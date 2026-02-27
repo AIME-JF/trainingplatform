@@ -37,6 +37,7 @@
           <template #icon><FormOutlined /></template>
           <template #title>考试系统</template>
           <a-menu-item key="/exam/bank">题库管理</a-menu-item>
+          <a-menu-item key="/exam/scores">成绩管理</a-menu-item>
         </a-sub-menu>
         <a-menu-item key="/exam/bank" v-else>
           <template #icon><FormOutlined /></template>
@@ -55,11 +56,17 @@
           <template #title>培训管理</template>
           <a-menu-item key="/training">培训班列表</a-menu-item>
           <a-menu-item key="/training/schedule">周训练计划</a-menu-item>
+          <a-menu-item key="/training/board" v-if="isAdmin">培训看板</a-menu-item>
         </a-sub-menu>
 
         <a-menu-item key="/instructor">
           <template #icon><UserOutlined /></template>
           教官库
+        </a-menu-item>
+
+        <a-menu-item key="/certificate">
+          <template #icon><SafetyCertificateOutlined /></template>
+          结业证书
         </a-menu-item>
 
         <a-menu-item key="/talent" v-if="isAdmin">
@@ -137,6 +144,30 @@
         <router-view />
       </a-layout-content>
     </a-layout>
+
+    <!-- 移动端底部导航栏 -->
+    <nav class="mobile-bottom-nav">
+      <a class="mobile-nav-item" :class="{ active: $route.path === '/' }" @click="$router.push('/')">
+        <span class="nav-icon"><HomeOutlined /></span>
+        <span class="nav-label">首页</span>
+      </a>
+      <a class="mobile-nav-item" :class="{ active: $route.path.startsWith('/courses') }" @click="$router.push('/courses')">
+        <span class="nav-icon"><PlayCircleOutlined /></span>
+        <span class="nav-label">课程</span>
+      </a>
+      <a class="mobile-nav-item" :class="{ active: $route.path.startsWith('/training') }" @click="$router.push('/training')">
+        <span class="nav-icon"><TeamOutlined /></span>
+        <span class="nav-label">培训</span>
+      </a>
+      <a class="mobile-nav-item" :class="{ active: $route.path.startsWith('/exam') }" @click="$router.push('/exam/bank')">
+        <span class="nav-icon"><FormOutlined /></span>
+        <span class="nav-label">考试</span>
+      </a>
+      <a class="mobile-nav-item" :class="{ active: $route.path === '/profile' }" @click="$router.push('/profile')">
+        <span class="nav-icon"><UserOutlined /></span>
+        <span class="nav-label">我的</span>
+      </a>
+    </nav>
   </a-layout>
 </template>
 
@@ -148,6 +179,7 @@ import {
   HomeOutlined, PlayCircleOutlined, FormOutlined, RobotOutlined,
   TeamOutlined, UserOutlined, StarOutlined, BarChartOutlined,
   MenuUnfoldOutlined, MenuFoldOutlined, DownOutlined, LogoutOutlined,
+  SafetyCertificateOutlined,
 } from '@ant-design/icons-vue'
 
 const router = useRouter()
@@ -364,4 +396,8 @@ function handleLogout() {
   background: var(--police-bg);
   min-height: calc(100vh - 64px);
 }
+</style>
+
+<style>
+@import '../assets/styles/mobile.css';
 </style>

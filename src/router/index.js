@@ -65,7 +65,7 @@ const router = createRouter({
           component: () => import('../views/ai/LessonPlan.vue'),
           meta: { title: 'AI教案生成', roles: ['instructor'] },
         },
-        // 培训管理
+        // 培训管理（静态路由必须在 /:id 之前）
         {
           path: 'training',
           name: 'TrainingList',
@@ -77,6 +77,12 @@ const router = createRouter({
           name: 'TrainingSchedule',
           component: () => import('../views/training/Schedule.vue'),
           meta: { title: '周训练计划' },
+        },
+        {
+          path: 'training/board',
+          name: 'TrainingBoard',
+          component: () => import('../views/training/Board.vue'),
+          meta: { title: '培训看板', roles: ['admin'] },
         },
         {
           path: 'training/:id',
@@ -124,7 +130,41 @@ const router = createRouter({
           component: () => import('../views/profile/Index.vue'),
           meta: { title: '个人中心' },
         },
+        // 报名管理
+        {
+          path: 'training/:id/enroll',
+          name: 'Enroll',
+          component: () => import('../views/training/Enroll.vue'),
+          meta: { title: '报名申请' },
+        },
+        {
+          path: 'training/:id/enroll/manage',
+          name: 'EnrollManage',
+          component: () => import('../views/training/EnrollManage.vue'),
+          meta: { title: '报名审核', roles: ['admin', 'instructor'] },
+        },
+        // 成绩管理
+        {
+          path: 'exam/scores',
+          name: 'ExamScores',
+          component: () => import('../views/exam/Scores.vue'),
+          meta: { title: '成绩管理', roles: ['admin', 'instructor'] },
+        },
+        // 结业证书
+        {
+          path: 'certificate',
+          name: 'Certificate',
+          component: () => import('../views/certificate/Index.vue'),
+          meta: { title: '结业证书' },
+        },
       ],
+    },
+    // 移动端签到（独立页，无主布局）
+    {
+      path: '/mobile/checkin/:token',
+      name: 'MobileCheckin',
+      component: () => import('../views/mobile/Checkin.vue'),
+      meta: { title: '扫码签到' },
     },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],

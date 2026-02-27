@@ -36,7 +36,7 @@
             <div class="login-logo-icon">警</div>
           </div>
           <h3>警务训练平台</h3>
-          <p>请选择角色登录体验</p>
+          <p>请选择角色并输入手机号登录</p>
         </div>
 
         <!-- 角色选择卡片 -->
@@ -59,10 +59,43 @@
           </div>
         </div>
 
-        <!-- 选中角色预览 -->
-        <div class="role-preview" v-if="selectedRoleInfo">
-          <a-tag color="blue">{{ selectedRoleInfo.unit }}</a-tag>
-          <span class="preview-name">{{ selectedRoleInfo.name }} · {{ selectedRoleInfo.policeId }}</span>
+        <!-- 手机号 + 验证码 -->
+        <div class="form-fields">
+          <a-input
+            v-model:value="phone"
+            size="large"
+            placeholder="请输入手机号"
+            maxlength="11"
+            allow-clear
+          >
+            <template #prefix><MobileOutlined /></template>
+          </a-input>
+
+          <div class="code-row">
+            <a-input
+              v-model:value="code"
+              size="large"
+              placeholder="请输入验证码"
+              maxlength="6"
+              @press-enter="handleLogin"
+              style="flex: 1"
+            >
+              <template #prefix><SafetyOutlined /></template>
+            </a-input>
+            <a-button
+              size="large"
+              :disabled="countdown > 0 || !isPhoneValid"
+              :loading="sendingCode"
+              class="send-btn"
+              @click="sendCode"
+            >
+              {{ countdown > 0 ? `${countdown}s后重发` : '获取验证码' }}
+            </a-button>
+          </div>
+
+          <div class="demo-hint">
+            验证码将发送至您的手机，5分钟内有效
+          </div>
         </div>
 
         <a-button
@@ -77,7 +110,7 @@
         </a-button>
 
         <div class="login-footer">
-          <span>演示版本 v1.0</span>
+          <span>演示版本 v2.0</span>
           <span>广西公安厅训练处</span>
         </div>
       </div>
@@ -89,51 +122,77 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import { MobileOutlined, SafetyOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '../../stores/auth.js'
-import { MOCK_USERS } from '../../mock/users.js'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
+const phone = ref('')
+const code = ref('')
 const selectedRole = ref('student')
 const loading = ref(false)
+const sendingCode = ref(false)
+const countdown = ref(0)
 
 const roles = [
-  {
-    key: 'admin',
-    name: '系统管理员',
-    desc: '全平台管理·数据看板·人才库',
-    icon: '管',
-    color: '#003087',
-  },
-  {
-    key: 'instructor',
-    name: '教官',
-    desc: '课程管理·AI组卷·学情分析',
-    icon: '教',
-    color: '#1a7a3e',
-  },
-  {
-    key: 'student',
-    name: '学员（民警）',
-    desc: '在线学习·考试·个人档案',
-    icon: '警',
-    color: '#8b1a1a',
-  },
+  { key: 'admin', name: '系统管理员', desc: '全平台管理·数据看板·人才库', icon: '管', color: '#003087' },
+  { key: 'instructor', name: '教官', desc: '课程管理·AI组卷·学情分析', icon: '教', color: '#1a7a3e' },
+  { key: 'student', name: '学员（民警）', desc: '在线学习·考试·个人档案', icon: '警', color: '#8b1a1a' },
 ]
 
-const selectedRoleInfo = computed(() => {
-  const user = MOCK_USERS[selectedRole.value]
-  return user ? { name: user.name, policeId: user.policeId, unit: user.unit } : null
-})
+const isPhoneValid = computed(() => /^1[3-9]\d{9}$/.test(phone.value))
 
+// 发送验证码
+async function sendCode() {
+  if (!isPhoneValid.value) { message.warning('请输入正确的手机号'); return }
+  sendingCode.value = true
+  try {
+    const res = await fetch('http://118.145.115.139:3950/api/sms/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone: phone.value }),
+    })
+    const data = await res.json()
+    if (data.success) {
+      message.success('验证码已发送（演示固定：123456）')
+      startCountdown()
+    } else {
+      message.error(data.message || '发送失败')
+    }
+  } catch {
+    message.error('网络异常，请稍后重试')
+  } finally {
+    sendingCode.value = false
+  }
+}
+
+function startCountdown() {
+  countdown.value = 60
+  const timer = setInterval(() => {
+    countdown.value--
+    if (countdown.value <= 0) clearInterval(timer)
+  }, 1000)
+}
+
+// 登录
 async function handleLogin() {
+  if (!isPhoneValid.value) { message.warning('请输入正确的手机号'); return }
+  if (!code.value.trim()) { message.warning('请输入验证码'); return }
   loading.value = true
-  await new Promise(r => setTimeout(r, 800))
-  authStore.login(selectedRole.value)
-  message.success(`欢迎回来，${authStore.currentUser.name}`)
-  loading.value = false
-  router.push('/')
+  try {
+    const result = await authStore.loginWithPhone(phone.value, code.value.trim(), selectedRole.value)
+    if (result.success) {
+      message.success(`欢迎，${authStore.currentUser.name}`)
+      router.push('/')
+    } else {
+      message.error(result.error || '验证码错误')
+    }
+  } catch {
+    message.error('网络异常，请稍后重试')
+  } finally {
+    loading.value = false
+  }
 }
 </script>
 
@@ -283,7 +342,7 @@ async function handleLogin() {
 
 .login-header {
   text-align: center;
-  margin-bottom: 32px;
+  margin-bottom: 28px;
 }
 
 .login-logo {
@@ -320,7 +379,7 @@ async function handleLogin() {
 .role-cards {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
   margin-bottom: 16px;
 }
 
@@ -328,7 +387,7 @@ async function handleLogin() {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 14px 16px;
+  padding: 12px 16px;
   border: 2px solid var(--police-border);
   border-radius: 8px;
   cursor: pointer;
@@ -348,14 +407,14 @@ async function handleLogin() {
 }
 
 .role-icon {
-  width: 40px;
-  height: 40px;
+  width: 38px;
+  height: 38px;
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: white;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   flex-shrink: 0;
 }
@@ -389,21 +448,39 @@ async function handleLogin() {
   font-weight: 700;
 }
 
-.role-preview {
+/* 表单 */
+.form-fields {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  background: #f0f4ff;
-  border-radius: 6px;
-  padding: 8px 12px;
+  flex-direction: column;
+  gap: 12px;
   margin-bottom: 16px;
-  font-size: 12px;
-  color: var(--police-text-secondary);
 }
 
-.preview-name {
+.code-row {
+  display: flex;
+  gap: 8px;
+}
+
+.send-btn {
+  flex-shrink: 0;
+  width: 120px;
   font-size: 13px;
-  color: var(--police-text-primary);
+}
+
+.demo-hint {
+  font-size: 12px;
+  color: #8c8c8c;
+  text-align: center;
+}
+
+.hint-code {
+  font-family: monospace;
+  color: #003087;
+  font-weight: 700;
+  background: #f0f4ff;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 14px;
 }
 
 .login-btn {

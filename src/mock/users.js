@@ -1,5 +1,7 @@
 export const MOCK_USERS = {
   admin: {
+    username: 'admin',
+    password: 'police2025',
     id: 'u001',
     name: '王建国',
     role: 'admin',
@@ -12,6 +14,8 @@ export const MOCK_USERS = {
     joinDate: '2018-03-01',
   },
   instructor: {
+    username: 'instructor',
+    password: 'teach2025',
     id: 'u002',
     name: '李志强',
     role: 'instructor',
@@ -28,6 +32,8 @@ export const MOCK_USERS = {
     expertise: ['刑事侦查', '审讯技术', '法律法规'],
   },
   student: {
+    username: 'student',
+    password: 'learn2025',
     id: 'u003',
     name: '张伟',
     role: 'student',
