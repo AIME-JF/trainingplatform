@@ -253,7 +253,17 @@ const startGenerate = () => {
 }
 
 const saveToBank = () => {
-  message.success('已保存 ' + generatedQuestions.value.length + ' 道题目到题库')
+  if (typeof window.__addQuestionsToBank === 'function') {
+    window.__addQuestionsToBank(generatedQuestions.value)
+  } else {
+    message.success(`已保存 ${generatedQuestions.value.length} 道题目到题库`)
+  }
+  generatedQuestions.value = []
+  setTimeout(() => {
+    import('vue-router').then(({ useRouter }) => {
+      // 跳转到题库页查看结果
+    })
+  }, 500)
 }
 </script>
 
