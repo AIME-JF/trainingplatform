@@ -5,13 +5,28 @@ export const MOCK_ENROLLMENTS = [
   { id: 'e004', trainingId: 't001', userId: 'u006', name: '黄志远', policeId: 'GX-GL-1045', unit: '桂林市秀峰区派出所', phone: '139****5566', enrollTime: '2025-02-19 14:20', status: 'pending', note: '' },
   { id: 'e005', trainingId: 't001', userId: 'u007', name: '梁美华', policeId: 'GX-ZZ-0892', unit: '柳州市城中区刑警队', phone: '186****7788', enrollTime: '2025-02-20 09:15', status: 'rejected', note: '名额已满，下期优先录取' },
   { id: 'e006', trainingId: 't001', userId: 'u008', name: '覃建军', policeId: 'GX-GL-2156', unit: '桂林市灵川县公安局', phone: '182****9900', enrollTime: '2025-02-20 11:30', status: 'approved', note: '' },
-  { id: 'e007', trainingId: 't002', userId: 'u003', name: '张伟', policeId: 'GX-NN-2056', unit: '南宁市青秀区刑警大队', phone: '136****0003', enrollTime: '2025-03-01 08:00', status: 'approved', note: '' },
-  { id: 'e008', trainingId: 't002', userId: 'u009', name: '韦国强', policeId: 'GX-BS-0334', unit: '百色市右江区派出所', phone: '173****1234', enrollTime: '2025-03-01 10:22', status: 'pending', note: '' },
+  { id: 'e007', trainingId: 't001', userId: 'u009', name: '罗强', policeId: 'GX-NN-2678', unit: '南宁市武鸣区公安局', phone: '173****9909', enrollTime: '2025-02-21 09:00', status: 'approved', note: '' },
+  { id: 'e008', trainingId: 't001', userId: 'u018', name: '黎志刚', policeId: 'GX-GG-0276', unit: '贵港市港北区公安局', phone: '139****1818', enrollTime: '2025-02-21 14:30', status: 'approved', note: '' },
+  { id: 'e009', trainingId: 't001', userId: 'u021', name: '谢建国', policeId: 'GX-HZ-0234', unit: '贺州市八步区公安局', phone: '173****2121', enrollTime: '2025-02-22 10:00', status: 'pending', note: '' },
+  { id: 'e010', trainingId: 't001', userId: 'u022', name: '林丽萍', policeId: 'GX-HC-0178', unit: '河池市金城江区公安局', phone: '182****2222', enrollTime: '2025-02-22 15:00', status: 'approved', note: '' },
+  { id: 'e011', trainingId: 't002', userId: 'u003', name: '张伟', policeId: 'GX-NN-2056', unit: '南宁市青秀区刑警大队', phone: '136****0003', enrollTime: '2025-03-01 08:00', status: 'approved', note: '' },
+  { id: 'e012', trainingId: 't002', userId: 'u009', name: '韦国强', policeId: 'GX-BS-0334', unit: '百色市右江区派出所', phone: '173****1234', enrollTime: '2025-03-01 10:22', status: 'pending', note: '' },
+  { id: 'e013', trainingId: 't002', userId: 'u024', name: '黎明远', policeId: 'GX-CZ-0198', unit: '崇左市江州区公安局', phone: '139****2424', enrollTime: '2025-03-02 09:15', status: 'approved', note: '' },
+  { id: 'e014', trainingId: 't002', userId: 'u025', name: '莫云飞', policeId: 'GX-NN-ADM-023', unit: '南宁市公安局交警支队', phone: '158****2525', enrollTime: '2025-03-02 11:00', status: 'approved', note: '' },
+  { id: 'e015', trainingId: 't004', userId: 'u019', name: '韦志鹏', policeId: 'GX-YL-0389', unit: '玉林市玉州区公安局', phone: '158****1919', enrollTime: '2025-02-10 08:30', status: 'approved', note: '' },
+  { id: 'e016', trainingId: 't004', userId: 'u020', name: '廖宇航', policeId: 'GX-BS-0456', unit: '百色市右江区公安局', phone: '135****2020', enrollTime: '2025-02-10 09:00', status: 'approved', note: '' },
+  { id: 'e017', trainingId: 't005', userId: 'u006', name: '韦大勇', policeId: 'GX-NN-2312', unit: '南宁市江南区公安局', phone: '139****5506', enrollTime: '2025-02-28 09:00', status: 'approved', note: '' },
+  { id: 'e018', trainingId: 't005', userId: 'u021', name: '谢建国', policeId: 'GX-HZ-0234', unit: '贺州市八步区公安局', phone: '173****2121', enrollTime: '2025-02-28 10:30', status: 'approved', note: '' },
+  { id: 'e019', trainingId: 't005', userId: 'u023', name: '苏伟强', policeId: 'GX-LB-0267', unit: '来宾市兴宾区公安局', phone: '136****2323', enrollTime: '2025-03-01 08:45', status: 'pending', note: '' },
+  { id: 'e020', trainingId: 't006', userId: 'u016', name: '庞志平', policeId: 'GX-FCG-0234', unit: '防城港市防城区公安局', phone: '182****1616', enrollTime: '2025-03-15 09:00', status: 'pending', note: '' },
 ]
 
-// 培训班名额信息
+// 培训班名额信息（动态计算）
 export const TRAINING_QUOTA = {
-  t001: { total: 50, approved: 32, pending: 8 },
-  t002: { total: 40, approved: 20, pending: 5 },
-  t003: { total: 30, approved: 28, pending: 2 },
+  t001: { total: 40, approved: 32, pending: 4 },
+  t002: { total: 60, approved: 44, pending: 8 },
+  t003: { total: 50, approved: 48, pending: 0 },
+  t004: { total: 30, approved: 26, pending: 2 },
+  t005: { total: 50, approved: 44, pending: 3 },
+  t006: { total: 45, approved: 36, pending: 2 },
 }

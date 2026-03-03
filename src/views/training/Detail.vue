@@ -2,7 +2,7 @@
   <div class="training-detail-page">
     <a-breadcrumb style="margin-bottom:16px">
       <a-breadcrumb-item @click="$router.push('/training')" style="cursor:pointer;color:var(--police-primary)">培训班管理</a-breadcrumb-item>
-      <a-breadcrumb-item>{{ training.title }}</a-breadcrumb-item>
+      <a-breadcrumb-item>{{ training.name }}</a-breadcrumb-item>
     </a-breadcrumb>
 
     <a-row :gutter="20">
@@ -11,11 +11,11 @@
           <div class="training-banner" :class="'status-' + training.status">
             <div class="banner-content">
               <a-tag :color="statusColorMap[training.status]" class="status-tag">{{ statusLabels[training.status] }}</a-tag>
-              <h2 class="training-title">{{ training.title }}</h2>
+              <h2 class="training-title">{{ training.name }}</h2>
               <div class="training-meta-row">
                 <span><CalendarOutlined /> {{ training.startDate }} ~ {{ training.endDate }}</span>
                 <span><EnvironmentOutlined /> {{ training.location }}</span>
-                <span><UserOutlined /> 主讲：{{ training.instructor }}</span>
+                <span><UserOutlined /> 主讲：{{ training.instructorName }}</span>
               </div>
             </div>
           </div>
@@ -112,7 +112,7 @@ import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QrcodeOutlined, Do
 import { MOCK_TRAININGS } from '@/mock/trainings'
 
 const route = useRoute()
-const trainingId = parseInt(route.params.id) || 1
+const trainingId = route.params.id
 const training = MOCK_TRAININGS.find(t => t.id === trainingId) || MOCK_TRAININGS[0]
 
 const activeTab = ref('overview')
@@ -122,15 +122,15 @@ const statusLabels = { active: '进行中', upcoming: '未开始', ended: '已�
 const statusColorMap = { active: 'green', upcoming: 'orange', ended: 'default' }
 
 const overviewStats = [
-  { label: '报名人数', value: training.enrolledCount, color: '#003087' },
+  { label: '报名人数', value: training.enrolled, color: '#003087' },
   { label: '班级容量', value: training.capacity, color: '#555' },
-  { label: '已完成学员', value: Math.floor(training.enrolledCount * 0.6), color: '#52c41a' },
-  { label: '课程总学时', value: '48', color: '#faad14' },
+  { label: '已完成学员', value: Math.floor((training.enrolled || 0) * 0.6), color: '#52c41a' },
+  { label: '课程总学时', value: (training.courses || []).reduce((a, c) => a + (c.hours || 0), 0) || 48, color: '#faad14' },
 ]
 
 const trainingWithCourses = {
   ...training,
-  courses: training.courses || [
+  courses: training.courses?.length ? training.courses : [
     { name: '刑事诉讼法实务操作', instructor: '李教官', hours: 12, type: 'theory' },
     { name: '现场处置技能', instructor: '王教官', hours: 16, type: 'practice' },
     { name: '电信诈骗案件侦办', instructor: '张教官', hours: 8, type: 'theory' },

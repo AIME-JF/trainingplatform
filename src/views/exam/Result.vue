@@ -148,7 +148,14 @@ const wrongQuestions = [
   { num: 7, type: 'judge', stem: '对醉酒的人在醉酒状态中实施的违法行为，公安机关可以对其采取保护性措施约束至酒醒。', myAnswer: 'F', answer: 'T', explanation: '《治安管理处罚法》第15条明确规定了该情形。' },
 ]
 
-const weakResources = WEAK_POINT_RESOURCES
+const weakResources = Object.entries(WEAK_POINT_RESOURCES).flatMap(([key, val]) =>
+  val.courses.map((c, i) => ({
+    id: `${key}-${i}`,
+    type: 'course',
+    title: c.title,
+    meta: val.tip,
+  }))
+)
 </script>
 
 <style scoped>

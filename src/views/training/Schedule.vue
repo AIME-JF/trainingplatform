@@ -30,10 +30,10 @@
           <div class="day-col-body" v-for="day in weekDays" :key="day.date">
             <div v-for="item in getScheduleForDay(day.weekday)" :key="item.id"
               class="schedule-item" :class="'type-' + item.type"
-              :style="{ top: getTopOffset(item.startTime) + 'px', height: getHeight(item.duration) + 'px' }"
+              :style="{ top: getTopOffset(item.timeStart) + 'px', height: getHeight(item.duration) + 'px' }"
             >
               <div class="si-title">{{ item.title }}</div>
-              <div class="si-meta">{{ item.startTime }} · {{ item.location }}</div>
+              <div class="si-meta">{{ item.timeStart }} · {{ item.location }}</div>
               <div class="si-instructor" v-if="item.instructor">{{ item.instructor }}</div>
             </div>
           </div>
@@ -45,7 +45,7 @@
     <a-row :gutter="16" style="margin-top:16px">
       <a-col :span="16">
         <a-card title="本周课程安排" :bordered="false">
-          <a-list :dataSource="MOCK_WEEK_SCHEDULE" size="small">
+          <a-list :dataSource="scheduleItems" size="small">
             <template #renderItem="{ item }">
               <a-list-item>
                 <a-list-item-meta>
@@ -53,7 +53,7 @@
                     <div class="type-dot" :class="'type-' + item.type">{{ typeIcons[item.type] }}</div>
                   </template>
                   <template #title>{{ item.title }}</template>
-                  <template #description>{{ item.weekday === 1 ? '周一' : item.weekday === 2 ? '周二' : item.weekday === 3 ? '周三' : item.weekday === 4 ? '周四' : '周五' }} {{ item.startTime }} · {{ item.location }}</template>
+                  <template #description>{{ item.day === 1 ? '周一' : item.day === 2 ? '周二' : item.day === 3 ? '周三' : item.day === 4 ? '周四' : '周五' }} {{ item.timeStart }} · {{ item.location }}</template>
                 </a-list-item-meta>
                 <template #extra>
                   <a-tag :color="typeColors[item.type]" size="small">{{ typeLabels[item.type] }}</a-tag>
@@ -84,6 +84,8 @@
 import { ref, computed } from 'vue'
 import { MOCK_WEEK_SCHEDULE } from '@/mock/schedules'
 
+const scheduleItems = MOCK_WEEK_SCHEDULE.items || []
+
 const currentWeek = ref(0)
 const weekNum = computed(() => 11 + currentWeek.value)
 const weekRange = computed(() => `03/${String(10 + currentWeek.value * 7).padStart(2,'0')} - 03/${String(14 + currentWeek.value * 7).padStart(2,'0')}`)
@@ -101,26 +103,26 @@ const weekDays = [
 
 const timeSlots = ['08:00', '09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00']
 
-const getScheduleForDay = (weekday) => MOCK_WEEK_SCHEDULE.filter(s => s.weekday === weekday)
+const getScheduleForDay = (weekday) => scheduleItems.filter(s => s.day === weekday)
 
 const getTopOffset = (time) => {
-  const [h, m] = time.split(':').map(Number)
+  const [h, m] = (time || '08:00').split(':').map(Number)
   const baseHour = 8
   const hourOffset = (h - baseHour) * 60 + m
   return Math.max(0, hourOffset * 1.2)
 }
 
-const getHeight = (duration) => duration * 1.2
+const getHeight = (duration) => (duration || 90) * 1.2
 
 const typeColors = { theory: 'blue', skill: 'green', review: 'purple', physical: 'orange', drill: 'red' }
 const typeLabels = { theory: '理论课', skill: '技能课', review: '复习', physical: '体能', drill: '演练' }
 const typeIcons = { theory: '📖', skill: '🔧', review: '📝', physical: '💪', drill: '⚠️' }
 
 const weekStats = [
-  { icon: '📚', label: '课程总数', value: MOCK_WEEK_SCHEDULE.length + '节', color: '#003087' },
-  { icon: '⏱', label: '总课时', value: MOCK_WEEK_SCHEDULE.reduce((a, b) => a + b.duration, 0) + '分钟', color: '#52c41a' },
-  { icon: '💪', label: '体能训练', value: MOCK_WEEK_SCHEDULE.filter(s => s.type === 'physical').length + '节', color: '#faad14' },
-  { icon: '📖', label: '理论课时', value: MOCK_WEEK_SCHEDULE.filter(s => s.type === 'theory').reduce((a, b) => a + b.duration, 0) + '分钟', color: '#722ed1' },
+  { icon: '📚', label: '课程总数', value: scheduleItems.length + '节', color: '#003087' },
+  { icon: '⏱', label: '总课时', value: scheduleItems.reduce((a, b) => a + (b.duration || 90), 0) + '分钟', color: '#52c41a' },
+  { icon: '💪', label: '体能训练', value: scheduleItems.filter(s => s.type === 'physical').length + '节', color: '#faad14' },
+  { icon: '📖', label: '理论课时', value: scheduleItems.filter(s => s.type === 'theory').reduce((a, b) => a + (b.duration || 90), 0) + '分钟', color: '#722ed1' },
 ]
 </script>
 

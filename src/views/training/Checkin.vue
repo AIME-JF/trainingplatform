@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h2>扫码签到</h2>
-        <p class="page-desc">{{ training.title }}</p>
+        <p class="page-desc">{{ training.name }}</p>
       </div>
       <div class="checkin-stats">
         <span class="cs-item"><span class="cs-num green">{{ onTimeCount }}</span>已签到</span>
@@ -99,7 +99,7 @@ import QRCode from 'qrcode'
 import { MOCK_TRAININGS } from '@/mock/trainings'
 
 const route = useRoute()
-const trainingId = parseInt(route.params.id) || 1
+const trainingId = route.params.id
 const training = MOCK_TRAININGS.find(t => t.id === trainingId) || MOCK_TRAININGS[0]
 
 const qrCanvas = ref(null)

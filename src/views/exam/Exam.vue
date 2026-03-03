@@ -125,14 +125,18 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { Modal, message } from 'ant-design-vue'
 import { ClockCircleOutlined, StarOutlined } from '@ant-design/icons-vue'
 import { MOCK_EXAMS, MOCK_QUESTIONS } from '@/mock/exams'
 
 const router = useRouter()
-const exam = MOCK_EXAMS[0]
-const questions = MOCK_QUESTIONS.slice(0, 8)
+const route = useRoute()
+const examId = route.params.id
+const exam = MOCK_EXAMS.find(e => e.id === examId) || MOCK_EXAMS[0]
+const questions = exam.questionIds
+  ? MOCK_QUESTIONS.filter(q => exam.questionIds.includes(q.id))
+  : MOCK_QUESTIONS.slice(0, 8)
 
 const currentIdx = ref(0)
 const answers = ref(Array(questions.length).fill(null))

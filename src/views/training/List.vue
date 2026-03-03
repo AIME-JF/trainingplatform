@@ -2,7 +2,7 @@
   <div class="training-list-page">
     <div class="page-header">
       <h2>培训班管理</h2>
-      <a-button type="primary" v-if="authStore.isAdmin || authStore.isInstructor">
+      <a-button type="primary" v-if="authStore.isAdmin || authStore.isInstructor" @click="showCreateModal = true">
         <template #icon><PlusOutlined /></template>新建培训班
       </a-button>
     </div>
@@ -27,7 +27,14 @@
           <a-select-option value="upcoming">未开始</a-select-option>
           <a-select-option value="ended">已结束</a-select-option>
         </a-select>
-        <a-input-search v-model:value="searchText" placeholder="搜索培训班..." style="width:240px" />
+        <a-select v-model:value="filterType" style="width:120px">
+          <a-select-option value="all">全部类型</a-select-option>
+          <a-select-option value="basic">基础训练</a-select-option>
+          <a-select-option value="special">专项训练</a-select-option>
+          <a-select-option value="promotion">晋升培训</a-select-option>
+          <a-select-option value="online">线上培训</a-select-option>
+        </a-select>
+        <a-input-search v-model:value="searchText" placeholder="搜索培训班..." style="width:240px" allow-clear />
       </a-space>
     </a-card>
 
@@ -37,18 +44,19 @@
         <div class="tc-header" :class="'status-' + t.status">
           <div class="tc-status-dot"></div>
           <span class="tc-status-text">{{ statusLabels[t.status] }}</span>
+          <a-tag size="small" style="margin-left:auto;font-size:11px">{{ t.typeLabel }}</a-tag>
         </div>
         <div class="tc-body">
-          <div class="tc-title">{{ t.title }}</div>
+          <div class="tc-title">{{ t.name }}</div>
           <div class="tc-meta">
             <div class="tc-meta-item"><CalendarOutlined /> {{ t.startDate }} ~ {{ t.endDate }}</div>
-            <div class="tc-meta-item"><TeamOutlined /> {{ t.enrolledCount }}/{{ t.capacity }} 人</div>
-            <div class="tc-meta-item"><UserOutlined /> {{ t.instructor }}</div>
+            <div class="tc-meta-item"><TeamOutlined /> {{ t.enrolled }}/{{ t.capacity }} 人</div>
+            <div class="tc-meta-item"><UserOutlined /> {{ t.instructorName }}</div>
             <div class="tc-meta-item"><EnvironmentOutlined /> {{ t.location }}</div>
           </div>
           <a-progress
-            :percent="Math.round(t.enrolledCount/t.capacity*100)"
-            :stroke-color="t.enrolledCount >= t.capacity ? '#ff4d4f' : '#003087'"
+            :percent="Math.round(t.enrolled / t.capacity * 100)"
+            :stroke-color="t.enrolled >= t.capacity ? '#ff4d4f' : '#003087'"
             size="small"
             style="margin-top:12px"
           />
@@ -58,44 +66,228 @@
           <a-button size="small" type="primary" @click="goCheckin(t)" v-if="t.status === 'active'">
             <template #icon><QrcodeOutlined /></template>扫码签到
           </a-button>
-          <a-button size="small" @click="goSchedule(t)" v-if="authStore.isStudent">查看日程</a-button>
+          <a-button size="small" @click="goEnroll(t)" v-if="t.status === 'upcoming' && authStore.isStudent">报名申请</a-button>
+          <a-button size="small" @click="goSchedule(t)" v-if="authStore.isStudent && t.status === 'active'">查看日程</a-button>
+          <a-dropdown v-if="authStore.isAdmin || authStore.isInstructor">
+            <a-button size="small"><EllipsisOutlined /></a-button>
+            <template #overlay>
+              <a-menu>
+                <a-menu-item key="edit" @click="handleEdit(t)">✏️ 编辑</a-menu-item>
+                <a-menu-item key="enroll" @click="goEnrollManage(t)">📋 报名管理</a-menu-item>
+                <a-menu-item key="delete" @click="handleDelete(t)" style="color:#ff4d4f">🗑️ 删除</a-menu-item>
+              </a-menu>
+            </template>
+          </a-dropdown>
         </div>
       </div>
     </div>
+
+    <!-- 空状态 -->
+    <a-empty v-if="filteredTrainings.length === 0" description="暂无符合条件的培训班" style="margin-top:60px" />
+
+    <!-- 新建/编辑培训班弹窗 -->
+    <a-modal
+      v-model:open="showCreateModal"
+      :title="editingTraining ? '编辑培训班' : '新建培训班'"
+      width="680px"
+      @ok="handleSubmitTraining"
+      @cancel="resetForm"
+      ok-text="确认保存"
+      cancel-text="取消"
+    >
+      <a-form :model="trainingForm" layout="vertical" style="margin-top:16px">
+        <a-row :gutter="16">
+          <a-col :span="24">
+            <a-form-item label="培训班名称" required>
+              <a-input v-model:value="trainingForm.name" placeholder="例：2025年春季刑侦专项训练班（第一期）" :maxlength="50" show-count />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="培训类型" required>
+              <a-select v-model:value="trainingForm.type" placeholder="请选择类型">
+                <a-select-option value="basic">基础训练</a-select-option>
+                <a-select-option value="special">专项训练</a-select-option>
+                <a-select-option value="promotion">晋升培训</a-select-option>
+                <a-select-option value="online">线上培训</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="班级容量" required>
+              <a-input-number v-model:value="trainingForm.capacity" :min="5" :max="500" style="width:100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="开始日期" required>
+              <a-input v-model:value="trainingForm.startDate" placeholder="2025-04-01" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="结束日期" required>
+              <a-input v-model:value="trainingForm.endDate" placeholder="2025-04-30" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="24">
+            <a-form-item label="培训地点" required>
+              <a-input v-model:value="trainingForm.location" placeholder="例：广西公安警察学院第三训练楼201教室" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="24">
+            <a-form-item label="主讲教官">
+              <a-input v-model:value="trainingForm.instructorName" placeholder="教官姓名" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="24">
+            <a-form-item label="培训简介">
+              <a-textarea v-model:value="trainingForm.description" :rows="3" placeholder="请简要描述本次培训的目标和内容..." :maxlength="200" show-count />
+            </a-form-item>
+          </a-col>
+        </a-row>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { PlusOutlined, CalendarOutlined, TeamOutlined, UserOutlined, EnvironmentOutlined, QrcodeOutlined } from '@ant-design/icons-vue'
+import { message, Modal } from 'ant-design-vue'
+import { PlusOutlined, CalendarOutlined, TeamOutlined, UserOutlined, EnvironmentOutlined, QrcodeOutlined, EllipsisOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
-import { MOCK_TRAININGS } from '@/mock/trainings'
+import { MOCK_TRAININGS, TRAINING_TYPES } from '@/mock/trainings'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const filterStatus = ref('all')
+const filterType = ref('all')
 const searchText = ref('')
+const showCreateModal = ref(false)
+const editingTraining = ref(null)
 
 const statusLabels = { active: '进行中', upcoming: '未开始', ended: '已结束' }
 
+const typeLabels = { basic: '基础训练', special: '专项训练', promotion: '晋升培训', online: '线上培训' }
+
+// 本地可修改的培训班列表
+const trainingList = ref([...MOCK_TRAININGS])
+
 const filteredTrainings = computed(() => {
-  let list = [...MOCK_TRAININGS]
+  let list = trainingList.value
   if (filterStatus.value !== 'all') list = list.filter(t => t.status === filterStatus.value)
-  if (searchText.value) list = list.filter(t => t.title.includes(searchText.value))
+  if (filterType.value !== 'all') list = list.filter(t => t.type === filterType.value)
+  if (searchText.value) list = list.filter(t => t.name.includes(searchText.value))
   return list
 })
 
-const stats = [
-  { icon: '🏫', label: '全部培训班', value: MOCK_TRAININGS.length, color: '#003087' },
-  { icon: '▶', label: '进行中', value: MOCK_TRAININGS.filter(t => t.status === 'active').length, color: '#52c41a' },
-  { icon: '🕐', label: '未开始', value: MOCK_TRAININGS.filter(t => t.status === 'upcoming').length, color: '#faad14' },
-  { icon: '✓', label: '已结束', value: MOCK_TRAININGS.filter(t => t.status === 'ended').length, color: '#888' },
-]
+const stats = computed(() => [
+  { icon: '🏫', label: '全部培训班', value: trainingList.value.length, color: '#003087' },
+  { icon: '▶', label: '进行中', value: trainingList.value.filter(t => t.status === 'active').length, color: '#52c41a' },
+  { icon: '🕐', label: '未开始', value: trainingList.value.filter(t => t.status === 'upcoming').length, color: '#faad14' },
+  { icon: '✓', label: '已结束', value: trainingList.value.filter(t => t.status === 'ended').length, color: '#888' },
+])
+
+// 表单数据
+const trainingForm = reactive({
+  name: '',
+  type: 'basic',
+  capacity: 30,
+  startDate: '',
+  endDate: '',
+  location: '',
+  instructorName: '',
+  description: '',
+})
+
+const resetForm = () => {
+  Object.assign(trainingForm, { name: '', type: 'basic', capacity: 30, startDate: '', endDate: '', location: '', instructorName: '', description: '' })
+  editingTraining.value = null
+  showCreateModal.value = false
+}
+
+const handleEdit = (t) => {
+  editingTraining.value = t
+  Object.assign(trainingForm, {
+    name: t.name,
+    type: t.type,
+    capacity: t.capacity,
+    startDate: t.startDate,
+    endDate: t.endDate,
+    location: t.location,
+    instructorName: t.instructorName,
+    description: t.description,
+  })
+  showCreateModal.value = true
+}
+
+const handleSubmitTraining = () => {
+  if (!trainingForm.name || !trainingForm.startDate || !trainingForm.endDate || !trainingForm.location) {
+    message.warning('请填写必填项：培训班名称、日期、地点')
+    return
+  }
+  const typeMap = { basic: '基础训练', special: '专项训练', promotion: '晋升培训', online: '线上培训' }
+  if (editingTraining.value) {
+    // 编辑
+    const idx = trainingList.value.findIndex(t => t.id === editingTraining.value.id)
+    if (idx !== -1) {
+      trainingList.value[idx] = {
+        ...trainingList.value[idx],
+        name: trainingForm.name,
+        type: trainingForm.type,
+        typeLabel: typeMap[trainingForm.type],
+        capacity: trainingForm.capacity,
+        startDate: trainingForm.startDate,
+        endDate: trainingForm.endDate,
+        location: trainingForm.location,
+        instructorName: trainingForm.instructorName,
+        description: trainingForm.description,
+      }
+    }
+    message.success('培训班信息已更新')
+  } else {
+    // 新建
+    const newId = `t${String(Date.now()).slice(-4)}`
+    trainingList.value.unshift({
+      id: newId,
+      name: trainingForm.name,
+      type: trainingForm.type,
+      typeLabel: typeMap[trainingForm.type],
+      status: 'upcoming',
+      startDate: trainingForm.startDate,
+      endDate: trainingForm.endDate,
+      location: trainingForm.location,
+      instructorName: trainingForm.instructorName,
+      capacity: trainingForm.capacity,
+      enrolled: 0,
+      students: [],
+      description: trainingForm.description,
+      subjects: [],
+      courses: [],
+      checkinRecords: [],
+    })
+    message.success('培训班创建成功')
+  }
+  resetForm()
+}
+
+const handleDelete = (t) => {
+  Modal.confirm({
+    title: '确认删除',
+    content: `确定要删除培训班"${t.name}"吗？此操作不可恢复。`,
+    okText: '确认删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: () => {
+      trainingList.value = trainingList.value.filter(item => item.id !== t.id)
+      message.success('已删除')
+    },
+  })
+}
 
 const goDetail = (t) => router.push({ name: 'TrainingDetail', params: { id: t.id } })
-const goCheckin = (t) => router.push({ name: 'TrainingCheckin', params: { id: t.id } })
+const goCheckin = (t) => router.push({ name: 'Checkin', params: { id: t.id } })
 const goSchedule = (t) => router.push('/training/schedule')
+const goEnroll = (t) => router.push(`/training/${t.id}/enroll`)
+const goEnrollManage = (t) => router.push(`/training/${t.id}/enroll/manage`)
 </script>
 
 <style scoped>
@@ -107,7 +299,8 @@ const goSchedule = (t) => router.push('/training/schedule')
 .stat-num { font-size: 28px; font-weight: 700; color: #1a1a1a; }
 .stat-label { font-size: 12px; color: #888; }
 .training-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-.training-card { background: #fff; border-radius: 8px; border: 1px solid #e8e8e8; overflow: hidden; }
+.training-card { background: #fff; border-radius: 8px; border: 1px solid #e8e8e8; overflow: hidden; transition: box-shadow 0.2s; }
+.training-card:hover { box-shadow: 0 4px 16px rgba(0,48,135,0.10); }
 .tc-header { padding: 8px 16px; display: flex; align-items: center; gap: 8px; }
 .tc-header.status-active { background: #f6ffed; }
 .tc-header.status-upcoming { background: #fffbe6; }
@@ -121,8 +314,15 @@ const goSchedule = (t) => router.push('/training/schedule')
 .status-upcoming .tc-status-text { color: #faad14; }
 .status-ended .tc-status-text { color: #888; }
 .tc-body { padding: 14px 16px; }
-.tc-title { font-size: 15px; font-weight: 600; color: #1a1a1a; margin-bottom: 12px; }
+.tc-title { font-size: 15px; font-weight: 600; color: #1a1a1a; margin-bottom: 12px; line-height: 1.4; }
 .tc-meta { display: flex; flex-direction: column; gap: 6px; }
 .tc-meta-item { font-size: 13px; color: #666; display: flex; align-items: center; gap: 6px; }
-.tc-footer { padding: 10px 16px; background: #fafafa; border-top: 1px solid #f0f0f0; display: flex; gap: 8px; }
+.tc-footer { padding: 10px 16px; background: #fafafa; border-top: 1px solid #f0f0f0; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+@media (max-width: 900px) {
+  .training-cards { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 600px) {
+  .training-cards { grid-template-columns: 1fr; }
+}
 </style>

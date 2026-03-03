@@ -124,7 +124,7 @@ import { LockOutlined, CheckCircleFilled } from '@ant-design/icons-vue'
 import { MOCK_COURSES } from '@/mock/courses'
 
 const route = useRoute()
-const courseId = parseInt(route.params.id) || 1
+const courseId = route.params.id
 const course = computed(() => MOCK_COURSES.find(c => c.id === courseId) || MOCK_COURSES[0])
 
 const currentChapterIdx = ref(0)

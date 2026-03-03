@@ -144,7 +144,7 @@ import { MOCK_INSTRUCTORS } from '@/mock/instructors'
 import { MOCK_COURSES } from '@/mock/courses'
 
 const route = useRoute()
-const instId = parseInt(route.params.id) || 1
+const instId = route.params.id
 const inst = computed(() => MOCK_INSTRUCTORS.find(i => i.id === instId) || MOCK_INSTRUCTORS[0])
 const activeTab = ref('intro')
 
