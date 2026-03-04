@@ -181,7 +181,7 @@
           <div class="police-card">
             <div class="card-header">
               <span class="card-title">系统公告</span>
-              <a-button size="small" type="text">+ 发布公告</a-button>
+              <a-button size="small" type="text" @click="announceMsg">发布公告</a-button>
             </div>
             <div class="notice-list">
               <div v-for="n in dashData.announcements" :key="n.id" class="notice-item">
@@ -241,6 +241,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth.js'
 import { MOCK_DASHBOARD } from '../../mock/dashboard.js'
+import { message } from 'ant-design-vue'
 import {
   PlayCircleOutlined, FormOutlined, RobotOutlined, TeamOutlined,
   BarChartOutlined, PlusOutlined, RightOutlined, ArrowUpOutlined,
@@ -268,6 +269,8 @@ const dashData = computed(() => {
   if (isInstructor.value) return MOCK_DASHBOARD.instructor
   return MOCK_DASHBOARD.student
 })
+
+const announceMsg = () => message.info('公告发布功能开发中...')
 </script>
 
 <style scoped>

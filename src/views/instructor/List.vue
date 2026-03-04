@@ -2,10 +2,26 @@
   <div class="instructor-list-page">
     <div class="page-header">
       <h2>教官库</h2>
-      <a-button type="primary" v-if="authStore.isAdmin">
+      <a-button type="primary" v-if="authStore.isAdmin" @click="addVisible = true">
         <template #icon><PlusOutlined /></template>添加教官
       </a-button>
     </div>
+
+    <!-- 添加教官弹窗 -->
+    <a-modal v-model:open="addVisible" title="添加教官" @ok="handleAdd" okText="添加" cancelText="取消" :width="520">
+      <a-form :label-col="{ span: 5 }" style="margin-top:16px">
+        <a-form-item label="姓名"><a-input v-model:value="addForm.name" placeholder="请输入教官姓名" /></a-form-item>
+        <a-form-item label="职级">
+          <a-select v-model:value="addForm.title" placeholder="选择职级">
+            <a-select-option value="高级教官">高级教官</a-select-option>
+            <a-select-option value="中级教官">中级教官</a-select-option>
+            <a-select-option value="初级教官">初级教官</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="单位"><a-input v-model:value="addForm.unit" placeholder="所属单位" /></a-form-item>
+        <a-form-item label="专业方向"><a-select v-model:value="addForm.specialties" mode="tags" placeholder="输入后回车添加" /></a-form-item>
+      </a-form>
+    </a-modal>
 
     <a-card :bordered="false" style="margin-bottom:16px">
       <a-row :gutter="16">
@@ -15,7 +31,7 @@
         <a-col :span="16">
           <a-space>
             <span style="color:#888">专业方向：</span>
-            <a-tag v-for="s in specialties" :key="s" :color="filterSpecialty === s ? 'blue' : 'default'" class="filter-tag" @click="filterSpecialty = s">{{ s }}</a-tag>
+            <a-tag v-for="s in specialtiesList" :key="s" :color="filterSpecialty === s ? 'blue' : 'default'" class="filter-tag" @click="filterSpecialty = s">{{ s }}</a-tag>
           </a-space>
         </a-col>
       </a-row>
@@ -59,9 +75,10 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { PlusOutlined } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
 import { MOCK_INSTRUCTORS } from '@/mock/instructors'
 
@@ -70,12 +87,46 @@ const authStore = useAuthStore()
 const searchText = ref('')
 const filterSpecialty = ref('全部')
 
-const allSpecialties = new Set()
-MOCK_INSTRUCTORS.forEach(i => i.specialties.forEach(s => allSpecialties.add(s)))
-const specialties = ['全部', ...allSpecialties]
+const instructorList = ref([...MOCK_INSTRUCTORS])
+
+// 动态计算专业列表
+const specialtiesList = computed(() => {
+  const allS = new Set()
+  instructorList.value.forEach(i => i.specialties.forEach(s => allS.add(s)))
+  return ['全部', ...allS]
+})
+
+// 添加教官
+const addVisible = ref(false)
+const addForm = reactive({ name: '', title: undefined, unit: '', specialties: [] })
+const avatarColors = ['#003087', '#c8a84b', '#8B1A1A', '#1a5c2e', '#6b3a8a', '#2e86de']
+const levelMap = { '高级教官': { level: 'expert', label: '专家' }, '中级教官': { level: 'senior', label: '高级' }, '初级教官': { level: 'standard', label: '初级' } }
+
+const handleAdd = () => {
+  if (!addForm.name) return message.warning('请输入教官姓名')
+  if (!addForm.title) return message.warning('请选择职级')
+  const lv = levelMap[addForm.title] || { level: 'standard', label: '初级' }
+  const newInst = {
+    id: Date.now(),
+    name: addForm.name,
+    title: addForm.title,
+    unit: addForm.unit || '未指定',
+    specialties: addForm.specialties.length ? addForm.specialties : ['通用'],
+    courseCount: 0,
+    studentCount: 0,
+    rating: 0,
+    level: lv.level,
+    levelLabel: lv.label,
+    avatarColor: avatarColors[Math.floor(Math.random() * avatarColors.length)],
+  }
+  instructorList.value.unshift(newInst)
+  addVisible.value = false
+  Object.assign(addForm, { name: '', title: undefined, unit: '', specialties: [] })
+  message.success('教官添加成功！')
+}
 
 const filteredInstructors = computed(() => {
-  let list = [...MOCK_INSTRUCTORS]
+  let list = [...instructorList.value]
   if (searchText.value) list = list.filter(i => i.name.includes(searchText.value) || i.specialties.some(s => s.includes(searchText.value)))
   if (filterSpecialty.value !== '全部') list = list.filter(i => i.specialties.includes(filterSpecialty.value))
   return list

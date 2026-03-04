@@ -8,7 +8,7 @@
       </div>
       <div class="header-actions">
         <a-button @click="$router.back()"><ArrowLeftOutlined /> 返回</a-button>
-        <a-button type="primary" ghost><DownloadOutlined /> 导出名单</a-button>
+        <a-button type="primary" ghost @click="message.success('名单已导出')"><DownloadOutlined /> 导出名单</a-button>
       </div>
     </div>
 

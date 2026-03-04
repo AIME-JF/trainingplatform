@@ -84,7 +84,7 @@
             <a-button block style="margin-bottom:8px" @click="$router.push('/training/schedule')">
               <template #icon><CalendarOutlined /></template>查看日程
             </a-button>
-            <a-button block>
+            <a-button block @click="exportMsg">
               <template #icon><DownloadOutlined /></template>导出学员名单
             </a-button>
           </div>
@@ -108,6 +108,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
+import { message } from 'ant-design-vue'
 import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QrcodeOutlined, DownloadOutlined } from '@ant-design/icons-vue'
 import { MOCK_TRAININGS } from '@/mock/trainings'
 
@@ -168,6 +169,8 @@ const notices = [
   { id: 1, title: '本周六体能测试通知', time: '2025-03-10', content: '本周六上午9:00在训练场进行体能测试，请携带运动装备，准时参加。' },
   { id: 2, title: '教材发放通知', time: '2025-03-08', content: '本次培训教材已到位，请于本周四前往综合楼312室领取。' },
 ]
+
+const exportMsg = () => message.success('学员名单已导出！')
 </script>
 
 <style scoped>

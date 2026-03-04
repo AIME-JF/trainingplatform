@@ -87,19 +87,39 @@ import { MOCK_WEEK_SCHEDULE } from '@/mock/schedules'
 const scheduleItems = MOCK_WEEK_SCHEDULE.items || []
 
 const currentWeek = ref(0)
-const weekNum = computed(() => 11 + currentWeek.value)
-const weekRange = computed(() => `03/${String(10 + currentWeek.value * 7).padStart(2,'0')} - 03/${String(14 + currentWeek.value * 7).padStart(2,'0')}`)
+
+// 动态计算周日期
+const baseMonday = new Date(2025, 2, 10) // 2025-03-10 周一
+const weekDays = computed(() => {
+  const monday = new Date(baseMonday)
+  monday.setDate(monday.getDate() + currentWeek.value * 7)
+  const names = ['周一', '周二', '周三', '周四', '周五']
+  return names.map((name, i) => {
+    const d = new Date(monday)
+    d.setDate(d.getDate() + i)
+    return {
+      name,
+      date: `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`,
+      weekday: i + 1,
+      isToday: currentWeek.value === 0 && i === 0,
+    }
+  })
+})
+
+const weekNum = computed(() => {
+  const monday = new Date(baseMonday)
+  monday.setDate(monday.getDate() + currentWeek.value * 7)
+  const start = new Date(monday.getFullYear(), 0, 1)
+  return Math.ceil(((monday - start) / 86400000 + start.getDay()) / 7)
+})
+
+const weekRange = computed(() => {
+  if (!weekDays.value.length) return ''
+  return `${weekDays.value[0].date} - ${weekDays.value[4].date}`
+})
 
 const prevWeek = () => currentWeek.value--
 const nextWeek = () => currentWeek.value++
-
-const weekDays = [
-  { name: '周一', date: '03/10', weekday: 1, isToday: true },
-  { name: '周二', date: '03/11', weekday: 2, isToday: false },
-  { name: '周三', date: '03/12', weekday: 3, isToday: false },
-  { name: '周四', date: '03/13', weekday: 4, isToday: false },
-  { name: '周五', date: '03/14', weekday: 5, isToday: false },
-]
 
 const timeSlots = ['08:00', '09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00']
 

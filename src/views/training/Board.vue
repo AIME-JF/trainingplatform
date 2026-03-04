@@ -15,7 +15,7 @@
           <a-select-option value="quarter">本季度</a-select-option>
           <a-select-option value="year">本年度</a-select-option>
         </a-select>
-        <a-button type="primary" ghost><DownloadOutlined /> 导出报告</a-button>
+        <a-button type="primary" ghost @click="exportReport"><DownloadOutlined /> 导出报告</a-button>
       </div>
     </div>
 
@@ -37,7 +37,7 @@
     <div class="chart-row">
       <!-- 各市局参训人数 -->
       <div class="chart-card chart-large">
-        <div class="chart-title">各市局本月参训人数</div>
+        <div class="chart-title">各市局{{ timeLabels[timeRange] }}参训人数</div>
         <v-chart class="chart" :option="barOption" autoresize />
       </div>
       <!-- 近6月完成率趋势 -->
@@ -83,7 +83,8 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { message } from 'ant-design-vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { BarChart, LineChart } from 'echarts/charts'
@@ -95,24 +96,29 @@ use([CanvasRenderer, BarChart, LineChart, GridComponent, TooltipComponent, Legen
 
 const timeRange = ref('month')
 const currentDate = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
+const timeLabels = { month: '本月', quarter: '本季度', year: '本年度' }
+const timeMultiplier = { month: 1, quarter: 3, year: 12 }
 
-const kpiData = [
-  { label: '进行中培训班', value: 8, suffix: '个', icon: '🏫', bgColor: '#e6f0ff', color: '#003087', trend: 14 },
-  { label: '本月参训人数', value: 1248, suffix: '人', icon: '👮', bgColor: '#e6fff0', color: '#52c41a', trend: 8 },
-  { label: '本月培训完成率', value: 84, suffix: '%', icon: '✅', bgColor: '#fff7e6', color: '#fa8c16', trend: 3 },
-  { label: '待审核事项', value: 23, suffix: '项', icon: '⚠️', bgColor: '#fff1f0', color: '#ff4d4f', trend: -12 },
-]
+const kpiData = computed(() => {
+  const m = timeMultiplier[timeRange.value]
+  return [
+    { label: '进行中培训班', value: Math.round(8 * (m === 1 ? 1 : m * 0.6)), suffix: '个', icon: '🏫', bgColor: '#e6f0ff', color: '#003087', trend: 14 },
+    { label: timeLabels[timeRange.value] + '参训人数', value: Math.round(1248 * m), suffix: '人', icon: '👮', bgColor: '#e6fff0', color: '#52c41a', trend: 8 },
+    { label: timeLabels[timeRange.value] + '培训完成率', value: m === 1 ? 84 : m === 3 ? 81 : 78, suffix: '%', icon: '✅', bgColor: '#fff7e6', color: '#fa8c16', trend: 3 },
+    { label: '待审核事项', value: Math.round(23 * (m === 1 ? 1 : m * 0.4)), suffix: '项', icon: '⚠️', bgColor: '#fff1f0', color: '#ff4d4f', trend: -12 },
+  ]
+})
 
 const cities = ['南宁市', '柳州市', '桂林市', '梧州市', '北海市', '防城港', '钦州市', '贵港市', '玉林市', '百色市', '贺州市', '河池市', '来宾市', '崇左市']
-const cityValues = [342, 286, 254, 198, 176, 142, 168, 154, 188, 134, 112, 128, 118, 98]
+const baseCityValues = [342, 286, 254, 198, 176, 142, 168, 154, 188, 134, 112, 128, 118, 98]
 
-const barOption = {
+const barOption = computed(() => ({
   tooltip: { trigger: 'axis' },
   grid: { left: 80, right: 20, top: 20, bottom: 20 },
   xAxis: { type: 'value', axisLabel: { fontSize: 11 } },
   yAxis: { type: 'category', data: cities, axisLabel: { fontSize: 11 } },
-  series: [{ type: 'bar', data: cityValues, itemStyle: { color: '#003087', borderRadius: [0, 4, 4, 0] }, barMaxWidth: 20 }],
-}
+  series: [{ type: 'bar', data: baseCityValues.map(v => Math.round(v * timeMultiplier[timeRange.value])), itemStyle: { color: '#003087', borderRadius: [0, 4, 4, 0] }, barMaxWidth: 20 }],
+}))
 
 const lineOption = {
   tooltip: { trigger: 'axis' },
@@ -140,6 +146,14 @@ const cityRanks = [
   { name: '贵港市', rate: 76 },
   { name: '钦州市', rate: 73 },
 ]
+
+// 导出报告
+function exportReport() {
+  message.loading({ content: '正在生成报告...', key: 'export', duration: 1.5 })
+  setTimeout(() => {
+    message.success({ content: '报告已生成并开始下载！', key: 'export' })
+  }, 1500)
+}
 </script>
 
 <style scoped>

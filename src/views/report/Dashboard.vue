@@ -11,7 +11,7 @@
           <a-select-option value="quarter">本季度</a-select-option>
           <a-select-option value="year">本年度</a-select-option>
         </a-select>
-        <a-button size="small">
+        <a-button size="small" @click="exportReport">
           <template #icon><DownloadOutlined /></template>导出报告
         </a-button>
       </div>
@@ -95,6 +95,7 @@
 
 <script setup>
 import { ref } from 'vue'
+import { message } from 'ant-design-vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { LineChart, PieChart, BarChart } from 'echarts/charts'
@@ -158,6 +159,11 @@ const aiInsights = [
   { id: 3, type: 'suggestion', icon: '💡', title: '体能训练参与率可提升', desc: '当前仅68%民警完成体能测试，建议结合培训班强制要求。' },
   { id: 4, type: 'positive', icon: '📈', title: '在线考试通过率上升', desc: '本月通过率较上月提升5.3%，AI智能推荐有效提升复习效率。' },
 ]
+
+function exportReport() {
+  message.loading({ content: '报告生成中...', key: 'rpt', duration: 1.5 })
+  setTimeout(() => message.success({ content: '报告已导出！', key: 'rpt' }), 1500)
+}
 </script>
 
 <style scoped>

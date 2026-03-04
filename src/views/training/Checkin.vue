@@ -51,7 +51,7 @@
             <a-space>
               <a-tag color="green">{{ onTimeCount }} 准时</a-tag>
               <a-tag color="orange">{{ lateCount }} 迟到</a-tag>
-              <a-button size="small">导出</a-button>
+              <a-button size="small" @click="message.success('签到记录已导出')">导出</a-button>
             </a-space>
           </template>
 

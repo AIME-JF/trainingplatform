@@ -2,10 +2,38 @@
   <div class="course-list-page">
     <div class="page-header">
       <h2>课程中心</h2>
-      <a-button type="primary" v-if="authStore.isInstructor || authStore.isAdmin">
+      <a-button type="primary" v-if="authStore.isInstructor || authStore.isAdmin" @click="uploadVisible = true">
         <template #icon><PlusOutlined /></template>上传课程
       </a-button>
     </div>
+
+    <!-- 上传课程弹窗 -->
+    <a-modal v-model:open="uploadVisible" title="上传课程" @ok="handleUpload" okText="提交" cancelText="取消" :width="560">
+      <a-form :label-col="{ span: 5 }" style="margin-top:16px">
+        <a-form-item label="课程名称" required><a-input v-model:value="formTitle" placeholder="请输入课程名称" /></a-form-item>
+        <a-form-item label="课程分类" required>
+          <a-select v-model:value="formCategory" placeholder="选择分类" allowClear>
+            <a-select-option v-for="cat in COURSE_CATEGORIES.filter(c => c.key !== 'all')" :key="cat.key" :value="cat.key">{{ cat.label }}</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="课件文件" required>
+          <a-upload-dragger
+            v-model:fileList="formFileList"
+            :beforeUpload="() => false"
+            :maxCount="1"
+            accept=".mp4,.pdf,.pptx,.ppt,.doc,.docx"
+          >
+            <p class="ant-upload-drag-icon" style="margin-bottom:8px"><InboxOutlined style="font-size:36px;color:#003087" /></p>
+            <p class="ant-upload-text" style="font-size:14px">点击或拖拽文件到此处上传</p>
+            <p class="ant-upload-hint" style="font-size:12px;color:#888">支持 MP4、PDF、PPT、Word 格式，单个文件不超过 500MB</p>
+          </a-upload-dragger>
+        </a-form-item>
+        <a-form-item label="时长(分钟)"><a-input-number v-model:value="formDuration" :min="10" :max="600" style="width:100%" /></a-form-item>
+        <a-form-item label="授课教官"><a-input v-model:value="formInstructor" placeholder="请输入教官姓名" /></a-form-item>
+        <a-form-item label="课程标签"><a-select v-model:value="formTags" mode="tags" placeholder="输入后回车添加标签" /></a-form-item>
+        <a-form-item label="是否必修"><a-switch v-model:checked="formRequired" /></a-form-item>
+      </a-form>
+    </a-modal>
 
     <a-card class="filter-card" :bordered="false">
       <a-row :gutter="16" align="middle">
@@ -15,9 +43,9 @@
         <a-col :span="14">
           <div class="category-tabs">
             <a-tag
-              v-for="cat in allCategories" :key="cat.value"
-              :color="selectedCategory === cat.value ? 'blue' : 'default'"
-              class="cat-tag" @click="selectedCategory = cat.value"
+              v-for="cat in allCategories" :key="cat.key"
+              :color="selectedCategory === cat.key ? 'blue' : 'default'"
+              class="cat-tag" @click="selectedCategory = cat.key"
             >{{ cat.label }}</a-tag>
           </div>
         </a-col>
@@ -77,9 +105,10 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { PlusOutlined, TeamOutlined, StarFilled } from '@ant-design/icons-vue'
+import { PlusOutlined, TeamOutlined, StarFilled, InboxOutlined } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
 import { MOCK_COURSES, COURSE_CATEGORIES } from '@/mock/courses'
 
@@ -88,10 +117,64 @@ const authStore = useAuthStore()
 const searchText = ref('')
 const selectedCategory = ref('all')
 const sortBy = ref('default')
-const allCategories = [{ value: 'all', label: '全部' }, ...COURSE_CATEGORIES]
+const allCategories = [{ key: 'all', label: '全部' }, ...COURSE_CATEGORIES]
+
+// 上传课程 - 用独立 ref 解决 a-select 响应式绑定问题
+const uploadVisible = ref(false)
+const formTitle = ref('')
+const formCategory = ref(null)
+const formFileList = ref([])
+const formDuration = ref(60)
+const formInstructor = ref('')
+const formTags = ref([])
+const formRequired = ref(false)
+const courseList = ref([...MOCK_COURSES])
+const coverColors = ['#8B1A1A', '#003087', '#1a5c2e', '#6b3a8a', '#8b6914', '#2e4057']
+
+const resetForm = () => {
+  formTitle.value = ''
+  formCategory.value = null
+  formFileList.value = []
+  formDuration.value = 60
+  formInstructor.value = ''
+  formTags.value = []
+  formRequired.value = false
+}
+
+const handleUpload = () => {
+  if (!formTitle.value) return message.warning('请输入课程名称')
+  if (!formCategory.value) return message.warning('请选择课程分类')
+  if (!formFileList.value.length) return message.warning('请上传课件文件')
+  const file = formFileList.value[0]
+  const ext = (file.name || '').split('.').pop().toLowerCase()
+  const fileType = ext === 'mp4' ? 'video' : 'document'
+  const newCourse = {
+    id: 'c' + Date.now(),
+    title: formTitle.value,
+    category: formCategory.value,
+    fileType,
+    duration: formDuration.value,
+    instructor: formInstructor.value || '未指定',
+    tags: formTags.value.length ? formTags.value : [getCategoryLabel(formCategory.value)],
+    isRequired: formRequired.value,
+    coverColor: coverColors[Math.floor(Math.random() * coverColors.length)],
+    rating: 0,
+    difficulty: 3,
+    studentCount: 0,
+    fileName: file.name,
+    description: `${formTitle.value}课程内容`,
+    chapters: [
+      { id: 'new1', title: formTitle.value + '（完整内容）', duration: formDuration.value, unlocked: true, progress: 0 },
+    ],
+  }
+  courseList.value.unshift(newCourse)
+  uploadVisible.value = false
+  resetForm()
+  message.success(`课程『${newCourse.title}』上传成功！文件：${file.name}`)
+}
 
 const filteredCourses = computed(() => {
-  let list = [...MOCK_COURSES]
+  let list = [...courseList.value]
   if (searchText.value) list = list.filter(c => c.title.includes(searchText.value) || c.tags.some(t => t.includes(searchText.value)))
   if (selectedCategory.value !== 'all') list = list.filter(c => c.category === selectedCategory.value)
   if (sortBy.value === 'rating') list.sort((a, b) => b.rating - a.rating)
@@ -103,7 +186,7 @@ const progressMap = { 1: 65, 2: 100, 3: 30, 4: 0, 5: 82, 6: 45 }
 const getCourseProgress = (id) => progressMap[id] ?? 0
 const completedCount = computed(() => Object.values(progressMap).filter(p => p === 100).length)
 const inProgressCount = computed(() => Object.values(progressMap).filter(p => p > 0 && p < 100).length)
-const getCategoryLabel = (cat) => COURSE_CATEGORIES.find(c => c.value === cat)?.label ?? cat
+const getCategoryLabel = (cat) => COURSE_CATEGORIES.find(c => c.key === cat)?.label ?? cat
 const formatDuration = (mins) => mins >= 60 ? `${Math.floor(mins/60)}h${mins%60>0?mins%60+'min':''}` : `${mins}min`
 const coverIcons = { law: '⚖️', skill: '🔧', traffic: '🚗', community: '🏘️', cyber: '💻', physical: '💪' }
 const getCoverIcon = (cat) => coverIcons[cat] ?? '📚'

@@ -12,7 +12,7 @@
             {{ exam.title }}
           </a-select-option>
         </a-select>
-        <a-button type="primary" ghost><DownloadOutlined /> 导出成绩</a-button>
+        <a-button type="primary" ghost @click="exportCSV"><DownloadOutlined /> 导出成绩</a-button>
       </div>
     </div>
 
@@ -69,16 +69,36 @@
             </a-tag>
           </template>
           <template v-if="column.key === 'action'">
-            <a-button type="link" size="small">查看详情</a-button>
+            <a-button type="link" size="small" @click.stop="showDetail(record)">查看详情</a-button>
           </template>
         </template>
       </a-table>
     </div>
+
+    <!-- 学员详情弹窗 -->
+    <a-modal v-model:open="detailVisible" :title="detailStudent ? detailStudent.name + '·成绩详情' : ''" :footer="null" :width="480">
+      <div v-if="detailStudent" style="padding:8px 0">
+        <a-descriptions :column="2" bordered size="small">
+          <a-descriptions-item label="姓名">{{ detailStudent.name }}</a-descriptions-item>
+          <a-descriptions-item label="警号">{{ detailStudent.policeId }}</a-descriptions-item>
+          <a-descriptions-item label="单位" :span="2">{{ detailStudent.unit }}</a-descriptions-item>
+          <a-descriptions-item label="总分"><span style="font-size:18px;font-weight:700" :style="{color: detailStudent.score >= 80 ? '#52c41a' : detailStudent.score >= 60 ? '#fa8c16' : '#ff4d4f'}">{{ detailStudent.score }}</span></a-descriptions-item>
+          <a-descriptions-item label="用时">{{ detailStudent.time }}</a-descriptions-item>
+          <a-descriptions-item label="法律法规">{{ detailStudent.law }}分</a-descriptions-item>
+          <a-descriptions-item label="执法程序">{{ detailStudent.enforce }}分</a-descriptions-item>
+          <a-descriptions-item label="证据规则">{{ detailStudent.evidence }}分</a-descriptions-item>
+          <a-descriptions-item label="体能技能">{{ detailStudent.physical }}分</a-descriptions-item>
+          <a-descriptions-item label="职业道德">{{ detailStudent.ethic }}分</a-descriptions-item>
+          <a-descriptions-item label="结果"><a-tag :color="detailStudent.score >= 60 ? 'green' : 'red'">{{ detailStudent.score >= 60 ? '通过' : '不合格' }}</a-tag></a-descriptions-item>
+        </a-descriptions>
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue'
+import { message } from 'ant-design-vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { BarChart, RadarChart } from 'echarts/charts'
@@ -175,7 +195,32 @@ const filteredStudents = computed(() => {
 })
 
 function loadExamData() {
-  // Demo: 数据不变，实际接入 API 时替换
+  message.info('已切换考试场次（Demo数据不变）')
+}
+
+// 导出 CSV
+function exportCSV() {
+  const header = ['姓名', '警号', '所属单位', '总分', '法律法规', '执法程序', '证据规则', '体能技能', '职业道德', '用时', '结果']
+  const rows = filteredStudents.value.map(s => [
+    s.name, s.policeId, s.unit, s.score, s.law, s.enforce, s.evidence, s.physical, s.ethic, s.time, s.score >= 60 ? '通过' : '不合格'
+  ])
+  const csv = '\uFEFF' + [header, ...rows].map(r => r.join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `成绩导出_${new Date().toLocaleDateString('zh-CN')}.csv`
+  a.click()
+  URL.revokeObjectURL(url)
+  message.success('成绩已导出！')
+}
+
+// 查看详情
+const detailVisible = ref(false)
+const detailStudent = ref(null)
+function showDetail(record) {
+  detailStudent.value = record
+  detailVisible.value = true
 }
 </script>
 

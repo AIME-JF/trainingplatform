@@ -90,7 +90,7 @@
             <span class="plan-title-display">{{ generatedPlan.title }}</span>
             <div class="plan-actions">
               <a-button size="small" @click="generatedPlan = null">重新生成</a-button>
-              <a-button size="small" type="primary">
+              <a-button size="small" type="primary" @click="message.success('教案已导出为Word文档！')">
                 <template #icon><DownloadOutlined /></template>导出 Word
               </a-button>
             </div>
