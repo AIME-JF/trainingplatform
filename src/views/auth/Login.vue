@@ -36,65 +36,107 @@
             <div class="login-logo-icon">警</div>
           </div>
           <h3>警务训练平台</h3>
-          <p>请选择角色并输入手机号登录</p>
+          <p>请登录以进入系统</p>
         </div>
 
-        <!-- 角色选择卡片 -->
-        <div class="role-cards">
+        <!-- 登录方式切换 -->
+        <div class="login-tabs">
           <div
-            v-for="role in roles"
-            :key="role.key"
-            class="role-card"
-            :class="{ active: selectedRole === role.key }"
-            @click="selectedRole = role.key"
-          >
-            <div class="role-icon" :style="{ background: role.color }">
-              {{ role.icon }}
-            </div>
-            <div class="role-info">
-              <div class="role-name">{{ role.name }}</div>
-              <div class="role-desc">{{ role.desc }}</div>
-            </div>
-            <div class="role-check" v-if="selectedRole === role.key">✓</div>
-          </div>
+            class="login-tab"
+            :class="{ active: loginMode === 'password' }"
+            @click="loginMode = 'password'"
+          >账号密码登录</div>
+          <div
+            class="login-tab"
+            :class="{ active: loginMode === 'phone' }"
+            @click="loginMode = 'phone'"
+          >手机验证码登录</div>
         </div>
 
-        <!-- 手机号 + 验证码 -->
-        <div class="form-fields">
+        <!-- 账号密码登录 -->
+        <div class="form-fields" v-if="loginMode === 'password'">
           <a-input
-            v-model:value="phone"
+            v-model:value="username"
             size="large"
-            placeholder="请输入手机号"
-            maxlength="11"
+            placeholder="请输入账号"
             allow-clear
+            @press-enter="handlePasswordLogin"
           >
-            <template #prefix><MobileOutlined /></template>
+            <template #prefix><UserOutlined /></template>
           </a-input>
 
-          <div class="code-row">
-            <a-input
-              v-model:value="code"
-              size="large"
-              placeholder="请输入验证码"
-              maxlength="6"
-              @press-enter="handleLogin"
-              style="flex: 1"
-            >
-              <template #prefix><SafetyOutlined /></template>
-            </a-input>
-            <a-button
-              size="large"
-              :disabled="countdown > 0 || !isPhoneValid"
-              :loading="sendingCode"
-              class="send-btn"
-              @click="sendCode"
-            >
-              {{ countdown > 0 ? `${countdown}s后重发` : '获取验证码' }}
-            </a-button>
-          </div>
+          <a-input-password
+            v-model:value="password"
+            size="large"
+            placeholder="请输入密码"
+            @press-enter="handlePasswordLogin"
+          >
+            <template #prefix><LockOutlined /></template>
+          </a-input-password>
 
           <div class="demo-hint">
-            验证码将发送至您的手机，5分钟内有效
+            演示账号：admin / police2025 · instructor / teach2025 · student / learn2025
+          </div>
+        </div>
+
+        <!-- 手机验证码登录 -->
+        <div v-if="loginMode === 'phone'">
+          <!-- 角色选择卡片 -->
+          <div class="role-cards">
+            <div
+              v-for="role in roles"
+              :key="role.key"
+              class="role-card"
+              :class="{ active: selectedRole === role.key }"
+              @click="selectedRole = role.key"
+            >
+              <div class="role-icon" :style="{ background: role.color }">
+                {{ role.icon }}
+              </div>
+              <div class="role-info">
+                <div class="role-name">{{ role.name }}</div>
+                <div class="role-desc">{{ role.desc }}</div>
+              </div>
+              <div class="role-check" v-if="selectedRole === role.key">✓</div>
+            </div>
+          </div>
+
+          <div class="form-fields">
+            <a-input
+              v-model:value="phone"
+              size="large"
+              placeholder="请输入手机号"
+              maxlength="11"
+              allow-clear
+            >
+              <template #prefix><MobileOutlined /></template>
+            </a-input>
+
+            <div class="code-row">
+              <a-input
+                v-model:value="code"
+                size="large"
+                placeholder="请输入验证码"
+                maxlength="6"
+                @press-enter="handleLogin"
+                style="flex: 1"
+              >
+                <template #prefix><SafetyOutlined /></template>
+              </a-input>
+              <a-button
+                size="large"
+                :disabled="countdown > 0 || !isPhoneValid"
+                :loading="sendingCode"
+                class="send-btn"
+                @click="sendCode"
+              >
+                {{ countdown > 0 ? `${countdown}s后重发` : '获取验证码' }}
+              </a-button>
+            </div>
+
+            <div class="demo-hint">
+              验证码将发送至您的手机，5分钟内有效
+            </div>
           </div>
         </div>
 
@@ -104,10 +146,20 @@
           size="large"
           :loading="loading"
           class="login-btn"
-          @click="handleLogin"
+          @click="loginMode === 'password' ? handlePasswordLogin() : handleLogin()"
         >
           进入系统
         </a-button>
+
+        <!-- 快速演示登录 -->
+        <div class="quick-login">
+          <div class="quick-login-label">快速演示登录：</div>
+          <div class="quick-login-btns">
+            <a-button size="small" @click="quickLogin('admin')">🔵 管理员</a-button>
+            <a-button size="small" @click="quickLogin('instructor')">🟢 教官</a-button>
+            <a-button size="small" @click="quickLogin('student')">🔴 学员</a-button>
+          </div>
+        </div>
 
         <div class="login-footer">
           <span>演示版本 v2.0</span>
@@ -122,12 +174,15 @@
 import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { MobileOutlined, SafetyOutlined } from '@ant-design/icons-vue'
+import { MobileOutlined, SafetyOutlined, UserOutlined, LockOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '../../stores/auth.js'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
+const loginMode = ref('password')
+const username = ref('')
+const password = ref('')
 const phone = ref('')
 const code = ref('')
 const selectedRole = ref('student')
@@ -142,6 +197,28 @@ const roles = [
 ]
 
 const isPhoneValid = computed(() => /^1[3-9]\d{9}$/.test(phone.value))
+
+// 账号密码登录
+function handlePasswordLogin() {
+  if (!username.value.trim()) { message.warning('请输入账号'); return }
+  if (!password.value.trim()) { message.warning('请输入密码'); return }
+  loading.value = true
+  const result = authStore.loginWithCredentials(username.value.trim(), password.value.trim())
+  if (result.success) {
+    message.success(`欢迎，${authStore.currentUser.name}`)
+    router.push('/')
+  } else {
+    message.error(result.error)
+  }
+  loading.value = false
+}
+
+// 快速演示登录
+function quickLogin(roleKey) {
+  authStore.login(roleKey)
+  message.success(`欢迎，${authStore.currentUser.name}`)
+  router.push('/')
+}
 
 // 发送验证码
 async function sendCode() {
@@ -175,7 +252,7 @@ function startCountdown() {
   }, 1000)
 }
 
-// 登录
+// 手机验证码登录
 async function handleLogin() {
   if (!isPhoneValid.value) { message.warning('请输入正确的手机号'); return }
   if (!code.value.trim()) { message.warning('请输入验证码'); return }
@@ -483,6 +560,35 @@ async function handleLogin() {
   font-size: 14px;
 }
 
+/* 登录方式切换 Tab */
+.login-tabs {
+  display: flex;
+  border-bottom: 2px solid #f0f0f0;
+  margin-bottom: 20px;
+}
+
+.login-tab {
+  flex: 1;
+  text-align: center;
+  padding: 10px 0;
+  font-size: 14px;
+  color: #8c8c8c;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+}
+
+.login-tab:hover {
+  color: var(--police-primary);
+}
+
+.login-tab.active {
+  color: var(--police-primary);
+  font-weight: 600;
+  border-bottom-color: var(--police-primary);
+}
+
 .login-btn {
   height: 46px;
   font-size: 15px;
@@ -496,6 +602,31 @@ async function handleLogin() {
 .login-btn:hover {
   background: var(--police-primary-hover) !important;
   border-color: var(--police-primary-hover) !important;
+}
+
+/* 快速演示登录 */
+.quick-login {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: #f6f8fc;
+  border-radius: 8px;
+  border: 1px dashed #d0d8e8;
+}
+
+.quick-login-label {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-bottom: 8px;
+}
+
+.quick-login-btns {
+  display: flex;
+  gap: 8px;
+}
+
+.quick-login-btns .ant-btn {
+  flex: 1;
+  font-size: 12px;
 }
 
 .login-footer {
