@@ -130,9 +130,9 @@ const trendOption = {
 
 const pieOption = {
   tooltip: { trigger: 'item', formatter: '{b}: {c}h ({d}%)' },
-  legend: { bottom: 0, textStyle: { fontSize: 11 } },
+  legend: { bottom: 0, textStyle: { fontSize: 11 }, icon: 'circle', itemWidth: 8, itemGap: 14 },
   series: [{
-    type: 'pie', radius: ['40%', '65%'], center: ['50%', '45%'],
+    type: 'pie', radius: ['35%', '60%'], center: ['50%', '42%'],
     data: [
       { name: '刑侦警', value: 428, itemStyle: { color: '#003087' } },
       { name: '治安警', value: 356, itemStyle: { color: '#1890ff' } },
@@ -140,7 +140,9 @@ const pieOption = {
       { name: '派出所', value: 512, itemStyle: { color: '#faad14' } },
       { name: '其他', value: 178, itemStyle: { color: '#c8a84b' } },
     ],
-    label: { formatter: '{b}\n{d}%', fontSize: 11 },
+    label: { formatter: '{d}%', fontSize: 11, position: 'outside' },
+    labelLine: { length: 10, length2: 8 },
+    emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0,0,0,0.2)' } },
   }]
 }
 

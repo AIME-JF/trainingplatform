@@ -166,11 +166,17 @@ const startGenerate = () => {
     }, delay)
   })
 
+const audienceMap = { basic: '基层民警', detective: '刑侦警员', leader: '基层领导' }
+const styleMap = { case: '案例导入式', lecture: '传统讲授式', interactive: '互动讨论式' }
+
   setTimeout(() => {
     generating.value = false
     generatedPlan.value = {
       ...MOCK_LESSON_PLAN,
       title: config.title || MOCK_LESSON_PLAN.title,
+      audience: audienceMap[config.audience] || '基层民警',
+      duration: config.duration || '90',
+      style: styleMap[config.style] || '案例导入式',
       genTime: new Date().toLocaleString('zh-CN'),
       sections: MOCK_LESSON_PLAN.sections.map(s => ({ ...s, collapsed: false })),
     }

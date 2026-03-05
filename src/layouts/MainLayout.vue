@@ -116,7 +116,7 @@
           <a-divider type="vertical" />
 
           <!-- 用户信息 -->
-          <a-dropdown>
+          <a-dropdown :trigger="['click']">
             <div class="user-info">
               <a-avatar :size="32" :style="{ background: '#003087' }">
                 {{ authStore.currentUser?.name?.charAt(0) }}
