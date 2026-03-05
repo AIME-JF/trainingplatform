@@ -39,7 +39,7 @@
           <a-menu-item key="/exam/bank">题库管理</a-menu-item>
           <a-menu-item key="/exam/scores">成绩管理</a-menu-item>
         </a-sub-menu>
-        <a-menu-item key="/exam/bank" v-else>
+        <a-menu-item key="/exam/list" v-else>
           <template #icon><FormOutlined /></template>
           参加考试
         </a-menu-item>
@@ -159,7 +159,7 @@
         <span class="nav-icon"><TeamOutlined /></span>
         <span class="nav-label">培训</span>
       </a>
-      <a class="mobile-nav-item" :class="{ active: $route.path.startsWith('/exam') }" @click="$router.push('/exam/bank')">
+      <a class="mobile-nav-item" :class="{ active: $route.path.startsWith('/exam') }" @click="$router.push(isStudent ? '/exam/list' : '/exam/bank')">
         <span class="nav-icon"><FormOutlined /></span>
         <span class="nav-label">考试</span>
       </a>

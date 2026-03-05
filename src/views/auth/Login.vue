@@ -82,6 +82,10 @@
         <!-- 手机验证码登录 -->
         <div v-if="loginMode === 'phone'">
           <!-- 角色选择卡片 -->
+          <div class="role-section-label">
+            <div class="role-label-title">请选择进入系统的角色身份</div>
+            <div class="role-label-hint">同一手机号如绑定多个角色，可选择角色登录</div>
+          </div>
           <div class="role-cards">
             <div
               v-for="role in roles"
@@ -449,6 +453,21 @@ async function handleLogin() {
 
 .login-header p {
   font-size: 13px;
+  color: var(--police-text-muted);
+}
+
+/* 角色选择区 */
+.role-section-label {
+  margin-bottom: 10px;
+}
+.role-label-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--police-text-primary);
+  margin-bottom: 2px;
+}
+.role-label-hint {
+  font-size: 11px;
   color: var(--police-text-muted);
 }
 

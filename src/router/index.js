@@ -35,6 +35,12 @@ const router = createRouter({
         },
         // 考试系统
         {
+          path: 'exam/list',
+          name: 'ExamList',
+          component: () => import('../views/exam/ExamList.vue'),
+          meta: { title: '参加考试', roles: ['student'] },
+        },
+        {
           path: 'exam/bank',
           name: 'QuestionBank',
           component: () => import('../views/exam/QuestionBank.vue'),
@@ -170,13 +176,17 @@ const router = createRouter({
   ],
 })
 
-// 导航守卫（Demo 版：简单检查 localStorage）
+// 导航守卫（Demo 版：检查登录 + 角色权限）
 router.beforeEach((to) => {
   const savedRole = localStorage.getItem('mockRole')
   if (to.meta.requiresAuth && !savedRole) {
     return '/login'
   }
   if (to.path === '/login' && savedRole) {
+    return '/'
+  }
+  // 角色权限检查
+  if (to.meta.roles && savedRole && !to.meta.roles.includes(savedRole)) {
     return '/'
   }
 })
