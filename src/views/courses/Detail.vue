@@ -530,4 +530,12 @@ const saveEdit = () => {
 .ch-edit-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .ch-badge { background: var(--police-primary, #003087); color: #fff; font-size: 11px; font-weight: 600; padding: 2px 10px; border-radius: 10px; }
 .chapter-upload :deep(.ant-upload.ant-upload-drag) { padding: 6px 0; }
+
+@media (max-width: 768px) {
+  .course-video { height: 240px !important; }
+  .doc-iframe-container { height: 340px !important; }
+  .meta-grid { grid-template-columns: 1fr !important; }
+  .video-controls { flex-wrap: wrap; gap: 8px; justify-content: space-between; }
+  .progress-bar-wrap { width: 100%; order: -1; padding: 4px 0; }
+}
 </style>

@@ -498,4 +498,14 @@ const announceMsg = () => message.info('公告发布功能开发中...')
   justify-content: center;
   font-size: 20px;
 }
+@media (max-width: 768px) {
+  .grid-2, .grid-3 {
+    grid-template-columns: 1fr !important;
+  }
+  .welcome-bar {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+  }
+}
 </style>

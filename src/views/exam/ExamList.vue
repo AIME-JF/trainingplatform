@@ -218,4 +218,9 @@ const startExam = (exam) => {
   border-radius: 8px;
   letter-spacing: 1px;
 }
+
+@media (max-width: 768px) {
+  .exam-meta-row { flex-direction: column !important; align-items: flex-start !important; gap: 6px; }
+  .exam-info-grid { grid-template-columns: 1fr !important; }
+}
 </style>

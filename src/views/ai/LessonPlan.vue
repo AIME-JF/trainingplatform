@@ -220,4 +220,10 @@ const styleMap = { case: '案例导入式', lecture: '传统讲授式', interact
 .ps-toggle { color: #aaa; font-size: 10px; }
 .ps-body { padding: 14px 16px; }
 .ps-content { font-size: 13px; color: #555; line-height: 1.8; white-space: pre-line; }
+
+@media (max-width: 768px) {
+  .plan-meta-grid { grid-template-columns: 1fr !important; }
+  .empty-panel { min-height: 200px !important; }
+  .plan-toolbar { flex-direction: column !important; align-items: flex-start !important; gap: 10px; }
+}
 </style>

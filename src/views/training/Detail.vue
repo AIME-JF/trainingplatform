@@ -206,4 +206,10 @@ const exportMsg = () => message.success('学员名单已导出！')
 .cd-item.green { color: #52c41a; }
 .cd-item.orange { color: #faad14; }
 .cd-item.red { color: #ff4d4f; }
+
+@media (max-width: 768px) {
+  .overview-stats { grid-template-columns: 1fr 1fr !important; }
+  .training-banner { padding: 16px !important; }
+  .training-title { font-size: 18px !important; }
+}
 </style>

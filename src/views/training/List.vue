@@ -322,7 +322,9 @@ const goEnrollManage = (t) => router.push(`/training/${t.id}/enroll/manage`)
 @media (max-width: 900px) {
   .training-cards { grid-template-columns: repeat(2, 1fr); }
 }
-@media (max-width: 600px) {
-  .training-cards { grid-template-columns: 1fr; }
+@media (max-width: 768px) {
+  .training-cards { grid-template-columns: 1fr !important; }
+  .stat-card { padding: 12px; margin-bottom: 8px; }
+  .stat-num { font-size: 20px; }
 }
 </style>

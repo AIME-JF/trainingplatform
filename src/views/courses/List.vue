@@ -469,4 +469,10 @@ const goDetail = (course) => router.push({ name: 'CourseDetail', params: { id: c
   margin-top: 16px;
   border-top: 1px solid #f0f0f0;
 }
+
+@media (max-width: 768px) {
+  .course-grid { grid-template-columns: 1fr !important; }
+  .filter-card :deep(.ant-card-body) { padding: 12px !important; }
+  .page-header h2 { font-size: 18px !important; }
+}
 </style>

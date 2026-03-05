@@ -199,4 +199,11 @@ function exportReport() {
 .insight-content { flex: 1; }
 .insight-title { font-size: 13px; font-weight: 600; color: #1a1a1a; margin-bottom: 2px; }
 .insight-desc { font-size: 12px; color: #666; line-height: 1.5; }
+
+@media (max-width: 768px) {
+  .chart-lg { height: 220px !important; }
+  .chart-md { height: 220px !important; }
+  .kpi-card :deep(.ant-card-body) { padding: 12px !important; flex-direction: column; align-items: flex-start; gap: 8px; }
+  .kpi-icon { position: absolute; right: 12px; top: 12px; }
+}
 </style>
