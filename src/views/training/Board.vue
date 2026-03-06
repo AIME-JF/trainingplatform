@@ -145,9 +145,20 @@ const lineOption = {
   yAxis: { type: 'value', min: 60, max: 100, axisLabel: { formatter: '{value}%' } },
   series: [{ type: 'line', data: [72, 76, 78, 81, 82, 84], smooth: true, lineStyle: { color: '#003087', width: 3 }, itemStyle: { color: '#003087' }, areaStyle: { color: 'rgba(0,48,135,0.08)' } }],
 }
-
+const MOCK_WARNINGS = [
+  { id: 1, text: '南宁市局参训人数本周下降 15%', time: '10分钟前', level: 'high' },
+  { id: 2, text: '2个新培训班即将达到报名人数上限', time: '1小时前', level: 'medium' },
+  { id: 3, text: '梧州有12名学员连续两周未完成在线学习', time: '2小时前', level: 'high' }
+]
 const warnings = MOCK_WARNINGS
 
+const MOCK_CITY_RANKS = [
+  { name: '南宁', rate: 98 },
+  { name: '柳州', rate: 95 },
+  { name: '桂林', rate: 92 },
+  { name: '北海', rate: 88 },
+  { name: '玉林', rate: 85 }
+]
 const cityRanks = MOCK_CITY_RANKS
 
 // 导出报告
