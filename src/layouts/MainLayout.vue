@@ -86,14 +86,88 @@
       </a-menu>
     </a-layout-sider>
 
+    <!-- 移动端抽屉菜单 -->
+    <a-drawer
+      v-model:open="mobileDrawerOpen"
+      placement="left"
+      :width="220"
+      :closable="false"
+      :bodyStyle="{ padding: 0, background: 'var(--police-sidebar-bg)' }"
+      :headerStyle="{ display: 'none' }"
+    >
+      <div class="sidebar-logo" style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+        <div class="logo-icon">警</div>
+        <span class="logo-text">警务训练平台</span>
+      </div>
+      <a-menu
+        v-model:selectedKeys="selectedKeys"
+        mode="inline"
+        class="sidebar-menu"
+        @click="handleDrawerMenuClick"
+      >
+        <a-menu-item key="/">
+          <template #icon><HomeOutlined /></template>
+          工作台
+        </a-menu-item>
+        <a-menu-item key="/courses">
+          <template #icon><PlayCircleOutlined /></template>
+          课程学习
+        </a-menu-item>
+        <a-sub-menu key="exam" v-if="!isStudent">
+          <template #icon><FormOutlined /></template>
+          <template #title>考试系统</template>
+          <a-menu-item key="/exam/bank">题库管理</a-menu-item>
+          <a-menu-item key="/exam/scores">成绩管理</a-menu-item>
+        </a-sub-menu>
+        <a-menu-item key="/exam/list" v-else>
+          <template #icon><FormOutlined /></template>
+          参加考试
+        </a-menu-item>
+        <a-sub-menu key="ai" v-if="!isStudent">
+          <template #icon><RobotOutlined /></template>
+          <template #title>AI 功能</template>
+          <a-menu-item key="/ai/question-gen">智能组卷</a-menu-item>
+          <a-menu-item key="/ai/lesson-plan" v-if="isInstructor">教案生成</a-menu-item>
+        </a-sub-menu>
+        <a-sub-menu key="training">
+          <template #icon><TeamOutlined /></template>
+          <template #title>培训管理</template>
+          <a-menu-item key="/training">培训班列表</a-menu-item>
+          <a-menu-item key="/training/schedule">周训练计划</a-menu-item>
+          <a-menu-item key="/training/board" v-if="isAdmin">培训看板</a-menu-item>
+        </a-sub-menu>
+        <a-menu-item key="/instructor" v-if="!isStudent">
+          <template #icon><UserOutlined /></template>
+          教官库
+        </a-menu-item>
+        <a-menu-item key="/trainee">
+          <template #icon><IdcardOutlined /></template>
+          学员库
+        </a-menu-item>
+        <a-menu-item key="/certificate">
+          <template #icon><SafetyCertificateOutlined /></template>
+          结业证书
+        </a-menu-item>
+        <a-menu-item key="/talent" v-if="isAdmin">
+          <template #icon><StarOutlined /></template>
+          人才库
+        </a-menu-item>
+        <a-menu-item key="/report" v-if="isAdmin">
+          <template #icon><BarChartOutlined /></template>
+          数据看板
+        </a-menu-item>
+      </a-menu>
+    </a-drawer>
+
     <a-layout>
       <!-- 顶部导航栏 -->
       <a-layout-header class="topbar">
         <div class="topbar-left">
+          <!-- 移动端：打开抽屉；PC端：折叠侧边栏 -->
           <menu-unfold-outlined
-            v-if="collapsed"
+            v-if="collapsed || isMobile"
             class="collapse-trigger"
-            @click="collapsed = false"
+            @click="isMobile ? (mobileDrawerOpen = true) : (collapsed = false)"
           />
           <menu-fold-outlined
             v-else
@@ -177,7 +251,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
 import {
@@ -192,8 +266,15 @@ const route = useRoute()
 const authStore = useAuthStore()
 
 const collapsed = ref(false)
+const mobileDrawerOpen = ref(false)
 const selectedKeys = ref([route.path])
 const openKeys = ref([])
+
+// 检测是否为移动端
+const isMobile = ref(window.innerWidth <= 768)
+function onResize() { isMobile.value = window.innerWidth <= 768 }
+onMounted(() => window.addEventListener('resize', onResize))
+onUnmounted(() => window.removeEventListener('resize', onResize))
 
 const isStudent = computed(() => authStore.isStudent)
 const isInstructor = computed(() => authStore.isInstructor)
@@ -219,6 +300,11 @@ watch(
 
 function handleMenuClick({ key }) {
   router.push(key)
+}
+
+function handleDrawerMenuClick({ key }) {
+  router.push(key)
+  mobileDrawerOpen.value = false
 }
 
 function switchRole(roleKey) {
