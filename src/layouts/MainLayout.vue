@@ -220,7 +220,7 @@
 
       <!-- 内容区 -->
       <a-layout-content class="content-area">
-        <router-view />
+        <router-view v-if="isMounted" />
       </a-layout-content>
     </a-layout>
 
@@ -272,8 +272,13 @@ const openKeys = ref([])
 
 // 检测是否为移动端
 const isMobile = ref(window.innerWidth <= 768)
+const isMounted = ref(false)
+
 function onResize() { isMobile.value = window.innerWidth <= 768 }
-onMounted(() => window.addEventListener('resize', onResize))
+onMounted(() => {
+  window.addEventListener('resize', onResize)
+  setTimeout(() => { isMounted.value = true }, 50)
+})
 onUnmounted(() => window.removeEventListener('resize', onResize))
 
 const isStudent = computed(() => authStore.isStudent)

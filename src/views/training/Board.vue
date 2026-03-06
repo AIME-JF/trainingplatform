@@ -34,7 +34,7 @@
     </div>
 
     <!-- 图表行 -->
-    <div class="chart-row">
+    <div class="chart-row" v-if="isMounted">
       <!-- 各市局参训人数 -->
       <div class="chart-card chart-large">
         <div class="chart-title">各市局{{ timeLabels[timeRange] }}参训人数</div>
@@ -101,6 +101,14 @@ const timeRange = ref('month')
 const currentDate = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
 const timeLabels = { month: '本月', quarter: '本季度', year: '本年度' }
 const timeMultiplier = { month: 1, quarter: 3, year: 12 }
+
+const isMounted = ref(false)
+import { onMounted } from 'vue'
+
+onMounted(() => {
+  // Delay chart rendering to bypass Ant Design submenu transition conflicts
+  setTimeout(() => { isMounted.value = true }, 200)
+})
 
 const baseActiveTrainings = MOCK_TRAININGS.filter(t => t.status === 'active').length || 1
 const baseTotalEnrolled = MOCK_ENROLLMENTS.filter(e => e.status === 'approved').length || 32
