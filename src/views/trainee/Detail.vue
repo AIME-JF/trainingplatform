@@ -135,6 +135,7 @@ import { useRoute } from 'vue-router'
 import { StarFilled } from '@ant-design/icons-vue'
 import { MOCK_TRAINEES } from '@/mock/trainees'
 import { MOCK_COURSES } from '@/mock/courses'
+import { MOCK_REVIEWS, getTrainingHistory } from '@/mock/reviews'
 
 const route = useRoute()
 const traineeId = route.params.id
@@ -144,17 +145,9 @@ const activeTab = ref('intro')
 const traineeCourses = computed(() => MOCK_COURSES.filter(c => c.instructor === trainee.value.name || true).slice(0, 3))
 const getCoverIcon = (cat) => ({ law: '⚖️', skill: '🔧', traffic: '🚗', community: '🏘️', cyber: '💻', physical: '💪' })[cat] ?? '📚'
 
-const mockReviews = [
-  { id: 1, user: '张民警', rating: 5, date: '2025-03-01', content: '讲课深入浅出，案例生动，学完很有收获，强烈推荐！', tags: ['内容丰富', '互动性强', '实用性高'] },
-  { id: 2, user: '李警官', rating: 4, date: '2025-02-20', content: '理论知识讲解很扎实，实操环节还可以再多一些。', tags: ['理论扎实', '专业权威'] },
-  { id: 3, user: '王同学', rating: 5, date: '2025-02-10', content: '老师很有耐心，答疑及时，遇到问题都能快速解答。', tags: ['耐心负责', '答疑及时'] },
-]
+const mockReviews = MOCK_REVIEWS
 
-const trainingHistory = [
-  { key: 1, title: '2025年春季刑侦技能培训班', period: '2025-03-01 ~ 2025-03-15', students: 28, score: 4.8 },
-  { key: 2, title: '基层民警法律素养提升班', period: '2024-11-10 ~ 2024-11-20', students: 35, score: 4.9 },
-  { key: 3, title: '执法规范化专项培训', period: '2024-09-01 ~ 2024-09-07', students: 42, score: 4.7 },
-]
+const trainingHistory = getTrainingHistory(traineeId)
 
 const historyColumns = [
   { title: '培训班名称', dataIndex: 'title', key: 'title' },

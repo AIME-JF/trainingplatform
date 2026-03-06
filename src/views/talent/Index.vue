@@ -83,6 +83,7 @@
 <script setup>
 import { ref, computed } from 'vue'
 import { RobotOutlined } from '@ant-design/icons-vue'
+import { MOCK_TALENTS } from '@/mock/scores'
 
 const searchText = ref('')
 const filterTier = ref('all')
@@ -95,14 +96,7 @@ const topStats = [
   { icon: '📊', label: '评估覆盖率', value: '94%', color: '#722ed1' },
 ]
 
-const TALENTS = [
-  { id: 1, name: '张伟', unit: '南宁市公安局', tier: 's', tierLabel: 'S', rank: 1, totalScore: 96.8, studyHours: 128, passRate: 100, avatarColor: '#c8a84b', highlights: ['全区第一', '理论满分', '实操优秀'], aiNote: 'AI综合评估：各维度均衡发展，推荐优先选拔。' },
-  { id: 2, name: '李芳', unit: '桂林市公安局', tier: 's', tierLabel: 'S', rank: 2, totalScore: 94.2, studyHours: 115, passRate: 98, avatarColor: '#003087', highlights: ['证据意识强', '执法规范'], aiNote: 'AI评估：证据固定能力突出，适合刑侦岗位。' },
-  { id: 3, name: '王强', unit: '柳州市公安局', tier: 's', tierLabel: 'S', rank: 3, totalScore: 92.5, studyHours: 98, passRate: 95, avatarColor: '#52c41a', highlights: ['体能达标', '全勤'], aiNote: 'AI评估：综合素质优秀，执行力强。' },
-  { id: 4, name: '陈明', unit: '南宁市公安局', tier: 'a', tierLabel: 'A', rank: 4, totalScore: 88.0, studyHours: 86, passRate: 90, avatarColor: '#722ed1', highlights: ['进步最快', '积极参与'], aiNote: 'AI评估：近3个月进步显著，可持续关注。' },
-  { id: 5, name: '刘洋', unit: '桂林市公安局', tier: 'a', tierLabel: 'A', rank: 5, totalScore: 85.5, studyHours: 79, passRate: 88, avatarColor: '#eb2f96', highlights: ['理论扎实', '法律素养高'], aiNote: 'AI评估：法律知识掌握全面，适合培训辅导。' },
-  { id: 6, name: '赵红', unit: '柳州市公安局', tier: 'b', tierLabel: 'B', rank: 6, totalScore: 78.2, studyHours: 65, passRate: 80, avatarColor: '#fa8c16', highlights: ['稳定发挥'], aiNote: 'AI评估：表现稳定，建议加强证据技能培训。' },
-]
+const TALENTS = MOCK_TALENTS
 
 const filteredTalents = computed(() => {
   let list = [...TALENTS]

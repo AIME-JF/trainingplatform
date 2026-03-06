@@ -249,6 +249,7 @@ import { message, Modal } from 'ant-design-vue'
 import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QrcodeOutlined, DownloadOutlined, PlusOutlined, EditOutlined } from '@ant-design/icons-vue'
 import { MOCK_TRAININGS } from '@/mock/trainings'
 import { MOCK_USER_LIST } from '@/mock/users'
+import { getTrainingNotices } from '@/mock/board'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
@@ -420,10 +421,7 @@ function saveClassInfo() {
 }
 
 // ===== 公告 =====
-const notices = [
-  { id: 1, title: '开班及教材发放通知', time: trainingData.startDate, content: `本次培训【${trainingData.name}】教材已到位，请于开班当天前往培训点领取。` },
-  { id: 2, title: '体能测试及考核通知', time: trainingData.endDate, content: '结业周将进行统一考核，请携带好装备。' },
-]
+const notices = computed(() => getTrainingNotices(trainingData))
 
 const exportMsg = () => message.success('学员名单已导出！')
 </script>

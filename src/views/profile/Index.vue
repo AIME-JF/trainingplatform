@@ -145,6 +145,7 @@ import { TooltipComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import { useAuthStore } from '@/stores/auth'
 import { MOCK_COURSES } from '@/mock/courses'
+import { MOCK_ABILITIES, MOCK_EXAM_HISTORY, MOCK_CERT_LIST, MOCK_POINT_HISTORY } from '@/mock/profile'
 
 use([CanvasRenderer, RadarChart, TooltipComponent])
 
@@ -163,13 +164,7 @@ const studyStats = [
   { icon: '🏆', label: '通过考试', value: Math.round((user.examCount || 8) * 0.6) + '次', color: '#c8a84b' },
 ]
 
-const abilities = [
-  { label: '法律知识', score: 88 },
-  { label: '执法规范', score: 72 },
-  { label: '证据意识', score: 64 },
-  { label: '体能标准', score: 95 },
-  { label: '警察素养', score: 91 },
-]
+const abilities = MOCK_ABILITIES
 
 const radarOption = {
   radar: {
@@ -201,11 +196,7 @@ const recentCourses = MOCK_COURSES.slice(0, 3).map(c => ({
   progress: Math.floor(Math.random() * 60 + 30),
 }))
 
-const examHistory = [
-  { key: 1, title: '刑事法律基础考试', date: '2025-03-05', score: 78, passed: true },
-  { key: 2, title: '执法规范化测验', date: '2025-02-20', score: 92, passed: true },
-  { key: 3, title: '反诈实务知识考核', date: '2025-01-15', score: 58, passed: false },
-]
+const examHistory = MOCK_EXAM_HISTORY
 
 const examColumns = [
   { title: '考试名称', dataIndex: 'title', key: 'title' },
@@ -214,17 +205,9 @@ const examColumns = [
   { title: '结果', key: 'result' },
 ]
 
-const certList = [
-  { id: 1, name: '优秀学员', issuer: '广西公安厅', date: '2024-12-31' },
-  { id: 2, name: '执法能手', issuer: '南宁市公安局', date: '2024-06-15' },
-]
+const certList = MOCK_CERT_LIST
 
-const pointHistory = [
-  { id: 1, action: '完成课程「电信诈骗」', points: 50 },
-  { id: 2, action: '通过月度考试', points: 100 },
-  { id: 3, action: '签到打卡', points: 5 },
-  { id: 4, action: '迟到扣分', points: -10 },
-]
+const pointHistory = MOCK_POINT_HISTORY
 </script>
 
 <style scoped>
