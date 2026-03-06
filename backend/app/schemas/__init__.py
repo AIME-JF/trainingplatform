@@ -1,0 +1,113 @@
+"""
+Pydantic模型导出
+"""
+
+from .user import (
+    UserCreate, UserUpdate, UserResponse, UserSimpleResponse, UserLogin, LoginResponse,
+    PasswordChange, TokenData, UserRoleUpdate, UserDepartmentUpdate
+)
+from .role import (
+    RoleCreate, RoleUpdate, RoleResponse, RoleSimpleResponse,
+    RolePermissionUpdate
+)
+from .permission import (
+    PermissionCreate, PermissionUpdate, PermissionResponse
+)
+from .department import (
+    DepartmentCreate, DepartmentUpdate, DepartmentResponse, DepartmentSimpleResponse,
+    DepartmentPermissionUpdate
+)
+from .system import (
+    ConfigCreate, ConfigUpdate, ConfigResponse,
+    ConfigGroupCreate, ConfigGroupUpdate, ConfigGroupResponse, ConfigGroupDetailResponse,
+    PublicConfigResponse
+)
+from .response import StandardResponse, PaginatedResponse
+
+# 课程相关
+from .course import (
+    CourseCreate, CourseUpdate, CourseResponse, CourseListResponse,
+    ChapterCreate, ChapterUpdate, ChapterResponse,
+    CourseProgressUpdate, CourseProgressResponse
+)
+# 培训相关
+from .training import (
+    TrainingCreate, TrainingUpdate, TrainingResponse, TrainingListResponse,
+    TrainingCourseCreate, TrainingCourseResponse,
+    EnrollmentCreate, EnrollmentResponse,
+    CheckinCreate, CheckinResponse,
+    ScheduleItemCreate, ScheduleItemResponse
+)
+# 考试相关
+from .exam import (
+    QuestionCreate, QuestionUpdate, QuestionResponse, QuestionBatchCreate,
+    ExamCreate, ExamUpdate, ExamResponse, ExamDetailResponse, ExamQuestionResponse,
+    ExamSubmit, ExamRecordResponse
+)
+# 证书相关
+from .certificate import CertificateCreate, CertificateResponse
+# 教官相关
+from .instructor import InstructorProfileCreate, InstructorProfileUpdate, InstructorResponse
+# 个人中心
+from .profile import ProfileUpdate, ProfileResponse, StudyStatsResponse, ExamHistoryResponse
+# 工作台
+from .dashboard import DashboardResponse
+# 数据看板
+from .report import KpiResponse, TrendItem, PoliceTypeDistribution, CityRanking
+# AI功能
+from .ai import (
+    AIGenerateQuestionsRequest, AIGenerateQuestionsResponse,
+    AIGenerateLessonPlanRequest, AIGenerateLessonPlanResponse
+)
+# 人才库
+from .talent import TalentResponse, TalentStatsResponse
+
+
+__all__ = [
+    # 用户相关
+    "UserCreate", "UserUpdate", "UserResponse", "UserSimpleResponse", "UserLogin", "LoginResponse",
+    "PasswordChange", "TokenData", "UserRoleUpdate", "UserDepartmentUpdate",
+    # 角色相关
+    "RoleCreate", "RoleUpdate", "RoleResponse", "RoleSimpleResponse",
+    "RolePermissionUpdate",
+    # 权限相关
+    "PermissionCreate", "PermissionUpdate", "PermissionResponse",
+    # 部门相关
+    "DepartmentCreate", "DepartmentUpdate", "DepartmentResponse",
+    "DepartmentSimpleResponse", "DepartmentPermissionUpdate",
+    # 系统配置相关
+    "ConfigCreate", "ConfigUpdate", "ConfigResponse",
+    "ConfigGroupCreate", "ConfigGroupUpdate", "ConfigGroupResponse", "ConfigGroupDetailResponse",
+    "PublicConfigResponse",
+    # 响应相关
+    "StandardResponse", "PaginatedResponse",
+    # 课程相关
+    "CourseCreate", "CourseUpdate", "CourseResponse", "CourseListResponse",
+    "ChapterCreate", "ChapterUpdate", "ChapterResponse",
+    "CourseProgressUpdate", "CourseProgressResponse",
+    # 培训相关
+    "TrainingCreate", "TrainingUpdate", "TrainingResponse", "TrainingListResponse",
+    "TrainingCourseCreate", "TrainingCourseResponse",
+    "EnrollmentCreate", "EnrollmentResponse",
+    "CheckinCreate", "CheckinResponse",
+    "ScheduleItemCreate", "ScheduleItemResponse",
+    # 考试相关
+    "QuestionCreate", "QuestionUpdate", "QuestionResponse", "QuestionBatchCreate",
+    "ExamCreate", "ExamUpdate", "ExamResponse", "ExamDetailResponse", "ExamQuestionResponse",
+    "ExamSubmit", "ExamRecordResponse",
+    # 证书相关
+    "CertificateCreate", "CertificateResponse",
+    # 教官相关
+    "InstructorProfileCreate", "InstructorProfileUpdate", "InstructorResponse",
+    # 个人中心
+    "ProfileUpdate", "ProfileResponse", "StudyStatsResponse", "ExamHistoryResponse",
+    # 工作台
+    "DashboardResponse",
+    # 数据看板
+    "KpiResponse", "TrendItem", "PoliceTypeDistribution", "CityRanking",
+    # AI功能
+    "AIGenerateQuestionsRequest", "AIGenerateQuestionsResponse",
+    "AIGenerateLessonPlanRequest", "AIGenerateLessonPlanResponse",
+    # 人才库
+    "TalentResponse", "TalentStatsResponse",
+]

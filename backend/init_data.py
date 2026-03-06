@@ -1,0 +1,389 @@
+"""
+初始化数据脚本
+"""
+from datetime import datetime, date
+from sqlalchemy.orm import Session
+from app.database import engine, init_db
+from app.models import User, Role, Permission, Department, user_roles, role_permissions
+from app.models.system import Config, ConfigGroup, ConfigFormat, SystemMeta
+from app.models import InstructorProfile
+from app.services.auth import auth_service
+from logger import logger
+
+
+def init_permissions():
+    """初始化权限数据"""
+    try:
+        with Session(engine) as db:
+            existing_count = db.query(Permission).count()
+            if existing_count > 0:
+                logger.info("权限数据已存在，跳过初始化")
+                return
+
+            permissions_data = [
+                # 认证相关权限
+                {"path": "/api/v1/auth/me", "code": "GET_CURRENT_USER", "description": "获取当前用户信息"},
+                {"path": "/api/v1/auth/change-password", "code": "CHANGE_PASSWORD", "description": "修改密码"},
+
+                # 用户管理权限
+                {"path": "/api/v1/users/create", "code": "CREATE_USER", "description": "创建用户"},
+                {"path": "/api/v1/users/{user_id}/detail", "code": "GET_USER", "description": "获取用户详情"},
+                {"path": "/api/v1/users/list", "code": "GET_USERS", "description": "获取用户列表"},
+                {"path": "/api/v1/users/{user_id}/update", "code": "UPDATE_USER", "description": "更新用户"},
+                {"path": "/api/v1/users/{user_id}/delete", "code": "DELETE_USER", "description": "删除用户"},
+                {"path": "/api/v1/users/{user_id}/roles", "code": "UPDATE_USER_ROLES", "description": "更新用户角色"},
+                {"path": "/api/v1/users/{user_id}/departments", "code": "UPDATE_USER_DEPARTMENTS", "description": "更新用户部门"},
+
+                # 角色管理权限
+                {"path": "/api/v1/roles", "code": "CREATE_ROLE", "description": "创建角色"},
+                {"path": "/api/v1/roles/{role_id}/detail", "code": "GET_ROLE", "description": "获取角色详情"},
+                {"path": "/api/v1/roles/list", "code": "GET_ROLES", "description": "获取角色列表"},
+                {"path": "/api/v1/roles/{role_id}/update", "code": "UPDATE_ROLE", "description": "更新角色"},
+                {"path": "/api/v1/roles/{role_id}/delete", "code": "DELETE_ROLE", "description": "删除角色"},
+                {"path": "/api/v1/roles/{role_id}/permissions", "code": "UPDATE_ROLE_PERMISSIONS", "description": "更新角色权限"},
+
+                # 权限管理权限
+                {"path": "/api/v1/permissions", "code": "CREATE_PERMISSION", "description": "创建权限"},
+                {"path": "/api/v1/permissions/{permission_id}/detail", "code": "GET_PERMISSION", "description": "获取权限详情"},
+                {"path": "/api/v1/permissions/list", "code": "GET_PERMISSIONS", "description": "获取权限列表"},
+                {"path": "/api/v1/permissions/{permission_id}/update", "code": "UPDATE_PERMISSION", "description": "更新权限"},
+                {"path": "/api/v1/permissions/{permission_id}/delete", "code": "DELETE_PERMISSION", "description": "删除权限"},
+                {"path": "/api/v1/permissions/sync", "code": "SYNC_PERMISSIONS", "description": "同步权限"},
+
+                # 部门管理权限
+                {"path": "/api/v1/departments", "code": "CREATE_DEPARTMENT", "description": "创建部门"},
+                {"path": "/api/v1/departments/{department_id}/detail", "code": "GET_DEPARTMENT", "description": "获取部门详情"},
+                {"path": "/api/v1/departments/list", "code": "GET_DEPARTMENTS", "description": "获取部门列表"},
+                {"path": "/api/v1/departments/tree", "code": "GET_DEPARTMENT_TREE", "description": "获取部门树形结构"},
+                {"path": "/api/v1/departments/{department_id}/update", "code": "UPDATE_DEPARTMENT", "description": "更新部门"},
+                {"path": "/api/v1/departments/{department_id}", "code": "DELETE_DEPARTMENT", "description": "删除部门"},
+                {"path": "/api/v1/departments/{department_id}/permissions", "code": "UPDATE_DEPARTMENT_PERMISSIONS", "description": "更新部门权限"},
+
+                # 系统权限
+                {"path": "/", "code": "ROOT", "description": "根路径访问"},
+                {"path": "/health", "code": "HEALTH_CHECK", "description": "健康检查"},
+
+                # ====== 警务培训平台业务权限 ======
+
+                # 课程管理
+                {"path": "/api/v1/courses", "code": "GET_COURSES", "description": "获取课程列表"},
+                {"path": "/api/v1/courses/create", "code": "CREATE_COURSE", "description": "创建课程"},
+                {"path": "/api/v1/courses/{id}", "code": "GET_COURSE_DETAIL", "description": "获取课程详情"},
+                {"path": "/api/v1/courses/{id}/update", "code": "UPDATE_COURSE", "description": "更新课程"},
+                {"path": "/api/v1/courses/progress", "code": "GET_COURSE_PROGRESS", "description": "获取学习进度"},
+                {"path": "/api/v1/courses/{id}/chapters/{chapter_id}/progress", "code": "UPDATE_CHAPTER_PROGRESS", "description": "更新章节进度"},
+
+                # 考试管理
+                {"path": "/api/v1/exams", "code": "GET_EXAMS", "description": "获取考试列表"},
+                {"path": "/api/v1/exams/create", "code": "CREATE_EXAM", "description": "创建考试"},
+                {"path": "/api/v1/exams/{id}", "code": "GET_EXAM_DETAIL", "description": "获取考试详情"},
+                {"path": "/api/v1/exams/{id}/submit", "code": "SUBMIT_EXAM", "description": "提交考试"},
+                {"path": "/api/v1/exams/{id}/result", "code": "GET_EXAM_RESULT", "description": "获取考试结果"},
+                {"path": "/api/v1/exams/{id}/scores", "code": "GET_EXAM_SCORES", "description": "获取成绩管理"},
+
+                # 题库管理
+                {"path": "/api/v1/questions", "code": "GET_QUESTIONS", "description": "获取题目列表"},
+                {"path": "/api/v1/questions/create", "code": "CREATE_QUESTION", "description": "创建题目"},
+                {"path": "/api/v1/questions/{id}/update", "code": "UPDATE_QUESTION", "description": "更新题目"},
+                {"path": "/api/v1/questions/{id}/delete", "code": "DELETE_QUESTION", "description": "删除题目"},
+                {"path": "/api/v1/questions/batch", "code": "BATCH_CREATE_QUESTIONS", "description": "批量导入题目"},
+
+                # 培训管理
+                {"path": "/api/v1/trainings", "code": "GET_TRAININGS", "description": "获取培训列表"},
+                {"path": "/api/v1/trainings/create", "code": "CREATE_TRAINING", "description": "创建培训班"},
+                {"path": "/api/v1/trainings/{id}", "code": "GET_TRAINING_DETAIL", "description": "获取培训详情"},
+                {"path": "/api/v1/trainings/{id}/update", "code": "UPDATE_TRAINING", "description": "更新培训班"},
+                {"path": "/api/v1/trainings/{id}/delete", "code": "DELETE_TRAINING", "description": "删除培训班"},
+                {"path": "/api/v1/trainings/{id}/students", "code": "GET_TRAINING_STUDENTS", "description": "获取培训学员"},
+                {"path": "/api/v1/trainings/{id}/schedule", "code": "GET_TRAINING_SCHEDULE", "description": "获取训练计划"},
+                {"path": "/api/v1/trainings/{id}/enroll", "code": "ENROLL_TRAINING", "description": "培训报名"},
+                {"path": "/api/v1/trainings/{id}/enrollments", "code": "GET_ENROLLMENTS", "description": "获取报名列表"},
+                {"path": "/api/v1/trainings/{id}/enrollments/{eid}/approve", "code": "APPROVE_ENROLLMENT", "description": "审批通过"},
+                {"path": "/api/v1/trainings/{id}/enrollments/{eid}/reject", "code": "REJECT_ENROLLMENT", "description": "审批拒绝"},
+                {"path": "/api/v1/trainings/{id}/checkin/records", "code": "GET_CHECKIN_RECORDS", "description": "获取签到记录"},
+                {"path": "/api/v1/trainings/{id}/checkin", "code": "CHECKIN", "description": "签到"},
+                {"path": "/api/v1/trainings/{id}/checkin/qr", "code": "GET_CHECKIN_QR", "description": "生成签到二维码"},
+
+                # 教官管理
+                {"path": "/api/v1/instructors", "code": "GET_INSTRUCTORS", "description": "获取教官列表"},
+                {"path": "/api/v1/instructors/{id}", "code": "GET_INSTRUCTOR_DETAIL", "description": "获取教官详情"},
+                {"path": "/api/v1/instructors/create", "code": "CREATE_INSTRUCTOR", "description": "新增教官"},
+
+                # 证书管理
+                {"path": "/api/v1/certificates", "code": "GET_CERTIFICATES", "description": "获取证书列表"},
+                {"path": "/api/v1/certificates/create", "code": "CREATE_CERTIFICATE", "description": "签发证书"},
+
+                # 个人中心
+                {"path": "/api/v1/profile", "code": "GET_PROFILE", "description": "获取个人信息"},
+                {"path": "/api/v1/profile/update", "code": "UPDATE_PROFILE", "description": "更新个人信息"},
+                {"path": "/api/v1/profile/study-stats", "code": "GET_STUDY_STATS", "description": "获取学习统计"},
+                {"path": "/api/v1/profile/exam-history", "code": "GET_EXAM_HISTORY", "description": "获取考试历史"},
+
+                # 数据看板
+                {"path": "/api/v1/report/kpi", "code": "GET_REPORT_KPI", "description": "获取KPI数据"},
+                {"path": "/api/v1/report/trend", "code": "GET_REPORT_TREND", "description": "获取月度趋势"},
+                {"path": "/api/v1/report/police-type-distribution", "code": "GET_POLICE_TYPE_DIST", "description": "获取警种分布"},
+                {"path": "/api/v1/report/city-ranking", "code": "GET_CITY_RANKING", "description": "获取城市排名"},
+
+                # AI功能
+                {"path": "/api/v1/ai/generate-questions", "code": "AI_GENERATE_QUESTIONS", "description": "AI智能组卷"},
+                {"path": "/api/v1/ai/generate-lesson-plan", "code": "AI_GENERATE_LESSON_PLAN", "description": "AI教案生成"},
+
+                # 人才库
+                {"path": "/api/v1/talent", "code": "GET_TALENTS", "description": "获取人才列表"},
+                {"path": "/api/v1/talent/stats", "code": "GET_TALENT_STATS", "description": "获取人才统计"},
+
+                # 工作台
+                {"path": "/api/v1/dashboard", "code": "GET_DASHBOARD", "description": "获取工作台数据"},
+            ]
+
+            for perm_data in permissions_data:
+                permission = Permission(
+                    path=perm_data["path"],
+                    code=perm_data["code"],
+                    description=perm_data["description"],
+                    is_active=True
+                )
+                db.add(permission)
+
+            db.commit()
+            logger.info(f"权限数据初始化完成，共创建 {len(permissions_data)} 个权限")
+
+    except Exception as e:
+        logger.error(f"初始化权限数据失败: {e}")
+        raise
+
+
+def init_departments():
+    """初始化部门数据"""
+    try:
+        with Session(engine) as db:
+            existing_count = db.query(Department).count()
+            if existing_count > 0:
+                logger.info("部门数据已存在，跳过初始化")
+                return
+
+            root_dept = Department(
+                name="总部",
+                code="ROOT",
+                parent_id=None,
+                inherit_sub_permissions=True,
+                description="总部",
+                is_active=True
+            )
+            db.add(root_dept)
+            db.flush()
+
+            db.commit()
+            logger.info("部门数据初始化完成")
+
+    except Exception as e:
+        logger.error(f"初始化部门数据失败: {e}")
+        raise
+
+
+def init_roles():
+    """初始化角色数据"""
+    try:
+        with Session(engine) as db:
+            existing_count = db.query(Role).count()
+            if existing_count > 0:
+                logger.info("角色数据已存在，跳过初始化")
+                return
+
+            all_permissions = db.query(Permission).all()
+            perm_map = {p.code: p for p in all_permissions}
+
+            # 管理员角色 - 全部权限
+            admin_role = Role(
+                code="admin", name="管理员",
+                description="系统管理员，拥有所有权限", is_active=True
+            )
+            admin_role.permissions = all_permissions
+            db.add(admin_role)
+
+            # 教官角色
+            instructor_perm_codes = [
+                "GET_CURRENT_USER", "CHANGE_PASSWORD", "ROOT", "HEALTH_CHECK",
+                "GET_DASHBOARD",
+                "GET_COURSES", "CREATE_COURSE", "GET_COURSE_DETAIL", "UPDATE_COURSE",
+                "GET_EXAMS", "CREATE_EXAM", "GET_EXAM_DETAIL", "GET_EXAM_SCORES",
+                "GET_QUESTIONS", "CREATE_QUESTION", "UPDATE_QUESTION", "DELETE_QUESTION", "BATCH_CREATE_QUESTIONS",
+                "GET_TRAININGS", "CREATE_TRAINING", "GET_TRAINING_DETAIL", "UPDATE_TRAINING",
+                "GET_TRAINING_STUDENTS", "GET_TRAINING_SCHEDULE",
+                "GET_ENROLLMENTS", "APPROVE_ENROLLMENT", "REJECT_ENROLLMENT",
+                "GET_CHECKIN_RECORDS", "GET_CHECKIN_QR",
+                "GET_INSTRUCTORS", "GET_INSTRUCTOR_DETAIL",
+                "GET_CERTIFICATES", "CREATE_CERTIFICATE",
+                "GET_PROFILE", "UPDATE_PROFILE", "GET_STUDY_STATS", "GET_EXAM_HISTORY",
+                "AI_GENERATE_QUESTIONS", "AI_GENERATE_LESSON_PLAN",
+            ]
+            instructor_role = Role(
+                code="instructor", name="教官",
+                description="教官，负责教学和培训管理", is_active=True
+            )
+            instructor_role.permissions = [perm_map[c] for c in instructor_perm_codes if c in perm_map]
+            db.add(instructor_role)
+
+            # 学员角色
+            student_perm_codes = [
+                "GET_CURRENT_USER", "CHANGE_PASSWORD", "ROOT", "HEALTH_CHECK",
+                "GET_DASHBOARD",
+                "GET_COURSES", "GET_COURSE_DETAIL", "GET_COURSE_PROGRESS", "UPDATE_CHAPTER_PROGRESS",
+                "GET_EXAMS", "GET_EXAM_DETAIL", "SUBMIT_EXAM", "GET_EXAM_RESULT",
+                "GET_TRAININGS", "GET_TRAINING_DETAIL", "ENROLL_TRAINING",
+                "GET_TRAINING_SCHEDULE", "CHECKIN",
+                "GET_CERTIFICATES",
+                "GET_PROFILE", "UPDATE_PROFILE", "GET_STUDY_STATS", "GET_EXAM_HISTORY",
+            ]
+            student_role = Role(
+                code="student", name="学员",
+                description="学员，参与学习和考试", is_active=True
+            )
+            student_role.permissions = [perm_map[c] for c in student_perm_codes if c in perm_map]
+            db.add(student_role)
+
+            db.commit()
+            logger.info("角色数据初始化完成")
+
+    except Exception as e:
+        logger.error(f"初始化角色数据失败: {e}")
+        raise
+
+
+def init_users():
+    """初始化用户数据"""
+    try:
+        with Session(engine) as db:
+            existing_count = db.query(User).count()
+            if existing_count > 0:
+                logger.info("用户数据已存在，跳过初始化")
+                return
+
+            admin_role = db.query(Role).filter(Role.code == "admin").first()
+            instructor_role = db.query(Role).filter(Role.code == "instructor").first()
+            student_role = db.query(Role).filter(Role.code == "student").first()
+            root_dept = db.query(Department).filter(Department.code == "ROOT").first()
+
+            if not admin_role or not instructor_role or not student_role:
+                logger.error("角色数据不存在，请先初始化角色数据")
+                return
+            if not root_dept:
+                logger.error("部门数据不存在，请先初始化部门数据")
+                return
+
+            # 管理员
+            admin_user = User(
+                username="admin",
+                password_hash=auth_service.get_password_hash("police2025"),
+                nickname="系统管理员",
+                email="admin@gxpolice.gov.cn",
+                phone="13800000001",
+                police_id="GX-ADM-001",
+                unit="广西警察训练总队",
+                police_type="管理",
+                is_active=True
+            )
+            admin_user.roles = [admin_role]
+            admin_user.departments = [root_dept]
+            db.add(admin_user)
+
+            # 教官
+            instructor_user = User(
+                username="instructor",
+                password_hash=auth_service.get_password_hash("teach2025"),
+                nickname="张教官",
+                email="instructor@gxpolice.gov.cn",
+                phone="13800000002",
+                police_id="GX-INS-001",
+                unit="广西警察训练总队",
+                police_type="刑侦",
+                join_date=date(2010, 7, 1),
+                is_active=True
+            )
+            instructor_user.roles = [instructor_role]
+            instructor_user.departments = [root_dept]
+            db.add(instructor_user)
+            db.flush()
+
+            # 创建教官档案
+            instructor_profile = InstructorProfile(
+                user_id=instructor_user.id,
+                title="高级教官",
+                level="expert",
+                specialties=["刑事侦查", "反诈骗", "网络安全"],
+                qualification=["公安部认证教官", "广西优秀教官"],
+                certificates=[
+                    {"name": "公安部高级教官证书", "issuer": "公安部", "year": 2020},
+                    {"name": "广西优秀教官", "issuer": "广西公安厅", "year": 2022}
+                ],
+                intro="从事公安教育训练工作15年，主讲刑事侦查和反诈骗课程。",
+                rating=4.8,
+                course_count=12,
+                student_count=560,
+                review_count=230
+            )
+            db.add(instructor_profile)
+
+            # 学员
+            student_user = User(
+                username="student",
+                password_hash=auth_service.get_password_hash("learn2025"),
+                nickname="李学员",
+                email="student@gxpolice.gov.cn",
+                phone="13800000003",
+                police_id="GX-STU-001",
+                unit="南宁市公安局",
+                police_type="治安",
+                join_date=date(2020, 9, 1),
+                level="中级",
+                study_hours=120.5,
+                exam_count=8,
+                avg_score=82.5,
+                is_active=True
+            )
+            student_user.roles = [student_role]
+            student_user.departments = [root_dept]
+            db.add(student_user)
+
+            db.commit()
+            logger.info("用户数据初始化完成")
+
+    except Exception as e:
+        logger.error(f"初始化用户数据失败: {e}")
+        raise
+
+
+def check_db_init():
+    """检查数据库是否已初始化"""
+    with Session(engine) as db:
+        meta = db.query(SystemMeta).filter(SystemMeta.key == "init").first()
+        if meta:
+            return True
+        meta = SystemMeta(key="init", value=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+        db.add(meta)
+        db.commit()
+        return False
+
+
+def main():
+    """主函数"""
+    try:
+        logger.info("开始初始化数据库...")
+
+        init_db()
+
+        if not check_db_init():
+            init_permissions()
+            init_departments()
+            init_roles()
+            init_users()
+
+        logger.info("数据库初始化完成！")
+
+    except Exception as e:
+        logger.error(f"数据库初始化失败: {e}")
+        raise
+
+if __name__ == "__main__":
+    main()
