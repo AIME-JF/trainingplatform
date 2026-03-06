@@ -29,10 +29,12 @@
           <a-input-search v-model:value="searchText" placeholder="搜索教官姓名、专业领域..." allow-clear />
         </a-col>
         <a-col :span="16">
-          <a-space>
-            <span style="color:#888">专业方向：</span>
-            <a-tag v-for="s in specialtiesList" :key="s" :color="filterSpecialty === s ? 'blue' : 'default'" class="filter-tag" @click="filterSpecialty = s">{{ s }}</a-tag>
-          </a-space>
+          <div class="specialty-filter">
+            <span style="color:#888;white-space:nowrap">专业方向：</span>
+            <div class="specialty-tags">
+              <a-tag v-for="s in specialtiesList" :key="s" :color="filterSpecialty === s ? 'blue' : 'default'" class="filter-tag" @click="filterSpecialty = s">{{ s }}</a-tag>
+            </div>
+          </div>
         </a-col>
       </a-row>
     </a-card>
@@ -140,6 +142,8 @@ const goDetail = (inst) => router.push({ name: 'InstructorDetail', params: { id:
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .page-header h2 { margin: 0; font-size: 20px; font-weight: 600; color: var(--police-primary); }
 .filter-tag { cursor: pointer; }
+.specialty-filter { display: flex; align-items: flex-start; gap: 8px; }
+.specialty-tags { display: flex; flex-wrap: wrap; gap: 4px 0; }
 .instructor-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
 .inst-card { background: #fff; border-radius: 12px; border: 1px solid #e8e8e8; padding: 24px; text-align: center; cursor: pointer; transition: all 0.25s; }
 .inst-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,48,135,0.12); border-color: var(--police-primary); }
