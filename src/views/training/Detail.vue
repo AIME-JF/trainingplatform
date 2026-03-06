@@ -45,7 +45,10 @@
                   <div class="ci-left">
                     <div class="ci-name">{{ c.name }}</div>
                     <div class="ci-instructor">{{ c.instructor }}</div>
-                    <div class="ci-time" v-if="c.dates && c.dates.length && c.timeRange">{{ c.dates.join(', ') }} {{ c.timeRange }}</div>
+                    <div class="ci-time" v-if="c.schedules && c.schedules.length">
+                      <span v-for="(sch, i) in c.schedules" :key="i" class="sch-item">{{ sch.date }} {{ sch.timeRange }}</span>
+                    </div>
+                    <div class="ci-time" v-else-if="c.dates && c.dates.length && c.timeRange">{{ c.dates.join(', ') }} {{ c.timeRange }}</div>
                     <div class="ci-time" v-else-if="c.date && c.timeRange">{{ c.date }} {{ c.timeRange }}</div>
                     <div class="ci-time" v-else-if="c.startTime && c.endTime">{{ c.startTime }} ~ {{ c.endTime }}</div>
                     <div class="ci-time" v-else-if="c.date">{{ c.date }}</div>
@@ -184,60 +187,62 @@
               </a-select>
             </a-form-item>
           </a-col>
-          <a-col :span="12">
-            <a-form-item label="课时数" required>
-              <a-input-number v-model:value="courseForm.hours" :min="1" :max="100" style="width:100%" />
+        </a-row>
+        <a-row :gutter="12">
+          <a-col :span="24">
+            <a-form-item label="详细排课清单" required>
+              <div v-if="courseForm.schedules.length > 0" style="margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 8px; background: #f9f9f9; padding: 12px; border-radius: 6px;">
+                <a-tag
+                  v-for="(sch, idx) in courseForm.schedules"
+                  :key="idx"
+                  closable
+                  color="blue"
+                  @close="removeCourseSchedule(idx)"
+                >
+                  {{ sch.date }} ({{ sch.timeRange }}) · {{ sch.hours }}课时
+                </a-tag>
+              </div>
+              <div style="border: 1px dashed #d9d9d9; padding: 12px; border-radius: 6px;">
+                <div style="margin-bottom: 8px;">
+                  <a-radio-group v-model:value="dateAddMode" size="small">
+                    <a-radio-button value="single">单日排课</a-radio-button>
+                    <a-radio-button value="range">多日同段连排</a-radio-button>
+                  </a-radio-group>
+                </div>
+                <div style="display: flex; gap: 12px; align-items: center;">
+                  <a-date-picker
+                    v-if="dateAddMode === 'single'"
+                    v-model:value="tempDate"
+                    style="flex: 1"
+                    format="YYYY-MM-DD"
+                    placeholder="选择日期"
+                  />
+                  <a-range-picker
+                    v-else
+                    v-model:value="tempDateRange"
+                    style="flex: 1"
+                    format="YYYY-MM-DD"
+                    :placeholder="['开始日期', '结束日期']"
+                  />
+                  <a-time-range-picker
+                    v-model:value="tempTimeRange"
+                    style="width: 220px;"
+                    format="HH:mm"
+                    :minute-step="5"
+                    :placeholder="['开始', '结束']"
+                  />
+                  <a-button type="primary" size="small" @click="addCourseSchedule">
+                    添加
+                  </a-button>
+                </div>
+              </div>
             </a-form-item>
           </a-col>
         </a-row>
         <a-row :gutter="12">
           <a-col :span="12">
-            <a-form-item label="上课日期" required>
-              <div v-if="courseForm.dates.length > 0" style="margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 6px;">
-                <a-tag
-                  v-for="d in courseForm.dates"
-                  :key="d"
-                  closable
-                  color="blue"
-                  @close="removeCourseDate(d)"
-                >
-                  {{ d }}
-                </a-tag>
-              </div>
-              <div style="margin-bottom: 8px;">
-                <a-radio-group v-model:value="dateAddMode" size="small">
-                  <a-radio-button value="single">点选单日</a-radio-button>
-                  <a-radio-button value="range">连选多日</a-radio-button>
-                </a-radio-group>
-              </div>
-              <a-date-picker
-                v-if="dateAddMode === 'single'"
-                v-model:value="tempDate"
-                style="width:100%"
-                format="YYYY-MM-DD"
-                placeholder="点击日历可不断添加单天"
-                @change="addCourseDate"
-              />
-              <a-range-picker
-                v-else
-                v-model:value="tempDateRange"
-                style="width:100%"
-                format="YYYY-MM-DD"
-                placeholder="['开始日期', '结束日期']"
-                @change="addCourseDateRange"
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="上课时段" required>
-              <a-time-range-picker
-                v-model:value="courseFormTimeRange"
-                style="width:100%"
-                format="HH:mm"
-                :minute-step="5"
-                placeholder="['开始', '结束']"
-                @change="onCourseTimeRangeChange"
-              />
+            <a-form-item label="课时数(自动计算取整)" required>
+              <a-input-number v-model:value="courseForm.hours" :min="0" :step="1" style="width:100%" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
@@ -493,8 +498,10 @@ const editingCourseIdx = ref(null)
 const dateAddMode = ref('single')
 const tempDate = ref(null)
 const tempDateRange = ref([])
-const courseFormTimeRange = ref([])
-const courseForm = reactive({ name: '', instructor: '', instructorId: null, hours: 8, type: 'theory', date: '', dates: [], timeRange: '' })
+const tempTimeRange = ref([])
+
+// 'schedules' will store objects like { date: 'YYYY-MM-DD', timeRange: 'HH:mm~HH:mm', hours: 2 }
+const courseForm = reactive({ name: '', instructor: '', instructorId: null, hours: 0, type: 'theory', schedules: [] })
 
 function onInstructorChange(id) {
   const inst = MOCK_INSTRUCTORS.find(i => i.id === id)
@@ -502,108 +509,119 @@ function onInstructorChange(id) {
 }
 
 function calcTotalHours() {
-  if (courseForm.dates.length > 0 && courseForm.timeRange) {
-    const times = courseForm.timeRange.split('~')
-    if (times.length === 2) {
-      const start = dayjs(`2000-01-01 ${times[0]}`)
-      const end = dayjs(`2000-01-01 ${times[1]}`)
-      const diffMs = end.diff(start)
-      if (diffMs > 0) {
-        const hoursPerDay = diffMs / (1000 * 60 * 60)
-        courseForm.hours = Number((hoursPerDay * courseForm.dates.length).toFixed(1))
-      }
-    }
+  courseForm.hours = Math.round(courseForm.schedules.reduce((sum, sch) => sum + (sch.hours || 0), 0))
+}
+
+function addCourseSchedule() {
+  if (!tempTimeRange.value || tempTimeRange.value.length !== 2) {
+    message.warning('请选择上课时段')
+    return
+  }
+
+  const tStr1 = tempTimeRange.value[0].format('HH:mm')
+  const tStr2 = tempTimeRange.value[1].format('HH:mm')
+  const tRange = `${tStr1}~${tStr2}`
+
+  const startT = dayjs(`2000-01-01 ${tStr1}`)
+  const endT = dayjs(`2000-01-01 ${tStr2}`)
+  const diffMs = endT.diff(startT)
+  const hrs = diffMs > 0 ? Math.round(diffMs / (1000 * 60 * 60)) : 0
+
+  if (hrs <= 0) {
+    message.warning('时长太短或结束时间早于开始时间')
+    return
+  }
+
+  let datesToAdd = []
+  if (dateAddMode.value === 'single') {
+    if (!tempDate.value) { message.warning('请选择上课日期'); return }
+    datesToAdd.push(tempDate.value.format('YYYY-MM-DD'))
   } else {
-    courseForm.hours = 0
-  }
-}
-
-function addCourseDate(date, dateString) {
-  if (dateString && !courseForm.dates.includes(dateString)) {
-    courseForm.dates.push(dateString)
-    courseForm.dates.sort()
-    calcTotalHours()
-  }
-  // Reset so picker can be used again
-  setTimeout(() => { tempDate.value = null }, 50)
-}
-
-function addCourseDateRange(dates, dateStrings) {
-  if (dates && dates.length === 2 && dateStrings[0] && dateStrings[1]) {
-    let current = dayjs(dateStrings[0])
-    const end = dayjs(dateStrings[1])
-    let added = false
-    
+    if (!tempDateRange.value || tempDateRange.value.length !== 2) { message.warning('请选择上课日期范围'); return }
+    let current = tempDateRange.value[0]
+    const end = tempDateRange.value[1]
     while (current.isBefore(end) || current.isSame(end, 'day')) {
-      const dStr = current.format('YYYY-MM-DD')
-      if (!courseForm.dates.includes(dStr)) {
-        courseForm.dates.push(dStr)
-        added = true
-      }
+      datesToAdd.push(current.format('YYYY-MM-DD'))
       current = current.add(1, 'day')
     }
-    
-    if (added) {
-      courseForm.dates.sort()
-      calcTotalHours()
+  }
+
+  let addedCount = 0
+  datesToAdd.forEach(dStr => {
+    // Avoid exact duplicate
+    const exists = courseForm.schedules.some(s => s.date === dStr && s.timeRange === tRange)
+    if (!exists) {
+      courseForm.schedules.push({ date: dStr, timeRange: tRange, hours: hrs })
+      addedCount++
     }
-  }
-  setTimeout(() => { tempDateRange.value = [] }, 50)
-}
+  })
 
-function removeCourseDate(d) {
-  courseForm.dates = courseForm.dates.filter(x => x !== d)
-  calcTotalHours()
-}
-
-function onCourseTimeRangeChange(times, timeStrings) {
-  if (times && times.length === 2) {
-    courseForm.timeRange = `${timeStrings[0]}~${timeStrings[1]}`
+  if (addedCount > 0) {
+    courseForm.schedules.sort((a, b) => {
+      const db = a.date.localeCompare(b.date)
+      if (db !== 0) return db
+      return a.timeRange.localeCompare(b.timeRange)
+    })
     calcTotalHours()
+    message.success(`成功添加 ${addedCount} 节排课`)
   } else {
-    courseForm.timeRange = ''
-    calcTotalHours()
+    message.warning('所选排课已存在，未重复添加')
   }
+
+  // Clear temps
+  tempDate.value = null
+  tempDateRange.value = []
+  tempTimeRange.value = []
+}
+
+function removeCourseSchedule(idx) {
+  courseForm.schedules.splice(idx, 1)
+  calcTotalHours()
 }
 
 function openCourseModal(idx = null) {
   editingCourseIdx.value = idx
   tempDate.value = null
   tempDateRange.value = []
+  tempTimeRange.value = []
   dateAddMode.value = 'single'
-  courseFormTimeRange.value = []
+  
   if (idx !== null && trainingData.courses[idx]) {
-    const c = trainingData.courses[idx]
+    const c = JSON.parse(JSON.stringify(trainingData.courses[idx]))
     const inst = MOCK_INSTRUCTORS.find(i => i.name === c.instructor)
-    Object.assign(courseForm, { name: c.name, instructor: c.instructor, instructorId: inst?.id ?? null, hours: c.hours, type: c.type, date: c.date || '', dates: c.dates ? [...c.dates] : [], timeRange: c.timeRange || '' })
-    
-    // Fallback if course has single 'date' string
-    if ((!c.dates || c.dates.length === 0) && c.date) {
-      courseForm.dates = [c.date]
-    }
+    Object.assign(courseForm, { name: c.name, instructor: c.instructor, instructorId: inst?.id ?? null, hours: c.hours, type: c.type, schedules: c.schedules || [] })
 
-    if (c.timeRange) {
-      const [start, end] = c.timeRange.split('~')
-      if (start && end) {
-        courseFormTimeRange.value = [dayjs(`2000-01-01 ${start}`), dayjs(`2000-01-01 ${end}`)]
+    // Migrate old legacy formats into 'schedules' array (if course has dates but no schedules)
+    if (courseForm.schedules.length === 0) {
+      if (c.dates && c.timeRange) {
+        let hrs = 0
+        const [st, ed] = c.timeRange.split('~')
+        if (st && ed) {
+          const diff = dayjs(`2000-01-01 ${ed}`).diff(dayjs(`2000-01-01 ${st}`))
+          if (diff > 0) hrs = Number((diff / (1000 * 60 * 60)).toFixed(1))
+        }
+        c.dates.forEach(d => {
+          courseForm.schedules.push({ date: d, timeRange: c.timeRange, hours: hrs })
+        })
+      } else if (c.date && c.timeRange) {
+        courseForm.schedules.push({ date: c.date, timeRange: c.timeRange, hours: c.hours })
+      } else if (c.startTime && c.endTime) {
+         courseForm.schedules.push({ 
+           date: dayjs(c.startTime).format('YYYY-MM-DD'), 
+           timeRange: `${dayjs(c.startTime).format('HH:mm')}~${dayjs(c.endTime).format('HH:mm')}`, 
+           hours: c.hours 
+        })
       }
-    } else if (c.startTime && c.endTime) {
-      // Legacy data fallback
-      const st = dayjs(c.startTime).format('HH:mm')
-      const ed = dayjs(c.endTime).format('HH:mm')
-      courseForm.timeRange = `${st}~${ed}`
-      courseForm.dates = [dayjs(c.startTime).format('YYYY-MM-DD')]
-      courseFormTimeRange.value = [dayjs(`2000-01-01 ${st}`), dayjs(`2000-01-01 ${ed}`)]
     }
   } else {
-    Object.assign(courseForm, { name: '', instructor: '', instructorId: null, hours: 2, type: 'theory', date: '', dates: [], timeRange: '' })
+    Object.assign(courseForm, { name: '', instructor: '', instructorId: null, hours: 0, type: 'theory', schedules: [] })
   }
   showCourseModal.value = true
 }
 
 function saveCourse() {
-  if (!courseForm.name || !courseForm.instructor || courseForm.dates.length === 0 || !courseForm.timeRange) { 
-    message.warning('请填写完整必填项(课程名称、教官、至少一天日期、上课时段)')
+  if (!courseForm.name || !courseForm.instructor || courseForm.schedules.length === 0) { 
+    message.warning('请填写课程名称、教官，并至少添加一节排课')
     return 
   }
   const courseData = { ...courseForm }
@@ -754,11 +772,12 @@ const exportMsg = () => message.success('学员名单已导出！')
 .ov-label { font-size: 12px; color: #888; margin-top: 4px; }
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .section-header h4 { margin: 0; color: #333; }
-.course-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+.course-item { display: flex; justify-content: space-between; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
 .ci-name { font-size: 14px; font-weight: 500; }
 .ci-instructor { font-size: 12px; color: #888; }
-.ci-time { font-size: 12px; color: #666; margin-top: 4px; background: #f5f5f5; padding: 2px 6px; border-radius: 4px; display: inline-block; }
-.ci-hours { font-size: 14px; color: var(--police-primary); font-weight: 600; margin-right: 8px; }
+.ci-time { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
+.sch-item { font-size: 12px; color: #666; background: #f5f5f5; padding: 2px 6px; border-radius: 4px; display: inline-block; width: max-content; }
+.ci-hours { font-size: 14px; color: var(--police-primary); font-weight: 600; margin-right: 8px; margin-top: 2px; }
 .ci-right { display: flex; align-items: center; gap: 4px; }
 .training-desc { background: rgba(255,255,255,0.1); padding: 12px 16px; border-radius: 6px; color: rgba(255,255,255,0.9); font-size: 13px; line-height: 1.5; margin-top: 12px; }
 .custom-notice-collapse { background: transparent; }
