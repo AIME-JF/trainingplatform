@@ -193,13 +193,23 @@
         <a-row :gutter="12">
           <a-col :span="12">
             <a-form-item label="上课日期" required>
+              <div v-if="courseForm.dates.length > 0" style="margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 6px;">
+                <a-tag
+                  v-for="d in courseForm.dates"
+                  :key="d"
+                  closable
+                  color="blue"
+                  @close="removeCourseDate(d)"
+                >
+                  {{ d }}
+                </a-tag>
+              </div>
               <a-date-picker
-                v-model:value="courseFormDateVals"
-                multiple
+                v-model:value="tempDate"
                 style="width:100%"
                 format="YYYY-MM-DD"
-                placeholder="请选择一天或多天"
-                @change="onCourseDateChange"
+                placeholder="点击日历可不断添加天数"
+                @change="addCourseDate"
               />
             </a-form-item>
           </a-col>
@@ -465,7 +475,7 @@ import dayjs from 'dayjs'
 
 const showCourseModal = ref(false)
 const editingCourseIdx = ref(null)
-const courseFormDateVals = ref([])
+const tempDate = ref(null)
 const courseFormTimeRange = ref([])
 const courseForm = reactive({ name: '', instructor: '', instructorId: null, hours: 8, type: 'theory', date: '', dates: [], timeRange: '' })
 
@@ -486,12 +496,23 @@ function calcTotalHours() {
         courseForm.hours = Number((hoursPerDay * courseForm.dates.length).toFixed(1))
       }
     }
+  } else {
+    courseForm.hours = 0
   }
 }
 
-function onCourseDateChange(_dates, dateStrings) {
-  // dateStrings is an array of strings like ['2025-03-01', '2025-03-03']
-  courseForm.dates = Array.isArray(dateStrings) ? dateStrings : [dateStrings].filter(Boolean)
+function addCourseDate(date, dateString) {
+  if (dateString && !courseForm.dates.includes(dateString)) {
+    courseForm.dates.push(dateString)
+    courseForm.dates.sort()
+    calcTotalHours()
+  }
+  // Reset so picker can be used again
+  setTimeout(() => { tempDate.value = null }, 50)
+}
+
+function removeCourseDate(d) {
+  courseForm.dates = courseForm.dates.filter(x => x !== d)
   calcTotalHours()
 }
 
@@ -501,24 +522,22 @@ function onCourseTimeRangeChange(times, timeStrings) {
     calcTotalHours()
   } else {
     courseForm.timeRange = ''
+    calcTotalHours()
   }
 }
 
 function openCourseModal(idx = null) {
   editingCourseIdx.value = idx
-  courseFormDateVals.value = []
+  tempDate.value = null
   courseFormTimeRange.value = []
   if (idx !== null && trainingData.courses[idx]) {
     const c = trainingData.courses[idx]
     const inst = MOCK_INSTRUCTORS.find(i => i.name === c.instructor)
-    Object.assign(courseForm, { name: c.name, instructor: c.instructor, instructorId: inst?.id ?? null, hours: c.hours, type: c.type, date: c.date || '', dates: c.dates || [], timeRange: c.timeRange || '' })
+    Object.assign(courseForm, { name: c.name, instructor: c.instructor, instructorId: inst?.id ?? null, hours: c.hours, type: c.type, date: c.date || '', dates: c.dates ? [...c.dates] : [], timeRange: c.timeRange || '' })
     
-    // Fallback if course has 'dates' array vs single 'date' string
-    if (c.dates && c.dates.length) {
-      courseFormDateVals.value = c.dates.map(d => dayjs(d))
-    } else if (c.date) {
+    // Fallback if course has single 'date' string
+    if ((!c.dates || c.dates.length === 0) && c.date) {
       courseForm.dates = [c.date]
-      courseFormDateVals.value = [dayjs(c.date)]
     }
 
     if (c.timeRange) {
@@ -532,7 +551,6 @@ function openCourseModal(idx = null) {
       const ed = dayjs(c.endTime).format('HH:mm')
       courseForm.timeRange = `${st}~${ed}`
       courseForm.dates = [dayjs(c.startTime).format('YYYY-MM-DD')]
-      courseFormDateVals.value = [dayjs(c.startTime)]
       courseFormTimeRange.value = [dayjs(`2000-01-01 ${st}`), dayjs(`2000-01-01 ${ed}`)]
     }
   } else {
