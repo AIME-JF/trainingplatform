@@ -14,11 +14,12 @@
         <div class="training-meta" v-if="selectedTraining">
           <a-tag :color="statusColors[selectedTraining.status]">{{ statusLabels[selectedTraining.status] }}</a-tag>
           <span>主讲：{{ selectedTraining.instructorName }}</span>
+          <span>地点：{{ selectedTraining.location }}</span>
           <span>{{ selectedTraining.startDate }} ~ {{ selectedTraining.endDate }}</span>
         </div>
       </div>
       <div class="week-nav">
-        <a-button @click="prevWeek">‹</a-button>
+        <a-button @click="prevWeek" :disabled="currentWeek <= 0">‹</a-button>
         <span class="week-label">第 {{ currentWeek + 1 }} 周（{{ weekRange }}）</span>
         <a-button @click="nextWeek">›</a-button>
       </div>
@@ -124,7 +125,7 @@ const availableTrainings = computed(() => {
     return MOCK_TRAININGS.filter(t => t.instructorName === myName || t.instructorId === authStore.currentUser?.username)
   } else {
     // 学员看自己已报名或已加入的班
-    const me = authStore.currentUser?.username
+    const me = authStore.currentUser?.id
     return MOCK_TRAININGS.filter(t =>
       (t.students || []).includes(me)
     )
@@ -178,7 +179,7 @@ const weekRange = computed(() => {
   return `${weekDays.value[0].date} - ${weekDays.value[4].date}`
 })
 
-const prevWeek = () => currentWeek.value--
+const prevWeek = () => { if (currentWeek.value > 0) currentWeek.value-- }
 const nextWeek = () => currentWeek.value++
 
 // 当前选中培训班的课程日程（优先用 training.courses 生成, 兜底用全局 Schedule）
@@ -235,7 +236,7 @@ const weekStats = computed(() => {
 .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
 .header-left { display: flex; flex-direction: column; gap: 8px; }
 .page-title { margin: 0; font-size: 20px; font-weight: 600; color: var(--police-primary); }
-.training-meta { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #888; flex-wrap: wrap; }
+.training-meta { display: flex; align-items: center; gap: 10px; font-size: 14px; color: #555; flex-wrap: wrap; }
 .week-nav { display: flex; align-items: center; gap: 12px; }
 .week-label { font-size: 14px; font-weight: 500; color: #333; min-width: 180px; text-align: center; }
 .schedule-card { overflow-x: auto; }

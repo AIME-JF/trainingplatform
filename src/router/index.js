@@ -154,7 +154,7 @@ const router = createRouter({
           path: 'training/:id/enroll',
           name: 'Enroll',
           component: () => import('../views/training/Enroll.vue'),
-          meta: { title: '报名申请' },
+          meta: { title: '报名申请', roles: ['student'] },
         },
         {
           path: 'training/:id/enroll/manage',

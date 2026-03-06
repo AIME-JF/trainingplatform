@@ -44,7 +44,7 @@
               </div>
             </a-tab-pane>
 
-            <a-tab-pane key="students" tab="学员名单">
+            <a-tab-pane key="students" tab="学员名单" v-if="!authStore.isStudent">
               <a-input-search v-model:value="studentSearch" placeholder="搜索学员..." style="width:240px;margin-bottom:16px" />
               <a-table :dataSource="filteredStudents" :columns="studentColumns" size="small" :pagination="{ pageSize: 10 }">
                 <template #bodyCell="{ column, record }">
@@ -78,8 +78,13 @@
       <a-col :span="8">
         <a-card title="快捷操作" :bordered="false" style="margin-bottom:16px">
           <div class="quick-ops">
-            <a-button block style="margin-bottom:8px" @click="$router.push('/training/checkin/' + training.id)" type="primary" v-if="training.status === 'active' || !authStore.isStudent">
-              <template #icon><QrcodeOutlined /></template>{{ authStore.isStudent ? '扫码签到' : '开始签到' }}
+            <!-- 管理员/教官：任何 active 班都可以开始签到 -->
+            <a-button block style="margin-bottom:8px" @click="$router.push('/training/checkin/' + training.id)" type="primary" v-if="training.status === 'active' && !authStore.isStudent">
+              <template #icon><QrcodeOutlined /></template>开始签到
+            </a-button>
+            <!-- 学员：只有在该班名单中且 active 才能扫码签到 -->
+            <a-button block style="margin-bottom:8px" @click="$router.push('/training/checkin/' + training.id)" type="primary" v-if="training.status === 'active' && authStore.isStudent && isEnrolled">
+              <template #icon><QrcodeOutlined /></template>扫码签到
             </a-button>
             <a-button block style="margin-bottom:8px" @click="$router.push('/training/schedule/' + training.id)">
               <template #icon><CalendarOutlined /></template>查看日程
@@ -111,7 +116,7 @@ import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QrcodeOutlined, DownloadOutlined } from '@ant-design/icons-vue'
 import { MOCK_TRAININGS } from '@/mock/trainings'
-import { MOCK_USERS } from '@/mock/users'
+import { MOCK_USER_LIST } from '@/mock/users'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
@@ -135,6 +140,9 @@ const checkinRate = checkinRecords.length > 0 ? Math.round((totalCheckin / check
 
 const completeCount = training.enrolled > 0 ? Math.floor(training.enrolled * (checkinRate / 100 || 0.8)) : 0
 
+// 判断当前学员是否在该培训班名单中
+const isEnrolled = (training.students || []).includes(authStore.currentUser?.id)
+
 const overviewStats = [
   { label: '报名人数', value: training.enrolled, color: '#003087' },
   { label: '班级容量', value: training.capacity, color: '#555' },
@@ -142,28 +150,18 @@ const overviewStats = [
   { label: '课程总学时', value: (training.courses || []).reduce((a, c) => a + (c.hours || 0), 0) || 48, color: '#faad14' },
 ]
 
-const trainingWithCourses = {
-  ...training,
-  courses: training.courses?.length ? training.courses : [
-    { name: '刑事诉讼法实务操作', instructor: '李教官', hours: 12, type: 'theory' },
-    { name: '现场处置技能', instructor: '王教官', hours: 16, type: 'practice' },
-    { name: '电信诈骗案件侦办', instructor: '张教官', hours: 8, type: 'theory' },
-    { name: '体能训练', instructor: '刘教官', hours: 12, type: 'practice' },
-  ]
-}
-
-// 基于 MOCK_USERS 映射真实学员数据，而不是随机生成
-const mockStudents = (training.students || []).map(username => {
-  const u = Object.values(MOCK_USERS).find(user => user.username === username) || { name: '未知学员', unit: '未知单位' }
+// 基于 MOCK_USER_LIST 通过 userId 映射真实学员数据
+const mockStudents = (training.students || []).map(userId => {
+  const u = MOCK_USER_LIST.find(user => user.id === userId) || { name: '未知学员', unit: '未知单位' }
   // 计算每个学员的考勤率（如果存在签到记录）
-  const r = checkinRecords.find(cr => cr.studentId === username)
+  const r = checkinRecords.find(cr => cr.studentId === userId)
   const cRate = !r ? 0 : (r.status === 'absent' ? 0 : (r.status === 'late' ? 80 : 100))
   return {
-    key: username,
+    key: userId,
     name: u.name,
-    policeId: username,
+    policeId: u.policeId || userId,
     unit: u.unit || '广西公安机关',
-    progress: Math.floor(Math.random() * 20 + 80), // 模拟进度
+    progress: Math.floor(Math.random() * 20 + 80),
     checkinRate: cRate
   }
 })

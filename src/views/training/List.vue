@@ -1,7 +1,7 @@
 <template>
   <div class="training-list-page">
     <div class="page-header">
-      <h2>培训班管理</h2>
+      <h2>{{ authStore.isStudent ? '我的培训' : '培训班管理' }}</h2>
       <a-button type="primary" v-if="authStore.isAdmin || authStore.isInstructor" @click="showCreateModal = true">
         <template #icon><PlusOutlined /></template>新建培训班
       </a-button>
@@ -70,7 +70,7 @@
 
           <!-- 学员：已报名且进行中才能扫码 -->
           <a-button size="small" type="primary" @click="goCheckin(t)"
-            v-if="t.status === 'active' && authStore.isStudent && t.students.includes(authStore.currentUser?.username)">
+            v-if="t.status === 'active' && authStore.isStudent && t.students.includes(authStore.currentUser?.id)">
             <template #icon><QrcodeOutlined /></template>扫码签到
           </a-button>
 
@@ -78,14 +78,14 @@
             <a-button 
               size="small" 
               @click="goEnroll(t)" 
-              v-if="!t.students.includes(authStore.currentUser?.username)"
+              v-if="!t.students.includes(authStore.currentUser?.id)"
             >报名申请</a-button>
             <a-button size="small" disabled v-else>已报名</a-button>
           </template>
 
           <!-- 学员：已报名的班级可看日程 -->
           <a-button size="small" @click="goSchedule(t)"
-            v-if="authStore.isStudent && t.students.includes(authStore.currentUser?.username)">
+            v-if="authStore.isStudent && t.students.includes(authStore.currentUser?.id)">
             查看日程
           </a-button>
           <a-dropdown v-if="authStore.isAdmin || authStore.isInstructor">
@@ -193,6 +193,13 @@ const trainingList = ref([...MOCK_TRAININGS])
 
 const filteredTrainings = computed(() => {
   let list = trainingList.value
+  // 学员只看自己参与的 + 正在招生的
+  if (authStore.isStudent) {
+    const myId = authStore.currentUser?.id
+    list = list.filter(t =>
+      (t.students || []).includes(myId) || t.status === 'upcoming'
+    )
+  }
   if (filterStatus.value !== 'all') list = list.filter(t => t.status === filterStatus.value)
   if (filterType.value !== 'all') list = list.filter(t => t.type === filterType.value)
   if (searchText.value) list = list.filter(t => t.name.includes(searchText.value))
