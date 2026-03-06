@@ -144,6 +144,7 @@ import { RadarChart } from 'echarts/charts'
 import { TooltipComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import { useAuthStore } from '@/stores/auth'
+import { MOCK_COURSES } from '@/mock/courses'
 
 use([CanvasRenderer, RadarChart, TooltipComponent])
 
@@ -151,15 +152,15 @@ const authStore = useAuthStore()
 const user = authStore.currentUser
 const activeTab = ref('study')
 const editMode = ref(false)
-const points = 1286
-const rank = 3
-const globalRankPercent = 12
+const points = user.studyHours ? user.studyHours * 10 + 6 : 1286
+const rank = user.role === 'student' ? 3 : 1
+const globalRankPercent = user.role === 'student' ? 12 : 5
 
 const studyStats = [
-  { icon: '📚', label: '已学课程', value: '12门', color: '#003087' },
-  { icon: '⏱', label: '总学时', value: '48.5h', color: '#52c41a' },
-  { icon: '✅', label: '已完成', value: '8门', color: '#faad14' },
-  { icon: '🏆', label: '通过考试', value: '5次', color: '#c8a84b' },
+  { icon: '📚', label: '已学课程', value: (user.examCount || 12) + '门', color: '#003087' },
+  { icon: '⏱', label: '总学时', value: (user.studyHours || 48) + 'h', color: '#52c41a' },
+  { icon: '✅', label: '平均分', value: (user.avgScore || 86) + '分', color: '#faad14' },
+  { icon: '🏆', label: '通过考试', value: Math.round((user.examCount || 8) * 0.6) + '次', color: '#c8a84b' },
 ]
 
 const abilities = [
@@ -189,11 +190,16 @@ const radarOption = {
   }]
 }
 
-const recentCourses = [
-  { id: 1, title: '刑事诉讼法实务操作', icon: '⚖️', color: '#e6f7ff', lastTime: '2天前', progress: 65 },
-  { id: 2, title: '电信网络诈骗案件侦办', icon: '🔍', color: '#f0f5ff', lastTime: '5天前', progress: 100 },
-  { id: 3, title: '网络安全与数字取证', icon: '💻', color: '#f6ffed', lastTime: '1周前', progress: 82 },
-]
+const courseIcons = { law: '⚖️', fraud: '🔍', traffic: '🚗', community: '🏨', cybersec: '💻', physical: '💪' }
+const courseColors = { law: '#e6f7ff', fraud: '#f0f5ff', traffic: '#f6ffed', community: '#fff7e6', cybersec: '#f9f0ff', physical: '#fff1f0' }
+const recentCourses = MOCK_COURSES.slice(0, 3).map(c => ({
+  id: c.id,
+  title: c.title,
+  icon: courseIcons[c.category] || '📚',
+  color: courseColors[c.category] || '#f0f5ff',
+  lastTime: c.updateDate || '3天前',
+  progress: Math.floor(Math.random() * 60 + 30),
+}))
 
 const examHistory = [
   { key: 1, title: '刑事法律基础考试', date: '2025-03-05', score: 78, passed: true },
