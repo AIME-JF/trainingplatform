@@ -46,7 +46,15 @@
                     <div class="ci-name">{{ c.name }}</div>
                     <div class="ci-instructor">{{ c.instructor }}</div>
                     <div class="ci-time" v-if="c.schedules && c.schedules.length">
-                      <span v-for="(sch, i) in c.schedules" :key="i" class="sch-item">{{ sch.date }} {{ sch.timeRange }}</span>
+                      <a-select
+                        :value="`排课详情 (共 ${c.schedules.length} 节)`"
+                        size="small"
+                        style="width: 240px"
+                      >
+                        <a-select-option v-for="(sch, i) in c.schedules" :key="i" :value="i">
+                          {{ sch.date }} {{ sch.timeRange }} ({{ sch.hours }}课时)
+                        </a-select-option>
+                      </a-select>
                     </div>
                     <div class="ci-time" v-else-if="c.dates && c.dates.length && c.timeRange">{{ c.dates.join(', ') }} {{ c.timeRange }}</div>
                     <div class="ci-time" v-else-if="c.date && c.timeRange">{{ c.date }} {{ c.timeRange }}</div>
@@ -123,10 +131,10 @@
       <a-col :xs="24" :md="8">
         <a-card title="快捷操作" :bordered="false" style="margin-bottom:16px">
           <div class="quick-ops">
-            <a-button block style="margin-bottom:8px" @click="$router.push('/training/checkin/' + trainingData.id)" type="primary" v-if="trainingData.status === 'active' && !authStore.isStudent">
+            <a-button block style="margin-bottom:8px" @click="$router.push(`/training/${trainingData.id}/checkin`)" type="primary" v-if="trainingData.status === 'active' && !authStore.isStudent">
               <template #icon><QrcodeOutlined /></template>开始签到
             </a-button>
-            <a-button block style="margin-bottom:8px" @click="$router.push('/training/checkin/' + trainingData.id)" type="primary" v-if="trainingData.status === 'active' && authStore.isStudent && isEnrolled">
+            <a-button block style="margin-bottom:8px" @click="$router.push(`/training/${trainingData.id}/checkin`)" type="primary" v-if="trainingData.status === 'active' && authStore.isStudent && isEnrolled">
               <template #icon><QrcodeOutlined /></template>扫码签到
             </a-button>
             <a-button block style="margin-bottom:8px" @click="$router.push('/training/schedule/' + trainingData.id)">
