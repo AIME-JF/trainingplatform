@@ -57,6 +57,12 @@
             <div class="is-label">评分</div>
           </div>
         </div>
+
+        <div class="trainee-card-actions" v-if="authStore.isAdmin" @click.stop>
+          <a-popconfirm :title="`确定删除学员「${trainee.name}」吗？`" ok-text="删除" cancel-text="取消" @confirm="deleteTrainee(trainee)">
+            <a-button size="small" type="text" danger><DeleteOutlined /> 删除</a-button>
+          </a-popconfirm>
+        </div>
       </div>
     </div>
   </div>
@@ -65,7 +71,7 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { PlusOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
 import { MOCK_TRAINEES } from '@/mock/trainees'
@@ -111,6 +117,11 @@ const filteredTrainees = computed(() => {
 })
 
 const goDetail = (trainee) => router.push({ name: 'TraineeDetail', params: { id: trainee.id } })
+
+function deleteTrainee(trainee) {
+  traineeList.value = traineeList.value.filter(i => i.id !== trainee.id)
+  message.success(`已删除学员「${trainee.name}」`)
+}
 </script>
 
 <style scoped>
@@ -135,4 +146,5 @@ const goDetail = (trainee) => router.push({ name: 'TraineeDetail', params: { id:
 .is-num { font-size: 20px; font-weight: 700; color: #1a1a1a; }
 .is-label { font-size: 11px; color: #888; }
 .is-divider { width: 1px; height: 30px; background: #f0f0f0; }
+.trainee-card-actions { margin-top: 12px; padding-top: 8px; border-top: 1px solid #f0f0f0; text-align: right; }
 </style>
