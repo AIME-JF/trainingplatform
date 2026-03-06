@@ -23,10 +23,20 @@ export const MOCK_CITY_RANKS = [
     { name: '钦州市', rate: 73 },
 ]
 
+export const MOCK_NOTICES = [
+    { id: 'n1', targetId: 't001', type: 'training', title: '开班及教材发放通知', time: '2025-03-01 09:00', content: '本次培训教材已到位，请于开班当天前往培训点领取。' },
+    { id: 'n2', targetId: 't001', type: 'training', title: '体能测试及考核通知', time: '2025-03-05 14:00', content: '结业周将进行统一考核，请携带好装备。' },
+]
+
 export function getTrainingNotices(trainingData) {
     if (!trainingData) return []
-    return [
-        { id: 1, title: '开班及教材发放通知', time: trainingData.startDate, content: `本次培训【${trainingData.name}】教材已到位，请于开班当天前往培训点领取。` },
-        { id: 2, title: '体能测试及考核通知', time: trainingData.endDate, content: '结业周将进行统一考核，请携带好装备。' },
-    ]
+    // 返回对应的动态 mock 数据，如果没有则返回自动生成的默认通知
+    let notices = MOCK_NOTICES.filter(n => n.targetId === trainingData.id)
+    if (notices.length === 0) {
+        return [
+            { id: 1, title: '开班及教材发放通知', time: trainingData.startDate, content: `本次培训【${trainingData.name}】教材已到位，请于开班当天前往培训点领取。` },
+            { id: 2, title: '体能测试及考核通知', time: trainingData.endDate, content: '结业周将进行统一考核，请携带好装备。' },
+        ]
+    }
+    return notices
 }
