@@ -47,10 +47,15 @@
               <div class="time-slot" v-for="t in timeSlots" :key="t">{{ t }}</div>
             </div>
 
-            <div class="day-col-body" v-for="day in weekDays" :key="day.date">
+            <div class="day-col-body" v-for="day in weekDays" :key="day.date"
+                 @dragover.prevent
+                 @drop="onDrop($event, day)"
+            >
               <div v-for="item in getScheduleForDay(day.weekday)" :key="item.id"
                 class="schedule-item" :class="'type-' + item.type"
                 :style="{ top: getTopOffset(item.timeStart) + 'px', height: getHeight(item.duration) + 'px' }"
+                draggable="true"
+                @dragstart="onDragStart($event, item)"
               >
                 <div class="si-title">{{ item.title }}</div>
                 <div class="si-meta">{{ item.timeStart }} · {{ item.location }}</div>
@@ -73,7 +78,7 @@
                       <div class="type-dot" :class="'type-' + item.type">{{ typeIcons[item.type] }}</div>
                     </template>
                     <template #title>{{ item.title }}</template>
-                    <template #description>{{ dayNames[item.day] }} {{ item.timeStart }} · {{ item.location }}</template>
+                    <template #description>{{ item.dayName }} {{ item.timeStart }} · {{ item.location }}</template>
                   </a-list-item-meta>
                   <template #extra>
                     <a-tag :color="typeColors[item.type]" size="small">{{ typeLabels[item.type] }}</a-tag>
@@ -153,25 +158,37 @@ function onTrainingChange() {
   currentWeek.value = 0
 }
 
+// 追踪调度更新
+const triggerUpdate = ref(0)
+const draggedItem = ref(null)
+
 // 动态计算周日期，基于选中培训班的开始时间
 const weekDays = computed(() => {
-  const base = new Date(selectedTraining.value?.startDate || new Date())
+  const startDateStr = selectedTraining.value?.startDate || new Date().toISOString().split('T')[0]
+  const base = new Date(startDateStr.replace(/-/g, '/'))
   base.setDate(base.getDate() + currentWeek.value * 7)
-  const names = ['周一', '周二', '周三', '周四', '周五']
+  
+  const daysOfWeek = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
   const today = new Date()
-  return names.map((name, i) => {
+  
+  const arr = []
+  for (let i = 0; i < 5; i++) {
     const d = new Date(base)
     d.setDate(d.getDate() + i)
-    return {
-      name,
-      date: `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}`,
+    
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const dt = String(d.getDate()).padStart(2, '0')
+    
+    arr.push({
+      name: daysOfWeek[d.getDay()],
+      date: `${m}/${dt}`,
+      fullDate: `${y}-${m}-${dt}`,
       weekday: i + 1,
-      isToday:
-        d.getFullYear() === today.getFullYear() &&
-        d.getMonth() === today.getMonth() &&
-        d.getDate() === today.getDate(),
-    }
-  })
+      isToday: d.getFullYear() === today.getFullYear() && d.getMonth() === today.getMonth() && d.getDate() === today.getDate()
+    })
+  }
+  return arr
 })
 
 const weekRange = computed(() => {
@@ -182,29 +199,97 @@ const weekRange = computed(() => {
 const prevWeek = () => { if (currentWeek.value > 0) currentWeek.value-- }
 const nextWeek = () => currentWeek.value++
 
-// 当前选中培训班的课程日程（优先用 training.courses 生成, 兜底用全局 Schedule）
+// 从课程 schedules 中精准解析日程数据
 const currentScheduleItems = computed(() => {
+  triggerUpdate.value // 依赖项，用于强制刷新
   if (!selectedTraining.value) return []
-  // 如果该培训班有详细的 courses, 转成日程格式
+  
   const courses = selectedTraining.value.courses || []
   if (courses.length > 0) {
-    return courses.map((c, i) => ({
-      id: `${selectedTraining.value.id}-c${i}`,
-      day: (i % 5) + 1,
-      title: c.name,
-      type: c.type === 'practice' ? 'skill' : 'theory',
-      timeStart: i % 2 === 0 ? '09:00' : '14:00',
-      duration: c.hours * 60 / 5,  // 按5天分散
-      location: selectedTraining.value.location,
-      instructor: c.instructor,
-    }))
+    const items = []
+    
+    courses.forEach((c, cIdx) => {
+      if (c.schedules) {
+        c.schedules.forEach((sch, sIdx) => {
+          const schDateStr = sch.date
+          const dayMatch = weekDays.value.find(d => d.fullDate === schDateStr)
+          
+          if (dayMatch) {
+            const timeStart = sch.timeRange ? sch.timeRange.split('~')[0] : '09:00'
+            const timeEnd = sch.timeRange ? sch.timeRange.split('~')[1] : '12:00'
+            
+            let duration = 180
+            if (timeStart && timeEnd) {
+              const [sh, sm] = timeStart.split(':').map(Number)
+              const [eh, em] = timeEnd.split(':').map(Number)
+              duration = (eh - sh) * 60 + (em - sm)
+            } else if (sch.hours) {
+              duration = sch.hours * 60
+            }
+            
+            items.push({
+              id: `${selectedTraining.value.id}-c${cIdx}-s${sIdx}`,
+              courseIdx: cIdx,
+              scheduleIdx: sIdx,
+              day: dayMatch.weekday,
+              dayName: dayMatch.name,
+              fullDate: schDateStr,
+              title: c.name,
+              type: c.type === 'practice' ? 'skill' : 'theory',
+              timeStart,
+              duration,
+              location: selectedTraining.value.location,
+              instructor: c.instructor,
+            })
+          }
+        })
+      }
+    })
+    return items
   }
   return MOCK_WEEK_SCHEDULE.items || []
 })
 
 const getScheduleForDay = (weekday) => currentScheduleItems.value.filter(s => s.day === weekday)
 
-const timeSlots = ['08:00', '09:00', '10:00', '11:00', '14:00', '15:00', '16:00', '17:00']
+// 连续修正时间轴避免对齐偏差
+const timeSlots = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00']
+
+// 拖拽调整逻辑
+function onDragStart(e, item) {
+  draggedItem.value = item
+  e.dataTransfer.effectAllowed = 'move'
+}
+
+function onDrop(e, targetDay) {
+  if (!draggedItem.value) return
+  const item = draggedItem.value
+  
+  // 基于容器计算确切的 Y 偏移
+  const rect = e.currentTarget.getBoundingClientRect()
+  const y = e.clientY - rect.top
+  
+  // 将 Y 轴像素反算为分钟 (1.2px = 1min)，并按照 30 分钟刻度吸附吸附
+  let minutes = Math.round(y / 1.2)
+  minutes = Math.round(minutes / 30) * 30
+  
+  const h = Math.floor(minutes / 60) + 8
+  const m = minutes % 60
+  const newStartString = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
+  
+  const endTotalMins = minutes + item.duration
+  const endH = Math.floor(endTotalMins / 60) + 8
+  const endM = endTotalMins % 60
+  const newEndString = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`
+  
+  // 静默更新训练班的排课数据并触发重渲染
+  const scheduleRef = selectedTraining.value.courses[item.courseIdx].schedules[item.scheduleIdx]
+  scheduleRef.date = targetDay.fullDate
+  scheduleRef.timeRange = `${newStartString}~${newEndString}`
+  
+  triggerUpdate.value++
+  draggedItem.value = null
+}
 
 const getTopOffset = (time) => {
   const [h, m] = (time || '08:00').split(':').map(Number)
@@ -248,11 +333,15 @@ const weekStats = computed(() => {
 .day-name { font-size: 12px; color: #888; }
 .day-date { font-size: 16px; font-weight: 700; color: #333; }
 .day-col.today .day-date { color: var(--police-primary); }
-.grid-body { display: flex; position: relative; min-height: 480px; }
+.grid-body { display: flex; position: relative; min-height: 800px; padding-bottom: 20px; }
 .time-slots { width: 64px; flex-shrink: 0; padding-top: 4px; }
 .time-slot { height: 72px; font-size: 11px; color: #aaa; padding-top: 2px; }
-.day-col-body { flex: 1; border-left: 1px dashed #e8e8e8; position: relative; padding: 4px; }
-.schedule-item { position: absolute; left: 4px; right: 4px; border-radius: 4px; padding: 4px 8px; font-size: 12px; overflow: hidden; cursor: pointer; }
+.day-col-body { flex: 1; border-left: 1px dashed #e8e8e8; position: relative; padding: 4px; transition: background 0.2s; }
+.day-col-body:last-child { border-right: 1px dashed #e8e8e8; }
+.day-col-body:focus-within, .day-col-body:hover { background: #fafafa; }
+.schedule-item { position: absolute; left: 4px; right: 4px; border-radius: 4px; padding: 4px 8px; font-size: 12px; overflow: hidden; cursor: grab; transition: box-shadow 0.2s, top 0.2s; z-index: 2; }
+.schedule-item:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 5; }
+.schedule-item:active { cursor: grabbing; z-index: 10; opacity: 0.9; }
 .schedule-item.type-theory { background: #e6f4ff; border-left: 3px solid #1890ff; color: #003a8c; }
 .schedule-item.type-skill { background: #f6ffed; border-left: 3px solid #52c41a; color: #135200; }
 .schedule-item.type-review { background: #f9f0ff; border-left: 3px solid #722ed1; color: #391085; }
