@@ -92,6 +92,9 @@ import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import { DownloadOutlined, ExclamationCircleOutlined, TrophyOutlined } from '@ant-design/icons-vue'
 
+import { MOCK_TRAININGS } from '@/mock/trainings'
+import { MOCK_ENROLLMENTS } from '@/mock/enrollments'
+
 use([CanvasRenderer, BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent])
 
 const timeRange = ref('month')
@@ -99,18 +102,22 @@ const currentDate = new Date().toLocaleDateString('zh-CN', { year: 'numeric', mo
 const timeLabels = { month: '本月', quarter: '本季度', year: '本年度' }
 const timeMultiplier = { month: 1, quarter: 3, year: 12 }
 
+const baseActiveTrainings = MOCK_TRAININGS.filter(t => t.status === 'active').length || 1
+const baseTotalEnrolled = MOCK_ENROLLMENTS.filter(e => e.status === 'approved').length || 32
+const basePending = MOCK_ENROLLMENTS.filter(e => e.status === 'pending').length || 0
+
 const kpiData = computed(() => {
   const m = timeMultiplier[timeRange.value]
   return [
-    { label: '进行中培训班', value: Math.round(8 * (m === 1 ? 1 : m * 0.6)), suffix: '个', icon: '🏫', bgColor: '#e6f0ff', color: '#003087', trend: 14 },
-    { label: timeLabels[timeRange.value] + '参训人数', value: Math.round(1248 * m), suffix: '人', icon: '👮', bgColor: '#e6fff0', color: '#52c41a', trend: 8 },
+    { label: '进行中培训班', value: baseActiveTrainings * (m === 1 ? 1 : m > 1 ? 2 : 1), suffix: '个', icon: '🏫', bgColor: '#e6f0ff', color: '#003087', trend: 14 },
+    { label: timeLabels[timeRange.value] + '参训人数', value: Math.round(baseTotalEnrolled * m * 1.5), suffix: '人', icon: '👮', bgColor: '#e6fff0', color: '#52c41a', trend: 8 },
     { label: timeLabels[timeRange.value] + '培训完成率', value: m === 1 ? 84 : m === 3 ? 81 : 78, suffix: '%', icon: '✅', bgColor: '#fff7e6', color: '#fa8c16', trend: 3 },
-    { label: '待审核事项', value: Math.round(23 * (m === 1 ? 1 : m * 0.4)), suffix: '项', icon: '⚠️', bgColor: '#fff1f0', color: '#ff4d4f', trend: -12 },
+    { label: '待审核学员', value: basePending, suffix: '人', icon: '⚠️', bgColor: '#fff1f0', color: '#ff4d4f', trend: -12 },
   ]
 })
 
 const cities = ['南宁市', '柳州市', '桂林市', '梧州市', '北海市', '防城港', '钦州市', '贵港市', '玉林市', '百色市', '贺州市', '河池市', '来宾市', '崇左市']
-const baseCityValues = [342, 286, 254, 198, 176, 142, 168, 154, 188, 134, 112, 128, 118, 98]
+const baseCityValues = [baseTotalEnrolled, Math.floor(baseTotalEnrolled * 0.8), Math.floor(baseTotalEnrolled * 0.7), 19, 17, 14, 16, 15, 18, 13, 11, 12, 11, 9]
 
 const barOption = computed(() => ({
   tooltip: { trigger: 'axis' },

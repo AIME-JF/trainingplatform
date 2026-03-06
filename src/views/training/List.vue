@@ -293,7 +293,7 @@ const handleDelete = (t) => {
 
 const goDetail = (t) => router.push({ name: 'TrainingDetail', params: { id: t.id } })
 const goCheckin = (t) => router.push({ name: 'Checkin', params: { id: t.id } })
-const goSchedule = (t) => router.push('/training/schedule')
+const goSchedule = (t) => router.push('/training/schedule/' + t.id)
 const goEnroll = (t) => router.push(`/training/${t.id}/enroll`)
 const goEnrollManage = (t) => router.push(`/training/${t.id}/enroll/manage`)
 </script>

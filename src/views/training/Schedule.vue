@@ -1,10 +1,13 @@
 <template>
   <div class="schedule-page">
     <div class="page-header">
-      <h2>周训练计划</h2>
+      <div style="display:flex; flex-direction:column; gap:4px">
+        <h2>{{ trainingTitle }} - 周训练计划</h2>
+        <span style="font-size:13px; color:#888" v-if="training">主讲教官：{{ training.instructorName }} | 地点：{{ training.location }}</span>
+      </div>
       <div class="week-nav">
         <a-button @click="prevWeek">‹</a-button>
-        <span class="week-label">2025年第{{ weekNum }}周（{{ weekRange }}）</span>
+        <span class="week-label">第 {{ currentWeek + 1 }} 周（{{ weekRange }}）</span>
         <a-button @click="nextWeek">›</a-button>
       </div>
     </div>
@@ -82,14 +85,21 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { MOCK_WEEK_SCHEDULE } from '@/mock/schedules'
+import { MOCK_TRAININGS } from '@/mock/trainings'
 
+const route = useRoute()
+const trainingId = route.params.id
+const training = MOCK_TRAININGS.find(t => t.id === trainingId) || MOCK_TRAININGS.find(t => t.status === 'active') || MOCK_TRAININGS[0]
+
+const trainingTitle = training.name || ''
 const scheduleItems = MOCK_WEEK_SCHEDULE.items || []
 
 const currentWeek = ref(0)
 
 // 动态计算周日期
-const baseMonday = new Date(2025, 2, 10) // 2025-03-10 周一
+const baseMonday = new Date(training.startDate || '2025-03-10')
 const weekDays = computed(() => {
   const monday = new Date(baseMonday)
   monday.setDate(monday.getDate() + currentWeek.value * 7)
@@ -106,12 +116,7 @@ const weekDays = computed(() => {
   })
 })
 
-const weekNum = computed(() => {
-  const monday = new Date(baseMonday)
-  monday.setDate(monday.getDate() + currentWeek.value * 7)
-  const start = new Date(monday.getFullYear(), 0, 1)
-  return Math.ceil(((monday - start) / 86400000 + start.getDay()) / 7)
-})
+
 
 const weekRange = computed(() => {
   if (!weekDays.value.length) return ''

@@ -79,7 +79,7 @@ const router = createRouter({
           meta: { title: '培训管理' },
         },
         {
-          path: 'training/schedule',
+          path: 'training/schedule/:id?',
           name: 'TrainingSchedule',
           component: () => import('../views/training/Schedule.vue'),
           meta: { title: '周训练计划' },

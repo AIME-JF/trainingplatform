@@ -81,7 +81,7 @@
             <a-button block style="margin-bottom:8px" @click="$router.push('/training/checkin/' + training.id)" type="primary" v-if="training.status === 'active' || !authStore.isStudent">
               <template #icon><QrcodeOutlined /></template>{{ authStore.isStudent ? '扫码签到' : '开始签到' }}
             </a-button>
-            <a-button block style="margin-bottom:8px" @click="$router.push('/training/schedule')">
+            <a-button block style="margin-bottom:8px" @click="$router.push('/training/schedule/' + training.id)">
               <template #icon><CalendarOutlined /></template>查看日程
             </a-button>
             <a-button block @click="exportMsg" v-if="!authStore.isStudent">
