@@ -12,10 +12,13 @@
             <div class="banner-content">
               <a-tag :color="statusColorMap[trainingData.status]" class="status-tag">{{ statusLabels[trainingData.status] }}</a-tag>
               <h2 class="training-title">{{ trainingData.name }}</h2>
-              <div class="training-meta-row">
+              <div class="training-meta-row" style="margin-bottom:8px">
                 <span><CalendarOutlined /> {{ trainingData.startDate }} ~ {{ trainingData.endDate }}</span>
                 <span><EnvironmentOutlined /> {{ trainingData.location }}</span>
                 <span><UserOutlined /> 主管/班主任：{{ trainingData.instructorName }}</span>
+              </div>
+              <div class="training-desc" v-if="trainingData.description">
+                {{ trainingData.description }}
               </div>
             </div>
           </div>
@@ -84,15 +87,19 @@
 
             <!-- ===== 公告 ===== -->
             <a-tab-pane key="notice" tab="公告">
-              <div class="notice-list">
-                <div v-for="n in notices" :key="n.id" class="notice-item">
-                  <div class="notice-header">
-                    <span class="notice-title">{{ n.title }}</span>
-                    <span class="notice-time">{{ n.time }}</span>
-                  </div>
-                  <div class="notice-content">{{ n.content }}</div>
-                </div>
+              <div class="section-header" style="margin-bottom:16px" v-if="canEdit">
+                <h4>班级公告栏</h4>
+                <a-button type="primary" size="small" @click="openNoticeModal">
+                  <template #icon><PlusOutlined /></template>发布新公告
+                </a-button>
               </div>
+              <a-empty v-if="!notices || notices.length === 0" description="暂无公告" />
+              <a-collapse v-else accordion :bordered="false" class="custom-notice-collapse">
+                <a-collapse-panel v-for="n in notices" :key="n.id" :header="n.title">
+                  <template #extra><span class="notice-time">{{ n.time }}</span></template>
+                  <p class="notice-content">{{ n.content }}</p>
+                </a-collapse-panel>
+              </a-collapse>
             </a-tab-pane>
           </a-tabs>
         </a-card>
@@ -291,6 +298,25 @@
         </a-form-item>
         <a-form-item label="培训简介">
           <a-textarea v-model:value="editForm.description" :rows="2" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- ===== 发布公告弹窗 ===== -->
+    <a-modal
+      v-model:open="showNoticeModal"
+      title="发布新公告"
+      @ok="saveNotice"
+      ok-text="发布"
+      cancel-text="取消"
+      width="600px"
+    >
+      <a-form layout="vertical" style="margin-top:12px">
+        <a-form-item label="公告标题" required>
+          <a-input v-model:value="noticeForm.title" placeholder="请输入标题" />
+        </a-form-item>
+        <a-form-item label="公告内容" required>
+          <a-textarea v-model:value="noticeForm.content" :rows="5" placeholder="请输入公告详细内容..." />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -497,7 +523,36 @@ function saveClassInfo() {
 }
 
 // ===== 公告 =====
+import { MOCK_NOTICES } from '@/mock/board' // Use the raw array from board.js to append
 const notices = computed(() => getTrainingNotices(trainingData))
+
+const showNoticeModal = ref(false)
+const noticeForm = reactive({ title: '', content: '' })
+
+function openNoticeModal() {
+  noticeForm.title = ''
+  noticeForm.content = ''
+  showNoticeModal.value = true
+}
+
+function saveNotice() {
+  if (!noticeForm.title || !noticeForm.content) { message.warning('请填写公告标题和内容'); return }
+  const now = new Date()
+  const timeStr = `${now.getMonth() + 1}-${now.getDate()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+  
+  // Create notice and insert to the front
+  MOCK_NOTICES.unshift({
+    id: Date.now(),
+    type: 'training',
+    targetId: trainingId,
+    title: noticeForm.title,
+    content: noticeForm.content,
+    time: timeStr
+  })
+  
+  message.success('公告已发布')
+  showNoticeModal.value = false
+}
 
 const exportMsg = () => message.success('学员名单已导出！')
 </script>
@@ -522,12 +577,12 @@ const exportMsg = () => message.success('学员名单已导出！')
 .ci-instructor { font-size: 12px; color: #888; }
 .ci-hours { font-size: 14px; color: var(--police-primary); font-weight: 600; margin-right: 8px; }
 .ci-right { display: flex; align-items: center; gap: 4px; }
-.notice-list { display: flex; flex-direction: column; gap: 12px; }
-.notice-item { padding: 14px; border: 1px solid #e8e8e8; border-radius: 6px; border-left: 3px solid var(--police-primary); }
-.notice-header { display: flex; justify-content: space-between; margin-bottom: 6px; }
-.notice-title { font-weight: 600; color: #1a1a1a; }
-.notice-time { font-size: 12px; color: #888; }
-.notice-content { font-size: 13px; color: #555; line-height: 1.6; }
+.training-desc { background: rgba(255,255,255,0.1); padding: 12px 16px; border-radius: 6px; color: rgba(255,255,255,0.9); font-size: 13px; line-height: 1.5; margin-top: 12px; }
+.custom-notice-collapse { background: transparent; }
+.custom-notice-collapse :deep(.ant-collapse-item) { border-bottom: 1px solid #f0f0f0; background: #fafafa; margin-bottom: 8px; border-radius: 6px; overflow: hidden; }
+.custom-notice-collapse :deep(.ant-collapse-header) { font-weight: 600; color: #1a1a1a; padding: 12px 16px; }
+.notice-time { font-size: 12px; color: #888; font-weight: normal; }
+.notice-content { font-size: 14px; color: #555; line-height: 1.6; margin: 0; padding: 4px 0; }
 .checkin-summary { display: flex; align-items: center; gap: 20px; }
 .checkin-detail { display: flex; flex-direction: column; gap: 8px; }
 .cd-item { font-size: 14px; }
