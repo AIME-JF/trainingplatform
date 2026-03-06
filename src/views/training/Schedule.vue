@@ -49,13 +49,13 @@
 
             <div class="day-col-body" v-for="day in weekDays" :key="day.date"
                  @dragover.prevent
-                 @drop="onDrop($event, day)"
+                 @drop="canEdit ? onDrop($event, day) : null"
             >
               <div v-for="item in getScheduleForDay(day.weekday)" :key="item.id"
-                class="schedule-item" :class="'type-' + item.type"
+                class="schedule-item" :class="['type-' + item.type, { 'is-draggable': canEdit }]"
                 :style="{ top: getTopOffset(item.timeStart) + 'px', height: getHeight(item.duration) + 'px' }"
-                draggable="true"
-                @dragstart="onDragStart($event, item)"
+                :draggable="canEdit"
+                @dragstart="canEdit ? onDragStart($event, item) : null"
               >
                 <div class="si-title">{{ item.title }}</div>
                 <div class="si-meta">{{ item.timeStart }} · {{ item.location }}</div>
@@ -118,6 +118,8 @@ import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const authStore = useAuthStore()
+
+const canEdit = computed(() => authStore.isAdmin || authStore.isInstructor)
 
 // 根据角色过滤可见的培训班
 const availableTrainings = computed(() => {
@@ -339,9 +341,10 @@ const weekStats = computed(() => {
 .day-col-body { flex: 1; border-left: 1px dashed #e8e8e8; position: relative; padding: 4px; transition: background 0.2s; }
 .day-col-body:last-child { border-right: 1px dashed #e8e8e8; }
 .day-col-body:focus-within, .day-col-body:hover { background: #fafafa; }
-.schedule-item { position: absolute; left: 4px; right: 4px; border-radius: 4px; padding: 4px 8px; font-size: 12px; overflow: hidden; cursor: grab; transition: box-shadow 0.2s, top 0.2s; z-index: 2; }
-.schedule-item:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 5; }
-.schedule-item:active { cursor: grabbing; z-index: 10; opacity: 0.9; }
+.schedule-item { position: absolute; left: 4px; right: 4px; border-radius: 4px; padding: 4px 8px; font-size: 12px; overflow: hidden; transition: box-shadow 0.2s, top 0.2s; z-index: 2; }
+.schedule-item.is-draggable { cursor: grab; }
+.schedule-item.is-draggable:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 5; }
+.schedule-item.is-draggable:active { cursor: grabbing; z-index: 10; opacity: 0.9; }
 .schedule-item.type-theory { background: #e6f4ff; border-left: 3px solid #1890ff; color: #003a8c; }
 .schedule-item.type-skill { background: #f6ffed; border-left: 3px solid #52c41a; color: #135200; }
 .schedule-item.type-review { background: #f9f0ff; border-left: 3px solid #722ed1; color: #391085; }
