@@ -204,15 +204,15 @@
               <down-outlined class="user-arrow" />
             </div>
             <template #overlay>
-              <a-menu>
-                <a-menu-item key="profile" @click="$router.push('/profile')">
+              <div class="user-dropdown-menu">
+                <div class="user-dropdown-item" @click="$router.push('/profile')">
                   <UserOutlined /> 个人中心
-                </a-menu-item>
-                <a-menu-divider />
-                <a-menu-item key="logout" @click="handleLogout">
+                </div>
+                <div class="user-dropdown-divider"></div>
+                <div class="user-dropdown-item danger" @click="handleLogout">
                   <LogoutOutlined /> 退出登录
-                </a-menu-item>
-              </a-menu>
+                </div>
+              </div>
             </template>
           </a-dropdown>
         </div>
@@ -487,6 +487,28 @@ function handleLogout() {
   background: var(--police-bg);
   min-height: calc(100vh - 64px);
 }
+
+/* 用户下拉菜单 */
+.user-dropdown-menu {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  padding: 4px 0;
+  min-width: 140px;
+}
+.user-dropdown-item {
+  padding: 9px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.15s;
+}
+.user-dropdown-item:hover { background: #f5f5f5; }
+.user-dropdown-item.danger { color: #ff4d4f; }
+.user-dropdown-divider { height: 1px; background: #f0f0f0; margin: 4px 0; }
 </style>
 
 <style>
