@@ -63,10 +63,17 @@
         </div>
         <div class="tc-footer">
           <a-button size="small" @click="goDetail(t)">查看详情</a-button>
-          <a-button size="small" type="primary" @click="goCheckin(t)" v-if="t.status === 'active'">
+          <!-- Admin/Instructor: 开始签到 -->
+          <a-button size="small" type="primary" @click="goCheckin(t)" v-if="t.status === 'active' && !authStore.isStudent">
+            <template #icon><QrcodeOutlined /></template>开始签到
+          </a-button>
+
+          <!-- 学员：已报名且进行中才能扫码 -->
+          <a-button size="small" type="primary" @click="goCheckin(t)"
+            v-if="t.status === 'active' && authStore.isStudent && t.students.includes(authStore.currentUser?.username)">
             <template #icon><QrcodeOutlined /></template>扫码签到
           </a-button>
-          
+
           <template v-if="t.status === 'upcoming' && authStore.isStudent">
             <a-button 
               size="small" 
@@ -75,7 +82,12 @@
             >报名申请</a-button>
             <a-button size="small" disabled v-else>已报名</a-button>
           </template>
-          <a-button size="small" @click="goSchedule(t)" v-if="authStore.isStudent && t.status === 'active'">查看日程</a-button>
+
+          <!-- 学员：已报名的班级可看日程 -->
+          <a-button size="small" @click="goSchedule(t)"
+            v-if="authStore.isStudent && t.students.includes(authStore.currentUser?.username)">
+            查看日程
+          </a-button>
           <a-dropdown v-if="authStore.isAdmin || authStore.isInstructor">
             <a-button size="small"><EllipsisOutlined /></a-button>
             <template #overlay>
