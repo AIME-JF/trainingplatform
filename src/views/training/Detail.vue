@@ -45,6 +45,8 @@
                   <div class="ci-left">
                     <div class="ci-name">{{ c.name }}</div>
                     <div class="ci-instructor">{{ c.instructor }}</div>
+                    <div class="ci-time" v-if="c.startTime && c.endTime">{{ c.startTime }} ~ {{ c.endTime }}</div>
+                    <div class="ci-time" v-else-if="c.date">{{ c.date }}</div>
                   </div>
                   <div class="ci-right">
                     <span class="ci-hours">{{ c.hours }}课时</span>
@@ -188,13 +190,14 @@
         </a-row>
         <a-row :gutter="12">
           <a-col :span="12">
-            <a-form-item label="上课日期">
-              <a-date-picker
+            <a-form-item label="上课时间">
+              <a-range-picker
                 v-model:value="courseFormDateVal"
                 style="width:100%"
-                :format="'YYYY-MM-DD'"
-                placeholder="选择上课日期（可选）"
-                @change="(_, s) => courseForm.date = s"
+                :show-time="{ format: 'HH:mm' }"
+                format="YYYY-MM-DD HH:mm"
+                placeholder="['开始时间', '结束时间']"
+                @change="onCourseTimeChange"
               />
             </a-form-item>
           </a-col>
@@ -444,25 +447,50 @@ function addSelectedStudents() {
 }
 
 // ===== 课程 CRUD =====
+import dayjs from 'dayjs'
+
 const showCourseModal = ref(false)
 const editingCourseIdx = ref(null)
-const courseFormDateVal = ref(null)
-const courseForm = reactive({ name: '', instructor: '', instructorId: null, hours: 8, type: 'theory', date: '' })
+const courseFormDateVal = ref([])
+const courseForm = reactive({ name: '', instructor: '', instructorId: null, hours: 8, type: 'theory', startTime: '', endTime: '', date: '' })
 
 function onInstructorChange(id) {
   const inst = MOCK_INSTRUCTORS.find(i => i.id === id)
   if (inst) courseForm.instructor = inst.name
 }
 
+function onCourseTimeChange(dates, dateStrings) {
+  if (dates && dates.length === 2) {
+    courseForm.startTime = dateStrings[0]
+    courseForm.endTime = dateStrings[1]
+    courseForm.date = dates[0].format('YYYY-MM-DD')
+    
+    // Auto-calculate hours
+    const diffMs = dates[1].diff(dates[0]) // difference in milliseconds
+    const hours = diffMs / (1000 * 60 * 60)
+    courseForm.hours = Number(hours.toFixed(1)) // Keep 1 decimal place
+  } else {
+    courseForm.startTime = ''
+    courseForm.endTime = ''
+    courseForm.date = ''
+  }
+}
+
 function openCourseModal(idx = null) {
   editingCourseIdx.value = idx
-  courseFormDateVal.value = null
+  courseFormDateVal.value = []
   if (idx !== null && trainingData.courses[idx]) {
     const c = trainingData.courses[idx]
     const inst = MOCK_INSTRUCTORS.find(i => i.name === c.instructor)
-    Object.assign(courseForm, { name: c.name, instructor: c.instructor, instructorId: inst?.id ?? null, hours: c.hours, type: c.type, date: c.date || '' })
+    Object.assign(courseForm, { name: c.name, instructor: c.instructor, instructorId: inst?.id ?? null, hours: c.hours, type: c.type, startTime: c.startTime || '', endTime: c.endTime || '', date: c.date || '' })
+    if (c.startTime && c.endTime) {
+      courseFormDateVal.value = [dayjs(c.startTime), dayjs(c.endTime)]
+    } else if (c.date) {
+      // Legacy support for plain dates
+      courseFormDateVal.value = [dayjs(c.date).startOf('day'), dayjs(c.date).endOf('day')]
+    }
   } else {
-    Object.assign(courseForm, { name: '', instructor: '', instructorId: null, hours: 8, type: 'theory', date: '' })
+    Object.assign(courseForm, { name: '', instructor: '', instructorId: null, hours: 8, type: 'theory', startTime: '', endTime: '', date: '' })
   }
   showCourseModal.value = true
 }
@@ -620,6 +648,7 @@ const exportMsg = () => message.success('学员名单已导出！')
 .course-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
 .ci-name { font-size: 14px; font-weight: 500; }
 .ci-instructor { font-size: 12px; color: #888; }
+.ci-time { font-size: 12px; color: #666; margin-top: 4px; background: #f5f5f5; padding: 2px 6px; border-radius: 4px; display: inline-block; }
 .ci-hours { font-size: 14px; color: var(--police-primary); font-weight: 600; margin-right: 8px; }
 .ci-right { display: flex; align-items: center; gap: 4px; }
 .training-desc { background: rgba(255,255,255,0.1); padding: 12px 16px; border-radius: 6px; color: rgba(255,255,255,0.9); font-size: 13px; line-height: 1.5; margin-top: 12px; }
