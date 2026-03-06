@@ -2,25 +2,26 @@
   <div class="training-detail-page">
     <a-breadcrumb style="margin-bottom:16px">
       <a-breadcrumb-item @click="$router.push('/training')" style="cursor:pointer;color:var(--police-primary)">培训班管理</a-breadcrumb-item>
-      <a-breadcrumb-item>{{ training.name }}</a-breadcrumb-item>
+      <a-breadcrumb-item>{{ trainingData.name }}</a-breadcrumb-item>
     </a-breadcrumb>
 
     <a-row :gutter="20">
-      <a-col :span="16">
+      <a-col :xs="24" :md="16">
         <a-card :bordered="false" class="main-card">
-          <div class="training-banner" :class="'status-' + training.status">
+          <div class="training-banner" :class="'status-' + trainingData.status">
             <div class="banner-content">
-              <a-tag :color="statusColorMap[training.status]" class="status-tag">{{ statusLabels[training.status] }}</a-tag>
-              <h2 class="training-title">{{ training.name }}</h2>
+              <a-tag :color="statusColorMap[trainingData.status]" class="status-tag">{{ statusLabels[trainingData.status] }}</a-tag>
+              <h2 class="training-title">{{ trainingData.name }}</h2>
               <div class="training-meta-row">
-                <span><CalendarOutlined /> {{ training.startDate }} ~ {{ training.endDate }}</span>
-                <span><EnvironmentOutlined /> {{ training.location }}</span>
-                <span><UserOutlined /> 主讲：{{ training.instructorName }}</span>
+                <span><CalendarOutlined /> {{ trainingData.startDate }} ~ {{ trainingData.endDate }}</span>
+                <span><EnvironmentOutlined /> {{ trainingData.location }}</span>
+                <span><UserOutlined /> 主讲：{{ trainingData.instructorName }}</span>
               </div>
             </div>
           </div>
 
           <a-tabs v-model:activeKey="activeTab" style="margin-top:16px">
+            <!-- ===== 班级概览 + 课程管理 ===== -->
             <a-tab-pane key="overview" tab="班级概览">
               <div class="overview-stats">
                 <div class="ov-stat" v-for="s in overviewStats" :key="s.label">
@@ -30,8 +31,14 @@
               </div>
               <a-divider />
               <div class="course-schedule">
-                <h4>课程安排</h4>
-                <div class="course-item" v-for="c in training.courses" :key="c.name">
+                <div class="section-header">
+                  <h4>课程安排</h4>
+                  <a-button size="small" type="primary" @click="openCourseModal()" v-if="canEdit">
+                    <template #icon><PlusOutlined /></template>添加课程
+                  </a-button>
+                </div>
+                <a-empty v-if="!trainingData.courses || trainingData.courses.length === 0" description="暂无课程安排，请点击添加" />
+                <div class="course-item" v-for="(c, idx) in trainingData.courses" :key="idx">
                   <div class="ci-left">
                     <div class="ci-name">{{ c.name }}</div>
                     <div class="ci-instructor">{{ c.instructor }}</div>
@@ -39,14 +46,24 @@
                   <div class="ci-right">
                     <span class="ci-hours">{{ c.hours }}课时</span>
                     <a-tag :color="c.type === 'theory' ? 'blue' : 'green'" size="small">{{ c.type === 'theory' ? '理论' : '实操' }}</a-tag>
+                    <template v-if="canEdit">
+                      <a-button size="small" type="link" @click="openCourseModal(idx)">编辑</a-button>
+                      <a-button size="small" type="link" danger @click="removeCourse(idx)">删除</a-button>
+                    </template>
                   </div>
                 </div>
               </div>
             </a-tab-pane>
 
+            <!-- ===== 学员名单 (Admin/Instructor 可管理) ===== -->
             <a-tab-pane key="students" tab="学员名单" v-if="!authStore.isStudent">
-              <a-input-search v-model:value="studentSearch" placeholder="搜索学员..." style="width:240px;margin-bottom:16px" />
-              <a-table :dataSource="filteredStudents" :columns="studentColumns" size="small" :pagination="{ pageSize: 10 }">
+              <div class="section-header" style="margin-bottom:16px">
+                <a-input-search v-model:value="studentSearch" placeholder="搜索学员..." style="width:240px" />
+                <a-button type="primary" size="small" @click="showStudentModal = true" v-if="canEdit">
+                  <template #icon><PlusOutlined /></template>添加学员
+                </a-button>
+              </div>
+              <a-table :dataSource="filteredStudents" :columns="studentColumnsWithAction" size="small" :pagination="{ pageSize: 10 }">
                 <template #bodyCell="{ column, record }">
                   <template v-if="column.key === 'progress'">
                     <a-progress :percent="record.progress" size="small" />
@@ -56,10 +73,16 @@
                       {{ record.checkinRate }}%
                     </span>
                   </template>
+                  <template v-if="column.key === 'action'">
+                    <a-popconfirm title="确定移除该学员？" @confirm="removeStudent(record.key)" v-if="canEdit">
+                      <a-button size="small" type="link" danger>移除</a-button>
+                    </a-popconfirm>
+                  </template>
                 </template>
               </a-table>
             </a-tab-pane>
 
+            <!-- ===== 公告 ===== -->
             <a-tab-pane key="notice" tab="公告">
               <div class="notice-list">
                 <div v-for="n in notices" :key="n.id" class="notice-item">
@@ -75,19 +98,20 @@
         </a-card>
       </a-col>
 
-      <a-col :span="8">
+      <a-col :xs="24" :md="8">
         <a-card title="快捷操作" :bordered="false" style="margin-bottom:16px">
           <div class="quick-ops">
-            <!-- 管理员/教官：任何 active 班都可以开始签到 -->
-            <a-button block style="margin-bottom:8px" @click="$router.push('/training/checkin/' + training.id)" type="primary" v-if="training.status === 'active' && !authStore.isStudent">
+            <a-button block style="margin-bottom:8px" @click="$router.push('/training/checkin/' + trainingData.id)" type="primary" v-if="trainingData.status === 'active' && !authStore.isStudent">
               <template #icon><QrcodeOutlined /></template>开始签到
             </a-button>
-            <!-- 学员：只有在该班名单中且 active 才能扫码签到 -->
-            <a-button block style="margin-bottom:8px" @click="$router.push('/training/checkin/' + training.id)" type="primary" v-if="training.status === 'active' && authStore.isStudent && isEnrolled">
+            <a-button block style="margin-bottom:8px" @click="$router.push('/training/checkin/' + trainingData.id)" type="primary" v-if="trainingData.status === 'active' && authStore.isStudent && isEnrolled">
               <template #icon><QrcodeOutlined /></template>扫码签到
             </a-button>
-            <a-button block style="margin-bottom:8px" @click="$router.push('/training/schedule/' + training.id)">
+            <a-button block style="margin-bottom:8px" @click="$router.push('/training/schedule/' + trainingData.id)">
               <template #icon><CalendarOutlined /></template>查看日程
+            </a-button>
+            <a-button block style="margin-bottom:8px" @click="showEditModal = true" v-if="canEdit">
+              <template #icon><EditOutlined /></template>编辑班级信息
             </a-button>
             <a-button block @click="exportMsg" v-if="!authStore.isStudent">
               <template #icon><DownloadOutlined /></template>导出学员名单
@@ -107,14 +131,122 @@
         </a-card>
       </a-col>
     </a-row>
+
+    <!-- ===== 添加/编辑课程弹窗 ===== -->
+    <a-modal
+      v-model:open="showCourseModal"
+      :title="editingCourseIdx !== null ? '编辑课程' : '添加课程'"
+      @ok="saveCourse"
+      ok-text="保存"
+      cancel-text="取消"
+    >
+      <a-form layout="vertical" style="margin-top:12px">
+        <a-form-item label="课程名称" required>
+          <a-input v-model:value="courseForm.name" placeholder="例：刑事诉讼法实务操作" />
+        </a-form-item>
+        <a-row :gutter="12">
+          <a-col :span="12">
+            <a-form-item label="授课教官" required>
+              <a-input v-model:value="courseForm.instructor" placeholder="教官姓名" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="课时数" required>
+              <a-input-number v-model:value="courseForm.hours" :min="1" :max="100" style="width:100%" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-form-item label="课程类型">
+          <a-radio-group v-model:value="courseForm.type">
+            <a-radio value="theory">理论课</a-radio>
+            <a-radio value="practice">实操课</a-radio>
+          </a-radio-group>
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <!-- ===== 添加学员弹窗 ===== -->
+    <a-modal
+      v-model:open="showStudentModal"
+      title="添加学员"
+      @ok="addSelectedStudents"
+      ok-text="确认添加"
+      cancel-text="取消"
+      width="600px"
+    >
+      <div style="margin-bottom:12px">
+        <a-input-search v-model:value="addStudentSearch" placeholder="搜索学员姓名或工号..." allow-clear />
+      </div>
+      <a-table
+        :dataSource="availableStudents"
+        :columns="addStudentColumns"
+        size="small"
+        :pagination="{ pageSize: 8 }"
+        :row-selection="{ selectedRowKeys: selectedStudentKeys, onChange: (keys) => selectedStudentKeys = keys }"
+        row-key="id"
+      />
+    </a-modal>
+
+    <!-- ===== 编辑班级信息弹窗 ===== -->
+    <a-modal
+      v-model:open="showEditModal"
+      title="编辑班级信息"
+      @ok="saveClassInfo"
+      ok-text="保存"
+      cancel-text="取消"
+      width="640px"
+    >
+      <a-form layout="vertical" style="margin-top:12px">
+        <a-form-item label="培训班名称" required>
+          <a-input v-model:value="editForm.name" />
+        </a-form-item>
+        <a-row :gutter="12">
+          <a-col :span="12">
+            <a-form-item label="开始日期" required>
+              <a-input v-model:value="editForm.startDate" placeholder="2025-04-01" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="结束日期" required>
+              <a-input v-model:value="editForm.endDate" placeholder="2025-04-30" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-form-item label="培训地点" required>
+          <a-input v-model:value="editForm.location" />
+        </a-form-item>
+        <a-row :gutter="12">
+          <a-col :span="12">
+            <a-form-item label="主讲教官">
+              <a-input v-model:value="editForm.instructorName" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="班级容量">
+              <a-input-number v-model:value="editForm.capacity" :min="1" style="width:100%" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-form-item label="状态">
+          <a-select v-model:value="editForm.status">
+            <a-select-option value="upcoming">未开始</a-select-option>
+            <a-select-option value="active">进行中</a-select-option>
+            <a-select-option value="ended">已结束</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item label="培训简介">
+          <a-textarea v-model:value="editForm.description" :rows="2" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, reactive } from 'vue'
 import { useRoute } from 'vue-router'
-import { message } from 'ant-design-vue'
-import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QrcodeOutlined, DownloadOutlined } from '@ant-design/icons-vue'
+import { message, Modal } from 'ant-design-vue'
+import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QrcodeOutlined, DownloadOutlined, PlusOutlined, EditOutlined } from '@ant-design/icons-vue'
 import { MOCK_TRAININGS } from '@/mock/trainings'
 import { MOCK_USER_LIST } from '@/mock/users'
 import { useAuthStore } from '@/stores/auth'
@@ -122,65 +254,175 @@ import { useAuthStore } from '@/stores/auth'
 const route = useRoute()
 const authStore = useAuthStore()
 const trainingId = route.params.id
-const training = MOCK_TRAININGS.find(t => t.id === trainingId) || MOCK_TRAININGS[0]
+const originalTraining = MOCK_TRAININGS.find(t => t.id === trainingId) || MOCK_TRAININGS[0]
 
+// 使用 reactive 使数据可编辑
+const trainingData = reactive({ ...originalTraining, courses: [...(originalTraining.courses || [])], students: [...(originalTraining.students || [])] })
+
+const canEdit = computed(() => authStore.isAdmin || authStore.isInstructor)
 const activeTab = ref('overview')
 const studentSearch = ref('')
 
 const statusLabels = { active: '进行中', upcoming: '未开始', ended: '已结束' }
 const statusColorMap = { active: 'green', upcoming: 'orange', ended: 'default' }
 
-// 动态统计数据
-const checkinRecords = training.checkinRecords || []
+// 签到统计
+const checkinRecords = trainingData.checkinRecords || []
 const onTimeCount = checkinRecords.filter(r => r.status === 'on_time').length
 const lateCount = checkinRecords.filter(r => r.status === 'late').length
 const absentCount = checkinRecords.filter(r => r.status === 'absent').length
 const totalCheckin = onTimeCount + lateCount
 const checkinRate = checkinRecords.length > 0 ? Math.round((totalCheckin / checkinRecords.length) * 100) : 0
+const completeCount = trainingData.enrolled > 0 ? Math.floor(trainingData.enrolled * (checkinRate / 100 || 0.8)) : 0
+const isEnrolled = computed(() => trainingData.students.includes(authStore.currentUser?.id))
 
-const completeCount = training.enrolled > 0 ? Math.floor(training.enrolled * (checkinRate / 100 || 0.8)) : 0
-
-// 判断当前学员是否在该培训班名单中
-const isEnrolled = (training.students || []).includes(authStore.currentUser?.id)
-
-const overviewStats = [
-  { label: '报名人数', value: training.enrolled, color: '#003087' },
-  { label: '班级容量', value: training.capacity, color: '#555' },
+const overviewStats = computed(() => [
+  { label: '报名人数', value: trainingData.students.length, color: '#003087' },
+  { label: '班级容量', value: trainingData.capacity, color: '#555' },
   { label: '预计完成学员', value: completeCount, color: '#52c41a' },
-  { label: '课程总学时', value: (training.courses || []).reduce((a, c) => a + (c.hours || 0), 0) || 48, color: '#faad14' },
-]
+  { label: '课程总学时', value: trainingData.courses.reduce((a, c) => a + (c.hours || 0), 0) || 0, color: '#faad14' },
+])
 
-// 基于 MOCK_USER_LIST 通过 userId 映射真实学员数据
-const mockStudents = (training.students || []).map(userId => {
-  const u = MOCK_USER_LIST.find(user => user.id === userId) || { name: '未知学员', unit: '未知单位' }
-  // 计算每个学员的考勤率（如果存在签到记录）
+// ===== 学员名单 =====
+const mockStudents = computed(() => trainingData.students.map(userId => {
+  const u = MOCK_USER_LIST.find(user => user.id === userId) || { name: '未知学员', unit: '未知单位', policeId: userId }
   const r = checkinRecords.find(cr => cr.studentId === userId)
   const cRate = !r ? 0 : (r.status === 'absent' ? 0 : (r.status === 'late' ? 80 : 100))
-  return {
-    key: userId,
-    name: u.name,
-    policeId: u.policeId || userId,
-    unit: u.unit || '广西公安机关',
-    progress: Math.floor(Math.random() * 20 + 80),
-    checkinRate: cRate
-  }
-})
+  return { key: userId, name: u.name, policeId: u.policeId || userId, unit: u.unit || '广西公安机关', progress: Math.floor(Math.random() * 20 + 80), checkinRate: cRate }
+}))
 
 const filteredStudents = computed(() =>
-  studentSearch.value ? mockStudents.filter(s => s.name.includes(studentSearch.value) || s.policeId.includes(studentSearch.value)) : mockStudents
+  studentSearch.value ? mockStudents.value.filter(s => s.name.includes(studentSearch.value) || s.policeId.includes(studentSearch.value)) : mockStudents.value
 )
 
-const studentColumns = [
+const baseStudentColumns = [
   { title: '姓名', dataIndex: 'name', key: 'name' },
   { title: '工号', dataIndex: 'policeId', key: 'policeId' },
   { title: '单位', dataIndex: 'unit', key: 'unit' },
   { title: '学习进度', key: 'progress', width: 120 },
   { title: '签到率', key: 'checkin', width: 80 },
 ]
+const studentColumnsWithAction = computed(() =>
+  canEdit.value ? [...baseStudentColumns, { title: '操作', key: 'action', width: 80 }] : baseStudentColumns
+)
 
+function removeStudent(userId) {
+  const idx = trainingData.students.indexOf(userId)
+  if (idx !== -1) {
+    trainingData.students.splice(idx, 1)
+    trainingData.enrolled = trainingData.students.length
+    // 同步回 MOCK_TRAININGS
+    const orig = MOCK_TRAININGS.find(t => t.id === trainingId)
+    if (orig) { orig.students = [...trainingData.students]; orig.enrolled = trainingData.enrolled }
+    message.success('已移除该学员')
+  }
+}
+
+// ===== 添加学员弹窗 =====
+const showStudentModal = ref(false)
+const addStudentSearch = ref('')
+const selectedStudentKeys = ref([])
+
+const availableStudents = computed(() => {
+  const existing = new Set(trainingData.students)
+  let list = MOCK_USER_LIST.filter(u => !existing.has(u.id))
+  if (addStudentSearch.value) {
+    const q = addStudentSearch.value.toLowerCase()
+    list = list.filter(u => u.name.includes(q) || u.policeId.toLowerCase().includes(q))
+  }
+  return list
+})
+
+const addStudentColumns = [
+  { title: '姓名', dataIndex: 'name', key: 'name' },
+  { title: '工号', dataIndex: 'policeId', key: 'policeId' },
+  { title: '单位', dataIndex: 'unit', key: 'unit' },
+]
+
+function addSelectedStudents() {
+  if (selectedStudentKeys.value.length === 0) { message.warning('请先选择要添加的学员'); return }
+  trainingData.students.push(...selectedStudentKeys.value)
+  trainingData.enrolled = trainingData.students.length
+  // 同步回 MOCK_TRAININGS
+  const orig = MOCK_TRAININGS.find(t => t.id === trainingId)
+  if (orig) { orig.students = [...trainingData.students]; orig.enrolled = trainingData.enrolled }
+  message.success(`已添加 ${selectedStudentKeys.value.length} 名学员`)
+  selectedStudentKeys.value = []
+  addStudentSearch.value = ''
+  showStudentModal.value = false
+}
+
+// ===== 课程 CRUD =====
+const showCourseModal = ref(false)
+const editingCourseIdx = ref(null)
+const courseForm = reactive({ name: '', instructor: '', hours: 8, type: 'theory' })
+
+function openCourseModal(idx = null) {
+  editingCourseIdx.value = idx
+  if (idx !== null && trainingData.courses[idx]) {
+    const c = trainingData.courses[idx]
+    Object.assign(courseForm, { name: c.name, instructor: c.instructor, hours: c.hours, type: c.type })
+  } else {
+    Object.assign(courseForm, { name: '', instructor: '', hours: 8, type: 'theory' })
+  }
+  showCourseModal.value = true
+}
+
+function saveCourse() {
+  if (!courseForm.name || !courseForm.instructor) { message.warning('请填写课程名称和授课教官'); return }
+  const courseData = { ...courseForm }
+  if (editingCourseIdx.value !== null) {
+    trainingData.courses.splice(editingCourseIdx.value, 1, courseData)
+    message.success('课程已更新')
+  } else {
+    trainingData.courses.push(courseData)
+    message.success('课程已添加')
+  }
+  // 同步回 MOCK_TRAININGS
+  const orig = MOCK_TRAININGS.find(t => t.id === trainingId)
+  if (orig) orig.courses = [...trainingData.courses]
+  showCourseModal.value = false
+}
+
+function removeCourse(idx) {
+  Modal.confirm({
+    title: '确认删除', content: `确定删除课程「${trainingData.courses[idx]?.name}」吗？`,
+    okText: '删除', okType: 'danger', cancelText: '取消',
+    onOk: () => {
+      trainingData.courses.splice(idx, 1)
+      const orig = MOCK_TRAININGS.find(t => t.id === trainingId)
+      if (orig) orig.courses = [...trainingData.courses]
+      message.success('课程已删除')
+    }
+  })
+}
+
+// ===== 编辑班级信息 =====
+const showEditModal = ref(false)
+const editForm = reactive({
+  name: trainingData.name, startDate: trainingData.startDate, endDate: trainingData.endDate,
+  location: trainingData.location, instructorName: trainingData.instructorName,
+  capacity: trainingData.capacity, status: trainingData.status, description: trainingData.description || '',
+})
+
+function saveClassInfo() {
+  if (!editForm.name || !editForm.startDate || !editForm.endDate || !editForm.location) { message.warning('请填写必填项'); return }
+  Object.assign(trainingData, {
+    name: editForm.name, startDate: editForm.startDate, endDate: editForm.endDate,
+    location: editForm.location, instructorName: editForm.instructorName,
+    capacity: editForm.capacity, status: editForm.status, description: editForm.description,
+  })
+  // 同步回 MOCK_TRAININGS
+  const orig = MOCK_TRAININGS.find(t => t.id === trainingId)
+  if (orig) Object.assign(orig, { name: editForm.name, startDate: editForm.startDate, endDate: editForm.endDate, location: editForm.location, instructorName: editForm.instructorName, capacity: editForm.capacity, status: editForm.status, description: editForm.description })
+  message.success('班级信息已更新')
+  showEditModal.value = false
+}
+
+// ===== 公告 =====
 const notices = [
-  { id: 1, title: '开班及教材发放通知', time: training.startDate, content: `本次培训【${training.name}】教材已到位，请于开班当天前往培训点领取。` },
-  { id: 2, title: '体能测试及考核通知', time: training.endDate, content: '结业周将进行统一考核，请携带好装备。' },
+  { id: 1, title: '开班及教材发放通知', time: trainingData.startDate, content: `本次培训【${trainingData.name}】教材已到位，请于开班当天前往培训点领取。` },
+  { id: 2, title: '体能测试及考核通知', time: trainingData.endDate, content: '结业周将进行统一考核，请携带好装备。' },
 ]
 
 const exportMsg = () => message.success('学员名单已导出！')
@@ -188,7 +430,6 @@ const exportMsg = () => message.success('学员名单已导出！')
 
 <style scoped>
 .training-detail-page { padding: 0; }
-.main-card { }
 .training-banner { padding: 24px; border-radius: 8px; margin-bottom: 4px; }
 .training-banner.status-active { background: linear-gradient(135deg, #001a50, #003087); }
 .training-banner.status-upcoming { background: linear-gradient(135deg, #78350f, #b45309); }
@@ -200,19 +441,19 @@ const exportMsg = () => message.success('学员名单已导出！')
 .ov-stat { text-align: center; padding: 16px; background: #f8f9ff; border-radius: 8px; }
 .ov-num { font-size: 28px; font-weight: 700; }
 .ov-label { font-size: 12px; color: #888; margin-top: 4px; }
-.course-schedule { }
-.course-schedule h4 { margin-bottom: 12px; color: #333; }
+.section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+.section-header h4 { margin: 0; color: #333; }
 .course-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
 .ci-name { font-size: 14px; font-weight: 500; }
 .ci-instructor { font-size: 12px; color: #888; }
 .ci-hours { font-size: 14px; color: var(--police-primary); font-weight: 600; margin-right: 8px; }
+.ci-right { display: flex; align-items: center; gap: 4px; }
 .notice-list { display: flex; flex-direction: column; gap: 12px; }
 .notice-item { padding: 14px; border: 1px solid #e8e8e8; border-radius: 6px; border-left: 3px solid var(--police-primary); }
 .notice-header { display: flex; justify-content: space-between; margin-bottom: 6px; }
 .notice-title { font-weight: 600; color: #1a1a1a; }
 .notice-time { font-size: 12px; color: #888; }
 .notice-content { font-size: 13px; color: #555; line-height: 1.6; }
-.quick-ops { }
 .checkin-summary { display: flex; align-items: center; gap: 20px; }
 .checkin-detail { display: flex; flex-direction: column; gap: 8px; }
 .cd-item { font-size: 14px; }
