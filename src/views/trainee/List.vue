@@ -19,20 +19,13 @@
           </a-select>
         </a-form-item>
         <a-form-item label="单位"><a-input v-model:value="addForm.unit" placeholder="所属单位" /></a-form-item>
-        <a-form-item label="专业方向"><a-select v-model:value="addForm.specialties" mode="tags" placeholder="输入后回车添加" /></a-form-item>
       </a-form>
     </a-modal>
 
     <a-card :bordered="false" style="margin-bottom:16px">
       <a-row :gutter="16">
-        <a-col :span="8">
-          <a-input-search v-model:value="searchText" placeholder="搜索学员姓名、专业领域..." allow-clear />
-        </a-col>
-        <a-col :span="16">
-          <a-space>
-            <span style="color:#888">专业方向：</span>
-            <a-tag v-for="s in specialtiesList" :key="s" :color="filterSpecialty === s ? 'blue' : 'default'" class="filter-tag" @click="filterSpecialty = s">{{ s }}</a-tag>
-          </a-space>
+        <a-col :span="12">
+          <a-input-search v-model:value="searchText" placeholder="搜索学员姓名..." allow-clear />
         </a-col>
       </a-row>
     </a-card>
@@ -47,21 +40,16 @@
         </div>
         <div class="traineename">{{ trainee.name }}</div>
         <div class="traineetitle">{{ trainee.title }}</div>
-        <div class="traineeunit">{{ trainee.unit }}</div>
 
-        <div class="traineespecialties">
-          <a-tag v-for="s in trainee.specialties.slice(0,2)" :key="s" size="small">{{ s }}</a-tag>
-        </div>
-
-        <div class="traineestats">
+        <div class="traineestats" style="margin-top: 16px;">
           <div class="is-item">
             <div class="is-num">{{ trainee.courseCount }}</div>
             <div class="is-label">课程数</div>
           </div>
           <div class="is-divider"></div>
           <div class="is-item">
-            <div class="is-num">{{ trainee.studentCount }}</div>
-            <div class="is-label">培训人次</div>
+            <div class="is-num" style="font-size: 14px;">{{ trainee.unit }}</div>
+            <div class="is-label">所属单位</div>
           </div>
           <div class="is-divider"></div>
           <div class="is-item">
@@ -85,20 +73,12 @@ import { MOCK_TRAINEES } from '@/mock/trainees'
 const router = useRouter()
 const authStore = useAuthStore()
 const searchText = ref('')
-const filterSpecialty = ref('全部')
 
 const traineeList = ref([...MOCK_TRAINEES])
 
-// 动态计算专业列表
-const specialtiesList = computed(() => {
-  const allS = new Set()
-  traineeList.value.forEach(i => i.specialties.forEach(s => allS.add(s)))
-  return ['全部', ...allS]
-})
-
 // 添加学员
 const addVisible = ref(false)
-const addForm = reactive({ name: '', title: undefined, unit: '', specialties: [] })
+const addForm = reactive({ name: '', title: undefined, unit: '' })
 const avatarColors = ['#003087', '#c8a84b', '#8B1A1A', '#1a5c2e', '#6b3a8a', '#2e86de']
 const levelMap = { '高级学员': { level: 'expert', label: '专家' }, '中级学员': { level: 'senior', label: '高级' }, '初级学员': { level: 'standard', label: '初级' } }
 
@@ -111,7 +91,6 @@ const handleAdd = () => {
     name: addForm.name,
     title: addForm.title,
     unit: addForm.unit || '未指定',
-    specialties: addForm.specialties.length ? addForm.specialties : ['通用'],
     courseCount: 0,
     studentCount: 0,
     rating: 0,
@@ -121,14 +100,13 @@ const handleAdd = () => {
   }
   traineeList.value.unshift(newTrainee)
   addVisible.value = false
-  Object.assign(addForm, { name: '', title: undefined, unit: '', specialties: [] })
+  Object.assign(addForm, { name: '', title: undefined, unit: '' })
   message.success('学员添加成功！')
 }
 
 const filteredTrainees = computed(() => {
   let list = [...traineeList.value]
-  if (searchText.value) list = list.filter(i => i.name.includes(searchText.value) || i.specialties.some(s => s.includes(searchText.value)))
-  if (filterSpecialty.value !== '全部') list = list.filter(i => i.specialties.includes(filterSpecialty.value))
+  if (searchText.value) list = list.filter(i => i.name.includes(searchText.value))
   return list
 })
 

@@ -17,7 +17,6 @@
           </div>
           <div class="profile-name">{{ trainee.name }}</div>
           <div class="profile-title">{{ trainee.title }}</div>
-          <div class="profile-unit">{{ trainee.unit }}</div>
 
           <a-divider />
 
@@ -28,8 +27,8 @@
             </div>
             <div class="ps-divider"></div>
             <div class="ps-item">
-              <div class="ps-num">{{ trainee.studentCount }}</div>
-              <div class="ps-label">培训人次</div>
+              <div class="ps-num" style="font-size: 16px;">{{ trainee.unit }}</div>
+              <div class="ps-label">所属单位</div>
             </div>
             <div class="ps-divider"></div>
             <div class="ps-item">
@@ -73,12 +72,6 @@
             <a-tab-pane key="intro" tab="学员简介">
               <div class="intro-section">
                 <p class="bio-text">{{ trainee.bio }}</p>
-                <div class="specialty-section">
-                  <h4>专业领域</h4>
-                  <div class="specialty-tags">
-                    <a-tag v-for="s in trainee.specialties" :key="s" color="blue">{{ s }}</a-tag>
-                  </div>
-                </div>
               </div>
             </a-tab-pane>
 
