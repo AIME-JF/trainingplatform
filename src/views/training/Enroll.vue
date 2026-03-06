@@ -25,12 +25,12 @@
       </div>
     </div>
 
-    <!-- 已提交状态 -->
-    <div v-if="submitted" class="submit-success">
+    <!-- 已提交或已在班级状态 -->
+    <div v-if="submitted || isAlreadyInClass || hasEnrolled" class="submit-success">
       <a-result
-        status="success"
-        title="报名申请已提交！"
-        sub-title="您的报名申请正在审核中，审核结果将通过系统消息通知您，请耐心等待。"
+        :status="isAlreadyInClass ? 'success' : 'info'"
+        :title="isAlreadyInClass ? '您已是该班级成员' : '报名申请已提交或正在审核中！'"
+        :sub-title="isAlreadyInClass ? '您已无需重复报名，快去看看课程日程吧！' : '您的报名申请正在处理中，审核结果将通过系统消息通知您，并且可以在我的培训中查看，请耐心等待。'"
       >
         <template #extra>
           <a-button type="primary" @click="$router.push('/training')">返回培训列表</a-button>
@@ -87,8 +87,8 @@
 
         <div class="form-actions">
           <a-button @click="$router.back()">返回</a-button>
-          <a-button type="primary" :loading="submitting" :disabled="!agreed" @click="handleSubmit">
-            提交报名申请
+          <a-button type="primary" :loading="submitting" :disabled="!agreed || isFull" @click="handleSubmit">
+            {{ isFull ? '名额已满' : '提交报名申请' }}
           </a-button>
         </div>
       </a-form>
@@ -97,11 +97,12 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { CalendarOutlined, EnvironmentOutlined, UserOutlined } from '@ant-design/icons-vue'
 import { MOCK_TRAININGS } from '@/mock/trainings'
+import { MOCK_ENROLLMENTS, addEnrollment } from '@/mock/enrollments'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
@@ -115,6 +116,14 @@ const submitting = ref(false)
 const agreed = ref(false)
 
 const u = authStore.currentUser || {}
+
+const isAlreadyInClass = computed(() => training?.students.includes(u.id))
+const hasEnrolled = computed(() => MOCK_ENROLLMENTS.some(e => e.trainingId === trainingId && e.userId === u.id))
+const isFull = computed(() => training?.enrolled >= training?.capacity)
+
+if (isAlreadyInClass.value || hasEnrolled.value) {
+  submitted.value = true
+}
 const formData = ref({
   name: u.name || '',
   policeId: u.username || '',
@@ -126,8 +135,21 @@ const formData = ref({
 
 async function handleSubmit() {
   if (!agreed.value) { message.warning('请先同意报名须知'); return }
+  if (isFull.value) { message.error('该班级名额已满，无法申请'); return }
+  
   submitting.value = true
-  await new Promise(r => setTimeout(r, 1000))
+  await new Promise(r => setTimeout(r, 600))
+  
+  addEnrollment({
+    trainingId,
+    userId: u.id,
+    name: formData.value.name,
+    policeId: formData.value.policeId,
+    unit: formData.value.unit,
+    phone: formData.value.phone,
+    reason: formData.value.reason
+  })
+  
   submitting.value = false
   submitted.value = true
   message.success('报名申请已提交，等待审核')

@@ -75,12 +75,9 @@
           </a-button>
 
           <template v-if="t.status === 'upcoming' && authStore.isStudent">
-            <a-button 
-              size="small" 
-              @click="goEnroll(t)" 
-              v-if="!t.students.includes(authStore.currentUser?.id)"
-            >报名申请</a-button>
-            <a-button size="small" disabled v-else>已报名</a-button>
+            <a-button size="small" disabled v-if="t.students.includes(authStore.currentUser?.id)">已报名</a-button>
+            <a-button size="small" disabled v-else-if="isPending(t.id)">审核中</a-button>
+            <a-button size="small" @click="goEnroll(t)" v-else>报名申请</a-button>
           </template>
 
           <!-- 学员：已报名的班级可看日程 -->
@@ -175,6 +172,7 @@ import { message, Modal } from 'ant-design-vue'
 import { PlusOutlined, CalendarOutlined, TeamOutlined, UserOutlined, EnvironmentOutlined, QrcodeOutlined, EllipsisOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { MOCK_TRAININGS, TRAINING_TYPES } from '@/mock/trainings'
+import { MOCK_ENROLLMENTS } from '@/mock/enrollments'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -187,6 +185,10 @@ const editingTraining = ref(null)
 const statusLabels = { active: '进行中', upcoming: '未开始', ended: '已结束' }
 
 const typeLabels = { basic: '基础训练', special: '专项训练', promotion: '晋升培训', online: '线上培训' }
+
+const isPending = (trainingId) => {
+  return authStore.isStudent && MOCK_ENROLLMENTS.some(e => e.trainingId === trainingId && e.userId === authStore.currentUser?.id && e.status === 'pending')
+}
 
 // 本地可修改的培训班列表
 const trainingList = ref([...MOCK_TRAININGS])

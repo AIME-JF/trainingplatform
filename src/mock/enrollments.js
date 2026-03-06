@@ -21,12 +21,15 @@ export const MOCK_ENROLLMENTS = [
   { id: 'e020', trainingId: 't006', userId: 'u016', name: '庞志平', policeId: 'GX-FCG-0234', unit: '防城港市防城区公安局', phone: '182****1616', enrollTime: '2025-03-15 09:00', status: 'pending', note: '' },
 ]
 
-// 培训班名额信息（动态计算）
-export const TRAINING_QUOTA = {
-  t001: { total: 40, approved: 32, pending: 4 },
-  t002: { total: 60, approved: 44, pending: 8 },
-  t003: { total: 50, approved: 48, pending: 0 },
-  t004: { total: 30, approved: 26, pending: 2 },
-  t005: { total: 50, approved: 44, pending: 3 },
-  t006: { total: 45, approved: 36, pending: 2 },
+export function addEnrollment(data) {
+  const newId = `e${String(MOCK_ENROLLMENTS.length + 1).padStart(3, '0')}`
+  const entry = {
+    id: newId,
+    ...data,
+    enrollTime: new Date().toLocaleString('zh-CN', { hour12: false }).replace(/\//g, '-'),
+    status: 'pending',
+    note: ''
+  }
+  MOCK_ENROLLMENTS.unshift(entry)
+  return entry
 }
