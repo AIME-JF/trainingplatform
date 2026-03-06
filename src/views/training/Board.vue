@@ -124,6 +124,9 @@ const kpiData = computed(() => {
   ]
 })
 
+const MOCK_CITIES = ['南宁', '柳州', '桂林', '梧州', '北海', '防城港', '钦州', '贵港', '玉林', '百色', '贺州', '河池', '来宾', '崇左']
+const MOCK_BASE_CITY_VALUES = [320, 240, 210, 150, 140, 95, 110, 160, 180, 130, 85, 90, 80, 75]
+
 const cities = MOCK_CITIES
 const baseCityValues = MOCK_BASE_CITY_VALUES
 
