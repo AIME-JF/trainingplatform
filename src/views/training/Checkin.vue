@@ -107,6 +107,7 @@
       <!-- 移动端：摄像头扫码 -->
       <div v-else class="student-scanner">
         <div class="scanner-header">
+          <button class="back-btn" @click="router.push(`/training/${trainingId}`)">← 返回</button>
           <h2>扫码签到</h2>
           <p class="page-desc">{{ training.name }}</p>
         </div>
@@ -134,28 +135,41 @@
           </a-button>
         </div>
 
-        <!-- 扫码成功：确认签到 -->
+        <!-- 扮码成功：确认签到 / 签到成功 -->
         <div v-else class="scan-result-card">
-          <div class="result-check">✓ 识别成功</div>
-          <div class="result-training">{{ training.name }}</div>
-          <div class="result-user">
-            <div class="result-avatar">{{ authStore.currentUser?.name?.charAt(0) }}</div>
-            <div>
-              <div class="result-name">{{ authStore.currentUser?.name || '张伟' }}</div>
-              <div class="result-id">{{ authStore.currentUser?.username || 'GX-NN-2056' }}</div>
+          <!-- 签到过程中 / 签到前 -->
+          <template v-if="!checkedIn">
+            <div class="result-check">✓ 识别成功</div>
+            <div class="result-training">{{ training.name }}</div>
+            <div class="result-user">
+              <div class="result-avatar">{{ authStore.currentUser?.name?.charAt(0) }}</div>
+              <div>
+                <div class="result-name">{{ authStore.currentUser?.name || '张伟' }}</div>
+                <div class="result-id">{{ authStore.currentUser?.username || 'GX-NN-2056' }}</div>
+              </div>
             </div>
-          </div>
-          <button
-            class="confirm-btn"
-            :class="{ loading: signing }"
-            @click="confirmCheckin"
-            :disabled="signing || checkedIn"
-          >
-            <span v-if="checkedIn">✓ 签到成功</span>
-            <span v-else-if="signing">签到中...</span>
-            <span v-else>确认签到</span>
-          </button>
-          <div v-if="checkedIn" class="success-time">{{ successTime }}</div>
+            <button
+              class="confirm-btn"
+              :class="{ loading: signing }"
+              @click="confirmCheckin"
+              :disabled="signing"
+            >
+              <span v-if="signing">签到中...</span>
+              <span v-else>确认签到</span>
+            </button>
+            <button class="back-link" @click="scanSuccess = false">重新扮码</button>
+          </template>
+
+          <!-- 签到成功页 -->
+          <template v-else>
+            <div class="success-icon-wrap">✓</div>
+            <div class="success-title">签到成功！</div>
+            <div class="success-name">{{ authStore.currentUser?.name || '张伟' }} 已完成签到</div>
+            <div class="success-time">{{ successTime }}</div>
+            <div class="success-training">{{ training.name }}</div>
+            <div class="redirect-tip">{{ redirectCount }}秒后自动返回培训班页面...</div>
+            <button class="confirm-btn" @click="goTraining">返回培训班页面</button>
+          </template>
         </div>
       </div>
     </template>
@@ -164,7 +178,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { ClockCircleOutlined } from '@ant-design/icons-vue'
 import QRCode from 'qrcode'
@@ -172,6 +186,7 @@ import { MOCK_TRAININGS } from '@/mock/trainings'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const trainingId = route.params.id
 const training = MOCK_TRAININGS.find(t => t.id === trainingId) || MOCK_TRAININGS[0]
@@ -251,6 +266,9 @@ function simulateScan() {
   scanSuccess.value = true
 }
 
+const redirectCount = ref(3)
+let redirectTimer = null
+
 async function confirmCheckin() {
   signing.value = true
   await new Promise(r => setTimeout(r, 1200))
@@ -259,6 +277,20 @@ async function confirmCheckin() {
   const t = new Date()
   successTime.value = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')} ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}`
   message.success('签到成功！')
+  // 3秒后自动返回培训班
+  redirectCount.value = 3
+  redirectTimer = setInterval(() => {
+    redirectCount.value--
+    if (redirectCount.value <= 0) {
+      clearInterval(redirectTimer)
+      goTraining()
+    }
+  }, 1000)
+}
+
+function goTraining() {
+  clearInterval(redirectTimer)
+  router.push(`/training/${trainingId}`)
 }
 
 let timer = null
@@ -275,6 +307,7 @@ onMounted(() => {
 })
 onUnmounted(() => {
   clearInterval(timer)
+  clearInterval(redirectTimer)
   // 释放摄像头
   if (videoRef.value?.srcObject) {
     videoRef.value.srcObject.getTracks().forEach(t => t.stop())
@@ -433,4 +466,47 @@ onUnmounted(() => {
 .confirm-btn:active { transform: scale(0.97); }
 .confirm-btn.loading { background: #6b8cc4; cursor: not-allowed; }
 .success-time { margin-top: 12px; font-size: 12px; color: #8c8c8c; font-family: monospace; }
+.back-btn {
+  background: none;
+  border: none;
+  color: var(--police-primary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  margin-bottom: 8px;
+  display: block;
+}
+.back-link {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  background: none;
+  border: none;
+  color: #8c8c8c;
+  font-size: 13px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.success-icon-wrap {
+  width: 72px;
+  height: 72px;
+  background: #52c41a;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 36px;
+  color: white;
+  margin: 0 auto 16px;
+  animation: pop-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+@keyframes pop-in {
+  from { transform: scale(0); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.success-title { font-size: 22px; font-weight: 700; color: #001234; margin-bottom: 6px; }
+.success-name { font-size: 14px; color: #595959; margin-bottom: 12px; }
+.success-training { font-size: 12px; color: #8c8c8c; margin-bottom: 16px; padding: 0 8px; }
+.redirect-tip { font-size: 12px; color: #aaa; margin-bottom: 16px; }
 </style>
