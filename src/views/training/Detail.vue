@@ -96,7 +96,15 @@
               <a-empty v-if="!notices || notices.length === 0" description="暂无公告" />
               <a-collapse v-else accordion :bordered="false" class="custom-notice-collapse">
                 <a-collapse-panel v-for="n in notices" :key="n.id" :header="n.title">
-                  <template #extra><span class="notice-time">{{ n.time }}</span></template>
+                  <template #extra>
+                    <span class="notice-time">{{ n.time }}</span>
+                    <a-space style="margin-left: 12px" v-if="canEdit" @click.stop>
+                      <a-button type="link" size="small" style="padding:0" @click="editNotice(n)">编辑</a-button>
+                      <a-popconfirm title="确定删除该公告？" @confirm="deleteNotice(n.id)">
+                        <a-button type="link" danger size="small" style="padding:0">删除</a-button>
+                      </a-popconfirm>
+                    </a-space>
+                  </template>
                   <p class="notice-content">{{ n.content }}</p>
                 </a-collapse-panel>
               </a-collapse>
@@ -305,9 +313,9 @@
     <!-- ===== 发布公告弹窗 ===== -->
     <a-modal
       v-model:open="showNoticeModal"
-      title="发布新公告"
+      :title="editingNoticeId ? '编辑公告' : '发布新公告'"
       @ok="saveNotice"
-      ok-text="发布"
+      ok-text="保存"
       cancel-text="取消"
       width="600px"
     >
@@ -527,33 +535,67 @@ function saveClassInfo() {
 const notices = ref(getTrainingNotices(trainingData))
 
 const showNoticeModal = ref(false)
+const editingNoticeId = ref(null)
 const noticeForm = reactive({ title: '', content: '' })
 
 function openNoticeModal() {
+  editingNoticeId.value = null
   noticeForm.title = ''
   noticeForm.content = ''
   showNoticeModal.value = true
 }
 
+function editNotice(notice) {
+  editingNoticeId.value = notice.id
+  noticeForm.title = notice.title
+  noticeForm.content = notice.content
+  showNoticeModal.value = true
+}
+
+function deleteNotice(id) {
+  const indexGlobal = MOCK_NOTICES.findIndex(n => n.id === id)
+  if (indexGlobal > -1) MOCK_NOTICES.splice(indexGlobal, 1)
+  
+  const indexLocal = notices.value.findIndex(n => n.id === id)
+  if (indexLocal > -1) notices.value.splice(indexLocal, 1)
+  
+  message.success('公告已删除')
+}
+
 function saveNotice() {
   if (!noticeForm.title || !noticeForm.content) { message.warning('请填写公告标题和内容'); return }
-  const now = new Date()
-  const timeStr = `${now.getMonth() + 1}-${now.getDate()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
   
-  const newNotice = {
-    id: Date.now(),
-    type: 'training',
-    targetId: trainingId,
-    title: noticeForm.title,
-    content: noticeForm.content,
-    time: timeStr
+  if (editingNoticeId.value) {
+    // Edit existing notice
+    const globalNotice = MOCK_NOTICES.find(n => n.id === editingNoticeId.value)
+    if (globalNotice) {
+      globalNotice.title = noticeForm.title
+      globalNotice.content = noticeForm.content
+    }
+    const localNotice = notices.value.find(n => n.id === editingNoticeId.value)
+    if (localNotice) {
+      localNotice.title = noticeForm.title
+      localNotice.content = noticeForm.content
+    }
+    message.success('公告已更新')
+  } else {
+    // Create new notice
+    const now = new Date()
+    const timeStr = `${now.getMonth() + 1}-${now.getDate()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+    
+    const newNotice = {
+      id: Date.now(),
+      type: 'training',
+      targetId: trainingId,
+      title: noticeForm.title,
+      content: noticeForm.content,
+      time: timeStr
+    }
+    MOCK_NOTICES.unshift(newNotice)
+    notices.value.unshift(newNotice)
+    message.success('公告已发布')
   }
   
-  // Create notice and insert to the front
-  MOCK_NOTICES.unshift(newNotice)
-  notices.value.unshift(newNotice)
-  
-  message.success('公告已发布')
   showNoticeModal.value = false
 }
 
