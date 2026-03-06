@@ -331,7 +331,7 @@ import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QrcodeOutlined, Do
 import { MOCK_TRAININGS } from '@/mock/trainings'
 import { MOCK_USER_LIST } from '@/mock/users'
 import { MOCK_INSTRUCTORS } from '@/mock/instructors'
-import { getTrainingNotices } from '@/mock/board'
+import { getTrainingNotices, MOCK_NOTICES } from '@/mock/board'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
@@ -523,7 +523,7 @@ function saveClassInfo() {
 }
 
 // ===== 公告 =====
-import { MOCK_NOTICES, getTrainingNotices } from '@/mock/board' // Use the raw array from board.js to append
+// ===== 公告 =====
 const notices = ref(getTrainingNotices(trainingData))
 
 const showNoticeModal = ref(false)
