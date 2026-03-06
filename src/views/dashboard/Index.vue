@@ -240,7 +240,7 @@
 <script setup>
 import { computed, ref, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth.js'
-import { MOCK_DASHBOARD } from '../../mock/dashboard.js'
+import { MOCK_PERSONAL_DASHBOARD } from '../../mock/dashboard.js'
 import { MOCK_TRAININGS } from '../../mock/trainings.js'
 import { message } from 'ant-design-vue'
 import {
@@ -271,19 +271,20 @@ const dashData = computed(() => {
     const activeCount = MOCK_TRAININGS.filter(t => t.status === 'active').length
     const upcomingCount = MOCK_TRAININGS.filter(t => t.status === 'upcoming').length
     const recentTrainings = MOCK_TRAININGS.filter(t => t.status === 'active' || t.status === 'upcoming').slice(0, 3)
+    const adminData = MOCK_PERSONAL_DASHBOARD.admin
     return {
-      ...MOCK_DASHBOARD.admin,
+      ...adminData,
       stats: [
-        MOCK_DASHBOARD.admin.stats[0],
-        MOCK_DASHBOARD.admin.stats[1],
+        adminData.stats[0],
+        adminData.stats[1],
         { label: '进行中培训班', value: activeCount, unit: '个', trend: `+${upcomingCount} 即将开始`, trendType: 'up' },
-        MOCK_DASHBOARD.admin.stats[3],
+        adminData.stats[3],
       ],
       recentTrainings,
     }
   }
-  if (isInstructor.value) return MOCK_DASHBOARD.instructor
-  return MOCK_DASHBOARD.student
+  if (isInstructor.value) return MOCK_PERSONAL_DASHBOARD.instructor
+  return MOCK_PERSONAL_DASHBOARD.student
 })
 
 const announceMsg = () => message.info('公告发布功能开发中...')

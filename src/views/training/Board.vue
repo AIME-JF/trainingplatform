@@ -94,6 +94,7 @@ import { DownloadOutlined, ExclamationCircleOutlined, TrophyOutlined } from '@an
 
 import { MOCK_TRAININGS } from '@/mock/trainings'
 import { MOCK_ENROLLMENTS } from '@/mock/enrollments'
+import { MOCK_TRAINING_BOARD } from '@/mock/dashboard'
 
 use([CanvasRenderer, BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent])
 
@@ -116,50 +117,69 @@ const basePending = MOCK_ENROLLMENTS.filter(e => e.status === 'pending').length 
 
 const kpiData = computed(() => {
   const m = timeMultiplier[timeRange.value]
+  const config = MOCK_TRAINING_BOARD.kpiConfig.baseTrend
   return [
-    { label: '进行中培训班', value: baseActiveTrainings * (m === 1 ? 1 : m > 1 ? 2 : 1), suffix: '个', icon: '🏫', bgColor: '#e6f0ff', color: '#003087', trend: 14 },
-    { label: timeLabels[timeRange.value] + '参训人数', value: Math.round(baseTotalEnrolled * m * 1.5), suffix: '人', icon: '👮', bgColor: '#e6fff0', color: '#52c41a', trend: 8 },
-    { label: timeLabels[timeRange.value] + '培训完成率', value: m === 1 ? 84 : m === 3 ? 81 : 78, suffix: '%', icon: '✅', bgColor: '#fff7e6', color: '#fa8c16', trend: 3 },
-    { label: '待审核学员', value: basePending, suffix: '人', icon: '⚠️', bgColor: '#fff1f0', color: '#ff4d4f', trend: -12 },
+    { 
+      label: '进行中培训班', 
+      value: baseActiveTrainings * (m === 1 ? 1 : m > 1 ? 2 : 1), 
+      suffix: '个', icon: '🏫', bgColor: '#e6f0ff', color: '#003087', 
+      trend: config.inProgress 
+    },
+    { 
+      label: timeLabels[timeRange.value] + '参训人数', 
+      value: Math.round(350 * m + (baseTotalEnrolled * 2)), 
+      suffix: '人', icon: '👮', bgColor: '#e6fff0', color: '#52c41a', 
+      trend: config.attendance 
+    },
+    { 
+      label: timeLabels[timeRange.value] + '培训完成率', 
+      value: m === 1 ? 88 : m === 3 ? 85 : 82, 
+      suffix: '%', icon: '✅', bgColor: '#fff7e6', color: '#fa8c16', 
+      trend: config.completion 
+    },
+    { 
+      label: '待审核学员', 
+      value: basePending, 
+      suffix: '人', icon: '⚠️', bgColor: '#fff1f0', color: '#ff4d4f', 
+      trend: config.pending 
+    },
   ]
 })
 
-const MOCK_CITIES = ['南宁', '柳州', '桂林', '梧州', '北海', '防城港', '钦州', '贵港', '玉林', '百色', '贺州', '河池', '来宾', '崇左']
-const MOCK_BASE_CITY_VALUES = [320, 240, 210, 150, 140, 95, 110, 160, 180, 130, 85, 90, 80, 75]
-
-const cities = MOCK_CITIES
-const baseCityValues = MOCK_BASE_CITY_VALUES
-
 const barOption = computed(() => ({
   tooltip: { trigger: 'axis' },
-  grid: { left: 80, right: 20, top: 20, bottom: 20 },
+  grid: { left: 80, right: 30, top: 20, bottom: 20 },
   xAxis: { type: 'value', axisLabel: { fontSize: 11 } },
-  yAxis: { type: 'category', data: cities, axisLabel: { fontSize: 11 } },
-  series: [{ type: 'bar', data: baseCityValues.map(v => Math.round(v * timeMultiplier[timeRange.value])), itemStyle: { color: '#003087', borderRadius: [0, 4, 4, 0] }, barMaxWidth: 20 }],
+  yAxis: { 
+    type: 'category', 
+    data: MOCK_TRAINING_BOARD.cityAttendance.map(c => c.name), 
+    axisLabel: { fontSize: 11 } 
+  },
+  series: [{ 
+    type: 'bar', 
+    data: MOCK_TRAINING_BOARD.cityAttendance.map(c => Math.round(c.value * timeMultiplier[timeRange.value] * 0.8)), 
+    itemStyle: { color: '#003087', borderRadius: [0, 4, 4, 0] }, 
+    barMaxWidth: 20 
+  }],
 }))
 
-const lineOption = {
+const lineOption = computed(() => ({
   tooltip: { trigger: 'axis' },
   grid: { left: 40, right: 20, top: 20, bottom: 30 },
-  xAxis: { type: 'category', data: ['9月', '10月', '11月', '12月', '1月', '2月'] },
+  xAxis: { type: 'category', data: MOCK_TRAINING_BOARD.completionTrend.months },
   yAxis: { type: 'value', min: 60, max: 100, axisLabel: { formatter: '{value}%' } },
-  series: [{ type: 'line', data: [72, 76, 78, 81, 82, 84], smooth: true, lineStyle: { color: '#003087', width: 3 }, itemStyle: { color: '#003087' }, areaStyle: { color: 'rgba(0,48,135,0.08)' } }],
-}
-const MOCK_WARNINGS = [
-  { id: 1, text: '南宁市局参训人数本周下降 15%', time: '10分钟前', level: 'high' },
-  { id: 2, text: '2个新培训班即将达到报名人数上限', time: '1小时前', level: 'medium' },
-  { id: 3, text: '梧州有12名学员连续两周未完成在线学习', time: '2小时前', level: 'high' }
-]
-const warnings = MOCK_WARNINGS
+  series: [{ 
+    type: 'line', 
+    data: MOCK_TRAINING_BOARD.completionTrend.rates, 
+    smooth: true, 
+    lineStyle: { color: '#003087', width: 3 }, 
+    itemStyle: { color: '#003087' }, 
+    areaStyle: { color: 'rgba(0,48,135,0.08)' } 
+  }],
+}))
 
-const MOCK_CITY_RANKS = [
-  { name: '南宁', rate: 98 },
-  { name: '柳州', rate: 95 },
-  { name: '桂林', rate: 92 },
-  { name: '北海', rate: 88 },
-  { name: '玉林', rate: 85 }
-]
-const cityRanks = MOCK_CITY_RANKS
+const warnings = computed(() => MOCK_TRAINING_BOARD.warnings)
+const cityRanks = computed(() => MOCK_TRAINING_BOARD.cityRankings)
 
 // 导出报告
 function exportReport() {
