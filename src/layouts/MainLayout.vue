@@ -59,9 +59,14 @@
           <a-menu-item key="/training/board" v-if="isAdmin">培训看板</a-menu-item>
         </a-sub-menu>
 
-        <a-menu-item key="/instructor">
+        <a-menu-item key="/instructor" v-if="!isStudent">
           <template #icon><UserOutlined /></template>
           教官库
+        </a-menu-item>
+
+        <a-menu-item key="/trainee">
+          <template #icon><IdcardOutlined /></template>
+          学员库
         </a-menu-item>
 
         <a-menu-item key="/certificate">
@@ -179,7 +184,7 @@ import {
   HomeOutlined, PlayCircleOutlined, FormOutlined, RobotOutlined,
   TeamOutlined, UserOutlined, StarOutlined, BarChartOutlined,
   MenuUnfoldOutlined, MenuFoldOutlined, DownOutlined, LogoutOutlined,
-  SafetyCertificateOutlined,
+  SafetyCertificateOutlined, IdcardOutlined,
 } from '@ant-design/icons-vue'
 
 const router = useRouter()

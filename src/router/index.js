@@ -107,13 +107,26 @@ const router = createRouter({
           path: 'instructor',
           name: 'InstructorList',
           component: () => import('../views/instructor/List.vue'),
-          meta: { title: '教官库' },
+          meta: { title: '教官库', roles: ['admin', 'instructor'] },
         },
         {
           path: 'instructor/:id',
           name: 'InstructorDetail',
           component: () => import('../views/instructor/Detail.vue'),
-          meta: { title: '教官详情' },
+          meta: { title: '教官详情', roles: ['admin', 'instructor'] },
+        },
+        // 学员库
+        {
+          path: 'trainee',
+          name: 'TraineeList',
+          component: () => import('../views/trainee/List.vue'),
+          meta: { title: '学员库' },
+        },
+        {
+          path: 'trainee/:id',
+          name: 'TraineeDetail',
+          component: () => import('../views/trainee/Detail.vue'),
+          meta: { title: '学员详情' },
         },
         // 人才库
         {
