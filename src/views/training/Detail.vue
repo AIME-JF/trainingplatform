@@ -523,8 +523,8 @@ function saveClassInfo() {
 }
 
 // ===== 公告 =====
-import { MOCK_NOTICES } from '@/mock/board' // Use the raw array from board.js to append
-const notices = computed(() => getTrainingNotices(trainingData))
+import { MOCK_NOTICES, getTrainingNotices } from '@/mock/board' // Use the raw array from board.js to append
+const notices = ref(getTrainingNotices(trainingData))
 
 const showNoticeModal = ref(false)
 const noticeForm = reactive({ title: '', content: '' })
@@ -540,15 +540,18 @@ function saveNotice() {
   const now = new Date()
   const timeStr = `${now.getMonth() + 1}-${now.getDate()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
   
-  // Create notice and insert to the front
-  MOCK_NOTICES.unshift({
+  const newNotice = {
     id: Date.now(),
     type: 'training',
     targetId: trainingId,
     title: noticeForm.title,
     content: noticeForm.content,
     time: timeStr
-  })
+  }
+  
+  // Create notice and insert to the front
+  MOCK_NOTICES.unshift(newNotice)
+  notices.value.unshift(newNotice)
   
   message.success('公告已发布')
   showNoticeModal.value = false
