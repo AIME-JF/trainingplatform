@@ -85,14 +85,14 @@
             v-if="authStore.isStudent && t.students.includes(authStore.currentUser?.id)">
             查看日程
           </a-button>
-          <a-dropdown v-if="authStore.isAdmin || authStore.isInstructor">
+          <a-dropdown v-if="authStore.isAdmin || authStore.isInstructor" :trigger="['click']">
             <a-button size="small"><EllipsisOutlined /></a-button>
             <template #overlay>
-              <a-menu>
-                <a-menu-item key="edit" @click="handleEdit(t)">✏️ 编辑</a-menu-item>
-                <a-menu-item key="enroll" @click="goEnrollManage(t)">📋 报名管理</a-menu-item>
-                <a-menu-item key="delete" @click="handleDelete(t)" style="color:#ff4d4f">🗑️ 删除</a-menu-item>
-              </a-menu>
+              <div class="dropdown-menu">
+                <div class="dropdown-item" @click="handleEdit(t)">✏️ 编辑</div>
+                <div class="dropdown-item" @click="goEnrollManage(t)">📋 报名管理</div>
+                <div class="dropdown-item danger" @click="handleDelete(t)">🗑️ 删除</div>
+              </div>
             </template>
           </a-dropdown>
         </div>
@@ -136,12 +136,24 @@
           </a-col>
           <a-col :span="12">
             <a-form-item label="开始日期" required>
-              <a-input v-model:value="trainingForm.startDate" placeholder="2025-04-01" />
+              <a-date-picker
+                v-model:value="trainingFormDates[0]"
+                style="width:100%"
+                :format="'YYYY-MM-DD'"
+                placeholder="请选择开始日期"
+                @change="(_, s) => trainingForm.startDate = s"
+              />
             </a-form-item>
           </a-col>
           <a-col :span="12">
             <a-form-item label="结束日期" required>
-              <a-input v-model:value="trainingForm.endDate" placeholder="2025-04-30" />
+              <a-date-picker
+                v-model:value="trainingFormDates[1]"
+                style="width:100%"
+                :format="'YYYY-MM-DD'"
+                placeholder="请选择结束日期"
+                @change="(_, s) => trainingForm.endDate = s"
+              />
             </a-form-item>
           </a-col>
           <a-col :span="24">
@@ -216,6 +228,7 @@ const stats = computed(() => [
 ])
 
 // 表单数据
+const trainingFormDates = ref([null, null]) // dayjs values for date-pickers
 const trainingForm = reactive({
   name: '',
   type: 'basic',
@@ -356,4 +369,23 @@ const goEnrollManage = (t) => router.push(`/training/${t.id}/enroll/manage`)
   .stat-card { padding: 12px; margin-bottom: 8px; }
   .stat-num { font-size: 20px; }
 }
-</style>
+.dropdown-menu {
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  padding: 4px 0;
+  min-width: 120px;
+}
+.dropdown-item {
+  padding: 8px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  color: #333;
+  transition: background 0.15s;
+}
+.dropdown-item:hover {
+  background: #f5f5f5;
+}
+.dropdown-item.danger {
+  color: #ff4d4f;
+}

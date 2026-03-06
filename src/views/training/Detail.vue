@@ -132,7 +132,6 @@
       </a-col>
     </a-row>
 
-    <!-- ===== 添加/编辑课程弹窗 ===== -->
     <a-modal
       v-model:open="showCourseModal"
       :title="editingCourseIdx !== null ? '编辑课程' : '添加课程'"
@@ -147,7 +146,23 @@
         <a-row :gutter="12">
           <a-col :span="12">
             <a-form-item label="授课教官" required>
-              <a-input v-model:value="courseForm.instructor" placeholder="教官姓名" />
+              <a-select
+                v-model:value="courseForm.instructorId"
+                placeholder="从教官库中选择"
+                show-search
+                option-filter-prop="label"
+                style="width:100%"
+                @change="onInstructorChange"
+              >
+                <a-select-option
+                  v-for="inst in MOCK_INSTRUCTORS"
+                  :key="inst.id"
+                  :value="inst.id"
+                  :label="inst.name"
+                >
+                  {{ inst.name }} · {{ inst.title }}
+                </a-select-option>
+              </a-select>
             </a-form-item>
           </a-col>
           <a-col :span="12">
@@ -156,12 +171,27 @@
             </a-form-item>
           </a-col>
         </a-row>
-        <a-form-item label="课程类型">
-          <a-radio-group v-model:value="courseForm.type">
-            <a-radio value="theory">理论课</a-radio>
-            <a-radio value="practice">实操课</a-radio>
-          </a-radio-group>
-        </a-form-item>
+        <a-row :gutter="12">
+          <a-col :span="12">
+            <a-form-item label="上课日期">
+              <a-date-picker
+                v-model:value="courseFormDateVal"
+                style="width:100%"
+                :format="'YYYY-MM-DD'"
+                placeholder="选择上课日期（可选）"
+                @change="(_, s) => courseForm.date = s"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="课程类型">
+              <a-radio-group v-model:value="courseForm.type">
+                <a-radio value="theory">理论课</a-radio>
+                <a-radio value="practice">实操课</a-radio>
+              </a-radio-group>
+            </a-form-item>
+          </a-col>
+        </a-row>
       </a-form>
     </a-modal>
 
@@ -203,12 +233,22 @@
         <a-row :gutter="12">
           <a-col :span="12">
             <a-form-item label="开始日期" required>
-              <a-input v-model:value="editForm.startDate" placeholder="2025-04-01" />
+              <a-date-picker
+                v-model:value="editFormDates[0]"
+                style="width:100%"
+                format="YYYY-MM-DD"
+                @change="(_, s) => editForm.startDate = s"
+              />
             </a-form-item>
           </a-col>
           <a-col :span="12">
             <a-form-item label="结束日期" required>
-              <a-input v-model:value="editForm.endDate" placeholder="2025-04-30" />
+              <a-date-picker
+                v-model:value="editFormDates[1]"
+                style="width:100%"
+                format="YYYY-MM-DD"
+                @change="(_, s) => editForm.endDate = s"
+              />
             </a-form-item>
           </a-col>
         </a-row>
@@ -249,6 +289,7 @@ import { message, Modal } from 'ant-design-vue'
 import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QrcodeOutlined, DownloadOutlined, PlusOutlined, EditOutlined } from '@ant-design/icons-vue'
 import { MOCK_TRAININGS } from '@/mock/trainings'
 import { MOCK_USER_LIST } from '@/mock/users'
+import { MOCK_INSTRUCTORS } from '@/mock/instructors'
 import { getTrainingNotices } from '@/mock/board'
 import { useAuthStore } from '@/stores/auth'
 
@@ -356,15 +397,23 @@ function addSelectedStudents() {
 // ===== 课程 CRUD =====
 const showCourseModal = ref(false)
 const editingCourseIdx = ref(null)
-const courseForm = reactive({ name: '', instructor: '', hours: 8, type: 'theory' })
+const courseFormDateVal = ref(null)
+const courseForm = reactive({ name: '', instructor: '', instructorId: null, hours: 8, type: 'theory', date: '' })
+
+function onInstructorChange(id) {
+  const inst = MOCK_INSTRUCTORS.find(i => i.id === id)
+  if (inst) courseForm.instructor = inst.name
+}
 
 function openCourseModal(idx = null) {
   editingCourseIdx.value = idx
+  courseFormDateVal.value = null
   if (idx !== null && trainingData.courses[idx]) {
     const c = trainingData.courses[idx]
-    Object.assign(courseForm, { name: c.name, instructor: c.instructor, hours: c.hours, type: c.type })
+    const inst = MOCK_INSTRUCTORS.find(i => i.name === c.instructor)
+    Object.assign(courseForm, { name: c.name, instructor: c.instructor, instructorId: inst?.id ?? null, hours: c.hours, type: c.type, date: c.date || '' })
   } else {
-    Object.assign(courseForm, { name: '', instructor: '', hours: 8, type: 'theory' })
+    Object.assign(courseForm, { name: '', instructor: '', instructorId: null, hours: 8, type: 'theory', date: '' })
   }
   showCourseModal.value = true
 }
@@ -382,6 +431,12 @@ function saveCourse() {
   // 同步回 MOCK_TRAININGS
   const orig = MOCK_TRAININGS.find(t => t.id === trainingId)
   if (orig) orig.courses = [...trainingData.courses]
+  // 同步到授课教官的课程计划
+  const instructor = MOCK_INSTRUCTORS.find(i => i.id === courseForm.instructorId)
+  if (instructor) {
+    if (!instructor.recentCourses) instructor.recentCourses = []
+    if (!instructor.recentCourses.includes(trainingId)) instructor.recentCourses.unshift(trainingId)
+  }
   showCourseModal.value = false
 }
 
@@ -400,6 +455,7 @@ function removeCourse(idx) {
 
 // ===== 编辑班级信息 =====
 const showEditModal = ref(false)
+const editFormDates = ref([null, null]) // dayjs values for date pickers
 const editForm = reactive({
   name: trainingData.name, startDate: trainingData.startDate, endDate: trainingData.endDate,
   location: trainingData.location, instructorName: trainingData.instructorName,
