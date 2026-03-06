@@ -14,12 +14,10 @@
       <div class="cert-card" v-for="cert in certificates" :key="cert.id">
         <!-- 证书主体 -->
         <div class="cert-body" :id="`cert-${cert.id}`">
-          <div class="cert-watermark">警</div>
           <div class="cert-top">
-            <div class="cert-emblem">警</div>
-            <div class="cert-org">广西壮族自治区公安厅</div>
+            <img src="../../assets/logo.png" class="cert-emblem" alt="Logo" />
           </div>
-          <div class="cert-main-title">警务训练结业证书</div>
+          <div class="cert-main-title">智慧教育训练结业证书</div>
           <div class="cert-content">
             <p>兹证明 <span class="cert-name">{{ cert.studentName }}</span> 同志</p>
             <p>于 <span class="cert-highlight">{{ cert.startDate }}</span> 至 <span class="cert-highlight">{{ cert.endDate }}</span></p>
@@ -54,16 +52,17 @@
     <a-modal v-model:open="issueVisible" title="颁发结业证书" @ok="handleIssue" ok-text="确认颁发" :confirm-loading="issuing">
       <a-form :model="issueForm" layout="vertical">
         <a-form-item label="选择学员">
-          <a-select v-model:value="issueForm.studentName" placeholder="请选择学员">
-            <a-select-option value="张伟">张伟 · GX-NN-2056</a-select-option>
-            <a-select-option value="陈小明">陈小明 · GX-NN-2101</a-select-option>
-            <a-select-option value="刘芳">刘芳 · GX-NN-2234</a-select-option>
+          <a-select v-model:value="issueForm.studentId" placeholder="请选择学员" show-search :filter-option="filterStudent">
+            <a-select-option v-for="u in studentOptions" :key="u.id" :value="u.id">
+              {{ u.name }} · {{ u.policeId }}
+            </a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item label="培训班">
-          <a-select v-model:value="issueForm.trainingName" placeholder="请选择培训班">
-            <a-select-option value="2025年南宁市基层民警执法规范化培训（第3期）">2025年南宁市基层民警执法规范化培训（第3期）</a-select-option>
-            <a-select-option value="广西公安刑事侦查专项培训（第1期）">广西公安刑事侦查专项培训（第1期）</a-select-option>
+          <a-select v-model:value="issueForm.trainingId" placeholder="请选择培训班">
+            <a-select-option v-for="t in endedTrainings" :key="t.id" :value="t.id">
+              {{ t.name }}
+            </a-select-option>
           </a-select>
         </a-form-item>
         <a-row :gutter="12">
@@ -88,6 +87,8 @@ import { ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, DownloadOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '../../stores/auth.js'
+import { MOCK_TRAININGS } from '../../mock/trainings.js'
+import { MOCK_USER_LIST } from '../../mock/users.js'
 
 const authStore = useAuthStore()
 const isAdmin = authStore.isAdmin
@@ -95,7 +96,7 @@ const isAdmin = authStore.isAdmin
 const certificates = ref([
   {
     id: 'cert001',
-    certNo: 'GXGA-2025-0312-0089',
+    certNo: 'ZHJY-2025-0312-0089',
     studentName: '张伟',
     trainingName: '2024年南宁市基层民警执法规范化培训（第2期）',
     startDate: '2024-11-06',
@@ -106,9 +107,9 @@ const certificates = ref([
   },
   {
     id: 'cert002',
-    certNo: 'GXGA-2024-0816-0156',
+    certNo: 'ZHJY-2024-0816-0156',
     studentName: '张伟',
-    trainingName: '2024年广西公安刑事侦查专项培训（第1期）',
+    trainingName: '2024年刑事侦查专项培训（第1期）',
     startDate: '2024-08-05',
     endDate: '2024-08-16',
     score: 92,
@@ -117,12 +118,19 @@ const certificates = ref([
   },
 ])
 
+// 动态下拉数据
+const studentOptions = MOCK_USER_LIST.filter(u => u.status === 'active')
+const endedTrainings = MOCK_TRAININGS.filter(t => t.status === 'ended' || t.status === 'active')
+function filterStudent(input, option) {
+  const u = studentOptions.find(s => s.id === option.value)
+  return u && (u.name.includes(input) || u.policeId.toLowerCase().includes(input.toLowerCase()))
+}
+
 const issueVisible = ref(false)
 const issuing = ref(false)
-const issueForm = ref({ studentName: '', trainingName: '', score: 80, issueDate: '' })
+const issueForm = ref({ studentId: '', trainingId: '', score: 80, issueDate: '' })
 
 function downloadCert(cert) {
-  // 创建临时打印区域
   const style = document.createElement('style')
   style.innerHTML = `
     @media print {
@@ -137,20 +145,22 @@ function downloadCert(cert) {
 }
 
 async function handleIssue() {
-  if (!issueForm.value.studentName || !issueForm.value.trainingName) {
+  if (!issueForm.value.studentId || !issueForm.value.trainingId) {
     message.warning('请填写完整信息')
     return
   }
   issuing.value = true
   await new Promise(r => setTimeout(r, 800))
   const now = new Date()
+  const student = MOCK_USER_LIST.find(u => u.id === issueForm.value.studentId)
+  const training = MOCK_TRAININGS.find(t => t.id === issueForm.value.trainingId)
   certificates.value.unshift({
     id: `cert${Date.now()}`,
-    certNo: `GXGA-${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${String(Math.floor(Math.random()*900)+100)}`,
-    studentName: issueForm.value.studentName,
-    trainingName: issueForm.value.trainingName,
-    startDate: '2025-03-10',
-    endDate: '2025-03-21',
+    certNo: `ZHJY-${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${String(Math.floor(Math.random()*900)+100)}`,
+    studentName: student?.name || '未知',
+    trainingName: training?.name || '未知培训班',
+    startDate: training?.startDate || '',
+    endDate: training?.endDate || '',
     score: issueForm.value.score,
     issueDate: issueForm.value.issueDate || now.toISOString().split('T')[0],
     expireDate: `${now.getFullYear()+2}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`,
@@ -158,7 +168,7 @@ async function handleIssue() {
   issuing.value = false
   issueVisible.value = false
   message.success('证书已成功颁发')
-  issueForm.value = { studentName: '', trainingName: '', score: 80, issueDate: '' }
+  issueForm.value = { studentId: '', trainingId: '', score: 80, issueDate: '' }
 }
 </script>
 
@@ -195,9 +205,8 @@ async function handleIssue() {
 
 .cert-top { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
 .cert-emblem {
-  width: 40px; height: 40px; background: #c8a84b; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 20px; font-weight: 900; color: #001234;
+  width: 56px; height: 56px;
+  object-fit: contain;
 }
 .cert-org { color: rgba(255,255,255,0.8); font-size: 13px; letter-spacing: 1px; }
 

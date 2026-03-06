@@ -1,37 +1,36 @@
 <template>
   <div class="enroll-page">
     <!-- 培训班信息头部 -->
-    <div class="training-header">
+    <div class="training-header" v-if="training">
       <div class="header-badge">
         <a-tag color="green">报名中</a-tag>
       </div>
-      <h2 class="training-title">2025年南宁市基层民警执法规范化培训（第3期）</h2>
+      <h2 class="training-title">{{ training.name }}</h2>
       <div class="training-meta-row">
-        <span><CalendarOutlined /> 2025-03-10 至 2025-03-21（12天）</span>
-        <span><EnvironmentOutlined /> 南宁市公安局培训基地</span>
-        <span><UserOutlined /> 主讲教官：李志强</span>
+        <span><CalendarOutlined /> {{ training.startDate }} 至 {{ training.endDate }}</span>
+        <span><EnvironmentOutlined /> {{ training.location }}</span>
+        <span><UserOutlined /> 主讲教官：{{ training.instructorName }}</span>
       </div>
       <!-- 名额进度 -->
       <div class="quota-section">
         <div class="quota-label">
           <span>名额情况</span>
-          <span class="quota-nums"><b>32</b> / 50 人已录取</span>
+          <span class="quota-nums"><b>{{ training.enrolled }}</b> / {{ training.capacity }} 人已录取</span>
         </div>
-        <a-progress :percent="64" :show-info="false" stroke-color="#003087" />
+        <a-progress :percent="Math.round(training.enrolled / training.capacity * 100)" :show-info="false" stroke-color="#003087" />
         <div class="quota-tags">
-          <a-tag color="green">已录取 32</a-tag>
-          <a-tag color="orange">待审核 8</a-tag>
-          <a-tag color="default">剩余名额 10</a-tag>
+          <a-tag color="green">已录取 {{ training.enrolled }}</a-tag>
+          <a-tag color="default">剩余名额 {{ Math.max(0, training.capacity - training.enrolled) }}</a-tag>
         </div>
       </div>
     </div>
 
-    <!-- 已提交状态 -->
-    <div v-if="submitted" class="submit-success">
+    <!-- 已提交或已在班级状态 -->
+    <div v-if="submitted || isAlreadyInClass || hasEnrolled" class="submit-success">
       <a-result
-        status="success"
-        title="报名申请已提交！"
-        sub-title="您的报名申请正在审核中，审核结果将通过系统消息通知您，请耐心等待。"
+        :status="isAlreadyInClass ? 'success' : 'info'"
+        :title="isAlreadyInClass ? '您已是该班级成员' : '报名申请已提交或正在审核中！'"
+        :sub-title="isAlreadyInClass ? '您已无需重复报名，快去看看课程日程吧！' : '您的报名申请正在处理中，审核结果将通过系统消息通知您，并且可以在我的培训中查看，请耐心等待。'"
       >
         <template #extra>
           <a-button type="primary" @click="$router.push('/training')">返回培训列表</a-button>
@@ -88,8 +87,8 @@
 
         <div class="form-actions">
           <a-button @click="$router.back()">返回</a-button>
-          <a-button type="primary" :loading="submitting" :disabled="!agreed" @click="handleSubmit">
-            提交报名申请
+          <a-button type="primary" :loading="submitting" :disabled="!agreed || isFull" @click="handleSubmit">
+            {{ isFull ? '名额已满' : '提交报名申请' }}
           </a-button>
         </div>
       </a-form>
@@ -98,27 +97,59 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { CalendarOutlined, EnvironmentOutlined, UserOutlined } from '@ant-design/icons-vue'
+import { MOCK_TRAININGS } from '@/mock/trainings'
+import { MOCK_ENROLLMENTS, addEnrollment } from '@/mock/enrollments'
+import { useAuthStore } from '@/stores/auth'
+
+const route = useRoute()
+const authStore = useAuthStore()
+
+const trainingId = route.params.id
+const training = MOCK_TRAININGS.find(t => t.id === trainingId)
 
 const submitted = ref(false)
 const submitting = ref(false)
 const agreed = ref(false)
 
+const u = authStore.currentUser || {}
+
+const isAlreadyInClass = computed(() => training?.students.includes(u.id))
+const hasEnrolled = computed(() => MOCK_ENROLLMENTS.some(e => e.trainingId === trainingId && e.userId === u.id))
+const isFull = computed(() => training?.enrolled >= training?.capacity)
+
+if (isAlreadyInClass.value || hasEnrolled.value) {
+  submitted.value = true
+}
 const formData = ref({
-  name: '张伟',
-  policeId: 'GX-NN-2056',
-  unit: '南宁市青秀区公安局刑警大队',
-  phone: '136****0003',
+  name: u.name || '',
+  policeId: u.username || '',
+  unit: u.unit || '',
+  phone: u.phone || '',
   reason: '',
   needAccom: 'no',
 })
 
 async function handleSubmit() {
   if (!agreed.value) { message.warning('请先同意报名须知'); return }
+  if (isFull.value) { message.error('该班级名额已满，无法申请'); return }
+  
   submitting.value = true
-  await new Promise(r => setTimeout(r, 1000))
+  await new Promise(r => setTimeout(r, 600))
+  
+  addEnrollment({
+    trainingId,
+    userId: u.id,
+    name: formData.value.name,
+    policeId: formData.value.policeId,
+    unit: formData.value.unit,
+    phone: formData.value.phone,
+    reason: formData.value.reason
+  })
+  
   submitting.value = false
   submitted.value = true
   message.success('报名申请已提交，等待审核')

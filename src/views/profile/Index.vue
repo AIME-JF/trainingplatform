@@ -144,6 +144,8 @@ import { RadarChart } from 'echarts/charts'
 import { TooltipComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import { useAuthStore } from '@/stores/auth'
+import { MOCK_COURSES } from '@/mock/courses'
+import { MOCK_ABILITIES, MOCK_EXAM_HISTORY, MOCK_CERT_LIST, MOCK_POINT_HISTORY } from '@/mock/profile'
 
 use([CanvasRenderer, RadarChart, TooltipComponent])
 
@@ -151,24 +153,18 @@ const authStore = useAuthStore()
 const user = authStore.currentUser
 const activeTab = ref('study')
 const editMode = ref(false)
-const points = 1286
-const rank = 3
-const globalRankPercent = 12
+const points = user.studyHours ? user.studyHours * 10 + 6 : 1286
+const rank = user.role === 'student' ? 3 : 1
+const globalRankPercent = user.role === 'student' ? 12 : 5
 
 const studyStats = [
-  { icon: '📚', label: '已学课程', value: '12门', color: '#003087' },
-  { icon: '⏱', label: '总学时', value: '48.5h', color: '#52c41a' },
-  { icon: '✅', label: '已完成', value: '8门', color: '#faad14' },
-  { icon: '🏆', label: '通过考试', value: '5次', color: '#c8a84b' },
+  { icon: '📚', label: '已学课程', value: (user.examCount || 12) + '门', color: '#003087' },
+  { icon: '⏱', label: '总学时', value: (user.studyHours || 48) + 'h', color: '#52c41a' },
+  { icon: '✅', label: '平均分', value: (user.avgScore || 86) + '分', color: '#faad14' },
+  { icon: '🏆', label: '通过考试', value: Math.round((user.examCount || 8) * 0.6) + '次', color: '#c8a84b' },
 ]
 
-const abilities = [
-  { label: '法律知识', score: 88 },
-  { label: '执法规范', score: 72 },
-  { label: '证据意识', score: 64 },
-  { label: '体能标准', score: 95 },
-  { label: '警察素养', score: 91 },
-]
+const abilities = MOCK_ABILITIES
 
 const radarOption = {
   radar: {
@@ -189,17 +185,18 @@ const radarOption = {
   }]
 }
 
-const recentCourses = [
-  { id: 1, title: '刑事诉讼法实务操作', icon: '⚖️', color: '#e6f7ff', lastTime: '2天前', progress: 65 },
-  { id: 2, title: '电信网络诈骗案件侦办', icon: '🔍', color: '#f0f5ff', lastTime: '5天前', progress: 100 },
-  { id: 3, title: '网络安全与数字取证', icon: '💻', color: '#f6ffed', lastTime: '1周前', progress: 82 },
-]
+const courseIcons = { law: '⚖️', fraud: '🔍', traffic: '🚗', community: '🏨', cybersec: '💻', physical: '💪' }
+const courseColors = { law: '#e6f7ff', fraud: '#f0f5ff', traffic: '#f6ffed', community: '#fff7e6', cybersec: '#f9f0ff', physical: '#fff1f0' }
+const recentCourses = MOCK_COURSES.slice(0, 3).map(c => ({
+  id: c.id,
+  title: c.title,
+  icon: courseIcons[c.category] || '📚',
+  color: courseColors[c.category] || '#f0f5ff',
+  lastTime: c.updateDate || '3天前',
+  progress: Math.floor(Math.random() * 60 + 30),
+}))
 
-const examHistory = [
-  { key: 1, title: '刑事法律基础考试', date: '2025-03-05', score: 78, passed: true },
-  { key: 2, title: '执法规范化测验', date: '2025-02-20', score: 92, passed: true },
-  { key: 3, title: '反诈实务知识考核', date: '2025-01-15', score: 58, passed: false },
-]
+const examHistory = MOCK_EXAM_HISTORY
 
 const examColumns = [
   { title: '考试名称', dataIndex: 'title', key: 'title' },
@@ -208,17 +205,9 @@ const examColumns = [
   { title: '结果', key: 'result' },
 ]
 
-const certList = [
-  { id: 1, name: '优秀学员', issuer: '广西公安厅', date: '2024-12-31' },
-  { id: 2, name: '执法能手', issuer: '南宁市公安局', date: '2024-06-15' },
-]
+const certList = MOCK_CERT_LIST
 
-const pointHistory = [
-  { id: 1, action: '完成课程「电信诈骗」', points: 50 },
-  { id: 2, action: '通过月度考试', points: 100 },
-  { id: 3, action: '签到打卡', points: 5 },
-  { id: 4, action: '迟到扣分', points: -10 },
-]
+const pointHistory = MOCK_POINT_HISTORY
 </script>
 
 <style scoped>

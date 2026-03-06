@@ -40,7 +40,7 @@ export const MOCK_INSTRUCTORS = [
     expertise: ['交通事故处置', '交通法规', '执法规范'],
     qualification: ['交通工程本科', '中级警衔'],
     certificates: [
-      { name: '公安机关中级教官资格证', issuer: '广西公安厅', year: 2020 },
+      { name: '公安机关中级教官资格证', issuer: '政治部训练处', year: 2020 },
     ],
     rating: 4.5,
     courseCount: 6,
@@ -55,7 +55,7 @@ export const MOCK_INSTRUCTORS = [
   {
     id: 'u013',
     name: '覃志文',
-    unit: '广西公安厅网安总队',
+    unit: '网安总队',
     policeType: '网络安全',
     policeId: 'GX-ZD-0203',
     title: '高级教官',
@@ -121,7 +121,7 @@ export const MOCK_INSTRUCTORS = [
     qualification: ['法学硕士', '司法考试A证'],
     certificates: [
       { name: '法律职业资格A证', issuer: '司法部', year: 2015 },
-      { name: '公安机关中级教官资格证', issuer: '广西公安厅', year: 2021 },
+      { name: '公安机关中级教官资格证', issuer: '政治部训练处', year: 2021 },
     ],
     rating: 4.6,
     courseCount: 9,
@@ -147,7 +147,7 @@ export const MOCK_INSTRUCTORS = [
     expertise: ['毒品识别', '禁毒侦查', '情报分析'],
     qualification: ['公安管理本科', '禁毒业务骨干'],
     certificates: [
-      { name: '公安机关初级教官资格证', issuer: '广西公安厅', year: 2023 },
+      { name: '公安机关初级教官资格证', issuer: '政治部训练处', year: 2023 },
     ],
     rating: 4.3,
     courseCount: 4,
@@ -162,7 +162,7 @@ export const MOCK_INSTRUCTORS = [
   {
     id: 'u017',
     name: '莫大伟',
-    unit: '广西公安厅刑侦总队',
+    unit: '刑侦总队',
     policeType: '刑侦',
     policeId: 'GX-ZD-0567',
     title: '高级教官',

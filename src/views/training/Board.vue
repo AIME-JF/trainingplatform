@@ -5,8 +5,8 @@
       <div class="board-title-area">
         <div class="board-icon">📊</div>
         <div>
-          <h1 class="board-title">广西公安警务培训实时看板</h1>
-          <div class="board-sub">厅政治部训练处 · 数据实时统计（{{ currentDate }}）</div>
+          <h1 class="board-title">智慧教育培训实时看板</h1>
+          <div class="board-sub">培训处 · 数据实时统计（{{ currentDate }}）</div>
         </div>
       </div>
       <div class="board-actions">
@@ -34,7 +34,7 @@
     </div>
 
     <!-- 图表行 -->
-    <div class="chart-row">
+    <div class="chart-row" v-if="isMounted">
       <!-- 各市局参训人数 -->
       <div class="chart-card chart-large">
         <div class="chart-title">各市局{{ timeLabels[timeRange] }}参训人数</div>
@@ -92,6 +92,10 @@ import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import { DownloadOutlined, ExclamationCircleOutlined, TrophyOutlined } from '@ant-design/icons-vue'
 
+import { MOCK_TRAININGS } from '@/mock/trainings'
+import { MOCK_ENROLLMENTS } from '@/mock/enrollments'
+import { MOCK_TRAINING_BOARD } from '@/mock/dashboard'
+
 use([CanvasRenderer, BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent])
 
 const timeRange = ref('month')
@@ -99,53 +103,83 @@ const currentDate = new Date().toLocaleDateString('zh-CN', { year: 'numeric', mo
 const timeLabels = { month: '本月', quarter: '本季度', year: '本年度' }
 const timeMultiplier = { month: 1, quarter: 3, year: 12 }
 
+const isMounted = ref(false)
+import { onMounted } from 'vue'
+
+onMounted(() => {
+  // Delay chart rendering to bypass Ant Design submenu transition conflicts
+  setTimeout(() => { isMounted.value = true }, 200)
+})
+
+const baseActiveTrainings = MOCK_TRAININGS.filter(t => t.status === 'active').length || 1
+const baseTotalEnrolled = MOCK_ENROLLMENTS.filter(e => e.status === 'approved').length || 32
+const basePending = MOCK_ENROLLMENTS.filter(e => e.status === 'pending').length || 0
+
 const kpiData = computed(() => {
   const m = timeMultiplier[timeRange.value]
+  const config = MOCK_TRAINING_BOARD.kpiConfig.baseTrend
   return [
-    { label: '进行中培训班', value: Math.round(8 * (m === 1 ? 1 : m * 0.6)), suffix: '个', icon: '🏫', bgColor: '#e6f0ff', color: '#003087', trend: 14 },
-    { label: timeLabels[timeRange.value] + '参训人数', value: Math.round(1248 * m), suffix: '人', icon: '👮', bgColor: '#e6fff0', color: '#52c41a', trend: 8 },
-    { label: timeLabels[timeRange.value] + '培训完成率', value: m === 1 ? 84 : m === 3 ? 81 : 78, suffix: '%', icon: '✅', bgColor: '#fff7e6', color: '#fa8c16', trend: 3 },
-    { label: '待审核事项', value: Math.round(23 * (m === 1 ? 1 : m * 0.4)), suffix: '项', icon: '⚠️', bgColor: '#fff1f0', color: '#ff4d4f', trend: -12 },
+    { 
+      label: '进行中培训班', 
+      value: baseActiveTrainings * (m === 1 ? 1 : m > 1 ? 2 : 1), 
+      suffix: '个', icon: '🏫', bgColor: '#e6f0ff', color: '#003087', 
+      trend: config.inProgress 
+    },
+    { 
+      label: timeLabels[timeRange.value] + '参训人数', 
+      value: Math.round(350 * m + (baseTotalEnrolled * 2)), 
+      suffix: '人', icon: '👮', bgColor: '#e6fff0', color: '#52c41a', 
+      trend: config.attendance 
+    },
+    { 
+      label: timeLabels[timeRange.value] + '培训完成率', 
+      value: m === 1 ? 88 : m === 3 ? 85 : 82, 
+      suffix: '%', icon: '✅', bgColor: '#fff7e6', color: '#fa8c16', 
+      trend: config.completion 
+    },
+    { 
+      label: '待审核学员', 
+      value: basePending, 
+      suffix: '人', icon: '⚠️', bgColor: '#fff1f0', color: '#ff4d4f', 
+      trend: config.pending 
+    },
   ]
 })
 
-const cities = ['南宁市', '柳州市', '桂林市', '梧州市', '北海市', '防城港', '钦州市', '贵港市', '玉林市', '百色市', '贺州市', '河池市', '来宾市', '崇左市']
-const baseCityValues = [342, 286, 254, 198, 176, 142, 168, 154, 188, 134, 112, 128, 118, 98]
-
 const barOption = computed(() => ({
   tooltip: { trigger: 'axis' },
-  grid: { left: 80, right: 20, top: 20, bottom: 20 },
+  grid: { left: 80, right: 30, top: 20, bottom: 20 },
   xAxis: { type: 'value', axisLabel: { fontSize: 11 } },
-  yAxis: { type: 'category', data: cities, axisLabel: { fontSize: 11 } },
-  series: [{ type: 'bar', data: baseCityValues.map(v => Math.round(v * timeMultiplier[timeRange.value])), itemStyle: { color: '#003087', borderRadius: [0, 4, 4, 0] }, barMaxWidth: 20 }],
+  yAxis: { 
+    type: 'category', 
+    data: MOCK_TRAINING_BOARD.cityAttendance.map(c => c.name), 
+    axisLabel: { fontSize: 11 } 
+  },
+  series: [{ 
+    type: 'bar', 
+    data: MOCK_TRAINING_BOARD.cityAttendance.map(c => Math.round(c.value * timeMultiplier[timeRange.value] * 0.8)), 
+    itemStyle: { color: '#003087', borderRadius: [0, 4, 4, 0] }, 
+    barMaxWidth: 20 
+  }],
 }))
 
-const lineOption = {
+const lineOption = computed(() => ({
   tooltip: { trigger: 'axis' },
   grid: { left: 40, right: 20, top: 20, bottom: 30 },
-  xAxis: { type: 'category', data: ['9月', '10月', '11月', '12月', '1月', '2月'] },
+  xAxis: { type: 'category', data: MOCK_TRAINING_BOARD.completionTrend.months },
   yAxis: { type: 'value', min: 60, max: 100, axisLabel: { formatter: '{value}%' } },
-  series: [{ type: 'line', data: [72, 76, 78, 81, 82, 84], smooth: true, lineStyle: { color: '#003087', width: 3 }, itemStyle: { color: '#003087' }, areaStyle: { color: 'rgba(0,48,135,0.08)' } }],
-}
+  series: [{ 
+    type: 'line', 
+    data: MOCK_TRAINING_BOARD.completionTrend.rates, 
+    smooth: true, 
+    lineStyle: { color: '#003087', width: 3 }, 
+    itemStyle: { color: '#003087' }, 
+    areaStyle: { color: 'rgba(0,48,135,0.08)' } 
+  }],
+}))
 
-const warnings = [
-  { id: 1, text: '南宁市青秀区25名学员签到率低于60%，连续3天未完成课时', time: '今日 09:32', level: 'high' },
-  { id: 2, text: '桂林市刑警支队培训班第4天缺勤率超过20%', time: '今日 08:15', level: 'high' },
-  { id: 3, text: '柳州市城中区培训班8名学员请假未返，超出允许天数', time: '昨日 16:40', level: 'medium' },
-  { id: 4, text: '梧州市第2期培训班课时进度落后计划3天', time: '昨日 14:20', level: 'medium' },
-  { id: 5, text: '百色市右江区有4名学员结业考试不合格，需安排补考', time: '2天前', level: 'medium' },
-]
-
-const cityRanks = [
-  { name: '南宁市', rate: 94 },
-  { name: '桂林市', rate: 91 },
-  { name: '柳州市', rate: 88 },
-  { name: '北海市', rate: 85 },
-  { name: '梧州市', rate: 82 },
-  { name: '玉林市', rate: 79 },
-  { name: '贵港市', rate: 76 },
-  { name: '钦州市', rate: 73 },
-]
+const warnings = computed(() => MOCK_TRAINING_BOARD.warnings)
+const cityRanks = computed(() => MOCK_TRAINING_BOARD.cityRankings)
 
 // 导出报告
 function exportReport() {

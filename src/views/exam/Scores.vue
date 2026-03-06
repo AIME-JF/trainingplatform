@@ -105,24 +105,17 @@ import { BarChart, RadarChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, RadarComponent, LegendComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import { DownloadOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
+import { MOCK_EXAM_LIST, MOCK_SCORE_STUDENTS, computeScoreKPI } from '@/mock/scores'
 
 use([CanvasRenderer, BarChart, RadarChart, GridComponent, TooltipComponent, RadarComponent, LegendComponent])
 
 const selectedExam = ref('exam001')
 const searchText = ref('')
 
-const examList = [
-  { id: 'exam001', title: '2025年Q1执法规范化综合考试' },
-  { id: 'exam002', title: '2024年年度基础法律知识考核' },
-  { id: 'exam003', title: '证据收集专项考试（2月场）' },
-]
+const examList = MOCK_EXAM_LIST
 
-const kpiCards = [
-  { label: '参考人数', value: 48, unit: '人', color: '#003087' },
-  { label: '班级平均分', value: 78.5, unit: '分', color: '#52c41a' },
-  { label: '最高分', value: 96, unit: '分', color: '#c8a84b' },
-  { label: '通过率', value: '87.5', unit: '%', color: '#fa8c16' },
-]
+const students = MOCK_SCORE_STUDENTS
+const kpiCards = computed(() => computeScoreKPI(filteredStudents.value))
 
 const barOption = {
   tooltip: { trigger: 'axis' },
@@ -164,16 +157,7 @@ const radarOption = {
   }],
 }
 
-const students = [
-  { id: 's1', name: '张伟', policeId: 'GX-NN-2056', unit: '青秀区刑警大队', score: 89, law: 92, enforce: 81, evidence: 85, physical: 95, ethic: 90, time: '1小时23分' },
-  { id: 's2', name: '陈小明', policeId: 'GX-NN-2101', unit: '江南区派出所', score: 76, law: 80, enforce: 70, evidence: 72, physical: 85, ethic: 80, time: '1小时45分' },
-  { id: 's3', name: '刘芳', policeId: 'GX-NN-2234', unit: '西乡塘交警大队', score: 62, law: 65, enforce: 60, evidence: 55, physical: 72, ethic: 68, time: '2小时' },
-  { id: 's4', name: '黄志远', policeId: 'GX-GL-1045', unit: '秀峰区派出所', score: 93, law: 96, enforce: 90, evidence: 92, physical: 98, ethic: 94, time: '1小时05分' },
-  { id: 's5', name: '梁美华', policeId: 'GX-ZZ-0892', unit: '城中区刑警队', score: 55, law: 58, enforce: 50, evidence: 48, physical: 65, ethic: 60, time: '2小时' },
-  { id: 's6', name: '覃建军', policeId: 'GX-GL-2156', unit: '灵川县公安局', score: 84, law: 88, enforce: 82, evidence: 78, physical: 90, ethic: 88, time: '1小时32分' },
-  { id: 's7', name: '韦国强', policeId: 'GX-BS-0334', unit: '右江区派出所', score: 71, law: 75, enforce: 68, evidence: 65, physical: 80, ethic: 72, time: '1小时50分' },
-  { id: 's8', name: '李建华', policeId: 'GX-NN-3012', unit: '兴宁区派出所', score: 88, law: 90, enforce: 85, evidence: 84, physical: 92, ethic: 90, time: '1小时18分' },
-]
+
 
 const columns = [
   { title: '姓名', dataIndex: 'name', key: 'name', width: 80, sorter: (a, b) => a.name.localeCompare(b.name) },

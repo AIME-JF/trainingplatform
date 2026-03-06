@@ -79,7 +79,7 @@ const router = createRouter({
           meta: { title: '培训管理' },
         },
         {
-          path: 'training/schedule',
+          path: 'training/schedule/:id?',
           name: 'TrainingSchedule',
           component: () => import('../views/training/Schedule.vue'),
           meta: { title: '周训练计划' },
@@ -97,7 +97,7 @@ const router = createRouter({
           meta: { title: '培训班详情' },
         },
         {
-          path: 'training/:id/checkin',
+          path: 'training/:id/checkin/:sessionKey?',
           name: 'Checkin',
           component: () => import('../views/training/Checkin.vue'),
           meta: { title: '扫码签到' },
@@ -107,13 +107,26 @@ const router = createRouter({
           path: 'instructor',
           name: 'InstructorList',
           component: () => import('../views/instructor/List.vue'),
-          meta: { title: '教官库' },
+          meta: { title: '教官库', roles: ['admin', 'instructor'] },
         },
         {
           path: 'instructor/:id',
           name: 'InstructorDetail',
           component: () => import('../views/instructor/Detail.vue'),
-          meta: { title: '教官详情' },
+          meta: { title: '教官详情', roles: ['admin', 'instructor'] },
+        },
+        // 学员库
+        {
+          path: 'trainee',
+          name: 'TraineeList',
+          component: () => import('../views/trainee/List.vue'),
+          meta: { title: '学员库' },
+        },
+        {
+          path: 'trainee/:id',
+          name: 'TraineeDetail',
+          component: () => import('../views/trainee/Detail.vue'),
+          meta: { title: '学员详情' },
         },
         // 人才库
         {
@@ -141,7 +154,7 @@ const router = createRouter({
           path: 'training/:id/enroll',
           name: 'Enroll',
           component: () => import('../views/training/Enroll.vue'),
-          meta: { title: '报名申请' },
+          meta: { title: '报名申请', roles: ['student'] },
         },
         {
           path: 'training/:id/enroll/manage',
@@ -167,7 +180,7 @@ const router = createRouter({
     },
     // 移动端签到（独立页，无主布局）
     {
-      path: '/mobile/checkin/:token',
+      path: '/mobile/checkin/:token/:sessionKey?',
       name: 'MobileCheckin',
       component: () => import('../views/mobile/Checkin.vue'),
       meta: { title: '扫码签到' },

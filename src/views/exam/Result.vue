@@ -103,6 +103,7 @@ import { TooltipComponent, LegendComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import { MOCK_EXAM_RECORDS, WEAK_POINT_RESOURCES } from '@/mock/exam-records'
 import { MOCK_QUESTIONS } from '@/mock/exams'
+import { MOCK_WRONG_QUESTIONS } from '@/mock/scores'
 
 use([CanvasRenderer, RadarChart, TooltipComponent, LegendComponent])
 
@@ -143,10 +144,7 @@ const radarOption = computed(() => ({
   }]
 }))
 
-const wrongQuestions = [
-  { num: 3, type: 'single', stem: '下列哪种情形不属于逮捕条件的"社会危险性"？', myAnswer: 'B', answer: 'D', explanation: '逮捕的"社会危险性"包括可能逃跑、毁灭证据等，一般违法行为不符合此条件。' },
-  { num: 7, type: 'judge', stem: '对醉酒的人在醉酒状态中实施的违法行为，公安机关可以对其采取保护性措施约束至酒醒。', myAnswer: 'F', answer: 'T', explanation: '《治安管理处罚法》第15条明确规定了该情形。' },
-]
+const wrongQuestions = MOCK_WRONG_QUESTIONS
 
 const weakResources = Object.entries(WEAK_POINT_RESOURCES).flatMap(([key, val]) =>
   val.courses.map((c, i) => ({

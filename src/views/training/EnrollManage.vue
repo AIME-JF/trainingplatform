@@ -1,10 +1,10 @@
 <template>
   <div class="enroll-manage">
     <!-- 页头 -->
-    <div class="page-header-bar">
+    <div class="page-header-bar" v-if="training">
       <div>
         <h2 class="page-h2">报名管理</h2>
-        <div class="page-sub">2025年南宁市基层民警执法规范化培训（第3期）</div>
+        <div class="page-sub">{{ training.name }}</div>
       </div>
       <div class="header-actions">
         <a-button @click="$router.back()"><ArrowLeftOutlined /> 返回</a-button>
@@ -13,22 +13,22 @@
     </div>
 
     <!-- 名额统计卡 -->
-    <div class="quota-cards">
+    <div class="quota-cards" v-if="training">
       <div class="qcard">
-        <div class="qcard-num total">50</div>
+        <div class="qcard-num total">{{ training.capacity }}</div>
         <div class="qcard-label">总名额</div>
       </div>
       <div class="qcard">
-        <div class="qcard-num approved">32</div>
+        <div class="qcard-num approved">{{ approvedList.length }}</div>
         <div class="qcard-label">已录取</div>
-        <a-progress :percent="64" :show-info="false" stroke-color="#52c41a" size="small" />
+        <a-progress :percent="Math.round((approvedList.length / training.capacity) * 100) || 0" :show-info="false" stroke-color="#52c41a" size="small" />
       </div>
       <div class="qcard">
         <div class="qcard-num pending">{{ pendingList.length }}</div>
         <div class="qcard-label">待审核</div>
       </div>
       <div class="qcard">
-        <div class="qcard-num remain">10</div>
+        <div class="qcard-num remain">{{ Math.max(0, training.capacity - approvedList.length) }}</div>
         <div class="qcard-label">剩余名额</div>
       </div>
     </div>
@@ -74,17 +74,25 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, reactive } from 'vue'
+import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { ArrowLeftOutlined, DownloadOutlined } from '@ant-design/icons-vue'
-import { MOCK_ENROLLMENTS } from '../../mock/enrollments.js'
+import { MOCK_ENROLLMENTS } from '@/mock/enrollments.js'
+import { MOCK_TRAININGS } from '@/mock/trainings.js'
+
+const route = useRoute()
+const trainingId = route.params.id
+// 使用 reactive 包装，以便在修改 enrolled / students 数量后页面能响应式更新
+const training = reactive(MOCK_TRAININGS.find(t => t.id === trainingId) || {})
 
 const searchText = ref('')
 const statusFilter = ref('all')
 const selectedRowKeys = ref([])
 const selectedRows = ref([])
 
-const enrollments = ref(MOCK_ENROLLMENTS.filter(e => e.trainingId === 't001').map(e => ({ ...e })))
+// 直接引用全局数据，从而真实改变 mock 状态
+const enrollments = ref(MOCK_ENROLLMENTS.filter(e => e.trainingId === trainingId))
 
 const pendingList = computed(() => enrollments.value.filter(e => e.status === 'pending'))
 const approvedList = computed(() => enrollments.value.filter(e => e.status === 'approved'))
@@ -119,19 +127,42 @@ function onSelectChange(keys, rows) {
 }
 
 function approve(record) {
+  if (training.students.length >= training.capacity) {
+    message.error('名额已满，无法通过更多学员')
+    return
+  }
   record.status = 'approved'
+  if (!training.students.includes(record.userId)) {
+    training.students.push(record.userId)
+    training.enrolled = training.students.length
+  }
   message.success(`已通过 ${record.name} 的报名申请`)
 }
 
 function reject(record) {
   record.status = 'rejected'
-  record.note = '名额限制，请关注下期培训'
+  record.note = '名额限制，暂无资格'
   message.warning(`已拒绝 ${record.name} 的报名申请`)
 }
 
 function batchApprove() {
-  selectedRows.value.forEach(r => { if (r.status === 'pending') r.status = 'approved' })
-  message.success(`已批量通过 ${selectedRows.value.length} 条报名申请`)
+  const pendingCount = selectedRows.value.filter(r => r.status === 'pending').length
+  const remain = training.capacity - training.students.length
+  if (pendingCount > remain) {
+    message.error(`批量通过失败：剩余名额不足（仅剩 ${remain} 人）`)
+    return
+  }
+
+  selectedRows.value.forEach(r => { 
+    if (r.status === 'pending') {
+      r.status = 'approved'
+      if (!training.students.includes(r.userId)) {
+        training.students.push(r.userId)
+      }
+    }
+  })
+  training.enrolled = training.students.length
+  message.success(`已批量通过审核`)
   selectedRowKeys.value = []
   selectedRows.value = []
 }

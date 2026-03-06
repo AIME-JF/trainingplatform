@@ -255,6 +255,7 @@ import { LockOutlined, CheckCircleFilled, DownloadOutlined, EditOutlined, Delete
 import { message } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
 import { MOCK_COURSES } from '@/mock/courses'
+import { MOCK_COURSE_QA } from '@/mock/scores'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -364,10 +365,7 @@ const docLoadError = ref(false)
 const activeTab = ref('intro')
 const notesSaved = ref(false)
 
-const mockQA = [
-  { id: 1, user: '张民警', question: '第3章的拘留时限是指连续72小时还是可以延长？', answer: '拘留后侦查羁押一般不超过37天，但有特殊情形可申请延长。' },
-  { id: 2, user: '李警员', question: '视频中的表格能下载吗？', answer: null },
-]
+const mockQA = MOCK_COURSE_QA
 
 // ─── 编辑弹窗 ───
 const editVisible = ref(false)

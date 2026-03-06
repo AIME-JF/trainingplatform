@@ -29,10 +29,12 @@
           <a-input-search v-model:value="searchText" placeholder="搜索教官姓名、专业领域..." allow-clear />
         </a-col>
         <a-col :span="16">
-          <a-space>
-            <span style="color:#888">专业方向：</span>
-            <a-tag v-for="s in specialtiesList" :key="s" :color="filterSpecialty === s ? 'blue' : 'default'" class="filter-tag" @click="filterSpecialty = s">{{ s }}</a-tag>
-          </a-space>
+          <div class="specialty-filter">
+            <span style="color:#888;white-space:nowrap">专业方向：</span>
+            <div class="specialty-tags">
+              <a-tag v-for="s in specialtiesList" :key="s" :color="filterSpecialty === s ? 'blue' : 'default'" class="filter-tag" @click="filterSpecialty = s">{{ s }}</a-tag>
+            </div>
+          </div>
         </a-col>
       </a-row>
     </a-card>
@@ -69,6 +71,12 @@
             <div class="is-label">评分</div>
           </div>
         </div>
+
+        <div class="inst-card-actions" v-if="authStore.isAdmin" @click.stop>
+          <a-popconfirm :title="`确定删除教官「${inst.name}」吗？`" ok-text="删除" cancel-text="取消" @confirm="deleteInstructor(inst)">
+            <a-button size="small" type="text" danger><DeleteOutlined /> 删除</a-button>
+          </a-popconfirm>
+        </div>
       </div>
     </div>
   </div>
@@ -77,7 +85,7 @@
 <script setup>
 import { ref, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { PlusOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
 import { MOCK_INSTRUCTORS } from '@/mock/instructors'
@@ -133,6 +141,11 @@ const filteredInstructors = computed(() => {
 })
 
 const goDetail = (inst) => router.push({ name: 'InstructorDetail', params: { id: inst.id } })
+
+function deleteInstructor(inst) {
+  instructorList.value = instructorList.value.filter(i => i.id !== inst.id)
+  message.success(`已删除教官「${inst.name}」`)
+}
 </script>
 
 <style scoped>
@@ -140,6 +153,8 @@ const goDetail = (inst) => router.push({ name: 'InstructorDetail', params: { id:
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .page-header h2 { margin: 0; font-size: 20px; font-weight: 600; color: var(--police-primary); }
 .filter-tag { cursor: pointer; }
+.specialty-filter { display: flex; align-items: flex-start; gap: 8px; }
+.specialty-tags { display: flex; flex-wrap: wrap; gap: 4px 0; }
 .instructor-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
 .inst-card { background: #fff; border-radius: 12px; border: 1px solid #e8e8e8; padding: 24px; text-align: center; cursor: pointer; transition: all 0.25s; }
 .inst-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,48,135,0.12); border-color: var(--police-primary); }
@@ -157,4 +172,5 @@ const goDetail = (inst) => router.push({ name: 'InstructorDetail', params: { id:
 .is-num { font-size: 20px; font-weight: 700; color: #1a1a1a; }
 .is-label { font-size: 11px; color: #888; }
 .is-divider { width: 1px; height: 30px; background: #f0f0f0; }
+.inst-card-actions { margin-top: 12px; padding-top: 8px; border-top: 1px solid #f0f0f0; text-align: right; }
 </style>

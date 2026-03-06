@@ -10,8 +10,8 @@
     >
       <!-- Logo区域 -->
       <div class="sidebar-logo">
-        <div class="logo-icon">警</div>
-        <span v-if="!collapsed" class="logo-text">警务训练平台</span>
+        <img src="../assets/logo.png" class="logo-icon" alt="Logo" />
+        <span v-if="!collapsed" class="logo-text">智慧教育训练平台</span>
       </div>
 
       <!-- 菜单 -->
@@ -59,9 +59,14 @@
           <a-menu-item key="/training/board" v-if="isAdmin">培训看板</a-menu-item>
         </a-sub-menu>
 
-        <a-menu-item key="/instructor">
+        <a-menu-item key="/instructor" v-if="!isStudent">
           <template #icon><UserOutlined /></template>
           教官库
+        </a-menu-item>
+
+        <a-menu-item key="/trainee">
+          <template #icon><IdcardOutlined /></template>
+          学员库
         </a-menu-item>
 
         <a-menu-item key="/certificate">
@@ -81,14 +86,88 @@
       </a-menu>
     </a-layout-sider>
 
+    <!-- 移动端抽屉菜单 -->
+    <a-drawer
+      v-model:open="mobileDrawerOpen"
+      placement="left"
+      :width="220"
+      :closable="false"
+      :bodyStyle="{ padding: 0, background: 'var(--police-sidebar-bg)' }"
+      :headerStyle="{ display: 'none' }"
+    >
+      <div class="sidebar-logo" style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+        <img src="../assets/logo.png" class="logo-icon" alt="Logo" />
+        <span class="logo-text">智慧教育训练平台</span>
+      </div>
+      <a-menu
+        v-model:selectedKeys="selectedKeys"
+        mode="inline"
+        class="sidebar-menu"
+        @click="handleDrawerMenuClick"
+      >
+        <a-menu-item key="/">
+          <template #icon><HomeOutlined /></template>
+          工作台
+        </a-menu-item>
+        <a-menu-item key="/courses">
+          <template #icon><PlayCircleOutlined /></template>
+          课程学习
+        </a-menu-item>
+        <a-sub-menu key="exam" v-if="!isStudent">
+          <template #icon><FormOutlined /></template>
+          <template #title>考试系统</template>
+          <a-menu-item key="/exam/bank">题库管理</a-menu-item>
+          <a-menu-item key="/exam/scores">成绩管理</a-menu-item>
+        </a-sub-menu>
+        <a-menu-item key="/exam/list" v-else>
+          <template #icon><FormOutlined /></template>
+          参加考试
+        </a-menu-item>
+        <a-sub-menu key="ai" v-if="!isStudent">
+          <template #icon><RobotOutlined /></template>
+          <template #title>AI 功能</template>
+          <a-menu-item key="/ai/question-gen">智能组卷</a-menu-item>
+          <a-menu-item key="/ai/lesson-plan" v-if="isInstructor">教案生成</a-menu-item>
+        </a-sub-menu>
+        <a-sub-menu key="training">
+          <template #icon><TeamOutlined /></template>
+          <template #title>培训管理</template>
+          <a-menu-item key="/training">培训班列表</a-menu-item>
+          <a-menu-item key="/training/schedule">周训练计划</a-menu-item>
+          <a-menu-item key="/training/board" v-if="isAdmin">培训看板</a-menu-item>
+        </a-sub-menu>
+        <a-menu-item key="/instructor" v-if="!isStudent">
+          <template #icon><UserOutlined /></template>
+          教官库
+        </a-menu-item>
+        <a-menu-item key="/trainee">
+          <template #icon><IdcardOutlined /></template>
+          学员库
+        </a-menu-item>
+        <a-menu-item key="/certificate">
+          <template #icon><SafetyCertificateOutlined /></template>
+          结业证书
+        </a-menu-item>
+        <a-menu-item key="/talent" v-if="isAdmin">
+          <template #icon><StarOutlined /></template>
+          人才库
+        </a-menu-item>
+        <a-menu-item key="/report" v-if="isAdmin">
+          <template #icon><BarChartOutlined /></template>
+          数据看板
+        </a-menu-item>
+      </a-menu>
+    </a-drawer>
+
     <a-layout>
       <!-- 顶部导航栏 -->
       <a-layout-header class="topbar">
         <div class="topbar-left">
+          <!-- 移动端：打开抽屉；PC端：折叠侧边栏 -->
           <menu-unfold-outlined
-            v-if="collapsed"
+            v-if="collapsed || isMobile"
             class="collapse-trigger"
-            @click="collapsed = false"
+            @click="isMobile ? (mobileDrawerOpen = true) : (collapsed = false)"
           />
           <menu-fold-outlined
             v-else
@@ -125,15 +204,15 @@
               <down-outlined class="user-arrow" />
             </div>
             <template #overlay>
-              <a-menu>
-                <a-menu-item key="profile" @click="$router.push('/profile')">
+              <div class="user-dropdown-menu">
+                <div class="user-dropdown-item" @click="$router.push('/profile')">
                   <UserOutlined /> 个人中心
-                </a-menu-item>
-                <a-menu-divider />
-                <a-menu-item key="logout" @click="handleLogout">
+                </div>
+                <div class="user-dropdown-divider"></div>
+                <div class="user-dropdown-item danger" @click="handleLogout">
                   <LogoutOutlined /> 退出登录
-                </a-menu-item>
-              </a-menu>
+                </div>
+              </div>
             </template>
           </a-dropdown>
         </div>
@@ -141,7 +220,7 @@
 
       <!-- 内容区 -->
       <a-layout-content class="content-area">
-        <router-view />
+        <router-view v-if="isMounted" />
       </a-layout-content>
     </a-layout>
 
@@ -172,14 +251,14 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
 import {
   HomeOutlined, PlayCircleOutlined, FormOutlined, RobotOutlined,
   TeamOutlined, UserOutlined, StarOutlined, BarChartOutlined,
   MenuUnfoldOutlined, MenuFoldOutlined, DownOutlined, LogoutOutlined,
-  SafetyCertificateOutlined,
+  SafetyCertificateOutlined, IdcardOutlined,
 } from '@ant-design/icons-vue'
 
 const router = useRouter()
@@ -187,8 +266,20 @@ const route = useRoute()
 const authStore = useAuthStore()
 
 const collapsed = ref(false)
+const mobileDrawerOpen = ref(false)
 const selectedKeys = ref([route.path])
 const openKeys = ref([])
+
+// 检测是否为移动端
+const isMobile = ref(window.innerWidth <= 768)
+const isMounted = ref(false)
+
+function onResize() { isMobile.value = window.innerWidth <= 768 }
+onMounted(() => {
+  window.addEventListener('resize', onResize)
+  setTimeout(() => { isMounted.value = true }, 50)
+})
+onUnmounted(() => window.removeEventListener('resize', onResize))
 
 const isStudent = computed(() => authStore.isStudent)
 const isInstructor = computed(() => authStore.isInstructor)
@@ -202,7 +293,7 @@ const roles = [
 ]
 
 const currentPageTitle = computed(() => {
-  return route.meta?.title || '广西公安警务训练平台'
+  return route.meta?.title || '智慧教育训练平台'
 })
 
 watch(
@@ -214,6 +305,11 @@ watch(
 
 function handleMenuClick({ key }) {
   router.push(key)
+}
+
+function handleDrawerMenuClick({ key }) {
+  router.push(key)
+  mobileDrawerOpen.value = false
 }
 
 function switchRole(roleKey) {
@@ -250,16 +346,9 @@ function handleLogout() {
 }
 
 .logo-icon {
-  width: 36px;
-  height: 36px;
-  background: var(--police-gold);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--police-sidebar-bg);
-  font-weight: 900;
-  font-size: 18px;
+  height: 44px;
+  width: auto;
+  object-fit: contain;
   flex-shrink: 0;
 }
 
@@ -396,6 +485,28 @@ function handleLogout() {
   background: var(--police-bg);
   min-height: calc(100vh - 64px);
 }
+
+/* 用户下拉菜单 */
+.user-dropdown-menu {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  padding: 4px 0;
+  min-width: 140px;
+}
+.user-dropdown-item {
+  padding: 9px 16px;
+  font-size: 14px;
+  cursor: pointer;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background 0.15s;
+}
+.user-dropdown-item:hover { background: #f5f5f5; }
+.user-dropdown-item.danger { color: #ff4d4f; }
+.user-dropdown-divider { height: 1px; background: #f0f0f0; margin: 4px 0; }
 </style>
 
 <style>

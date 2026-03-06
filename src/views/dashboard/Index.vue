@@ -240,7 +240,8 @@
 <script setup>
 import { computed, ref, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth.js'
-import { MOCK_DASHBOARD } from '../../mock/dashboard.js'
+import { MOCK_PERSONAL_DASHBOARD } from '../../mock/dashboard.js'
+import { MOCK_TRAININGS } from '../../mock/trainings.js'
 import { message } from 'ant-design-vue'
 import {
   PlayCircleOutlined, FormOutlined, RobotOutlined, TeamOutlined,
@@ -265,9 +266,25 @@ const greeting = hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好'
 const today = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`
 
 const dashData = computed(() => {
-  if (isAdmin.value) return MOCK_DASHBOARD.admin
-  if (isInstructor.value) return MOCK_DASHBOARD.instructor
-  return MOCK_DASHBOARD.student
+  if (isAdmin.value) {
+    // 管理员：用真实培训数据覆盖 recentTrainings 和部分 stats
+    const activeCount = MOCK_TRAININGS.filter(t => t.status === 'active').length
+    const upcomingCount = MOCK_TRAININGS.filter(t => t.status === 'upcoming').length
+    const recentTrainings = MOCK_TRAININGS.filter(t => t.status === 'active' || t.status === 'upcoming').slice(0, 3)
+    const adminData = MOCK_PERSONAL_DASHBOARD.admin
+    return {
+      ...adminData,
+      stats: [
+        adminData.stats[0],
+        adminData.stats[1],
+        { label: '进行中培训班', value: activeCount, unit: '个', trend: `+${upcomingCount} 即将开始`, trendType: 'up' },
+        adminData.stats[3],
+      ],
+      recentTrainings,
+    }
+  }
+  if (isInstructor.value) return MOCK_PERSONAL_DASHBOARD.instructor
+  return MOCK_PERSONAL_DASHBOARD.student
 })
 
 const announceMsg = () => message.info('公告发布功能开发中...')
