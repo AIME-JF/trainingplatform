@@ -204,12 +204,27 @@
                   {{ d }}
                 </a-tag>
               </div>
+              <div style="margin-bottom: 8px;">
+                <a-radio-group v-model:value="dateAddMode" size="small">
+                  <a-radio-button value="single">点选单日</a-radio-button>
+                  <a-radio-button value="range">连选多日</a-radio-button>
+                </a-radio-group>
+              </div>
               <a-date-picker
+                v-if="dateAddMode === 'single'"
                 v-model:value="tempDate"
                 style="width:100%"
                 format="YYYY-MM-DD"
-                placeholder="点击日历可不断添加天数"
+                placeholder="点击日历可不断添加单天"
                 @change="addCourseDate"
+              />
+              <a-range-picker
+                v-else
+                v-model:value="tempDateRange"
+                style="width:100%"
+                format="YYYY-MM-DD"
+                placeholder="['开始日期', '结束日期']"
+                @change="addCourseDateRange"
               />
             </a-form-item>
           </a-col>
@@ -475,7 +490,9 @@ import dayjs from 'dayjs'
 
 const showCourseModal = ref(false)
 const editingCourseIdx = ref(null)
+const dateAddMode = ref('single')
 const tempDate = ref(null)
+const tempDateRange = ref([])
 const courseFormTimeRange = ref([])
 const courseForm = reactive({ name: '', instructor: '', instructorId: null, hours: 8, type: 'theory', date: '', dates: [], timeRange: '' })
 
@@ -511,6 +528,29 @@ function addCourseDate(date, dateString) {
   setTimeout(() => { tempDate.value = null }, 50)
 }
 
+function addCourseDateRange(dates, dateStrings) {
+  if (dates && dates.length === 2 && dateStrings[0] && dateStrings[1]) {
+    let current = dayjs(dateStrings[0])
+    const end = dayjs(dateStrings[1])
+    let added = false
+    
+    while (current.isBefore(end) || current.isSame(end, 'day')) {
+      const dStr = current.format('YYYY-MM-DD')
+      if (!courseForm.dates.includes(dStr)) {
+        courseForm.dates.push(dStr)
+        added = true
+      }
+      current = current.add(1, 'day')
+    }
+    
+    if (added) {
+      courseForm.dates.sort()
+      calcTotalHours()
+    }
+  }
+  setTimeout(() => { tempDateRange.value = [] }, 50)
+}
+
 function removeCourseDate(d) {
   courseForm.dates = courseForm.dates.filter(x => x !== d)
   calcTotalHours()
@@ -529,6 +569,8 @@ function onCourseTimeRangeChange(times, timeStrings) {
 function openCourseModal(idx = null) {
   editingCourseIdx.value = idx
   tempDate.value = null
+  tempDateRange.value = []
+  dateAddMode.value = 'single'
   courseFormTimeRange.value = []
   if (idx !== null && trainingData.courses[idx]) {
     const c = trainingData.courses[idx]
