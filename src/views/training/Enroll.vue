@@ -1,27 +1,26 @@
 <template>
   <div class="enroll-page">
     <!-- 培训班信息头部 -->
-    <div class="training-header">
+    <div class="training-header" v-if="training">
       <div class="header-badge">
         <a-tag color="green">报名中</a-tag>
       </div>
-      <h2 class="training-title">2025年南宁市基层民警执法规范化培训（第3期）</h2>
+      <h2 class="training-title">{{ training.name }}</h2>
       <div class="training-meta-row">
-        <span><CalendarOutlined /> 2025-03-10 至 2025-03-21（12天）</span>
-        <span><EnvironmentOutlined /> 南宁市公安局培训基地</span>
-        <span><UserOutlined /> 主讲教官：李志强</span>
+        <span><CalendarOutlined /> {{ training.startDate }} 至 {{ training.endDate }}</span>
+        <span><EnvironmentOutlined /> {{ training.location }}</span>
+        <span><UserOutlined /> 主讲教官：{{ training.instructorName }}</span>
       </div>
       <!-- 名额进度 -->
       <div class="quota-section">
         <div class="quota-label">
           <span>名额情况</span>
-          <span class="quota-nums"><b>32</b> / 50 人已录取</span>
+          <span class="quota-nums"><b>{{ training.enrolled }}</b> / {{ training.capacity }} 人已录取</span>
         </div>
-        <a-progress :percent="64" :show-info="false" stroke-color="#003087" />
+        <a-progress :percent="Math.round(training.enrolled / training.capacity * 100)" :show-info="false" stroke-color="#003087" />
         <div class="quota-tags">
-          <a-tag color="green">已录取 32</a-tag>
-          <a-tag color="orange">待审核 8</a-tag>
-          <a-tag color="default">剩余名额 10</a-tag>
+          <a-tag color="green">已录取 {{ training.enrolled }}</a-tag>
+          <a-tag color="default">剩余名额 {{ Math.max(0, training.capacity - training.enrolled) }}</a-tag>
         </div>
       </div>
     </div>
@@ -99,18 +98,28 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { CalendarOutlined, EnvironmentOutlined, UserOutlined } from '@ant-design/icons-vue'
+import { MOCK_TRAININGS } from '@/mock/trainings'
+import { useAuthStore } from '@/stores/auth'
+
+const route = useRoute()
+const authStore = useAuthStore()
+
+const trainingId = route.params.id
+const training = MOCK_TRAININGS.find(t => t.id === trainingId)
 
 const submitted = ref(false)
 const submitting = ref(false)
 const agreed = ref(false)
 
+const u = authStore.currentUser || {}
 const formData = ref({
-  name: '张伟',
-  policeId: 'GX-NN-2056',
-  unit: '南宁市青秀区公安局刑警大队',
-  phone: '136****0003',
+  name: u.name || '',
+  policeId: u.username || '',
+  unit: u.unit || '',
+  phone: u.phone || '',
   reason: '',
   needAccom: 'no',
 })

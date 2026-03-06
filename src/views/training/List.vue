@@ -66,7 +66,15 @@
           <a-button size="small" type="primary" @click="goCheckin(t)" v-if="t.status === 'active'">
             <template #icon><QrcodeOutlined /></template>扫码签到
           </a-button>
-          <a-button size="small" @click="goEnroll(t)" v-if="t.status === 'upcoming' && authStore.isStudent">报名申请</a-button>
+          
+          <template v-if="t.status === 'upcoming' && authStore.isStudent">
+            <a-button 
+              size="small" 
+              @click="goEnroll(t)" 
+              v-if="!t.students.includes(authStore.currentUser?.username)"
+            >报名申请</a-button>
+            <a-button size="small" disabled v-else>已报名</a-button>
+          </template>
           <a-button size="small" @click="goSchedule(t)" v-if="authStore.isStudent && t.status === 'active'">查看日程</a-button>
           <a-dropdown v-if="authStore.isAdmin || authStore.isInstructor">
             <a-button size="small"><EllipsisOutlined /></a-button>

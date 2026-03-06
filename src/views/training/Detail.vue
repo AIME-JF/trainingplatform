@@ -78,13 +78,13 @@
       <a-col :span="8">
         <a-card title="快捷操作" :bordered="false" style="margin-bottom:16px">
           <div class="quick-ops">
-            <a-button block style="margin-bottom:8px" @click="$router.push('/training/checkin/' + training.id)" type="primary">
-              <template #icon><QrcodeOutlined /></template>开始签到
+            <a-button block style="margin-bottom:8px" @click="$router.push('/training/checkin/' + training.id)" type="primary" v-if="training.status === 'active' || !authStore.isStudent">
+              <template #icon><QrcodeOutlined /></template>{{ authStore.isStudent ? '扫码签到' : '开始签到' }}
             </a-button>
             <a-button block style="margin-bottom:8px" @click="$router.push('/training/schedule')">
               <template #icon><CalendarOutlined /></template>查看日程
             </a-button>
-            <a-button block @click="exportMsg">
+            <a-button block @click="exportMsg" v-if="!authStore.isStudent">
               <template #icon><DownloadOutlined /></template>导出学员名单
             </a-button>
           </div>
@@ -111,8 +111,11 @@ import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QrcodeOutlined, DownloadOutlined } from '@ant-design/icons-vue'
 import { MOCK_TRAININGS } from '@/mock/trainings'
+import { MOCK_USERS } from '@/mock/users'
+import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
+const authStore = useAuthStore()
 const trainingId = route.params.id
 const training = MOCK_TRAININGS.find(t => t.id === trainingId) || MOCK_TRAININGS[0]
 
@@ -122,10 +125,20 @@ const studentSearch = ref('')
 const statusLabels = { active: '进行中', upcoming: '未开始', ended: '已结束' }
 const statusColorMap = { active: 'green', upcoming: 'orange', ended: 'default' }
 
+// 动态统计数据
+const checkinRecords = training.checkinRecords || []
+const onTimeCount = checkinRecords.filter(r => r.status === 'on_time').length
+const lateCount = checkinRecords.filter(r => r.status === 'late').length
+const absentCount = checkinRecords.filter(r => r.status === 'absent').length
+const totalCheckin = onTimeCount + lateCount
+const checkinRate = checkinRecords.length > 0 ? Math.round((totalCheckin / checkinRecords.length) * 100) : 0
+
+const completeCount = training.enrolled > 0 ? Math.floor(training.enrolled * (checkinRate / 100 || 0.8)) : 0
+
 const overviewStats = [
   { label: '报名人数', value: training.enrolled, color: '#003087' },
   { label: '班级容量', value: training.capacity, color: '#555' },
-  { label: '已完成学员', value: Math.floor((training.enrolled || 0) * 0.6), color: '#52c41a' },
+  { label: '预计完成学员', value: completeCount, color: '#52c41a' },
   { label: '课程总学时', value: (training.courses || []).reduce((a, c) => a + (c.hours || 0), 0) || 48, color: '#faad14' },
 ]
 
@@ -139,14 +152,21 @@ const trainingWithCourses = {
   ]
 }
 
-const mockStudents = Array.from({ length: 15 }, (_, i) => ({
-  key: i,
-  name: ['张明', '李华', '王刚', '陈红', '刘洋', '赵伟', '孙丽', '周明', '吴强', '郑浩', '钱磊', '冯雪', '蒋峰', '谢辉', '韩婷'][i],
-  policeId: `GX2024${String(i+1).padStart(3,'0')}`,
-  unit: ['南宁市公安局', '桂林市公安局', '柳州市公安局'][i % 3],
-  progress: [100, 82, 65, 40, 95, 78, 55, 90, 33, 72, 88, 61, 45, 99, 70][i],
-  checkinRate: [100, 90, 85, 75, 95, 80, 70, 90, 60, 85, 95, 75, 65, 100, 80][i],
-}))
+// 基于 MOCK_USERS 映射真实学员数据，而不是随机生成
+const mockStudents = (training.students || []).map(username => {
+  const u = Object.values(MOCK_USERS).find(user => user.username === username) || { name: '未知学员', unit: '未知单位' }
+  // 计算每个学员的考勤率（如果存在签到记录）
+  const r = checkinRecords.find(cr => cr.studentId === username)
+  const cRate = !r ? 0 : (r.status === 'absent' ? 0 : (r.status === 'late' ? 80 : 100))
+  return {
+    key: username,
+    name: u.name,
+    policeId: username,
+    unit: u.unit || '广西公安机关',
+    progress: Math.floor(Math.random() * 20 + 80), // 模拟进度
+    checkinRate: cRate
+  }
+})
 
 const filteredStudents = computed(() =>
   studentSearch.value ? mockStudents.filter(s => s.name.includes(studentSearch.value) || s.policeId.includes(studentSearch.value)) : mockStudents
@@ -160,14 +180,9 @@ const studentColumns = [
   { title: '签到率', key: 'checkin', width: 80 },
 ]
 
-const onTimeCount = training.checkinRecords?.filter(r => r.status === 'on_time').length || 0
-const lateCount = training.checkinRecords?.filter(r => r.status === 'late').length || 0
-const absentCount = training.checkinRecords?.filter(r => r.status === 'absent').length || 0
-const checkinRate = Math.round(((onTimeCount + lateCount) / (training.checkinRecords?.length || 1)) * 100)
-
 const notices = [
-  { id: 1, title: '本周六体能测试通知', time: '2025-03-10', content: '本周六上午9:00在训练场进行体能测试，请携带运动装备，准时参加。' },
-  { id: 2, title: '教材发放通知', time: '2025-03-08', content: '本次培训教材已到位，请于本周四前往综合楼312室领取。' },
+  { id: 1, title: '开班及教材发放通知', time: training.startDate, content: `本次培训【${training.name}】教材已到位，请于开班当天前往培训点领取。` },
+  { id: 2, title: '体能测试及考核通知', time: training.endDate, content: '结业周将进行统一考核，请携带好装备。' },
 ]
 
 const exportMsg = () => message.success('学员名单已导出！')

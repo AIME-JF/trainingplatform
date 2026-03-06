@@ -1,10 +1,10 @@
 <template>
   <div class="enroll-manage">
     <!-- 页头 -->
-    <div class="page-header-bar">
+    <div class="page-header-bar" v-if="training">
       <div>
         <h2 class="page-h2">报名管理</h2>
-        <div class="page-sub">2025年南宁市基层民警执法规范化培训（第3期）</div>
+        <div class="page-sub">{{ training.name }}</div>
       </div>
       <div class="header-actions">
         <a-button @click="$router.back()"><ArrowLeftOutlined /> 返回</a-button>
@@ -13,22 +13,22 @@
     </div>
 
     <!-- 名额统计卡 -->
-    <div class="quota-cards">
+    <div class="quota-cards" v-if="training">
       <div class="qcard">
-        <div class="qcard-num total">50</div>
+        <div class="qcard-num total">{{ training.capacity }}</div>
         <div class="qcard-label">总名额</div>
       </div>
       <div class="qcard">
-        <div class="qcard-num approved">32</div>
+        <div class="qcard-num approved">{{ approvedList.length }}</div>
         <div class="qcard-label">已录取</div>
-        <a-progress :percent="64" :show-info="false" stroke-color="#52c41a" size="small" />
+        <a-progress :percent="Math.round((approvedList.length / training.capacity) * 100) || 0" :show-info="false" stroke-color="#52c41a" size="small" />
       </div>
       <div class="qcard">
         <div class="qcard-num pending">{{ pendingList.length }}</div>
         <div class="qcard-label">待审核</div>
       </div>
       <div class="qcard">
-        <div class="qcard-num remain">10</div>
+        <div class="qcard-num remain">{{ Math.max(0, training.capacity - approvedList.length) }}</div>
         <div class="qcard-label">剩余名额</div>
       </div>
     </div>
@@ -75,16 +75,23 @@
 
 <script setup>
 import { ref, computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { ArrowLeftOutlined, DownloadOutlined } from '@ant-design/icons-vue'
-import { MOCK_ENROLLMENTS } from '../../mock/enrollments.js'
+import { MOCK_ENROLLMENTS } from '@/mock/enrollments.js'
+import { MOCK_TRAININGS } from '@/mock/trainings.js'
+
+const route = useRoute()
+const trainingId = route.params.id
+const training = MOCK_TRAININGS.find(t => t.id === trainingId)
 
 const searchText = ref('')
 const statusFilter = ref('all')
 const selectedRowKeys = ref([])
 const selectedRows = ref([])
 
-const enrollments = ref(MOCK_ENROLLMENTS.filter(e => e.trainingId === 't001').map(e => ({ ...e })))
+// Load enrollments specifically for this training
+const enrollments = ref(MOCK_ENROLLMENTS.filter(e => e.trainingId === trainingId).map(e => ({ ...e })))
 
 const pendingList = computed(() => enrollments.value.filter(e => e.status === 'pending'))
 const approvedList = computed(() => enrollments.value.filter(e => e.status === 'approved'))
