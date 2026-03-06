@@ -389,3 +389,4 @@ const goEnrollManage = (t) => router.push(`/training/${t.id}/enroll/manage`)
 .dropdown-item.danger {
   color: #ff4d4f;
 }
+</style>
