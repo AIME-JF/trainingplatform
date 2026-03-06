@@ -2,10 +2,11 @@
 人才库服务
 """
 from typing import Optional, List
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 
-from app.models import User
+from app.models import User, Department
+from app.models.department import user_departments
 from app.schemas.talent import TalentResponse, TalentStatsResponse
 from app.schemas import PaginatedResponse
 from logger import logger
@@ -23,20 +24,22 @@ class TalentService:
         size: int = 10,
         search: Optional[str] = None,
         tier: Optional[str] = None,
-        unit: Optional[str] = None
+        department_id: Optional[int] = None
     ) -> PaginatedResponse[TalentResponse]:
         """获取人才列表"""
-        query = self.db.query(User).filter(User.is_active == True)
+        query = self.db.query(User).options(
+            joinedload(User.departments),
+            joinedload(User.police_types)
+        ).filter(User.is_active == True)
 
         if search:
             query = query.filter(
                 User.nickname.contains(search) | User.username.contains(search) |
                 User.police_id.contains(search)
             )
-        if unit:
-            query = query.filter(User.unit.contains(unit))
+        if department_id:
+            query = query.join(User.departments).filter(Department.id == department_id)
 
-        # tier筛选基于avg_score
         if tier == 'gold':
             query = query.filter(User.avg_score >= 90)
         elif tier == 'silver':
@@ -85,19 +88,23 @@ class TalentService:
             {"name": "铜牌", "value": bronze}
         ]
 
-        # 单位分布
-        unit_results = self.db.query(
-            User.unit, func.count(User.id).label('count')
+        # 单位（部门）分布：通过关联表统计
+        dept_results = self.db.query(
+            Department.name, func.count(user_departments.c.user_id).label('count')
+        ).join(
+            user_departments, Department.id == user_departments.c.department_id
+        ).join(
+            User, User.id == user_departments.c.user_id
         ).filter(
-            User.is_active == True, User.unit.isnot(None)
-        ).group_by(User.unit).order_by(func.count(User.id).desc()).limit(10).all()
+            User.is_active == True
+        ).group_by(Department.name).order_by(func.count(user_departments.c.user_id).desc()).limit(10).all()
 
-        unit_distribution = [{"name": r.unit, "value": r.count} for r in unit_results]
+        department_distribution = [{"name": r.name, "value": r.count} for r in dept_results]
 
         return TalentStatsResponse(
             total=total,
             tier_distribution=tier_distribution,
-            unit_distribution=unit_distribution,
+            department_distribution=department_distribution,
             avg_score=avg_score,
             avg_study_hours=avg_hours
         )
@@ -114,10 +121,13 @@ class TalentService:
         else:
             tier = None
 
+        departments = [d.name for d in user.departments] if user.departments else []
+        police_types = [pt.name for pt in user.police_types] if user.police_types else []
+
         return TalentResponse(
             id=user.id, username=user.username,
             nickname=user.nickname, police_id=user.police_id,
-            unit=user.unit, police_type=user.police_type,
+            departments=departments, police_types=police_types,
             avatar=user.avatar, level=user.level,
             study_hours=user.study_hours or 0,
             exam_count=user.exam_count or 0,

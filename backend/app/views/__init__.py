@@ -13,6 +13,7 @@ from .profile import router as profile_router
 from .report import router as report_router
 from .ai import router as ai_router
 from .talent import router as talent_router
+from .police_type import router as police_type_router
 
 all_routers = [
     auth_router,
@@ -27,6 +28,7 @@ all_routers = [
     report_router,
     ai_router,
     talent_router,
+    police_type_router,
 ]
 
 __all__ = [
@@ -34,5 +36,5 @@ __all__ = [
     "auth_router", "dashboard_router", "course_router", "exam_router",
     "question_router", "training_router", "instructor_router",
     "certificate_router", "profile_router", "report_router",
-    "ai_router", "talent_router",
+    "ai_router", "talent_router", "police_type_router",
 ]

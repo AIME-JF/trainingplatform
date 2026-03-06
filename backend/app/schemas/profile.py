@@ -24,8 +24,6 @@ class ProfileResponse(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     police_id: Optional[str] = None
-    unit: Optional[str] = None
-    police_type: Optional[str] = None
     avatar: Optional[str] = None
     join_date: Optional[date] = None
     level: Optional[str] = None
@@ -33,6 +31,8 @@ class ProfileResponse(BaseModel):
     exam_count: int = 0
     avg_score: float = 0
     roles: List[str] = []
+    departments: List[str] = []
+    police_types: List[str] = []
     created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)

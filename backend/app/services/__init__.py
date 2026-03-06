@@ -6,6 +6,7 @@ from .user import UserService
 from .department import DepartmentService
 from .role import RoleService
 from .permission import PermissionService
+from .police_type import PoliceTypeService
 from .system import SystemConfigService
 from .course import CourseService
 from .exam import ExamService
@@ -21,7 +22,7 @@ from .talent import TalentService
 
 __all__ = [
     "AuthService", "UserService", "DepartmentService", "RoleService", "PermissionService",
-    "SystemConfigService",
+    "PoliceTypeService", "SystemConfigService",
     "CourseService", "ExamService", "QuestionService", "TrainingService",
     "InstructorService", "CertificateService", "ProfileService",
     "DashboardService", "ReportService", "AIService", "TalentService",

@@ -10,7 +10,7 @@ from sqlalchemy import select
 from fastapi import HTTPException
 
 from config import settings
-from app.models import User, Role, Permission, Department
+from app.models import User, Role, Permission, Department, PoliceType
 from app.schemas import TokenData
 from logger import logger
 
@@ -74,7 +74,8 @@ class AuthService:
             # 查询用户及其角色、权限和部门
             user = db.query(User).options(
                 selectinload(User.roles).selectinload(Role.permissions),
-                selectinload(User.departments).selectinload(Department.permissions)
+                selectinload(User.departments).selectinload(Department.permissions),
+                selectinload(User.police_types)
             ).filter(User.username == username).first()
             
             if not user:
@@ -98,7 +99,8 @@ class AuthService:
         try:
             user = db.query(User).options(
                 selectinload(User.roles).selectinload(Role.permissions),
-                selectinload(User.departments).selectinload(Department.permissions)
+                selectinload(User.departments).selectinload(Department.permissions),
+                selectinload(User.police_types)
             ).filter(User.id == user_id, User.is_active == True).first()
             
             if not user:

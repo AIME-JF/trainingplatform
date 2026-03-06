@@ -5,6 +5,7 @@ from .user import User
 from .role import Role, user_roles
 from .permission import Permission, role_permissions, department_permissions
 from .department import Department, user_departments
+from .police_type import PoliceType, user_police_types
 from .system import Config, ConfigGroup, ConfigFormat
 from .course import Course, Chapter, CourseProgress
 from .training import Training, TrainingCourse, Enrollment, CheckinRecord, ScheduleItem
@@ -18,12 +19,14 @@ __all__ = [
     "Role",
     "Permission",
     "Department",
+    "PoliceType",
     "Config",
     "ConfigGroup",
     "ConfigFormat",
     "user_roles",
     "role_permissions",
     "user_departments",
+    "user_police_types",
     "department_permissions",
     # 课程相关
     "Course", "Chapter", "CourseProgress",

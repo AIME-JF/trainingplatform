@@ -8,7 +8,7 @@ from fastapi import HTTPException, status
 from app.services import UserService
 from app.schemas import (
     UserCreate, UserUpdate, UserResponse, UserSimpleResponse, PasswordChange, PaginatedResponse,
-    UserRoleUpdate, UserDepartmentUpdate
+    UserRoleUpdate, UserDepartmentUpdate, UserPoliceTypeUpdate
 )
 from logger import logger
 
@@ -168,5 +168,30 @@ class UserController:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="更新用户部门失败"
+            )
+
+    def update_user_police_types(self, user_id: int, data: UserPoliceTypeUpdate) -> UserResponse:
+        """更新用户警种"""
+        try:
+            user = self.user_service.update_user_police_types(user_id, data)
+            if not user:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="用户不存在"
+                )
+            return user
+        except ValueError as e:
+            logger.warning(f"更新用户警种失败: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e)
+            )
+        except HTTPException as e:
+            raise e
+        except Exception as e:
+            logger.error(f"更新用户警种异常: {e}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="更新用户警种失败"
             )
 

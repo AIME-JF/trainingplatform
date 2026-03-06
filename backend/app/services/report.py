@@ -5,7 +5,9 @@ from typing import List
 from sqlalchemy.orm import Session
 from sqlalchemy import func, extract
 
-from app.models import User, Course, Exam, Training, ExamRecord
+from app.models import User, Course, Exam, Training, ExamRecord, Department, PoliceType
+from app.models.department import user_departments
+from app.models.police_type import user_police_types
 from app.schemas.report import KpiResponse, TrendItem, PoliceTypeDistribution, CityRanking
 from logger import logger
 
@@ -66,34 +68,42 @@ class ReportService:
         return items
 
     def get_police_type_distribution(self) -> List[PoliceTypeDistribution]:
-        """获取警种分布"""
+        """获取警种分布（通过关联表统计）"""
         results = self.db.query(
-            User.police_type,
-            func.count(User.id).label('count')
+            PoliceType.name,
+            func.count(user_police_types.c.user_id).label('count')
+        ).join(
+            user_police_types, PoliceType.id == user_police_types.c.police_type_id
+        ).join(
+            User, User.id == user_police_types.c.user_id
         ).filter(
-            User.police_type.isnot(None),
-            User.is_active == True
-        ).group_by(User.police_type).all()
+            User.is_active == True,
+            PoliceType.is_active == True
+        ).group_by(PoliceType.name).all()
 
         return [
-            PoliceTypeDistribution(name=r.police_type or "未知", value=r.count)
+            PoliceTypeDistribution(name=r.name, value=r.count)
             for r in results
         ]
 
     def get_city_ranking(self) -> List[CityRanking]:
-        """获取城市/单位排名"""
+        """获取城市/单位排名（通过关联表统计）"""
         results = self.db.query(
-            User.unit,
+            Department.name,
             func.avg(User.avg_score).label('score'),
-            func.count(User.id).label('students')
+            func.count(user_departments.c.user_id).label('students')
+        ).join(
+            user_departments, Department.id == user_departments.c.department_id
+        ).join(
+            User, User.id == user_departments.c.user_id
         ).filter(
-            User.unit.isnot(None),
-            User.is_active == True
-        ).group_by(User.unit).order_by(func.avg(User.avg_score).desc()).limit(20).all()
+            User.is_active == True,
+            Department.is_active == True
+        ).group_by(Department.name).order_by(func.avg(User.avg_score).desc()).limit(20).all()
 
         return [
             CityRanking(
-                city=r.unit or "未知",
+                city=r.name,
                 score=round(float(r.score), 1) if r.score else 0,
                 students=r.students
             )

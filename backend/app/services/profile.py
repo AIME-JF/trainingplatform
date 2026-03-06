@@ -21,25 +21,29 @@ class ProfileService:
     def get_profile(self, user_id: int) -> Optional[ProfileResponse]:
         """获取个人信息"""
         user = self.db.query(User).options(
-            joinedload(User.roles)
+            joinedload(User.roles),
+            joinedload(User.departments),
+            joinedload(User.police_types)
         ).filter(User.id == user_id).first()
 
         if not user:
             return None
 
         roles = [r.name for r in user.roles] if user.roles else []
+        departments = [d.name for d in user.departments] if user.departments else []
+        police_types = [pt.name for pt in user.police_types] if user.police_types else []
 
         return ProfileResponse(
             id=user.id, username=user.username,
             nickname=user.nickname, gender=user.gender,
             email=user.email, phone=user.phone,
-            police_id=user.police_id, unit=user.unit,
-            police_type=user.police_type, avatar=user.avatar,
+            police_id=user.police_id, avatar=user.avatar,
             join_date=user.join_date, level=user.level,
             study_hours=user.study_hours or 0,
             exam_count=user.exam_count or 0,
             avg_score=user.avg_score or 0,
-            roles=roles, created_at=user.created_at
+            roles=roles, departments=departments,
+            police_types=police_types, created_at=user.created_at
         )
 
     def update_profile(self, user_id: int, data: ProfileUpdate) -> Optional[ProfileResponse]:

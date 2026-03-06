@@ -9,6 +9,7 @@ from app.database import Base
 # 从其他模块导入关联表
 from .role import user_roles
 from .department import user_departments
+from .police_type import user_police_types
 
 
 class User(Base):
@@ -26,8 +27,6 @@ class User(Base):
 
     # 警务相关字段
     police_id = Column(String(50), unique=True, index=True, nullable=True, comment='警号')
-    unit = Column(String(200), nullable=True, comment='所属单位')
-    police_type = Column(String(50), nullable=True, comment='警种')
     avatar = Column(String(500), nullable=True, comment='头像URL')
     join_date = Column(Date, nullable=True, comment='入警日期')
     level = Column(String(50), nullable=True, comment='学员等级')
@@ -41,4 +40,5 @@ class User(Base):
     # 关联关系
     roles = relationship("Role", secondary=user_roles, back_populates="users")
     departments = relationship("Department", secondary=user_departments, back_populates="users")
-    instructor_profile = relationship("InstructorProfile", back_populates="user", uselist=False) 
+    police_types = relationship("PoliceType", secondary=user_police_types, back_populates="users")
+    instructor_profile = relationship("InstructorProfile", back_populates="user", uselist=False)

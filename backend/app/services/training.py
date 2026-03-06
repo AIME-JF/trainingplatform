@@ -327,13 +327,14 @@ class TrainingService:
     def _enrollment_to_response(self, enrollment: Enrollment) -> EnrollmentResponse:
         """转换报名为响应"""
         user = enrollment.user if hasattr(enrollment, 'user') and enrollment.user else None
+        departments = [d.name for d in user.departments] if user and user.departments else []
         return EnrollmentResponse(
             id=enrollment.id, training_id=enrollment.training_id,
             user_id=enrollment.user_id,
             user_name=user.username if user else None,
             user_nickname=user.nickname if user else None,
             police_id=user.police_id if user else None,
-            unit=user.unit if user else None,
+            departments=departments,
             status=enrollment.status, note=enrollment.note,
             enroll_time=enrollment.enroll_time
         )

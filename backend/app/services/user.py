@@ -7,10 +7,10 @@ from sqlalchemy import and_, or_, func
 from passlib.context import CryptContext
 from fastapi import HTTPException
 
-from app.models import User, Role, Department
+from app.models import User, Role, Department, PoliceType
 from app.schemas import (
     UserCreate, UserUpdate, UserResponse, UserSimpleResponse, PaginatedResponse,
-    UserRoleUpdate, UserDepartmentUpdate
+    UserRoleUpdate, UserDepartmentUpdate, UserPoliceTypeUpdate
 )
 from logger import logger
 
@@ -31,43 +31,45 @@ class UserService:
     
     def create_user(self, user_data: UserCreate) -> UserResponse:
         """创建用户"""
-            # 检查用户名是否已存在
         if self.db.query(User).filter(User.username == user_data.username).first():
-                raise ValueError("用户名已存在")
-            
-            # 检查邮箱是否已存在
+            raise ValueError("用户名已存在")
+
         if user_data.email and self.db.query(User).filter(User.email == user_data.email).first():
-                    raise ValueError("邮箱已存在")
-            
-            # 检查手机号是否已存在
+            raise ValueError("邮箱已存在")
+
         if user_data.phone and self.db.query(User).filter(User.phone == user_data.phone).first():
-                    raise ValueError("手机号已存在")
-            
-            # 创建用户
+            raise ValueError("手机号已存在")
+
         hashed_password = pwd_context.hash(user_data.password)
         db_user = User(
             username=user_data.username,
-        password_hash=hashed_password,
+            password_hash=hashed_password,
             nickname=user_data.nickname,
             gender=user_data.gender,
             email=user_data.email,
-        phone=user_data.phone
+            phone=user_data.phone,
+            police_id=user_data.police_id,
+            avatar=user_data.avatar,
+            join_date=user_data.join_date,
+            level=user_data.level,
         )
-        
-        # 分配角色
+
         if user_data.role_ids:
             roles = self.db.query(Role).filter(Role.id.in_(user_data.role_ids)).all()
             db_user.roles = roles
-            
-        # 分配部门
+
         if user_data.department_ids:
             departments = self.db.query(Department).filter(Department.id.in_(user_data.department_ids)).all()
             db_user.departments = departments
-        
+
+        if user_data.police_type_ids:
+            police_types = self.db.query(PoliceType).filter(PoliceType.id.in_(user_data.police_type_ids)).all()
+            db_user.police_types = police_types
+
         self.db.add(db_user)
         self.db.commit()
         self.db.refresh(db_user)
-            
+
         logger.info(f"创建用户成功: {user_data.username}")
         return UserResponse.model_validate(db_user)
     
@@ -75,7 +77,8 @@ class UserService:
         """根据ID获取用户"""
         user = self.db.query(User).options(
             joinedload(User.roles).joinedload(Role.permissions),
-            joinedload(User.departments).joinedload(Department.permissions)
+            joinedload(User.departments).joinedload(Department.permissions),
+            joinedload(User.police_types)
             ).filter(User.id == user_id).first()
             
         if not user:
@@ -103,7 +106,8 @@ class UserService:
         # 构建查询（不加载角色权限信息）
         query = self.db.query(User).options(
             joinedload(User.roles),
-            joinedload(User.departments)
+            joinedload(User.departments),
+            joinedload(User.police_types)
         )
         
         # 应用过滤条件
@@ -274,6 +278,24 @@ class UserService:
         self.db.refresh(user)
         
         logger.info(f"更新用户部门成功: {user.username}")
+        return UserResponse.model_validate(user)
+
+    def update_user_police_types(self, user_id: int, data: UserPoliceTypeUpdate) -> Optional[UserResponse]:
+        """更新用户警种"""
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return None
+        assert_admin_user(user)
+
+        police_types = self.db.query(PoliceType).filter(PoliceType.id.in_(data.police_type_ids)).all()
+        if len(police_types) != len(data.police_type_ids):
+            raise ValueError("部分警种不存在")
+
+        user.police_types = police_types
+        self.db.commit()
+        self.db.refresh(user)
+
+        logger.info(f"更新用户警种成功: {user.username}")
         return UserResponse.model_validate(user)
 
 

@@ -22,13 +22,13 @@ def get_talents(
     size: int = Query(10, ge=-1),
     search: Optional[str] = None,
     tier: Optional[str] = None,
-    unit: Optional[str] = None,
+    department_id: Optional[int] = None,
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """获取人才列表"""
     controller = TalentController(db)
-    data = controller.get_talents(page, size, search, tier, unit)
+    data = controller.get_talents(page, size, search, tier, department_id)
     return StandardResponse(data=data)
 
 

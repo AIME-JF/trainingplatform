@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 from .role import RoleResponse, RoleSimpleResponse
 from .department import DepartmentSimpleResponse
+from .police_type import PoliceTypeSimpleResponse
 
 
 class TokenData(BaseModel):
@@ -33,13 +34,12 @@ class UserCreate(BaseModel):
     email: Optional[str] = Field(None, description="邮箱")
     phone: Optional[str] = Field(None, description="手机号")
     police_id: Optional[str] = Field(None, max_length=50, description="警号")
-    unit: Optional[str] = Field(None, max_length=200, description="所属单位")
-    police_type: Optional[str] = Field(None, max_length=50, description="警种")
     avatar: Optional[str] = Field(None, description="头像URL")
     join_date: Optional[date] = Field(None, description="入警日期")
     level: Optional[str] = Field(None, description="学员等级")
     role_ids: Optional[List[int]] = Field([], description="角色ID列表")
     department_ids: Optional[List[int]] = Field([], description="部门ID列表")
+    police_type_ids: Optional[List[int]] = Field([], description="警种ID列表")
 
 
 class UserUpdate(BaseModel):
@@ -50,8 +50,6 @@ class UserUpdate(BaseModel):
     phone: Optional[str] = Field(None, description="手机号")
     is_active: Optional[bool] = Field(None, description="是否激活")
     police_id: Optional[str] = Field(None, max_length=50, description="警号")
-    unit: Optional[str] = Field(None, max_length=200, description="所属单位")
-    police_type: Optional[str] = Field(None, max_length=50, description="警种")
     avatar: Optional[str] = Field(None, description="头像URL")
     join_date: Optional[date] = Field(None, description="入警日期")
     level: Optional[str] = Field(None, description="学员等级")
@@ -65,6 +63,11 @@ class UserRoleUpdate(BaseModel):
 class UserDepartmentUpdate(BaseModel):
     """更新用户部门请求"""
     department_ids: List[int] = Field(..., description="部门ID列表")
+
+
+class UserPoliceTypeUpdate(BaseModel):
+    """更新用户警种请求"""
+    police_type_ids: List[int] = Field(..., description="警种ID列表")
 
 
 class PasswordChange(BaseModel):
@@ -83,8 +86,6 @@ class UserSimpleResponse(BaseModel):
     phone: Optional[str] = None
     is_active: bool
     police_id: Optional[str] = None
-    unit: Optional[str] = None
-    police_type: Optional[str] = None
     avatar: Optional[str] = None
     join_date: Optional[date] = None
     level: Optional[str] = None
@@ -95,6 +96,7 @@ class UserSimpleResponse(BaseModel):
     updated_at: Optional[datetime] = None
     roles: List[RoleSimpleResponse] = []
     departments: List[DepartmentSimpleResponse] = []
+    police_types: List[PoliceTypeSimpleResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -109,8 +111,6 @@ class UserResponse(BaseModel):
     phone: Optional[str] = None
     is_active: bool
     police_id: Optional[str] = None
-    unit: Optional[str] = None
-    police_type: Optional[str] = None
     avatar: Optional[str] = None
     join_date: Optional[date] = None
     level: Optional[str] = None
@@ -121,6 +121,7 @@ class UserResponse(BaseModel):
     updated_at: Optional[datetime] = None
     roles: List[RoleResponse] = []
     departments: List[DepartmentSimpleResponse] = []
+    police_types: List[PoliceTypeSimpleResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -131,4 +132,4 @@ class LoginResponse(BaseModel):
     token_type: str = "bearer"
     user: UserResponse
     
-    model_config = ConfigDict(from_attributes=True) 
+    model_config = ConfigDict(from_attributes=True)

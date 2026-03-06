@@ -4,7 +4,7 @@
 from datetime import datetime, date
 from sqlalchemy.orm import Session
 from app.database import engine, init_db
-from app.models import User, Role, Permission, Department, user_roles, role_permissions
+from app.models import User, Role, Permission, Department, PoliceType, user_roles, role_permissions
 from app.models.system import Config, ConfigGroup, ConfigFormat, SystemMeta
 from app.models import InstructorProfile
 from app.services.auth import auth_service
@@ -135,6 +135,14 @@ def init_permissions():
 
                 # 工作台
                 {"path": "/api/v1/dashboard", "code": "GET_DASHBOARD", "description": "获取工作台数据"},
+
+                # 警种管理
+                {"path": "/api/v1/police-types", "code": "GET_POLICE_TYPES", "description": "获取警种列表"},
+                {"path": "/api/v1/police-types/create", "code": "CREATE_POLICE_TYPE", "description": "创建警种"},
+                {"path": "/api/v1/police-types/{id}", "code": "GET_POLICE_TYPE_DETAIL", "description": "获取警种详情"},
+                {"path": "/api/v1/police-types/{id}/update", "code": "UPDATE_POLICE_TYPE", "description": "更新警种"},
+                {"path": "/api/v1/police-types/{id}/delete", "code": "DELETE_POLICE_TYPE", "description": "删除警种"},
+                {"path": "/api/v1/users/{user_id}/police-types", "code": "UPDATE_USER_POLICE_TYPES", "description": "更新用户警种"},
             ]
 
             for perm_data in permissions_data:
@@ -179,6 +187,43 @@ def init_departments():
 
     except Exception as e:
         logger.error(f"初始化部门数据失败: {e}")
+        raise
+
+
+def init_police_types():
+    """初始化警种数据"""
+    try:
+        with Session(engine) as db:
+            existing_count = db.query(PoliceType).count()
+            if existing_count > 0:
+                logger.info("警种数据已存在，跳过初始化")
+                return
+
+            police_types_data = [
+                {"name": "管理", "code": "MANAGEMENT", "description": "管理警种"},
+                {"name": "刑侦", "code": "CRIMINAL_INVESTIGATION", "description": "刑事侦查"},
+                {"name": "治安", "code": "PUBLIC_SECURITY", "description": "治安管理"},
+                {"name": "交通", "code": "TRAFFIC", "description": "交通管理"},
+                {"name": "网安", "code": "CYBER_SECURITY", "description": "网络安全"},
+                {"name": "特警", "code": "SWAT", "description": "特种警察"},
+                {"name": "禁毒", "code": "ANTI_NARCOTICS", "description": "禁毒"},
+                {"name": "经侦", "code": "ECONOMIC_CRIME", "description": "经济犯罪侦查"},
+            ]
+
+            for pt_data in police_types_data:
+                pt = PoliceType(
+                    name=pt_data["name"],
+                    code=pt_data["code"],
+                    description=pt_data["description"],
+                    is_active=True
+                )
+                db.add(pt)
+
+            db.commit()
+            logger.info(f"警种数据初始化完成，共创建 {len(police_types_data)} 个警种")
+
+    except Exception as e:
+        logger.error(f"初始化警种数据失败: {e}")
         raise
 
 
@@ -272,6 +317,11 @@ def init_users():
                 logger.error("部门数据不存在，请先初始化部门数据")
                 return
 
+            # 获取警种
+            pt_management = db.query(PoliceType).filter(PoliceType.code == "MANAGEMENT").first()
+            pt_criminal = db.query(PoliceType).filter(PoliceType.code == "CRIMINAL_INVESTIGATION").first()
+            pt_security = db.query(PoliceType).filter(PoliceType.code == "PUBLIC_SECURITY").first()
+
             # 管理员
             admin_user = User(
                 username="admin",
@@ -280,12 +330,12 @@ def init_users():
                 email="admin@gxpolice.gov.cn",
                 phone="13800000001",
                 police_id="GX-ADM-001",
-                unit="广西警察训练总队",
-                police_type="管理",
                 is_active=True
             )
             admin_user.roles = [admin_role]
             admin_user.departments = [root_dept]
+            if pt_management:
+                admin_user.police_types = [pt_management]
             db.add(admin_user)
 
             # 教官
@@ -296,13 +346,13 @@ def init_users():
                 email="instructor@gxpolice.gov.cn",
                 phone="13800000002",
                 police_id="GX-INS-001",
-                unit="广西警察训练总队",
-                police_type="刑侦",
                 join_date=date(2010, 7, 1),
                 is_active=True
             )
             instructor_user.roles = [instructor_role]
             instructor_user.departments = [root_dept]
+            if pt_criminal:
+                instructor_user.police_types = [pt_criminal]
             db.add(instructor_user)
             db.flush()
 
@@ -333,8 +383,6 @@ def init_users():
                 email="student@gxpolice.gov.cn",
                 phone="13800000003",
                 police_id="GX-STU-001",
-                unit="南宁市公安局",
-                police_type="治安",
                 join_date=date(2020, 9, 1),
                 level="中级",
                 study_hours=120.5,
@@ -344,6 +392,8 @@ def init_users():
             )
             student_user.roles = [student_role]
             student_user.departments = [root_dept]
+            if pt_security:
+                student_user.police_types = [pt_security]
             db.add(student_user)
 
             db.commit()
@@ -376,6 +426,7 @@ def main():
         if not check_db_init():
             init_permissions()
             init_departments()
+            init_police_types()
             init_roles()
             init_users()
 

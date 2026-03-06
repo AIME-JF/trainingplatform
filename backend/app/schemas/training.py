@@ -116,7 +116,7 @@ class EnrollmentResponse(BaseModel):
     user_name: Optional[str] = None
     user_nickname: Optional[str] = None
     police_id: Optional[str] = None
-    unit: Optional[str] = None
+    departments: List[str] = []
     status: str = "pending"
     note: Optional[str] = None
     enroll_time: Optional[datetime] = None

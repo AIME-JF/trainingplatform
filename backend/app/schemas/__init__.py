@@ -4,7 +4,7 @@ Pydantic模型导出
 
 from .user import (
     UserCreate, UserUpdate, UserResponse, UserSimpleResponse, UserLogin, LoginResponse,
-    PasswordChange, TokenData, UserRoleUpdate, UserDepartmentUpdate
+    PasswordChange, TokenData, UserRoleUpdate, UserDepartmentUpdate, UserPoliceTypeUpdate
 )
 from .role import (
     RoleCreate, RoleUpdate, RoleResponse, RoleSimpleResponse,
@@ -16,6 +16,9 @@ from .permission import (
 from .department import (
     DepartmentCreate, DepartmentUpdate, DepartmentResponse, DepartmentSimpleResponse,
     DepartmentPermissionUpdate
+)
+from .police_type import (
+    PoliceTypeCreate, PoliceTypeUpdate, PoliceTypeResponse, PoliceTypeSimpleResponse
 )
 from .system import (
     ConfigCreate, ConfigUpdate, ConfigResponse,
@@ -66,7 +69,7 @@ from .talent import TalentResponse, TalentStatsResponse
 __all__ = [
     # 用户相关
     "UserCreate", "UserUpdate", "UserResponse", "UserSimpleResponse", "UserLogin", "LoginResponse",
-    "PasswordChange", "TokenData", "UserRoleUpdate", "UserDepartmentUpdate",
+    "PasswordChange", "TokenData", "UserRoleUpdate", "UserDepartmentUpdate", "UserPoliceTypeUpdate",
     # 角色相关
     "RoleCreate", "RoleUpdate", "RoleResponse", "RoleSimpleResponse",
     "RolePermissionUpdate",
@@ -75,6 +78,8 @@ __all__ = [
     # 部门相关
     "DepartmentCreate", "DepartmentUpdate", "DepartmentResponse",
     "DepartmentSimpleResponse", "DepartmentPermissionUpdate",
+    # 警种相关
+    "PoliceTypeCreate", "PoliceTypeUpdate", "PoliceTypeResponse", "PoliceTypeSimpleResponse",
     # 系统配置相关
     "ConfigCreate", "ConfigUpdate", "ConfigResponse",
     "ConfigGroupCreate", "ConfigGroupUpdate", "ConfigGroupResponse", "ConfigGroupDetailResponse",

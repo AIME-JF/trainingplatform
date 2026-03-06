@@ -18,9 +18,9 @@ class TalentController:
 
     def get_talents(self, page: int = 1, size: int = 10,
                     search: Optional[str] = None, tier: Optional[str] = None,
-                    unit: Optional[str] = None):
+                    department_id: Optional[int] = None):
         try:
-            return self.service.get_talents(page, size, search, tier, unit)
+            return self.service.get_talents(page, size, search, tier, department_id)
         except Exception as e:
             logger.error(f"获取人才列表异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取人才列表失败")
