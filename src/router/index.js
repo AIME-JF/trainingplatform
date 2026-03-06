@@ -97,7 +97,7 @@ const router = createRouter({
           meta: { title: '培训班详情' },
         },
         {
-          path: 'training/:id/checkin',
+          path: 'training/:id/checkin/:sessionKey?',
           name: 'Checkin',
           component: () => import('../views/training/Checkin.vue'),
           meta: { title: '扫码签到' },
@@ -180,7 +180,7 @@ const router = createRouter({
     },
     // 移动端签到（独立页，无主布局）
     {
-      path: '/mobile/checkin/:token',
+      path: '/mobile/checkin/:token/:sessionKey?',
       name: 'MobileCheckin',
       component: () => import('../views/mobile/Checkin.vue'),
       meta: { title: '扫码签到' },

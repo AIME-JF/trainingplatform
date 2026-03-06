@@ -63,9 +63,9 @@
         </div>
         <div class="tc-footer">
           <a-button size="small" @click="goDetail(t)">查看详情</a-button>
-          <!-- Admin/Instructor: 开始签到 -->
+          <!-- Admin/Instructor: 开班签到 -->
           <a-button size="small" type="primary" @click="goCheckin(t)" v-if="t.status === 'active' && !authStore.isStudent">
-            <template #icon><QrcodeOutlined /></template>开始签到
+            <template #icon><QrcodeOutlined /></template>开班签到
           </a-button>
 
           <!-- 学员：已报名且进行中才能扫码 -->
