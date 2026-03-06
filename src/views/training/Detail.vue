@@ -45,7 +45,8 @@
                   <div class="ci-left">
                     <div class="ci-name">{{ c.name }}</div>
                     <div class="ci-instructor">{{ c.instructor }}</div>
-                    <div class="ci-time" v-if="c.startTime && c.endTime">{{ c.startTime }} ~ {{ c.endTime }}</div>
+                    <div class="ci-time" v-if="c.date && c.timeRange">{{ c.date }} {{ c.timeRange }}</div>
+                    <div class="ci-time" v-else-if="c.startTime && c.endTime">{{ c.startTime }} ~ {{ c.endTime }}</div>
                     <div class="ci-time" v-else-if="c.date">{{ c.date }}</div>
                   </div>
                   <div class="ci-right">
@@ -190,14 +191,25 @@
         </a-row>
         <a-row :gutter="12">
           <a-col :span="12">
-            <a-form-item label="上课时间">
-              <a-range-picker
+            <a-form-item label="上课日期" required>
+              <a-date-picker
                 v-model:value="courseFormDateVal"
                 style="width:100%"
-                :show-time="{ format: 'HH:mm' }"
-                format="YYYY-MM-DD HH:mm"
-                placeholder="['开始时间', '结束时间']"
-                @change="onCourseTimeChange"
+                format="YYYY-MM-DD"
+                placeholder="选择日期"
+                @change="(_, s) => courseForm.date = s"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="上课时段" required>
+              <a-time-range-picker
+                v-model:value="courseFormTimeRange"
+                style="width:100%"
+                format="HH:mm"
+                :minute-step="5"
+                placeholder="['开始', '结束']"
+                @change="onCourseTimeRangeChange"
               />
             </a-form-item>
           </a-col>
@@ -451,52 +463,68 @@ import dayjs from 'dayjs'
 
 const showCourseModal = ref(false)
 const editingCourseIdx = ref(null)
-const courseFormDateVal = ref([])
-const courseForm = reactive({ name: '', instructor: '', instructorId: null, hours: 8, type: 'theory', startTime: '', endTime: '', date: '' })
+const courseFormDateVal = ref(null)
+const courseFormTimeRange = ref([])
+const courseForm = reactive({ name: '', instructor: '', instructorId: null, hours: 8, type: 'theory', date: '', timeRange: '' })
 
 function onInstructorChange(id) {
   const inst = MOCK_INSTRUCTORS.find(i => i.id === id)
   if (inst) courseForm.instructor = inst.name
 }
 
-function onCourseTimeChange(dates, dateStrings) {
-  if (dates && dates.length === 2) {
-    courseForm.startTime = dateStrings[0]
-    courseForm.endTime = dateStrings[1]
-    courseForm.date = dates[0].format('YYYY-MM-DD')
-    
-    // Auto-calculate hours
-    const diffMs = dates[1].diff(dates[0]) // difference in milliseconds
-    const hours = diffMs / (1000 * 60 * 60)
-    courseForm.hours = Number(hours.toFixed(1)) // Keep 1 decimal place
+function onCourseTimeRangeChange(times, timeStrings) {
+  if (times && times.length === 2) {
+    courseForm.timeRange = `${timeStrings[0]}~${timeStrings[1]}`
+    // Auto-calculate hours using today's fake date string to subtract times
+    const start = dayjs(`2000-01-01 ${timeStrings[0]}`)
+    const end = dayjs(`2000-01-01 ${timeStrings[1]}`)
+    const diffMs = end.diff(start)
+    if (diffMs > 0) {
+      const hours = diffMs / (1000 * 60 * 60)
+      courseForm.hours = Number(hours.toFixed(1))
+    }
   } else {
-    courseForm.startTime = ''
-    courseForm.endTime = ''
-    courseForm.date = ''
+    courseForm.timeRange = ''
   }
 }
 
 function openCourseModal(idx = null) {
   editingCourseIdx.value = idx
-  courseFormDateVal.value = []
+  courseFormDateVal.value = null
+  courseFormTimeRange.value = []
   if (idx !== null && trainingData.courses[idx]) {
     const c = trainingData.courses[idx]
     const inst = MOCK_INSTRUCTORS.find(i => i.name === c.instructor)
-    Object.assign(courseForm, { name: c.name, instructor: c.instructor, instructorId: inst?.id ?? null, hours: c.hours, type: c.type, startTime: c.startTime || '', endTime: c.endTime || '', date: c.date || '' })
-    if (c.startTime && c.endTime) {
-      courseFormDateVal.value = [dayjs(c.startTime), dayjs(c.endTime)]
-    } else if (c.date) {
-      // Legacy support for plain dates
-      courseFormDateVal.value = [dayjs(c.date).startOf('day'), dayjs(c.date).endOf('day')]
+    Object.assign(courseForm, { name: c.name, instructor: c.instructor, instructorId: inst?.id ?? null, hours: c.hours, type: c.type, date: c.date || '', timeRange: c.timeRange || '' })
+    
+    if (c.date) {
+      courseFormDateVal.value = dayjs(c.date)
+    }
+    if (c.timeRange) {
+      const [start, end] = c.timeRange.split('~')
+      if (start && end) {
+        courseFormTimeRange.value = [dayjs(`2000-01-01 ${start}`), dayjs(`2000-01-01 ${end}`)]
+      }
+    } else if (c.startTime && c.endTime) {
+      // Legacy data fallback (from the previous diff transition)
+      const st = dayjs(c.startTime).format('HH:mm')
+      const ed = dayjs(c.endTime).format('HH:mm')
+      courseForm.timeRange = `${st}~${ed}`
+      courseForm.date = dayjs(c.startTime).format('YYYY-MM-DD')
+      courseFormDateVal.value = dayjs(c.startTime)
+      courseFormTimeRange.value = [dayjs(`2000-01-01 ${st}`), dayjs(`2000-01-01 ${ed}`)]
     }
   } else {
-    Object.assign(courseForm, { name: '', instructor: '', instructorId: null, hours: 8, type: 'theory', startTime: '', endTime: '', date: '' })
+    Object.assign(courseForm, { name: '', instructor: '', instructorId: null, hours: 2, type: 'theory', date: '', timeRange: '' })
   }
   showCourseModal.value = true
 }
 
 function saveCourse() {
-  if (!courseForm.name || !courseForm.instructor) { message.warning('请填写课程名称和授课教官'); return }
+  if (!courseForm.name || !courseForm.instructor || !courseForm.date || !courseForm.timeRange) { 
+    message.warning('请填写完整必填项(课程名称、教官、日期、时段)')
+    return 
+  }
   const courseData = { ...courseForm }
   if (editingCourseIdx.value !== null) {
     trainingData.courses.splice(editingCourseIdx.value, 1, courseData)
