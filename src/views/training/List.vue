@@ -162,8 +162,24 @@
             </a-form-item>
           </a-col>
           <a-col :span="24">
-            <a-form-item label="主讲教官">
-              <a-input v-model:value="trainingForm.instructorName" placeholder="教官姓名" />
+            <a-form-item label="主管教官">
+              <a-select
+                v-model:value="trainingForm.instructorId"
+                placeholder="从教官库中选择"
+                show-search
+                option-filter-prop="label"
+                style="width:100%"
+                @change="onInstructorChange"
+              >
+                <a-select-option
+                  v-for="inst in MOCK_INSTRUCTORS"
+                  :key="inst.id"
+                  :value="inst.id"
+                  :label="inst.name"
+                >
+                  {{ inst.name }} · {{ inst.title }}
+                </a-select-option>
+              </a-select>
             </a-form-item>
           </a-col>
           <a-col :span="24">
@@ -185,6 +201,7 @@ import { PlusOutlined, CalendarOutlined, TeamOutlined, UserOutlined, Environment
 import { useAuthStore } from '@/stores/auth'
 import { MOCK_TRAININGS, TRAINING_TYPES } from '@/mock/trainings'
 import { MOCK_ENROLLMENTS } from '@/mock/enrollments'
+import { MOCK_INSTRUCTORS } from '@/mock/instructors'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -236,12 +253,19 @@ const trainingForm = reactive({
   startDate: '',
   endDate: '',
   location: '',
+  instructorId: null,
   instructorName: '',
   description: '',
 })
 
+const onInstructorChange = (id) => {
+  const inst = MOCK_INSTRUCTORS.find(i => i.id === id)
+  if (inst) trainingForm.instructorName = inst.name
+}
+
 const resetForm = () => {
-  Object.assign(trainingForm, { name: '', type: 'basic', capacity: 30, startDate: '', endDate: '', location: '', instructorName: '', description: '' })
+  Object.assign(trainingForm, { name: '', type: 'basic', capacity: 30, startDate: '', endDate: '', location: '', instructorId: null, instructorName: '', description: '' })
+  trainingFormDates.value = [null, null]
   editingTraining.value = null
   showCreateModal.value = false
 }
@@ -255,6 +279,7 @@ const handleEdit = (t) => {
     startDate: t.startDate,
     endDate: t.endDate,
     location: t.location,
+    instructorId: t.instructorId || null,
     instructorName: t.instructorName,
     description: t.description,
   })
@@ -280,6 +305,7 @@ const handleSubmitTraining = () => {
         startDate: trainingForm.startDate,
         endDate: trainingForm.endDate,
         location: trainingForm.location,
+        instructorId: trainingForm.instructorId,
         instructorName: trainingForm.instructorName,
         description: trainingForm.description,
       }

@@ -15,7 +15,7 @@
               <div class="training-meta-row">
                 <span><CalendarOutlined /> {{ trainingData.startDate }} ~ {{ trainingData.endDate }}</span>
                 <span><EnvironmentOutlined /> {{ trainingData.location }}</span>
-                <span><UserOutlined /> 主讲：{{ trainingData.instructorName }}</span>
+                <span><UserOutlined /> 主管/班主任：{{ trainingData.instructorName }}</span>
               </div>
             </div>
           </div>
@@ -257,8 +257,23 @@
         </a-form-item>
         <a-row :gutter="12">
           <a-col :span="12">
-            <a-form-item label="主讲教官">
-              <a-input v-model:value="editForm.instructorName" />
+            <a-form-item label="主管/班主任">
+              <a-select
+                v-model:value="editForm.instructorId"
+                placeholder="从教官库选定班主任"
+                show-search
+                option-filter-prop="label"
+                @change="onEditInstructorChange"
+              >
+                <a-select-option
+                  v-for="inst in MOCK_INSTRUCTORS"
+                  :key="inst.id"
+                  :value="inst.id"
+                  :label="inst.name"
+                >
+                  {{ inst.name }} · {{ inst.title }}
+                </a-select-option>
+              </a-select>
             </a-form-item>
           </a-col>
           <a-col :span="12">
@@ -458,20 +473,25 @@ const showEditModal = ref(false)
 const editFormDates = ref([null, null]) // dayjs values for date pickers
 const editForm = reactive({
   name: trainingData.name, startDate: trainingData.startDate, endDate: trainingData.endDate,
-  location: trainingData.location, instructorName: trainingData.instructorName,
+  location: trainingData.location, instructorId: trainingData.instructorId || null, instructorName: trainingData.instructorName,
   capacity: trainingData.capacity, status: trainingData.status, description: trainingData.description || '',
 })
+
+function onEditInstructorChange(id) {
+  const inst = MOCK_INSTRUCTORS.find(i => i.id === id)
+  if (inst) editForm.instructorName = inst.name
+}
 
 function saveClassInfo() {
   if (!editForm.name || !editForm.startDate || !editForm.endDate || !editForm.location) { message.warning('请填写必填项'); return }
   Object.assign(trainingData, {
     name: editForm.name, startDate: editForm.startDate, endDate: editForm.endDate,
-    location: editForm.location, instructorName: editForm.instructorName,
+    location: editForm.location, instructorId: editForm.instructorId, instructorName: editForm.instructorName,
     capacity: editForm.capacity, status: editForm.status, description: editForm.description,
   })
   // 同步回 MOCK_TRAININGS
   const orig = MOCK_TRAININGS.find(t => t.id === trainingId)
-  if (orig) Object.assign(orig, { name: editForm.name, startDate: editForm.startDate, endDate: editForm.endDate, location: editForm.location, instructorName: editForm.instructorName, capacity: editForm.capacity, status: editForm.status, description: editForm.description })
+  if (orig) Object.assign(orig, { name: editForm.name, startDate: editForm.startDate, endDate: editForm.endDate, location: editForm.location, instructorId: editForm.instructorId, instructorName: editForm.instructorName, capacity: editForm.capacity, status: editForm.status, description: editForm.description })
   message.success('班级信息已更新')
   showEditModal.value = false
 }
