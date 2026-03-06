@@ -118,3 +118,38 @@ export const MOCK_PERSONAL_DASHBOARD = {
     monthProgress: 65,
   },
 }
+
+// 3. 数据看板（领导视图）数据 (用于 Report/Dashboard.vue)
+export const MOCK_REPORT_DATA = {
+  overview: {
+    totalPolice: 48632,
+    trainedThisYear: 32108,
+    trainingRate: 66.0,
+    avgScore: 81.3,
+    passRate: 92.4,
+  },
+  cityComparison: [
+    { city: '南宁', trainingRate: 78, avgScore: 83 },
+    { city: '柳州', trainingRate: 72, avgScore: 80 },
+    { city: '桂林', trainingRate: 68, avgScore: 79 },
+    { city: '梧州', trainingRate: 65, avgScore: 77 },
+    { city: '贺州', trainingRate: 70, avgScore: 81 },
+    { city: '百色', trainingRate: 58, avgScore: 75 },
+    { city: '钦州', trainingRate: 62, avgScore: 78 },
+  ],
+  monthlyTrend: [
+    { month: '2024-09', trained: 4200, hours: 85000 },
+    { month: '2024-10', trained: 5100, hours: 102000 },
+    { month: '2024-11', trained: 4800, hours: 96000 },
+    { month: '2024-12', trained: 3200, hours: 64000 },
+    { month: '2025-01', trained: 2800, hours: 56000 },
+    { month: '2025-02', trained: 4500, hours: 90000 },
+  ],
+  policeTypeDistribution: [
+    { type: '刑警', count: 8420, trained: 6850 },
+    { type: '交警', count: 7230, trained: 5440 },
+    { type: '治安', count: 12600, trained: 8200 },
+    { type: '社区', count: 9800, trained: 5800 },
+    { type: '其他', count: 10582, trained: 5818 },
+  ],
+}
