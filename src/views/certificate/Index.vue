@@ -14,12 +14,10 @@
       <div class="cert-card" v-for="cert in certificates" :key="cert.id">
         <!-- 证书主体 -->
         <div class="cert-body" :id="`cert-${cert.id}`">
-          <div class="cert-watermark">警</div>
           <div class="cert-top">
-            <div class="cert-emblem">警</div>
-            <div class="cert-org">广西壮族自治区公安厅</div>
+            <img src="../../assets/logo.png" class="cert-emblem" alt="Logo" />
           </div>
-          <div class="cert-main-title">警务训练结业证书</div>
+          <div class="cert-main-title">智慧教育训练结业证书</div>
           <div class="cert-content">
             <p>兹证明 <span class="cert-name">{{ cert.studentName }}</span> 同志</p>
             <p>于 <span class="cert-highlight">{{ cert.startDate }}</span> 至 <span class="cert-highlight">{{ cert.endDate }}</span></p>
@@ -98,7 +96,7 @@ const isAdmin = authStore.isAdmin
 const certificates = ref([
   {
     id: 'cert001',
-    certNo: 'GXGA-2025-0312-0089',
+    certNo: 'ZHJY-2025-0312-0089',
     studentName: '张伟',
     trainingName: '2024年南宁市基层民警执法规范化培训（第2期）',
     startDate: '2024-11-06',
@@ -109,9 +107,9 @@ const certificates = ref([
   },
   {
     id: 'cert002',
-    certNo: 'GXGA-2024-0816-0156',
+    certNo: 'ZHJY-2024-0816-0156',
     studentName: '张伟',
-    trainingName: '2024年广西公安刑事侦查专项培训（第1期）',
+    trainingName: '2024年刑事侦查专项培训（第1期）',
     startDate: '2024-08-05',
     endDate: '2024-08-16',
     score: 92,
@@ -158,7 +156,7 @@ async function handleIssue() {
   const training = MOCK_TRAININGS.find(t => t.id === issueForm.value.trainingId)
   certificates.value.unshift({
     id: `cert${Date.now()}`,
-    certNo: `GXGA-${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${String(Math.floor(Math.random()*900)+100)}`,
+    certNo: `ZHJY-${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${String(Math.floor(Math.random()*900)+100)}`,
     studentName: student?.name || '未知',
     trainingName: training?.name || '未知培训班',
     startDate: training?.startDate || '',
@@ -207,9 +205,8 @@ async function handleIssue() {
 
 .cert-top { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
 .cert-emblem {
-  width: 40px; height: 40px; background: #c8a84b; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 20px; font-weight: 900; color: #001234;
+  width: 56px; height: 56px;
+  object-fit: contain;
 }
 .cert-org { color: rgba(255,255,255,0.8); font-size: 13px; letter-spacing: 1px; }
 

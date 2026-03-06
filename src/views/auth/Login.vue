@@ -4,10 +4,9 @@
     <div class="login-bg">
       <div class="bg-overlay">
         <div class="bg-content">
-          <div class="emblem">警</div>
-          <h1>广西壮族自治区公安厅</h1>
-          <h2>警务训练综合管理平台</h2>
-          <p>Guangxi Police Training Management System</p>
+          <img src="../../assets/logo.png" class="emblem" alt="Logo" />
+          <h1>智慧教育训练平台</h1>
+          <p>Smart Education & Training Platform</p>
           <div class="bg-stats">
             <div class="stat-item">
               <span class="stat-num">12,486</span>
@@ -33,9 +32,9 @@
       <div class="login-card">
         <div class="login-header">
           <div class="login-logo">
-            <div class="login-logo-icon">警</div>
+            <img src="../../assets/logo.png" class="login-logo-icon" alt="Logo" />
           </div>
-          <h3>警务训练平台</h3>
+          <h3>智慧教育训练平台</h3>
           <p>请登录以进入系统</p>
         </div>
 
@@ -167,7 +166,6 @@
 
         <div class="login-footer">
           <span>演示版本 v2.0</span>
-          <span>广西公安厅训练处</span>
         </div>
       </div>
     </div>
@@ -330,18 +328,10 @@ async function handleLogin() {
 }
 
 .emblem {
-  width: 100px;
-  height: 100px;
-  border-radius: 50%;
-  background: var(--police-gold);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 52px;
-  font-weight: 900;
-  color: #001234;
+  width: 140px;
+  height: 140px;
   margin: 0 auto 28px;
-  box-shadow: 0 0 40px rgba(200, 168, 75, 0.4);
+  object-fit: contain;
 }
 
 .bg-content h1 {
@@ -431,17 +421,10 @@ async function handleLogin() {
 }
 
 .login-logo-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background: var(--police-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 28px;
-  font-weight: 900;
-  color: var(--police-gold);
+  width: 80px;
+  height: 80px;
   margin: 0 auto;
+  object-fit: contain;
 }
 
 .login-header h3 {

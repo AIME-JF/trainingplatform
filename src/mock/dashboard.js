@@ -2,7 +2,7 @@
  * 培训看板及个人工作台 Mock 数据
  */
 
-// 1. 广西公安警务培训实时看板汇总数据 (用于 Board.vue)
+// 1. 智慧教育培训实时看板汇总数据 (用于 Board.vue)
 export const MOCK_TRAINING_BOARD = {
   // 各市局参训人数分布 (柱状图)
   cityAttendance: [
@@ -67,7 +67,7 @@ export const MOCK_PERSONAL_DASHBOARD = {
     announcements: [
       { id: 1, title: '关于开展2025年春季全警实战大练兵的指导意见', date: '2025-03-05', urgent: true },
       { id: 2, title: '关于规范培训班考勤管理制度的补充通知', date: '2025-03-02', urgent: false },
-      { id: 3, title: '广西公安教育训练管理平台V2.0上线公告', date: '2025-02-28', urgent: false },
+      { id: 3, title: '智慧教育训练平台V2.0上线公告', date: '2025-02-28', urgent: false },
     ]
   },
 

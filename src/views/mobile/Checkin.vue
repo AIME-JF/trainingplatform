@@ -2,8 +2,8 @@
   <div class="mobile-checkin">
     <!-- 顶部状态栏区域 -->
     <div class="checkin-header">
-      <div class="header-emblem">警</div>
-      <div class="header-title">广西公安警务训练平台</div>
+      <img src="../../assets/logo.png" class="header-emblem" alt="Logo" />
+      <div class="header-title">智慧教育训练平台</div>
       <div class="header-sub">扫码签到确认</div>
     </div>
 
@@ -101,18 +101,10 @@ async function handleCheckin() {
 }
 
 .header-emblem {
-  width: 64px;
-  height: 64px;
-  background: #c8a84b;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 32px;
-  font-weight: 900;
-  color: #001234;
+  width: 100px;
+  height: 100px;
   margin: 0 auto 12px;
-  box-shadow: 0 0 24px rgba(200, 168, 75, 0.5);
+  object-fit: contain;
 }
 
 .header-title {

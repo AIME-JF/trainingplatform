@@ -158,7 +158,7 @@
           </a-col>
           <a-col :span="24">
             <a-form-item label="培训地点" required>
-              <a-input v-model:value="trainingForm.location" placeholder="例：广西公安警察学院第三训练楼201教室" />
+              <a-input v-model:value="trainingForm.location" placeholder="例：第三训练楼201教室" />
             </a-form-item>
           </a-col>
           <a-col :span="24">

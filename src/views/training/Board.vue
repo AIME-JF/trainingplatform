@@ -5,8 +5,8 @@
       <div class="board-title-area">
         <div class="board-icon">📊</div>
         <div>
-          <h1 class="board-title">广西公安警务培训实时看板</h1>
-          <div class="board-sub">厅政治部训练处 · 数据实时统计（{{ currentDate }}）</div>
+          <h1 class="board-title">智慧教育培训实时看板</h1>
+          <div class="board-sub">培训处 · 数据实时统计（{{ currentDate }}）</div>
         </div>
       </div>
       <div class="board-actions">

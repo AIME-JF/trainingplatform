@@ -10,8 +10,8 @@
     >
       <!-- Logo区域 -->
       <div class="sidebar-logo">
-        <div class="logo-icon">警</div>
-        <span v-if="!collapsed" class="logo-text">警务训练平台</span>
+        <img src="../assets/logo.png" class="logo-icon" alt="Logo" />
+        <span v-if="!collapsed" class="logo-text">智慧教育训练平台</span>
       </div>
 
       <!-- 菜单 -->
@@ -96,8 +96,8 @@
       :headerStyle="{ display: 'none' }"
     >
       <div class="sidebar-logo" style="border-bottom: 1px solid rgba(255,255,255,0.1);">
-        <div class="logo-icon">警</div>
-        <span class="logo-text">警务训练平台</span>
+        <img src="../assets/logo.png" class="logo-icon" alt="Logo" />
+        <span class="logo-text">智慧教育训练平台</span>
       </div>
       <a-menu
         v-model:selectedKeys="selectedKeys"
@@ -293,7 +293,7 @@ const roles = [
 ]
 
 const currentPageTitle = computed(() => {
-  return route.meta?.title || '广西公安警务训练平台'
+  return route.meta?.title || '智慧教育训练平台'
 })
 
 watch(
@@ -346,16 +346,9 @@ function handleLogout() {
 }
 
 .logo-icon {
-  width: 36px;
-  height: 36px;
-  background: var(--police-gold);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--police-sidebar-bg);
-  font-weight: 900;
-  font-size: 18px;
+  height: 44px;
+  width: auto;
+  object-fit: contain;
   flex-shrink: 0;
 }
 

@@ -473,7 +473,7 @@ const mockStudents = computed(() => trainingData.students.map(userId => {
   } else {
     cRate = Math.floor(Math.random() * 20 + 80) // default fallback
   }
-  return { key: userId, name: u.name, policeId: u.policeId || userId, unit: u.unit || '广西公安机关', progress: Math.floor(Math.random() * 20 + 80), checkinRate: cRate }
+  return { key: userId, name: u.name, policeId: u.policeId || userId, unit: u.unit || '机关单位', progress: Math.floor(Math.random() * 20 + 80), checkinRate: cRate }
 }))
 
 const filteredStudents = computed(() =>

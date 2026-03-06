@@ -6,7 +6,7 @@ export const MOCK_USERS = {
     name: '王建国',
     role: 'admin',
     roleLabel: '系统管理员',
-    unit: '广西壮族自治区公安厅训练处',
+    unit: '政治部训练处',
     policeType: '综合管理',
     policeId: 'GX-ADM-001',
     phone: '138****8001',
