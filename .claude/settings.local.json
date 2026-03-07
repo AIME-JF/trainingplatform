@@ -3,7 +3,9 @@
     "allow": [
       "Bash(rm:*)",
       "Bash(python:*)",
-      "Bash(npm install:*)"
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(git:*)"
     ]
   }
 }

@@ -23,3 +23,11 @@ export function getProgress() {
 export function updateChapterProgress(courseId, chapterId, progress) {
   return request.put(`/courses/${courseId}/chapters/${chapterId}/progress`, { progress })
 }
+
+export function getCourseNote(courseId) {
+  return request.get(`/courses/${courseId}/note`)
+}
+
+export function saveCourseNote(courseId, content) {
+  return request.put(`/courses/${courseId}/note`, { content })
+}

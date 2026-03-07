@@ -1,7 +1,7 @@
 """
 课程管理相关的数据验证模型
 """
-from typing import Optional, List, Any
+from typing import Optional, List
 from datetime import datetime
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -72,6 +72,7 @@ class CourseUpdate(BaseModel):
     is_required: Optional[bool] = None
     cover_color: Optional[str] = None
     tags: Optional[List[str]] = None
+    chapters: Optional[List[ChapterCreate]] = None
 
 
 class CourseResponse(BaseModel):
@@ -123,6 +124,23 @@ class CourseListResponse(BaseModel):
 class CourseProgressUpdate(BaseModel):
     """更新学习进度"""
     progress: int = Field(..., ge=0, le=100, description="进度0-100")
+
+
+class CourseNoteUpdate(BaseModel):
+    """更新课程笔记"""
+    content: str = Field('', description="笔记内容")
+
+
+class CourseNoteResponse(BaseModel):
+    """课程笔记响应"""
+    id: int
+    user_id: int
+    course_id: int
+    content: str = ''
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 class CourseProgressResponse(BaseModel):

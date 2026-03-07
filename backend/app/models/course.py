@@ -30,6 +30,7 @@ class Course(Base):
     # 关联关系
     instructor = relationship("User", foreign_keys=[instructor_id])
     chapters = relationship("Chapter", back_populates="course", cascade="all, delete-orphan")
+    notes = relationship("CourseNote", back_populates="course", cascade="all, delete-orphan")
 
 
 class Chapter(Base):
@@ -48,6 +49,26 @@ class Chapter(Base):
     # 关联关系
     course = relationship("Course", back_populates="chapters")
     file = relationship("MediaFile", foreign_keys=[file_id])
+
+
+class CourseNote(Base):
+    """课程笔记表"""
+    __tablename__ = 'course_notes'
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, comment='用户ID')
+    course_id = Column(Integer, ForeignKey('courses.id', ondelete='CASCADE'), nullable=False, comment='课程ID')
+    content = Column(Text, nullable=False, default='', comment='笔记内容')
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), comment='创建时间')
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now(), comment='更新时间')
+
+    __table_args__ = (
+        UniqueConstraint('user_id', 'course_id', name='uq_course_notes_user_course'),
+        {'comment': '课程笔记表'},
+    )
+
+    user = relationship("User", foreign_keys=[user_id])
+    course = relationship("Course", back_populates="notes", foreign_keys=[course_id])
 
 
 class CourseProgress(Base):

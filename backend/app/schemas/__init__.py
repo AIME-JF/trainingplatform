@@ -31,7 +31,8 @@ from .response import StandardResponse, PaginatedResponse
 from .course import (
     CourseCreate, CourseUpdate, CourseResponse, CourseListResponse,
     ChapterCreate, ChapterUpdate, ChapterResponse,
-    CourseProgressUpdate, CourseProgressResponse
+    CourseProgressUpdate, CourseProgressResponse,
+    CourseNoteUpdate, CourseNoteResponse
 )
 # 培训相关
 from .training import (
@@ -91,7 +92,7 @@ __all__ = [
     # 课程相关
     "CourseCreate", "CourseUpdate", "CourseResponse", "CourseListResponse",
     "ChapterCreate", "ChapterUpdate", "ChapterResponse",
-    "CourseProgressUpdate", "CourseProgressResponse",
+    "CourseProgressUpdate", "CourseProgressResponse", "CourseNoteUpdate", "CourseNoteResponse",
     # 培训相关
     "TrainingCreate", "TrainingUpdate", "TrainingResponse", "TrainingListResponse",
     "TrainingCourseCreate", "TrainingCourseResponse",

@@ -1,5 +1,5 @@
 <template>
-  <div class="course-detail-page">
+  <div class="course-detail-page" v-if="localCourse.title">
     <!-- 面包屑 + 编辑按钮 -->
     <div class="top-bar">
       <a-breadcrumb>
@@ -28,7 +28,7 @@
               preload="metadata"
               @play="isPlaying = true"
               @pause="isPlaying = false"
-              @ended="isPlaying = false"
+              @ended="onVideoEnded"
               @timeupdate="onTimeUpdate"
               @loadedmetadata="onMetaLoaded"
               @error="videoError = true"
@@ -86,6 +86,9 @@
                 <a-spin size="large" />
                 <div style="margin-top:12px;color:#888">文档加载中...</div>
               </div>
+              <div style="position:absolute;right:12px;top:12px;z-index:3" v-if="!docLoading && !docLoadError">
+                <a-button size="small" @click="markDocProgress">标记已学习</a-button>
+              </div>
               <iframe
                 :src="currentDocUrl"
                 class="doc-iframe"
@@ -108,21 +111,23 @@
             <a-tab-pane key="intro" tab="课程简介">
               <p style="line-height:1.8;color:#444">{{ localCourse.description }}</p>
               <div class="meta-grid">
-                <div class="meta-item"><span class="meta-l">主讲教官</span><span>{{ localCourse.instructor }}</span></div>
+                <div class="meta-item"><span class="meta-l">主讲教官</span><span>{{ localCourse.instructor || '-' }}</span></div>
                 <div class="meta-item"><span class="meta-l">课程时长</span><span>{{ localCourse.duration }} 分钟</span></div>
                 <div class="meta-item"><span class="meta-l">课件类型</span><span>{{ isVideo ? '🎬 视频课程' : '📄 文档课程' }}</span></div>
                 <div class="meta-item"><span class="meta-l">学员人数</span><span>{{ localCourse.studentCount?.toLocaleString() }} 人</span></div>
               </div>
             </a-tab-pane>
             <a-tab-pane key="notes" tab="笔记">
-              <a-textarea placeholder="记录学习笔记..." :rows="5" />
-              <a-button type="primary" style="margin-top:8px" @click="notesSaved = true; setTimeout(() => notesSaved = false, 2000)">{{ notesSaved ? '✓ 已保存' : '保存笔记' }}</a-button>
+              <a-textarea v-model:value="noteContent" placeholder="记录学习笔记..." :rows="5" />
+              <a-button type="primary" style="margin-top:8px" :loading="noteSaving" @click="handleSaveNote">
+                {{ notesSaved ? '✓ 已保存' : '保存笔记' }}
+              </a-button>
             </a-tab-pane>
             <a-tab-pane key="qa" tab="答疑区">
-              <div class="qa-list">
-                <div class="qa-item" v-for="q in mockQA" :key="q.id">
+              <div class="qa-list" v-if="qaList.length">
+                <div class="qa-item" v-for="q in qaList" :key="q.id">
                   <div class="qa-question">
-                    <a-avatar size="small" style="background:#003087">{{ q.user.charAt(0) }}</a-avatar>
+                    <a-avatar size="small" style="background:#003087">{{ (q.user || '?').charAt(0) }}</a-avatar>
                     <span class="qa-user">{{ q.user }}</span>
                     <span class="qa-text">{{ q.question }}</span>
                   </div>
@@ -132,6 +137,7 @@
                   </div>
                 </div>
               </div>
+              <a-empty v-else description="暂无答疑内容" />
               <a-input-search placeholder="提问..." enter-button="提交" style="margin-top:12px" />
             </a-tab-pane>
           </a-tabs>
@@ -173,7 +179,8 @@
       title="编辑课程"
       :width="700"
       @ok="saveEdit"
-      ok-text="保存修改"
+      :okText="editSaving ? `保存中 ${editUploadPercent}%` : '保存修改'"
+      :confirmLoading="editSaving"
       cancel-text="取消"
       :destroy-on-close="true"
     >
@@ -188,7 +195,13 @@
               <a-textarea v-model:value="editForm.description" :rows="5" :max-length="500" show-count placeholder="课程简介、学习目标..." />
             </a-form-item>
             <a-form-item label="授课教官">
-              <a-input v-model:value="editForm.instructor" />
+              <a-select
+                v-model:value="editForm.instructorId"
+                :options="instructorOptions"
+                allow-clear
+                placeholder="请选择教官"
+                style="width:100%"
+              />
             </a-form-item>
             <a-form-item label="难度等级">
               <div style="display:flex;align-items:center;gap:12px">
@@ -238,7 +251,7 @@
                 <p style="font-size:12px;margin:2px 0">{{ ch.fileList?.length ? '已选择文件，点击更换' : '点击上传此章节新媒体文件（不上传则保留原文件）' }}</p>
               </a-upload-dragger>
             </div>
-            <a-button type="dashed" block @click="editForm.chapters.push({ title: '', duration: 30, fileList: [] })" style="margin-top:12px">
+            <a-button type="dashed" block @click="editForm.chapters.push({ title: '', duration: 30, fileId: null, fileList: [] })" style="margin-top:12px">
               <template #icon><PlusOutlined /></template>添加章节
             </a-button>
           </div>
@@ -254,9 +267,15 @@ import { useRoute } from 'vue-router'
 import { LockOutlined, CheckCircleFilled, DownloadOutlined, EditOutlined, DeleteOutlined, InboxOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
-import { getCourse, updateCourse as apiUpdateCourse, updateChapterProgress } from '@/api/course'
+import {
+  getCourse,
+  updateCourse as apiUpdateCourse,
+  updateChapterProgress,
+  getCourseNote,
+  saveCourseNote,
+} from '@/api/course'
+import { getInstructors } from '@/api/instructor'
 import { uploadFile } from '@/api/media'
-import { MOCK_COURSE_QA } from '@/mock/scores'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -264,13 +283,49 @@ const authStore = useAuthStore()
 const courseId = route.params.id
 
 // 本地可编辑副本
-const localCourse = ref({ title: '', chapters: [], fileType: 'video', description: '', instructor: '', duration: 0, studentCount: 0 })
+const localCourse = ref({
+  title: '',
+  chapters: [],
+  fileType: 'video',
+  description: '',
+  instructor: '',
+  instructorId: undefined,
+  duration: 0,
+  studentCount: 0,
+})
+const instructorOptions = ref([])
+
+async function fetchInstructors() {
+  try {
+    const res = await getInstructors({ size: -1 })
+    const items = res.items || []
+    instructorOptions.value = items.map(i => ({
+      value: i.id,
+      label: i.nickname || i.name || `教官#${i.id}`,
+    }))
+  } catch {
+    instructorOptions.value = []
+  }
+}
+
+async function fetchCourse() {
+  const data = await getCourse(courseId)
+  localCourse.value = {
+    ...data,
+    instructor: data.instructor || data.instructorName || '',
+    chapters: (data.chapters || []).map(ch => ({
+      ...ch,
+      progress: ch.progress || 0,
+      locked: false,
+    })),
+  }
+  recalcChapterLocks()
+}
 
 onMounted(async () => {
   try {
-    const data = await getCourse(courseId)
-    localCourse.value = { ...data, chapters: data.chapters || [] }
-  } catch (e) {
+    await Promise.all([fetchInstructors(), fetchCourse(), fetchNote()])
+  } catch {
     message.error('加载课程失败')
   }
 })
@@ -281,8 +336,16 @@ const isVideo = computed(() => (localCourse.value.fileType || 'video') === 'vide
 const currentChapterIdx = ref(0)
 const currentChapter = computed(() => localCourse.value.chapters[currentChapterIdx.value] || {})
 
-const selectChapter = (idx, ch) => {
+const selectChapter = async (idx, ch) => {
   if (ch.locked) return
+
+  const prev = currentChapter.value
+  if (prev?.id && isVideo.value && videoRef.value?.duration) {
+    const percent = Math.min(100, Math.round((videoRef.value.currentTime / videoRef.value.duration) * 100))
+    prev.progress = Math.max(prev.progress || 0, percent)
+    try { await updateChapterProgress(courseId, prev.id, percent) } catch { /* ignore */ }
+  }
+
   currentChapterIdx.value = idx
   videoError.value = false
   docLoading.value = true
@@ -302,6 +365,14 @@ const showPlayIcon = ref(false)
 
 const currentVideoUrl = computed(() => currentChapter.value.fileUrl || currentChapter.value.videoUrl || localCourse.value.videoUrl || '')
 const currentDocUrl = computed(() => currentChapter.value.fileUrl || currentChapter.value.docUrl || localCourse.value.docUrl || '')
+
+function recalcChapterLocks() {
+  if (!localCourse.value.chapters?.length) return
+  localCourse.value.chapters = localCourse.value.chapters.map((item, idx, arr) => {
+    if (idx === 0) return { ...item, locked: false }
+    return { ...item, locked: !((arr[idx - 1]?.progress || 0) >= 100) }
+  })
+}
 
 let playIconTimer = null
 const togglePlay = () => {
@@ -332,12 +403,35 @@ const onMetaLoaded = () => {
   videoError.value = false
 }
 
-const onTimeUpdate = () => {
+const onVideoEnded = async () => {
+  isPlaying.value = false
+  const ch = currentChapter.value
+  if (!ch?.id) return
+  try {
+    await updateChapterProgress(courseId, ch.id, 100)
+    ch.progress = 100
+    recalcChapterLocks()
+  } catch {
+    // ignore
+  }
+}
+
+let lastProgressAt = 0
+const onTimeUpdate = async () => {
   if (!videoRef.value) return
   const video = videoRef.value
   const total = video.duration || 0
   playProgress.value = total > 0 ? (video.currentTime / total) * 100 : 0
   currentTime.value = formatSeconds(video.currentTime)
+
+  const now = Date.now()
+  const ch = currentChapter.value
+  if (!ch?.id || total <= 0 || now - lastProgressAt < 5000) return
+
+  lastProgressAt = now
+  const percent = Math.min(100, Math.round((video.currentTime / total) * 100))
+  ch.progress = Math.max(ch.progress || 0, percent)
+  try { await updateChapterProgress(courseId, ch.id, percent) } catch { /* ignore */ }
 }
 
 const seekVideo = (e) => {
@@ -345,6 +439,20 @@ const seekVideo = (e) => {
   const rect = e.currentTarget.getBoundingClientRect()
   const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
   videoRef.value.currentTime = ratio * (videoRef.value.duration || 0)
+}
+
+const markDocProgress = async () => {
+  const ch = currentChapter.value
+  if (!ch?.id) return
+  const nextProgress = Math.max(ch.progress || 0, 100)
+  ch.progress = nextProgress
+  try {
+    await updateChapterProgress(courseId, ch.id, nextProgress)
+    recalcChapterLocks()
+    message.success('已标记本章完成')
+  } catch {
+    message.warning('进度保存失败，请稍后重试')
+  }
 }
 
 const enterFullscreen = () => {
@@ -373,8 +481,40 @@ const docLoadError = ref(false)
 // ─── 通用 ───
 const activeTab = ref('intro')
 const notesSaved = ref(false)
+const qaList = ref([])
 
-const mockQA = MOCK_COURSE_QA
+const noteContent = ref('')
+const noteSaving = ref(false)
+
+async function fetchNote() {
+  try {
+    const res = await getCourseNote(courseId)
+    noteContent.value = res?.content || ''
+  } catch {
+    const cacheKey = `course_note_${authStore.currentUser?.id || 'guest'}_${courseId}`
+    noteContent.value = localStorage.getItem(cacheKey) || ''
+  }
+}
+
+async function handleSaveNote() {
+  noteSaving.value = true
+  try {
+    const res = await saveCourseNote(courseId, noteContent.value || '')
+    noteContent.value = res?.content || ''
+    const cacheKey = `course_note_${authStore.currentUser?.id || 'guest'}_${courseId}`
+    localStorage.setItem(cacheKey, noteContent.value)
+    notesSaved.value = true
+    setTimeout(() => { notesSaved.value = false }, 2000)
+  } catch (e) {
+    const cacheKey = `course_note_${authStore.currentUser?.id || 'guest'}_${courseId}`
+    localStorage.setItem(cacheKey, noteContent.value)
+    notesSaved.value = true
+    setTimeout(() => { notesSaved.value = false }, 2000)
+    message.warning(e.message || '笔记已暂存到本地')
+  } finally {
+    noteSaving.value = false
+  }
+}
 
 // ─── 编辑弹窗 ───
 const editVisible = ref(false)
@@ -383,7 +523,7 @@ const editTab = ref('basic')
 const editForm = reactive({
   title: '',
   description: '',
-  instructor: '',
+  instructorId: undefined,
   difficulty: 3,
   tags: [],
   isRequired: false,
@@ -399,25 +539,28 @@ const openEdit = () => {
   const c = localCourse.value
   editForm.title = c.title
   editForm.description = c.description || ''
-  editForm.instructor = c.instructor || ''
+  editForm.instructorId = c.instructorId
   editForm.difficulty = c.difficulty || 3
   editForm.tags = [...(c.tags || [])]
   editForm.isRequired = !!c.isRequired
   editForm.chapters = (c.chapters || []).map(ch => ({
     title: ch.title,
     duration: ch.duration || 30,
+    fileId: ch.fileId || null,
     fileList: [],
-    // carry through existing media URLs
-    _videoUrl: ch.videoUrl,
-    _docUrl: ch.docUrl,
   }))
   editTab.value = 'basic'
   editVisible.value = true
 }
 
 const editSaving = ref(false)
+const editUploadPercent = ref(0)
+let lastEditSubmitAt = 0
 
 const saveEdit = async () => {
+  const now = Date.now()
+  if (editSaving.value || now - lastEditSubmitAt < 800) return
+  lastEditSubmitAt = now
   if (!editForm.title.trim()) return message.warning('课程名称不能为空')
   if (editForm.chapters.some(ch => !ch.title.trim())) return message.warning('章节名称不能为空')
 
@@ -425,16 +568,24 @@ const saveEdit = async () => {
   try {
     // 上传新文件并构建章节数据
     const newChapters = []
+    const uploadTargets = editForm.chapters.filter(ch => ch.fileList?.length > 0).length
+    let uploadedCount = 0
+    editUploadPercent.value = 0
+
     for (let idx = 0; idx < editForm.chapters.length; idx++) {
       const ch = editForm.chapters[idx]
       const existing = localCourse.value.chapters[idx] || {}
-      let fileId = existing.fileId || null
+      let fileId = ch.fileId || existing.fileId || null
 
       if (ch.fileList?.length > 0) {
         const rawFile = ch.fileList[0].originFileObj || ch.fileList[0]
         if (rawFile && rawFile.name) {
-          const fileRes = await uploadFile(rawFile)
+          const fileRes = await uploadFile(rawFile, (percent) => {
+            editUploadPercent.value = Math.round(((uploadedCount + percent / 100) / (uploadTargets || 1)) * 100)
+          })
           fileId = fileRes.id
+          uploadedCount += 1
+          editUploadPercent.value = Math.round((uploadedCount / (uploadTargets || 1)) * 100)
         }
       }
 
@@ -449,17 +600,17 @@ const saveEdit = async () => {
     const courseData = {
       title: editForm.title,
       description: editForm.description,
+      instructorId: editForm.instructorId,
       difficulty: editForm.difficulty,
       tags: editForm.tags,
       isRequired: editForm.isRequired,
-      duration: newChapters.reduce((s, c) => s + c.duration, 0),
+      duration: newChapters.reduce((s, c) => s + (Number(c.duration) || 0), 0),
+      chapters: newChapters,
     }
 
     await apiUpdateCourse(courseId, courseData)
 
-    // 重新加载课程数据
-    const data = await getCourse(courseId)
-    localCourse.value = { ...data, chapters: data.chapters || [] }
+    await Promise.all([fetchCourse(), fetchNote()])
 
     if (currentChapterIdx.value >= localCourse.value.chapters.length) {
       currentChapterIdx.value = 0
@@ -471,6 +622,7 @@ const saveEdit = async () => {
     message.error(e.message || '保存失败')
   } finally {
     editSaving.value = false
+    editUploadPercent.value = 0
   }
 }
 </script>

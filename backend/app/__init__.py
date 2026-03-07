@@ -101,11 +101,9 @@ def startup_event():
                 logger.warning("自动数据库迁移失败，继续启动应用")
         except Exception as e:
             logger.error(f"自动数据库迁移异常: {e}")
-            logger.warning("迁移失败，尝试使用传统初始化方式...")
-            init_db()
+            logger.warning("迁移失败，继续启动应用（不再执行 create_all，避免与 Alembic 冲突）")
     else:
-        logger.info("自动数据库迁移已禁用，使用传统初始化方式")
-        init_db()
+        logger.info("自动数据库迁移已禁用，跳过 create_all（请手动执行 Alembic 迁移）")
 
     # 测试Redis连接
     try:

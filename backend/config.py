@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     REDIS_DB: int = 0
 
     # MinIO配置
+    MINIO_PUBLIC_URL: str = "http://localhost:9000"
     MINIO_ENDPOINT: str = "localhost:9000"
     MINIO_ACCESS_KEY: str = "minioadmin"
     MINIO_SECRET_KEY: str = "minioadmin"

@@ -2,7 +2,7 @@
 文件管理路由
 """
 from fastapi import APIRouter, Depends, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -47,12 +47,17 @@ def get_file(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文件不存在")
 
     file_path = service.get_file_path(file_id)
-    if not file_path:
-        from fastapi import HTTPException, status
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文件已丢失")
+    if file_path:
+        return FileResponse(
+            path=str(file_path),
+            media_type=media.mime_type or "application/octet-stream",
+            filename=media.filename,
+        )
 
-    return FileResponse(
-        path=str(file_path),
-        media_type=media.mime_type or "application/octet-stream",
-        filename=media.filename,
-    )
+    # MinIO文件：兼容旧接口，302/307跳转到真实直链
+    direct_url = service.build_url(media)
+    if direct_url and not direct_url.endswith(f"/media/files/{file_id}"):
+        return RedirectResponse(url=direct_url, status_code=307)
+
+    from fastapi import HTTPException, status
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="文件已丢失")

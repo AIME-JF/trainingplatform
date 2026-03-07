@@ -8,7 +8,9 @@ from fastapi import HTTPException, status
 from app.services import CourseService
 from app.schemas import (
     CourseCreate, CourseUpdate, CourseResponse, CourseListResponse,
-    CourseProgressUpdate, CourseProgressResponse, PaginatedResponse
+    CourseProgressUpdate, CourseProgressResponse,
+    CourseNoteUpdate, CourseNoteResponse,
+    PaginatedResponse
 )
 from logger import logger
 
@@ -64,3 +66,17 @@ class CourseController:
         except Exception as e:
             logger.error(f"更新进度异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新进度失败")
+
+    def get_course_note(self, course_id: int, user_id: int) -> CourseNoteResponse:
+        try:
+            return self.service.get_course_note(course_id, user_id)
+        except Exception as e:
+            logger.error(f"获取课程笔记异常: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取课程笔记失败")
+
+    def update_course_note(self, course_id: int, user_id: int, data: CourseNoteUpdate) -> CourseNoteResponse:
+        try:
+            return self.service.update_course_note(course_id, user_id, data)
+        except Exception as e:
+            logger.error(f"更新课程笔记异常: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新课程笔记失败")

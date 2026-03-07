@@ -130,7 +130,7 @@ def init_db():
         from app.models import (
             User, Role, Permission, user_roles, role_permissions,
             Config, ConfigGroup,
-            Course, Chapter, CourseProgress,
+            Course, Chapter, CourseNote, CourseProgress,
             Training, TrainingCourse, Enrollment, CheckinRecord, ScheduleItem,
             Question, Exam, ExamQuestion, ExamRecord,
             Certificate, InstructorProfile, MediaFile

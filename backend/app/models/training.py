@@ -1,7 +1,7 @@
 """
 培训管理相关的数据库模型
 """
-from sqlalchemy import Column, Integer, String, DateTime, Date, ForeignKey, Text, Float, JSON, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, Date, ForeignKey, Text, Float, JSON, UniqueConstraint, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -42,6 +42,7 @@ class TrainingCourse(Base):
     instructor = Column(String(100), nullable=True, comment='授课教官')
     hours = Column(Float, default=0, comment='课时')
     type = Column(String(50), default='theory', comment='类型: theory/practice')
+    schedules = Column(JSON, nullable=True, comment='排课清单')
 
     # 关联关系
     training = relationship("Training", back_populates="courses")
@@ -77,6 +78,12 @@ class CheckinRecord(Base):
     date = Column(Date, nullable=False, comment='签到日期')
     time = Column(String(10), nullable=True, comment='签到时间 HH:MM')
     status = Column(String(20), default='on_time', comment='状态: on_time/late/absent')
+    session_key = Column(String(100), nullable=False, default='start', comment='签到场次标识')
+
+    __table_args__ = (
+        UniqueConstraint('training_id', 'user_id', 'date', 'session_key', name='uq_checkin_training_user_date_session'),
+        Index('ix_checkin_training_date_session', 'training_id', 'date', 'session_key'),
+    )
 
     # 关联关系
     training = relationship("Training", foreign_keys=[training_id])

@@ -10,7 +10,8 @@ from app.middleware.auth import get_current_user
 from app.schemas import (
     StandardResponse, TokenData, PaginatedResponse,
     CourseCreate, CourseUpdate, CourseResponse, CourseListResponse,
-    CourseProgressUpdate, CourseProgressResponse
+    CourseProgressUpdate, CourseProgressResponse,
+    CourseNoteUpdate, CourseNoteResponse
 )
 from app.controllers import CourseController
 
@@ -93,4 +94,29 @@ def update_chapter_progress(
     """更新章节学习进度"""
     controller = CourseController(db)
     result = controller.update_chapter_progress(course_id, chapter_id, current_user.user_id, data)
+    return StandardResponse(data=result)
+
+
+@router.get("/{course_id}/note", response_model=StandardResponse[CourseNoteResponse], summary="获取课程笔记")
+def get_course_note(
+    course_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取当前用户课程笔记"""
+    controller = CourseController(db)
+    result = controller.get_course_note(course_id, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.put("/{course_id}/note", response_model=StandardResponse[CourseNoteResponse], summary="保存课程笔记")
+def update_course_note(
+    course_id: int,
+    data: CourseNoteUpdate,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """保存当前用户课程笔记"""
+    controller = CourseController(db)
+    result = controller.update_course_note(course_id, current_user.user_id, data)
     return StandardResponse(data=result)

@@ -4,13 +4,14 @@
 from typing import Optional, List
 from datetime import datetime
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import or_, cast, String
 
-from app.models import Course, Chapter, CourseProgress, User
+from app.models import Course, Chapter, CourseNote, CourseProgress, User
 from app.models.media import MediaFile
 from app.schemas.course import (
     CourseCreate, CourseUpdate, CourseResponse, CourseListResponse,
-    ChapterResponse, CourseProgressUpdate, CourseProgressResponse
+    ChapterResponse, CourseProgressUpdate, CourseProgressResponse,
+    CourseNoteUpdate, CourseNoteResponse
 )
 from app.schemas import PaginatedResponse
 from config import settings
@@ -35,7 +36,14 @@ class CourseService:
         query = self.db.query(Course).options(joinedload(Course.instructor))
 
         if search:
-            query = query.filter(Course.title.contains(search))
+            query = query.outerjoin(Course.chapters).filter(
+                or_(
+                    Course.title.contains(search),
+                    Course.description.contains(search),
+                    Chapter.title.contains(search),
+                    cast(Course.tags, String).contains(search)
+                )
+            ).distinct()
         if category:
             query = query.filter(Course.category == category)
 
@@ -49,7 +57,7 @@ class CourseService:
         else:
             query = query.order_by(Course.created_at.desc())
 
-        total = query.count()
+        total = query.order_by(None).count()
 
         if size == -1:
             courses = query.all()
@@ -118,16 +126,41 @@ class CourseService:
 
     def update_course(self, course_id: int, data: CourseUpdate) -> Optional[CourseResponse]:
         """更新课程"""
-        course = self.db.query(Course).filter(Course.id == course_id).first()
+        course = self.db.query(Course).options(joinedload(Course.chapters)).filter(Course.id == course_id).first()
         if not course:
             return None
 
         update_data = data.model_dump(exclude_unset=True)
+        chapters_data = update_data.pop('chapters', None)
+
         for field, value in update_data.items():
             setattr(course, field, value)
 
+        if chapters_data is not None:
+            normalized = []
+            for idx, ch in enumerate(chapters_data):
+                chapter_dict = ch.model_dump() if hasattr(ch, 'model_dump') else dict(ch)
+                chapter_dict['sort_order'] = chapter_dict.get('sort_order', idx)
+                normalized.append(chapter_dict)
+
+            self.db.query(Chapter).filter(Chapter.course_id == course.id).delete()
+            for ch in normalized:
+                chapter = Chapter(
+                    course_id=course.id,
+                    title=ch.get('title'),
+                    sort_order=ch.get('sort_order', 0),
+                    duration=ch.get('duration', 0),
+                    video_url=ch.get('video_url'),
+                    doc_url=ch.get('doc_url'),
+                    file_id=ch.get('file_id')
+                )
+                self.db.add(chapter)
+
         self.db.commit()
-        self.db.refresh(course)
+        course = self.db.query(Course).options(
+            joinedload(Course.instructor),
+            joinedload(Course.chapters)
+        ).filter(Course.id == course_id).first()
         logger.info(f"更新课程: {course.title}")
         return self._to_response(course)
 
@@ -163,11 +196,61 @@ class CourseService:
         self.db.refresh(record)
         return CourseProgressResponse.model_validate(record)
 
+    def get_course_note(self, course_id: int, user_id: int) -> CourseNoteResponse:
+        """获取课程笔记"""
+        note = self.db.query(CourseNote).filter(
+            CourseNote.course_id == course_id,
+            CourseNote.user_id == user_id
+        ).first()
+
+        if not note:
+            return CourseNoteResponse(
+                id=0,
+                user_id=user_id,
+                course_id=course_id,
+                content='',
+                created_at=None,
+                updated_at=None
+            )
+        return CourseNoteResponse.model_validate(note)
+
+    def update_course_note(self, course_id: int, user_id: int, data: CourseNoteUpdate) -> CourseNoteResponse:
+        """更新课程笔记"""
+        note = self.db.query(CourseNote).filter(
+            CourseNote.course_id == course_id,
+            CourseNote.user_id == user_id
+        ).first()
+
+        if not note:
+            note = CourseNote(
+                user_id=user_id,
+                course_id=course_id,
+                content=data.content or ''
+            )
+            self.db.add(note)
+        else:
+            note.content = data.content or ''
+            note.updated_at = datetime.now()
+
+        self.db.commit()
+        self.db.refresh(note)
+        return CourseNoteResponse.model_validate(note)
+
     def _chapter_to_response(self, ch: Chapter) -> ChapterResponse:
         """转换章节为响应，填充 file_url"""
         file_url = None
         if ch.file_id:
-            file_url = f"{settings.API_V1_STR}/media/files/{ch.file_id}"
+            media = self.db.query(MediaFile).filter(MediaFile.id == ch.file_id).first()
+            if media and media.storage_path:
+                base = (settings.MINIO_PUBLIC_URL or "").rstrip("/")
+                bucket = (settings.MINIO_BUCKET or "").strip("/")
+                path = media.storage_path.lstrip("/")
+                if base and bucket and path:
+                    file_url = f"{base}/{bucket}/{path}"
+                else:
+                    file_url = f"{settings.API_V1_STR}/media/files/{ch.file_id}"
+            else:
+                file_url = f"{settings.API_V1_STR}/media/files/{ch.file_id}"
         resp = ChapterResponse(
             id=ch.id, course_id=ch.course_id, title=ch.title,
             sort_order=ch.sort_order, duration=ch.duration,

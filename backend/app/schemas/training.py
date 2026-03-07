@@ -1,12 +1,19 @@
 """
 培训管理相关的数据验证模型
 """
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Dict
 from datetime import datetime, date as DateType
 from pydantic import BaseModel, Field, ConfigDict
 
 
 # ========== TrainingCourse ==========
+
+class TrainingScheduleItem(BaseModel):
+    """课程排课条目"""
+    date: DateType
+    time_range: str
+    hours: Optional[float] = 0
+
 
 class TrainingCourseCreate(BaseModel):
     """创建培训课程安排"""
@@ -14,6 +21,7 @@ class TrainingCourseCreate(BaseModel):
     instructor: Optional[str] = Field(None, description="授课教官")
     hours: float = Field(0, description="课时")
     type: str = Field("theory", description="类型: theory/practice")
+    schedules: Optional[List[TrainingScheduleItem]] = None
 
 
 class TrainingCourseResponse(BaseModel):
@@ -24,6 +32,7 @@ class TrainingCourseResponse(BaseModel):
     instructor: Optional[str] = None
     hours: float = 0
     type: str = "theory"
+    schedules: List[TrainingScheduleItem] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -57,6 +66,8 @@ class TrainingUpdate(BaseModel):
     capacity: Optional[int] = None
     description: Optional[str] = None
     subjects: Optional[List[str]] = None
+    courses: Optional[List[TrainingCourseCreate]] = None
+    student_ids: Optional[List[int]] = None
 
 
 class TrainingResponse(BaseModel):
@@ -65,6 +76,7 @@ class TrainingResponse(BaseModel):
     name: str
     type: str
     status: str = "upcoming"
+    progress_percent: int = 0
     start_date: Optional[DateType] = None
     end_date: Optional[DateType] = None
     location: Optional[str] = None
@@ -72,6 +84,7 @@ class TrainingResponse(BaseModel):
     instructor_name: Optional[str] = None
     capacity: int = 0
     enrolled_count: Optional[int] = 0
+    student_ids: List[int] = []
     description: Optional[str] = None
     subjects: Optional[List[str]] = None
     courses: List[TrainingCourseResponse] = []
@@ -87,6 +100,7 @@ class TrainingListResponse(BaseModel):
     name: str
     type: str
     status: str = "upcoming"
+    progress_percent: int = 0
     start_date: Optional[DateType] = None
     end_date: Optional[DateType] = None
     location: Optional[str] = None
@@ -94,6 +108,7 @@ class TrainingListResponse(BaseModel):
     instructor_name: Optional[str] = None
     capacity: int = 0
     enrolled_count: Optional[int] = 0
+    student_ids: List[int] = []
     description: Optional[str] = None
     subjects: Optional[List[str]] = None
     created_at: Optional[datetime] = None
@@ -130,6 +145,8 @@ class CheckinCreate(BaseModel):
     """签到"""
     date: Optional[DateType] = None
     time: Optional[str] = Field(None, description="签到时间 HH:MM")
+    session_key: str = Field("start", description="签到场次")
+    user_id: Optional[int] = None
 
 
 class CheckinResponse(BaseModel):
@@ -142,6 +159,7 @@ class CheckinResponse(BaseModel):
     date: Optional[DateType] = None
     time: Optional[str] = None
     status: str = "on_time"
+    session_key: str = "start"
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -151,7 +169,7 @@ class CheckinResponse(BaseModel):
 class ScheduleItemCreate(BaseModel):
     """创建计划条目"""
     week_start: Optional[DateType] = None
-    day: Optional[int] = Field(None, ge=1, le=5)
+    day: Optional[int] = Field(None, ge=1, le=7)
     date: Optional[DateType] = None
     time_start: Optional[str] = None
     time_end: Optional[str] = None
