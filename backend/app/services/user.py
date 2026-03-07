@@ -52,6 +52,16 @@ class UserService:
             avatar=user_data.avatar,
             join_date=user_data.join_date,
             level=user_data.level,
+            instructor_title=user_data.instructor_title,
+            instructor_level=user_data.instructor_level,
+            instructor_specialties=user_data.instructor_specialties,
+            instructor_qualification=user_data.instructor_qualification,
+            instructor_certificates=user_data.instructor_certificates,
+            instructor_intro=user_data.instructor_intro,
+            instructor_rating=user_data.instructor_rating if user_data.instructor_rating is not None else 0,
+            instructor_course_count=user_data.instructor_course_count if user_data.instructor_course_count is not None else 0,
+            instructor_student_count=user_data.instructor_student_count if user_data.instructor_student_count is not None else 0,
+            instructor_review_count=user_data.instructor_review_count if user_data.instructor_review_count is not None else 0,
         )
 
         if user_data.role_ids:

@@ -1,7 +1,7 @@
 """
 用户权限管理相关的数据验证模型
 """
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from datetime import datetime, date
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -37,6 +37,18 @@ class UserCreate(BaseModel):
     avatar: Optional[str] = Field(None, description="头像URL")
     join_date: Optional[date] = Field(None, description="入警日期")
     level: Optional[str] = Field(None, description="学员等级")
+
+    instructor_title: Optional[str] = Field(None, max_length=50, description="教官职称")
+    instructor_level: Optional[str] = Field(None, max_length=20, description="教官等级")
+    instructor_specialties: Optional[List[str]] = Field(None, description="教官专长")
+    instructor_qualification: Optional[List[str]] = Field(None, description="教官资质")
+    instructor_certificates: Optional[List[Dict[str, Any]]] = Field(None, description="教官证书列表")
+    instructor_intro: Optional[str] = Field(None, description="教官简介")
+    instructor_rating: Optional[float] = Field(None, description="教官评分")
+    instructor_course_count: Optional[int] = Field(None, description="教官课程数")
+    instructor_student_count: Optional[int] = Field(None, description="教官学员数")
+    instructor_review_count: Optional[int] = Field(None, description="教官评价数")
+
     role_ids: Optional[List[int]] = Field([], description="角色ID列表")
     department_ids: Optional[List[int]] = Field([], description="部门ID列表")
     police_type_ids: Optional[List[int]] = Field([], description="警种ID列表")
@@ -53,6 +65,17 @@ class UserUpdate(BaseModel):
     avatar: Optional[str] = Field(None, description="头像URL")
     join_date: Optional[date] = Field(None, description="入警日期")
     level: Optional[str] = Field(None, description="学员等级")
+
+    instructor_title: Optional[str] = Field(None, max_length=50, description="教官职称")
+    instructor_level: Optional[str] = Field(None, max_length=20, description="教官等级")
+    instructor_specialties: Optional[List[str]] = Field(None, description="教官专长")
+    instructor_qualification: Optional[List[str]] = Field(None, description="教官资质")
+    instructor_certificates: Optional[List[Dict[str, Any]]] = Field(None, description="教官证书列表")
+    instructor_intro: Optional[str] = Field(None, description="教官简介")
+    instructor_rating: Optional[float] = Field(None, description="教官评分")
+    instructor_course_count: Optional[int] = Field(None, description="教官课程数")
+    instructor_student_count: Optional[int] = Field(None, description="教官学员数")
+    instructor_review_count: Optional[int] = Field(None, description="教官评价数")
 
 
 class UserRoleUpdate(BaseModel):
@@ -92,6 +115,18 @@ class UserSimpleResponse(BaseModel):
     study_hours: float = 0
     exam_count: int = 0
     avg_score: float = 0
+
+    instructor_title: Optional[str] = None
+    instructor_level: Optional[str] = None
+    instructor_specialties: Optional[List[str]] = None
+    instructor_qualification: Optional[List[str]] = None
+    instructor_certificates: Optional[List[Dict[str, Any]]] = None
+    instructor_intro: Optional[str] = None
+    instructor_rating: float = 0
+    instructor_course_count: int = 0
+    instructor_student_count: int = 0
+    instructor_review_count: int = 0
+
     created_at: datetime
     updated_at: Optional[datetime] = None
     roles: List[RoleSimpleResponse] = []
@@ -117,6 +152,18 @@ class UserResponse(BaseModel):
     study_hours: float = 0
     exam_count: int = 0
     avg_score: float = 0
+
+    instructor_title: Optional[str] = None
+    instructor_level: Optional[str] = None
+    instructor_specialties: Optional[List[str]] = None
+    instructor_qualification: Optional[List[str]] = None
+    instructor_certificates: Optional[List[Dict[str, Any]]] = None
+    instructor_intro: Optional[str] = None
+    instructor_rating: float = 0
+    instructor_course_count: int = 0
+    instructor_student_count: int = 0
+    instructor_review_count: int = 0
+
     created_at: datetime
     updated_at: Optional[datetime] = None
     roles: List[RoleResponse] = []

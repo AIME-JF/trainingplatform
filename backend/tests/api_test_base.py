@@ -40,7 +40,6 @@ class APITestRunner:
             "course_id": None,
             "chapter_id": None,
             "certificate_id": None,
-            "instructor_profile_id": None,
         }
 
     def pass_case(self, name: str, detail: str = ""):

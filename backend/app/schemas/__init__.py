@@ -50,8 +50,6 @@ from .exam import (
 )
 # 证书相关
 from .certificate import CertificateCreate, CertificateResponse
-# 教官相关
-from .instructor import InstructorProfileCreate, InstructorProfileUpdate, InstructorResponse
 # 个人中心
 from .profile import ProfileUpdate, ProfileResponse, StudyStatsResponse, ExamHistoryResponse
 # 工作台
@@ -110,8 +108,6 @@ __all__ = [
     "ExamSubmit", "ExamRecordResponse",
     # 证书相关
     "CertificateCreate", "CertificateResponse",
-    # 教官相关
-    "InstructorProfileCreate", "InstructorProfileUpdate", "InstructorResponse",
     # 个人中心
     "ProfileUpdate", "ProfileResponse", "StudyStatsResponse", "ExamHistoryResponse",
     # 工作台

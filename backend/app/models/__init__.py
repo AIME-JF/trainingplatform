@@ -11,7 +11,6 @@ from .course import Course, Chapter, CourseNote, CourseProgress
 from .training import Training, TrainingCourse, Enrollment, CheckinRecord, ScheduleItem
 from .exam import Question, Exam, ExamQuestion, ExamRecord
 from .certificate import Certificate
-from .instructor import InstructorProfile
 from .media import MediaFile
 from .notice import Notice
 
@@ -38,8 +37,6 @@ __all__ = [
     "Question", "Exam", "ExamQuestion", "ExamRecord",
     # 证书
     "Certificate",
-    # 教官
-    "InstructorProfile",
     # 文件
     "MediaFile",
     # 公告

@@ -12,7 +12,7 @@
 - 课程与学习进度管理
 - 题库与考试管理（出卷、交卷、成绩）
 - 培训班管理（报名、审批、签到、二维码）
-- 教官档案与证书管理
+- 教官信息（基于用户角色）与证书管理
 - 个人中心、数据看板、人才库
 - AI 能力（智能组卷、教案生成）
 
@@ -89,7 +89,7 @@ backend/
 │   ├── test_api_integration.py     # 集成测试（覆盖 12 业务域）
 │   └── ...
 ├── config.py                       # 项目配置
-├── init_data.py                    # 初始权限/角色/用户/教官档案
+├── init_data.py                    # 初始权限/角色/用户（含教官扩展字段）
 ├── migrate.py                      # 迁移管理脚本
 └── main.py                         # 启动入口
 ```
@@ -105,7 +105,7 @@ backend/
   - 课程：`Course`, `Chapter`, `CourseProgress`
   - 培训：`Training`, `TrainingCourse`, `Enrollment`, `CheckinRecord`, `ScheduleItem`
   - 考试：`Question`, `Exam`, `ExamQuestion`, `ExamRecord`
-  - 教官/证书：`InstructorProfile`, `Certificate`
+  - 证书：`Certificate`（教官扩展信息已并入 `User`）
 
 ### Schemas (`app/schemas`)
 
@@ -117,7 +117,7 @@ backend/
 
 封装业务逻辑与数据库操作，例如：
 - `CourseService`, `QuestionService`, `ExamService`, `TrainingService`
-- `InstructorService`, `CertificateService`, `ProfileService`
+- `CertificateService`, `ProfileService`
 - `DashboardService`, `ReportService`, `TalentService`, `AIService`
 
 ### Controllers (`app/controllers`)
@@ -180,7 +180,7 @@ python main.py
 
 ## 8. 初始化数据（`init_data.py`）
 
-首次初始化会创建权限、部门、角色、用户与教官档案。
+首次初始化会创建权限、部门、角色、用户（含教官扩展字段）。
 
 ### 默认账号
 
@@ -253,11 +253,23 @@ python main.py
 - `POST /trainings/{training_id}/checkin` 签到
 - `GET /trainings/{training_id}/checkin/qr` 生成签到二维码
 
-### 9.7 教官管理（`/instructors`）
+### 9.7 教官信息（通过用户接口）
 
-- `GET /instructors` 教官列表
-- `GET /instructors/{instructor_id}` 教官详情
-- `POST /instructors` 新增教官档案
+- `GET /users?role=instructor` 教官用户列表
+- `GET /users/{user_id}` 教官用户详情
+- `POST /users` / `PUT /users/{user_id}` 支持教官扩展字段：
+  - `instructor_title`
+  - `instructor_level`
+  - `instructor_specialties`
+  - `instructor_qualification`
+  - `instructor_certificates`
+  - `instructor_intro`
+  - `instructor_rating`
+  - `instructor_course_count`
+  - `instructor_student_count`
+  - `instructor_review_count`
+
+> `/instructors` 专用接口已下线。
 
 ### 9.8 证书管理（`/certificates`）
 

@@ -159,13 +159,15 @@ onMounted(async () => {
       ...data,
       id: data.id,
       name: data.nickname || data.username,
-      title: data.level || '教官',
+      title: data.instructorTitle || data.level || '教官',
       unit: (data.departments && data.departments.length > 0) ? data.departments[0].name : '未分配',
       policeId: data.policeId,
       phone: data.phone,
       joinDate: data.joinDate,
-      level: data.level || '',
-      specialties: (data.policeTypes || []).map((p) => p.name).filter(Boolean),
+      level: data.instructorLevel || data.level || '',
+      specialties: (data.instructorSpecialties && data.instructorSpecialties.length > 0)
+        ? data.instructorSpecialties
+        : (data.policeTypes || []).map((p) => p.name).filter(Boolean),
       examCount: data.examCount || 0,
       studyHours: data.studyHours || 0,
       avgScore: data.avgScore || 0,

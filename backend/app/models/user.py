@@ -1,7 +1,7 @@
 """
 用户权限管理相关的数据库模型
 """
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Text, Table, Date, Float
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Text, Table, Date, Float, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -34,6 +34,18 @@ class User(Base):
     exam_count = Column(Integer, default=0, comment='考试次数')
     avg_score = Column(Float, default=0, comment='平均分')
 
+    # 教官扩展字段（原 instructor_profiles）
+    instructor_title = Column(String(50), nullable=True, comment='教官职称')
+    instructor_level = Column(String(20), nullable=True, comment='教官等级')
+    instructor_specialties = Column(JSON, nullable=True, comment='教官专长数组')
+    instructor_qualification = Column(JSON, nullable=True, comment='教官资质数组')
+    instructor_certificates = Column(JSON, nullable=True, comment='教官证书列表')
+    instructor_intro = Column(Text, nullable=True, comment='教官简介')
+    instructor_rating = Column(Float, default=0, comment='教官评分')
+    instructor_course_count = Column(Integer, default=0, comment='教官课程数')
+    instructor_student_count = Column(Integer, default=0, comment='教官学员数')
+    instructor_review_count = Column(Integer, default=0, comment='教官评价数')
+
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment='创建时间')
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), comment='更新时间')
 
@@ -41,4 +53,3 @@ class User(Base):
     roles = relationship("Role", secondary=user_roles, back_populates="users")
     departments = relationship("Department", secondary=user_departments, back_populates="users")
     police_types = relationship("PoliceType", secondary=user_police_types, back_populates="users")
-    instructor_profile = relationship("InstructorProfile", back_populates="user", uselist=False)

@@ -503,37 +503,42 @@ Authorization: Bearer <access_token>
 
 ---
 
-## 9. 教官模块（`/api/v1/instructors`）
+## 9. 教官信息（通过用户接口）
 
-### 9.1 教官列表
+> 教官专用接口 `/api/v1/instructors*` 已下线，请改用用户接口按角色筛选。
 
-- **Method**: `GET`
-- **URL**: `/api/v1/instructors`
-- **Auth**: 是
-- **参数（Query）**: `page`, `size`, `search`, `specialty`
-
-### 9.2 教官详情
+### 9.1 教官用户列表
 
 - **Method**: `GET`
-- **URL**: `/api/v1/instructors/{instructor_id}`
+- **URL**: `/api/v1/users?role=instructor`
+- **Auth**: 是
+- **参数（Query）**: `page`, `size`, `search`, `role`
+
+### 9.2 教官用户详情
+
+- **Method**: `GET`
+- **URL**: `/api/v1/users/{user_id}`
 - **Auth**: 是
 
-### 9.3 新增教官
+### 9.3 创建/更新教官信息
 
-- **Method**: `POST`
-- **URL**: `/api/v1/instructors`
+- **Method**: `POST` / `PUT`
+- **URL**: `/api/v1/users` / `/api/v1/users/{user_id}`
 - **Auth**: 是
-- **Body(JSON)**:
+- **教官扩展字段（请求/响应）**:
 
-| 字段 | 类型 | 必填 | 说明 |
-|---|---|---:|---|
-| user_id | int | 是 | 用户ID |
-| title | string | 否 | 教官职称 |
-| level | string | 否 | expert/senior/standard |
-| specialties | string[] | 否 | 专长 |
-| qualification | string[] | 否 | 资质 |
-| certificates | object[] | 否 | 证书列表 |
-| intro | string | 否 | 简介 |
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| instructor_title | string | 教官职称 |
+| instructor_level | string | 教官等级 |
+| instructor_specialties | string[] | 教官专长 |
+| instructor_qualification | string[] | 教官资质 |
+| instructor_certificates | object[] | 教官证书列表 |
+| instructor_intro | string | 教官简介 |
+| instructor_rating | float | 教官评分 |
+| instructor_course_count | int | 教官课程数 |
+| instructor_student_count | int | 教官学员数 |
+| instructor_review_count | int | 教官评价数 |
 
 ---
 
@@ -707,6 +712,7 @@ Authorization: Bearer <access_token>
 | police_id / unit / police_type | 警务属性 |
 | avatar / join_date / level | 个人资料 |
 | study_hours / exam_count / avg_score | 学习统计 |
+| instructor_* | 教官扩展信息（职称、等级、专长、资质、证书、简介、评分与统计） |
 | roles | 角色列表 |
 | departments | 部门列表 |
 

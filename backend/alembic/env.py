@@ -31,7 +31,7 @@ if config.config_file_name is not None:
 # 导入所有模型以确保它们被注册到metadata中
 from app.models import (
     user, role, permission, department, police_type, system,
-    course, training, exam, certificate, instructor, media
+    course, training, exam, certificate, media, notice
 )
 target_metadata = Base.metadata
 

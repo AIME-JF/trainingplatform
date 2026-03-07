@@ -10,31 +10,19 @@ from api_test_base import APITestRunner, TestFailure
 
 
 def case_instructor_endpoints(runner: APITestRunner):
-    il = runner._request("GET", "/instructors?page=1&size=10", role="admin", expected_code=200)
-    total = (il.get("data") or {}).get("total")
+    il = runner._request("GET", "/users?page=1&size=10&role=instructor", role="admin", expected_code=200)
+    data = il.get("data") or {}
+    total = data.get("total")
     if total is None:
-        raise TestFailure("教官列表无total")
+        raise TestFailure("教官用户列表无total")
 
-    items = (il.get("data") or {}).get("items") or []
+    items = data.get("items") or []
     if items:
         iid = items[0].get("id")
         if iid:
-            d = runner._request("GET", f"/instructors/{iid}", role="admin", expected_code=200)
+            d = runner._request("GET", f"/users/{iid}", role="admin", expected_code=200)
             if (d.get("data") or {}).get("id") != iid:
-                raise TestFailure("教官详情不匹配")
-
-    instructor_user_id = (runner.users.get("instructor") or {}).get("id")
-    if instructor_user_id:
-        dup_payload = {
-            "user_id": instructor_user_id,
-            "title": "中级教官",
-            "level": "senior",
-            "specialties": ["测试"],
-        }
-        res = runner._request("POST", "/instructors", role="admin", json=dup_payload, expected_code=400)
-        if res.get("code") != 400:
-            raise TestFailure("教官重复创建返回非400")
-
+                raise TestFailure("教官用户详情不匹配")
 
 def case_certificate_flow(runner: APITestRunner):
     student_user_id = (runner.users.get("student") or {}).get("id")
@@ -63,6 +51,6 @@ def case_certificate_flow(runner: APITestRunner):
 
 def get_cases(runner: APITestRunner):
     return [
-        ("教官接口", lambda: case_instructor_endpoints(runner)),
+        ("教官用户接口", lambda: case_instructor_endpoints(runner)),
         ("证书流程", lambda: case_certificate_flow(runner)),
     ]

@@ -6,7 +6,6 @@ from sqlalchemy.orm import Session
 from app.database import engine, init_db
 from app.models import User, Role, Permission, Department, PoliceType, user_roles, role_permissions
 from app.models.system import Config, ConfigGroup, ConfigFormat, SystemMeta
-from app.models import InstructorProfile
 from app.services.auth import auth_service
 from logger import logger
 
@@ -103,11 +102,6 @@ def init_permissions():
                 {"path": "/api/v1/trainings/{id}/checkin/records", "code": "GET_CHECKIN_RECORDS", "description": "获取签到记录"},
                 {"path": "/api/v1/trainings/{id}/checkin", "code": "CHECKIN", "description": "签到"},
                 {"path": "/api/v1/trainings/{id}/checkin/qr", "code": "GET_CHECKIN_QR", "description": "生成签到二维码"},
-
-                # 教官管理
-                {"path": "/api/v1/instructors", "code": "GET_INSTRUCTORS", "description": "获取教官列表"},
-                {"path": "/api/v1/instructors/{id}", "code": "GET_INSTRUCTOR_DETAIL", "description": "获取教官详情"},
-                {"path": "/api/v1/instructors/create", "code": "CREATE_INSTRUCTOR", "description": "新增教官"},
 
                 # 证书管理
                 {"path": "/api/v1/certificates", "code": "GET_CERTIFICATES", "description": "获取证书列表"},
@@ -258,7 +252,6 @@ def init_roles():
                 "GET_TRAINING_STUDENTS", "GET_TRAINING_SCHEDULE",
                 "GET_ENROLLMENTS", "APPROVE_ENROLLMENT", "REJECT_ENROLLMENT",
                 "GET_CHECKIN_RECORDS", "GET_CHECKIN_QR",
-                "GET_INSTRUCTORS", "GET_INSTRUCTOR_DETAIL",
                 "GET_CERTIFICATES", "CREATE_CERTIFICATE",
                 "GET_PROFILE", "UPDATE_PROFILE", "GET_STUDY_STATS", "GET_EXAM_HISTORY",
                 "AI_GENERATE_QUESTIONS", "AI_GENERATE_LESSON_PLAN",
@@ -347,6 +340,19 @@ def init_users():
                 phone="13800000002",
                 police_id="GX-INS-001",
                 join_date=date(2010, 7, 1),
+                instructor_title="高级教官",
+                instructor_level="expert",
+                instructor_specialties=["刑事侦查", "反诈骗", "网络安全"],
+                instructor_qualification=["公安部认证教官", "广西优秀教官"],
+                instructor_certificates=[
+                    {"name": "公安部高级教官证书", "issuer": "公安部", "year": 2020},
+                    {"name": "广西优秀教官", "issuer": "广西公安厅", "year": 2022}
+                ],
+                instructor_intro="从事公安教育训练工作15年，主讲刑事侦查和反诈骗课程。",
+                instructor_rating=4.8,
+                instructor_course_count=12,
+                instructor_student_count=560,
+                instructor_review_count=230,
                 is_active=True
             )
             instructor_user.roles = [instructor_role]
@@ -354,26 +360,6 @@ def init_users():
             if pt_criminal:
                 instructor_user.police_types = [pt_criminal]
             db.add(instructor_user)
-            db.flush()
-
-            # 创建教官档案
-            instructor_profile = InstructorProfile(
-                user_id=instructor_user.id,
-                title="高级教官",
-                level="expert",
-                specialties=["刑事侦查", "反诈骗", "网络安全"],
-                qualification=["公安部认证教官", "广西优秀教官"],
-                certificates=[
-                    {"name": "公安部高级教官证书", "issuer": "公安部", "year": 2020},
-                    {"name": "广西优秀教官", "issuer": "广西公安厅", "year": 2022}
-                ],
-                intro="从事公安教育训练工作15年，主讲刑事侦查和反诈骗课程。",
-                rating=4.8,
-                course_count=12,
-                student_count=560,
-                review_count=230
-            )
-            db.add(instructor_profile)
 
             # 学员
             student_user = User(

@@ -110,12 +110,14 @@ async function loadInstructors() {
       id: u.id,
       userId: u.id,
       name: u.nickname || u.username,
-      title: u.level || '教官',
+      title: u.instructorTitle || u.level || '教官',
       unit: (u.departments && u.departments.length > 0) ? u.departments[0].name : '未分配',
-      specialties: (u.policeTypes || []).map((p) => p.name).filter(Boolean),
+      specialties: (u.instructorSpecialties && u.instructorSpecialties.length > 0)
+        ? u.instructorSpecialties
+        : (u.policeTypes || []).map((p) => p.name).filter(Boolean),
       avatarColor: getAvatarColor(u.id),
-      levelClass: getLevelClass(u.level),
-      levelLabel: getLevelLabel(u.level),
+      levelClass: getLevelClass(u.instructorLevel || u.level),
+      levelLabel: getLevelLabel(u.instructorLevel || u.level),
     }))
   } catch {
     instructorList.value = []

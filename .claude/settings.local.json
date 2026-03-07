@@ -6,7 +6,9 @@
       "Bash(npm install:*)",
       "Bash(npm run:*)",
       "Bash(git:*)",
-      "Bash(alembic:*)"
+      "Bash(alembic:*)",
+      "Bash(grep:*)",
+      "WebSearch"
     ]
   }
 }

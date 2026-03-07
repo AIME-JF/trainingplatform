@@ -92,6 +92,16 @@ def create_user(
         avatar=data.avatar,
         join_date=data.join_date,
         level=data.level,
+        instructor_title=data.instructor_title,
+        instructor_level=data.instructor_level,
+        instructor_specialties=data.instructor_specialties,
+        instructor_qualification=data.instructor_qualification,
+        instructor_certificates=data.instructor_certificates,
+        instructor_intro=data.instructor_intro,
+        instructor_rating=data.instructor_rating if data.instructor_rating is not None else 0,
+        instructor_course_count=data.instructor_course_count if data.instructor_course_count is not None else 0,
+        instructor_student_count=data.instructor_student_count if data.instructor_student_count is not None else 0,
+        instructor_review_count=data.instructor_review_count if data.instructor_review_count is not None else 0,
         is_active=True,
     )
 
