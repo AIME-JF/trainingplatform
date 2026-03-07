@@ -2,154 +2,152 @@
   <div class="instructor-list-page">
     <div class="page-header">
       <h2>教官库</h2>
-      <a-button type="primary" v-if="authStore.isAdmin" @click="addVisible = true">
-        <template #icon><PlusOutlined /></template>添加教官
-      </a-button>
     </div>
 
-    <!-- 添加教官弹窗 -->
-    <a-modal v-model:open="addVisible" title="添加教官" @ok="handleAdd" okText="添加" cancelText="取消" :width="520">
-      <a-form :label-col="{ span: 5 }" style="margin-top:16px">
-        <a-form-item label="姓名"><a-input v-model:value="addForm.name" placeholder="请输入教官姓名" /></a-form-item>
-        <a-form-item label="职级">
-          <a-select v-model:value="addForm.title" placeholder="选择职级">
-            <a-select-option value="高级教官">高级教官</a-select-option>
-            <a-select-option value="中级教官">中级教官</a-select-option>
-            <a-select-option value="初级教官">初级教官</a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item label="单位"><a-input v-model:value="addForm.unit" placeholder="所属单位" /></a-form-item>
-        <a-form-item label="专业方向"><a-select v-model:value="addForm.specialties" mode="tags" placeholder="输入后回车添加" /></a-form-item>
-      </a-form>
-    </a-modal>
-
-    <a-card :bordered="false" style="margin-bottom:16px">
+    <a-card :bordered="false" style="margin-bottom: 16px">
       <a-row :gutter="16">
         <a-col :span="8">
-          <a-input-search v-model:value="searchText" placeholder="搜索教官姓名、专业领域..." allow-clear />
+          <a-input-search v-model:value="searchText" placeholder="搜索教官姓名/用户名..." allow-clear @search="loadInstructors" />
         </a-col>
         <a-col :span="16">
           <div class="specialty-filter">
-            <span style="color:#888;white-space:nowrap">专业方向：</span>
+            <span style="color: #888; white-space: nowrap">警种：</span>
             <div class="specialty-tags">
-              <a-tag v-for="s in specialtiesList" :key="s" :color="filterSpecialty === s ? 'blue' : 'default'" class="filter-tag" @click="filterSpecialty = s">{{ s }}</a-tag>
+              <a-tag
+                v-for="s in specialtiesList"
+                :key="s"
+                :color="filterSpecialty === s ? 'blue' : 'default'"
+                class="filter-tag"
+                @click="filterSpecialty = s"
+              >
+                {{ s }}
+              </a-tag>
             </div>
           </div>
         </a-col>
       </a-row>
     </a-card>
 
-    <div class="instructor-grid">
-      <div v-for="inst in filteredInstructors" :key="inst.id" class="inst-card" @click="goDetail(inst)">
-        <div class="inst-avatar-wrap">
-          <a-avatar :size="72" :style="{ background: inst.avatarColor, fontSize: '28px' }">
-            {{ inst.name.charAt(0) }}
-          </a-avatar>
-          <div class="inst-badge" :class="inst.level">{{ inst.levelLabel }}</div>
-        </div>
-        <div class="inst-name">{{ inst.name }}</div>
-        <div class="inst-title">{{ inst.title }}</div>
-        <div class="inst-unit">{{ inst.unit }}</div>
-
-        <div class="inst-specialties">
-          <a-tag v-for="s in inst.specialties.slice(0,2)" :key="s" size="small">{{ s }}</a-tag>
-        </div>
-
-        <div class="inst-stats">
-          <div class="is-item">
-            <div class="is-num">{{ inst.courseCount }}</div>
-            <div class="is-label">课程数</div>
+    <a-spin :spinning="loading">
+      <div class="instructor-grid" v-if="filteredInstructors.length > 0">
+        <div v-for="inst in filteredInstructors" :key="inst.id" class="inst-card" @click="goDetail(inst)">
+          <div class="inst-avatar-wrap">
+            <a-avatar :size="72" :style="{ background: inst.avatarColor, fontSize: '28px' }">
+              {{ (inst.name || '').charAt(0) }}
+            </a-avatar>
+            <div class="inst-badge" :class="inst.levelClass">{{ inst.levelLabel }}</div>
           </div>
-          <div class="is-divider"></div>
-          <div class="is-item">
-            <div class="is-num">{{ inst.studentCount }}</div>
-            <div class="is-label">培训人次</div>
-          </div>
-          <div class="is-divider"></div>
-          <div class="is-item">
-            <div class="is-num" style="color:#faad14">{{ inst.rating }}</div>
-            <div class="is-label">评分</div>
-          </div>
-        </div>
 
-        <div class="inst-card-actions" v-if="authStore.isAdmin" @click.stop>
-          <a-popconfirm :title="`确定删除教官「${inst.name}」吗？`" ok-text="删除" cancel-text="取消" @confirm="deleteInstructor(inst)">
-            <a-button size="small" type="text" danger><DeleteOutlined /> 删除</a-button>
-          </a-popconfirm>
+          <div class="inst-name">{{ inst.name }}</div>
+          <div class="inst-title">{{ inst.title }}</div>
+          <div class="inst-unit">{{ inst.unit }}</div>
+
+          <div class="inst-specialties">
+            <a-tag v-for="s in inst.specialties.slice(0, 2)" :key="s" size="small">{{ s }}</a-tag>
+            <span v-if="inst.specialties.length === 0" style="color: #999; font-size: 12px">未设置</span>
+          </div>
+
+          <div class="inst-stats">
+            <div class="is-item">
+              <div class="is-num">{{ inst.examCount || 0 }}</div>
+              <div class="is-label">考试数</div>
+            </div>
+            <div class="is-divider"></div>
+            <div class="is-item">
+              <div class="is-num">{{ Math.round(inst.studyHours || 0) }}</div>
+              <div class="is-label">学习时长</div>
+            </div>
+            <div class="is-divider"></div>
+            <div class="is-item">
+              <div class="is-num" style="color: #faad14">{{ inst.avgScore || 0 }}</div>
+              <div class="is-label">平均分</div>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
+      <a-empty v-else description="暂无教官数据" style="margin-top: 60px" />
+    </a-spin>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
-import { useAuthStore } from '@/stores/auth'
-import { getInstructors, createInstructor as apiCreateInstructor } from '@/api/instructor'
+import { getUsers } from '@/api/user'
 
 const router = useRouter()
-const authStore = useAuthStore()
 const searchText = ref('')
 const filterSpecialty = ref('全部')
-
+const loading = ref(false)
 const instructorList = ref([])
 
-async function fetchInstructors() {
-  try {
-    const res = await getInstructors({ size: -1 })
-    instructorList.value = res.items || res || []
-  } catch { /* ignore */ }
+const avatarColors = ['#003087', '#c8a84b', '#8B1A1A', '#1a5c2e', '#6b3a8a', '#2e86de']
+function getAvatarColor(id) {
+  return avatarColors[(id || 0) % avatarColors.length]
 }
 
-onMounted(fetchInstructors)
+function getLevelClass(level) {
+  if (!level) return 'standard'
+  if (level.includes('高级') || level.includes('专家')) return 'expert'
+  if (level.includes('中级')) return 'senior'
+  return 'standard'
+}
 
-// 动态计算专业列表
-const specialtiesList = computed(() => {
-  const allS = new Set()
-  instructorList.value.forEach(i => i.specialties.forEach(s => allS.add(s)))
-  return ['全部', ...allS]
-})
+function getLevelLabel(level) {
+  if (!level) return '教官'
+  if (level.includes('高级') || level.includes('专家')) return '专家'
+  if (level.includes('中级')) return '资深'
+  return '教官'
+}
 
-// 添加教官
-const addVisible = ref(false)
-const addForm = reactive({ name: '', title: undefined, unit: '', specialties: [] })
-const avatarColors = ['#003087', '#c8a84b', '#8B1A1A', '#1a5c2e', '#6b3a8a', '#2e86de']
-const levelMap = { '高级教官': { level: 'expert', label: '专家' }, '中级教官': { level: 'senior', label: '高级' }, '初级教官': { level: 'standard', label: '初级' } }
-
-const handleAdd = async () => {
-  if (!addForm.name) return message.warning('请输入教官姓名')
-  if (!addForm.title) return message.warning('请选择职级')
+async function loadInstructors() {
+  loading.value = true
   try {
-    await apiCreateInstructor({
-      name: addForm.name,
-      title: addForm.title,
-      unit: addForm.unit || '未指定',
-      specialties: addForm.specialties.length ? addForm.specialties : ['通用'],
-    })
-    addVisible.value = false
-    Object.assign(addForm, { name: '', title: undefined, unit: '', specialties: [] })
-    message.success('教官添加成功！')
-    fetchInstructors()
-  } catch (e) {
-    message.error(e.message || '添加失败')
+    const res = await getUsers({ role: 'instructor', size: -1, search: searchText.value || undefined })
+    const items = res.items || []
+    instructorList.value = items.map((u) => ({
+      ...u,
+      id: u.id,
+      userId: u.id,
+      name: u.nickname || u.username,
+      title: u.level || '教官',
+      unit: (u.departments && u.departments.length > 0) ? u.departments[0].name : '未分配',
+      specialties: (u.policeTypes || []).map((p) => p.name).filter(Boolean),
+      avatarColor: getAvatarColor(u.id),
+      levelClass: getLevelClass(u.level),
+      levelLabel: getLevelLabel(u.level),
+    }))
+  } catch {
+    instructorList.value = []
+  } finally {
+    loading.value = false
   }
 }
 
+onMounted(loadInstructors)
+
+let searchTimer = null
+watch(searchText, () => {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => loadInstructors(), 300)
+})
+
+const specialtiesList = computed(() => {
+  const all = new Set()
+  instructorList.value.forEach((i) => (i.specialties || []).forEach((s) => all.add(s)))
+  return ['全部', ...all]
+})
+
 const filteredInstructors = computed(() => {
   let list = [...instructorList.value]
-  if (searchText.value) list = list.filter(i => i.name.includes(searchText.value) || i.specialties.some(s => s.includes(searchText.value)))
-  if (filterSpecialty.value !== '全部') list = list.filter(i => i.specialties.includes(filterSpecialty.value))
+  if (filterSpecialty.value !== '全部') {
+    list = list.filter((i) => (i.specialties || []).includes(filterSpecialty.value))
+  }
   return list
 })
 
-const goDetail = (inst) => router.push({ name: 'InstructorDetail', params: { id: inst.id } })
-
-function deleteInstructor(inst) {
-  instructorList.value = instructorList.value.filter(i => i.id !== inst.id)
-  message.success(`已删除教官「${inst.name}」`)
+function goDetail(inst) {
+  router.push({ name: 'InstructorDetail', params: { id: inst.id } })
 }
 </script>
 
@@ -162,7 +160,7 @@ function deleteInstructor(inst) {
 .specialty-tags { display: flex; flex-wrap: wrap; gap: 4px 0; }
 .instructor-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
 .inst-card { background: #fff; border-radius: 12px; border: 1px solid #e8e8e8; padding: 24px; text-align: center; cursor: pointer; transition: all 0.25s; }
-.inst-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,48,135,0.12); border-color: var(--police-primary); }
+.inst-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0, 48, 135, 0.12); border-color: var(--police-primary); }
 .inst-avatar-wrap { position: relative; display: inline-block; margin-bottom: 12px; }
 .inst-badge { position: absolute; bottom: 0; right: -4px; font-size: 10px; padding: 1px 6px; border-radius: 10px; font-weight: 700; }
 .inst-badge.senior { background: #c8a84b; color: #fff; }
@@ -171,11 +169,10 @@ function deleteInstructor(inst) {
 .inst-name { font-size: 18px; font-weight: 700; color: #1a1a1a; }
 .inst-title { font-size: 13px; color: var(--police-primary); margin: 4px 0; }
 .inst-unit { font-size: 12px; color: #888; margin-bottom: 12px; }
-.inst-specialties { display: flex; justify-content: center; gap: 4px; flex-wrap: wrap; margin-bottom: 16px; }
+.inst-specialties { display: flex; justify-content: center; gap: 4px; flex-wrap: wrap; margin-bottom: 16px; min-height: 24px; }
 .inst-stats { display: flex; align-items: center; justify-content: space-around; padding: 12px 0 0; border-top: 1px solid #f0f0f0; }
 .is-item { text-align: center; }
 .is-num { font-size: 20px; font-weight: 700; color: #1a1a1a; }
 .is-label { font-size: 11px; color: #888; }
 .is-divider { width: 1px; height: 30px; background: #f0f0f0; }
-.inst-card-actions { margin-top: 12px; padding-top: 8px; border-top: 1px solid #f0f0f0; text-align: right; }
 </style>

@@ -200,7 +200,7 @@ import { message, Modal } from 'ant-design-vue'
 import { PlusOutlined, CalendarOutlined, TeamOutlined, UserOutlined, EnvironmentOutlined, QrcodeOutlined, EllipsisOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { getTrainings, createTraining as apiCreateTraining, updateTraining as apiUpdateTraining, deleteTraining as apiDeleteTraining } from '@/api/training'
-import { getInstructors } from '@/api/instructor'
+import { getUsers } from '@/api/user'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -231,12 +231,12 @@ async function fetchTrainings() {
 
 async function fetchInstructors() {
   try {
-    const res = await getInstructors({ size: -1 })
-    const rawList = res.items || res || []
+    const res = await getUsers({ role: 'instructor', size: -1 })
+    const rawList = res.items || []
     instructorList.value = rawList.map((it) => ({
       ...it,
-      userId: it.userId,
-      name: it.nickname || it.name
+      userId: it.id,
+      name: it.nickname || it.username
     }))
   } catch { /* ignore */ }
 }

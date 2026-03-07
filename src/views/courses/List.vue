@@ -228,7 +228,7 @@ import { PlusOutlined, TeamOutlined, StarFilled, InboxOutlined, DeleteOutlined, 
 import { message } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
 import { getCourses, getCourse as apiGetCourse, createCourse as apiCreateCourse, updateCourse as apiUpdateCourse, getProgress } from '@/api/course'
-import { getInstructors } from '@/api/instructor'
+import { getUsers } from '@/api/user'
 import { uploadFile } from '@/api/media'
 import { COURSE_CATEGORIES } from '@/mock/courses'
 
@@ -273,11 +273,11 @@ async function fetchCourses() {
 
 async function fetchInstructors() {
   try {
-    const res = await getInstructors({ size: -1 })
+    const res = await getUsers({ role: 'instructor', size: -1 })
     const items = res.items || []
     instructorOptions.value = items.map(i => ({
       value: i.id,
-      label: i.nickname || i.name || `教官#${i.id}`,
+      label: i.nickname || i.username || `教官#${i.id}`,
     }))
   } catch {
     instructorOptions.value = []

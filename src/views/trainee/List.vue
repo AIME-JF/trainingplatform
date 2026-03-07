@@ -2,25 +2,7 @@
   <div class="trainee-list-page">
     <div class="page-header">
       <h2>学员库</h2>
-      <a-button type="primary" v-if="authStore.isAdmin" @click="addVisible = true">
-        <template #icon><PlusOutlined /></template>添加学员
-      </a-button>
     </div>
-
-    <!-- 添加学员弹窗 -->
-    <a-modal v-model:open="addVisible" title="添加学员" @ok="handleAdd" okText="添加" cancelText="取消" :width="520">
-      <a-form :label-col="{ span: 5 }" style="margin-top:16px">
-        <a-form-item label="姓名"><a-input v-model:value="addForm.name" placeholder="请输入学员姓名" /></a-form-item>
-        <a-form-item label="等级">
-          <a-select v-model:value="addForm.title" placeholder="选择等级">
-            <a-select-option value="高级学员">高级学员</a-select-option>
-            <a-select-option value="中级学员">中级学员</a-select-option>
-            <a-select-option value="初级学员">初级学员</a-select-option>
-          </a-select>
-        </a-form-item>
-        <a-form-item label="单位"><a-input v-model:value="addForm.unit" placeholder="所属单位" /></a-form-item>
-      </a-form>
-    </a-modal>
 
     <a-card :bordered="false" style="margin-bottom:16px">
       <a-row :gutter="16">
@@ -71,9 +53,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, watch } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons-vue'
+import { DeleteOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
 import { getUsers } from '@/api/user'
@@ -123,19 +105,6 @@ watch(searchText, () => {
   clearTimeout(searchTimer)
   searchTimer = setTimeout(() => loadTrainees(), 300)
 })
-
-// 添加学员
-const addVisible = ref(false)
-const addForm = reactive({ name: '', title: undefined, unit: '' })
-
-const handleAdd = () => {
-  if (!addForm.name) return message.warning('请输入学员姓名')
-  if (!addForm.title) return message.warning('请选择等级')
-  // TODO: 调用后端创建用户接口
-  message.info('添加学员功能需要后端用户创建接口支持')
-  addVisible.value = false
-  Object.assign(addForm, { name: '', title: undefined, unit: '' })
-}
 
 const goDetail = (trainee) => router.push({ name: 'TraineeDetail', params: { id: trainee.id } })
 

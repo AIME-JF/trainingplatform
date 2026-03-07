@@ -83,6 +83,12 @@
           <template #icon><BarChartOutlined /></template>
           数据看板
         </a-menu-item>
+
+        <a-sub-menu key="system" v-if="isAdmin">
+          <template #icon><SettingOutlined /></template>
+          <template #title>系统管理</template>
+          <a-menu-item key="/system/users">用户管理</a-menu-item>
+        </a-sub-menu>
       </a-menu>
     </a-layout-sider>
 
@@ -156,6 +162,12 @@
           <template #icon><BarChartOutlined /></template>
           数据看板
         </a-menu-item>
+
+        <a-sub-menu key="system" v-if="isAdmin">
+          <template #icon><SettingOutlined /></template>
+          <template #title>系统管理</template>
+          <a-menu-item key="/system/users">用户管理</a-menu-item>
+        </a-sub-menu>
       </a-menu>
     </a-drawer>
 
@@ -258,7 +270,7 @@ import {
   HomeOutlined, PlayCircleOutlined, FormOutlined, RobotOutlined,
   TeamOutlined, UserOutlined, StarOutlined, BarChartOutlined,
   MenuUnfoldOutlined, MenuFoldOutlined, DownOutlined, LogoutOutlined,
-  SafetyCertificateOutlined, IdcardOutlined,
+  SafetyCertificateOutlined, IdcardOutlined, SettingOutlined,
 } from '@ant-design/icons-vue'
 
 const router = useRouter()

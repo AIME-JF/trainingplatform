@@ -414,7 +414,6 @@ import { message, Modal } from 'ant-design-vue'
 import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QrcodeOutlined, DownloadOutlined, PlusOutlined, EditOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import { getTraining, updateTraining as apiUpdateTraining, getCheckinRecords as apiGetCheckinRecords } from '@/api/training'
-import { getInstructors } from '@/api/instructor'
 import { getUsers } from '@/api/user'
 import { getNotices as apiGetNotices, createNotice as apiCreateNotice, updateNotice as apiUpdateNotice, deleteNotice as apiDeleteNotice } from '@/api/notice'
 import { useAuthStore } from '@/stores/auth'
@@ -457,7 +456,7 @@ onMounted(async () => {
   try {
     const [data, instRes, checkinRes, usersRes] = await Promise.all([
       getTraining(trainingId),
-      getInstructors({ size: -1 }),
+      getUsers({ role: 'instructor', size: -1 }),
       apiGetCheckinRecords(trainingId),
       getUsers({ role: 'student', size: -1 })
     ])
@@ -482,11 +481,11 @@ onMounted(async () => {
       checkinRecords: normalizedCheckinRecords
     })
 
-    instructorList.value = (instRes.items || instRes || []).map((it) => ({
+    instructorList.value = (instRes.items || []).map((it) => ({
       ...it,
       id: it.id,
-      userId: it.userId,
-      name: it.nickname || it.name
+      userId: it.id,
+      name: it.nickname || it.username
     }))
     loadNotices()
   } catch (e) {

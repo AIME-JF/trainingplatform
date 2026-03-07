@@ -142,6 +142,13 @@ const router = createRouter({
           component: () => import('../views/report/Dashboard.vue'),
           meta: { title: '数据看板', roles: ['admin'] },
         },
+        // 系统管理
+        {
+          path: 'system/users',
+          name: 'UserManage',
+          component: () => import('../views/system/UserManage.vue'),
+          meta: { title: '用户管理', roles: ['admin'] },
+        },
         // 个人中心
         {
           path: 'profile',

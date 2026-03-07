@@ -2,13 +2,16 @@
 用户管理路由
 """
 from typing import Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Body
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.middleware.auth import get_current_user
-from app.schemas import StandardResponse, PaginatedResponse, TokenData, UserSimpleResponse
+from app.schemas import StandardResponse, PaginatedResponse, TokenData, UserSimpleResponse, UserCreate, UserUpdate
+from app.schemas.role import RoleSimpleResponse
 from app.models import User, Role
+from app.services.auth import auth_service
+from logger import logger
 
 router = APIRouter(prefix="/users", tags=["用户管理"])
 
@@ -65,3 +68,130 @@ def get_user(
     if not user:
         return StandardResponse(code=404, message="用户不存在")
     return StandardResponse(data=UserSimpleResponse.model_validate(user))
+
+
+@router.post("", response_model=StandardResponse[UserSimpleResponse], summary="创建用户")
+def create_user(
+    data: UserCreate,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """创建用户"""
+    existing = db.query(User).filter(User.username == data.username).first()
+    if existing:
+        return StandardResponse(code=400, message="用户名已存在")
+
+    user = User(
+        username=data.username,
+        password_hash=auth_service.get_password_hash(data.password),
+        nickname=data.nickname,
+        gender=data.gender,
+        email=data.email,
+        phone=data.phone,
+        police_id=data.police_id,
+        avatar=data.avatar,
+        join_date=data.join_date,
+        level=data.level,
+        is_active=True,
+    )
+
+    if data.role_ids:
+        roles = db.query(Role).filter(Role.id.in_(data.role_ids)).all()
+        user.roles = roles
+
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    logger.info(f"创建用户: {data.username}")
+    return StandardResponse(data=UserSimpleResponse.model_validate(user))
+
+
+@router.put("/{user_id}", response_model=StandardResponse[UserSimpleResponse], summary="更新用户")
+def update_user(
+    user_id: int,
+    data: UserUpdate,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """更新用户"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return StandardResponse(code=404, message="用户不存在")
+
+    update_data = data.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(user, field, value)
+
+    db.commit()
+    db.refresh(user)
+    logger.info(f"更新用户: {user.username}")
+    return StandardResponse(data=UserSimpleResponse.model_validate(user))
+
+
+@router.put("/{user_id}/roles", response_model=StandardResponse[UserSimpleResponse], summary="更新用户角色")
+def update_user_roles(
+    user_id: int,
+    role_ids: list[int] = Body(..., embed=True),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """更新用户角色"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return StandardResponse(code=404, message="用户不存在")
+
+    roles = db.query(Role).filter(Role.id.in_(role_ids)).all()
+    user.roles = roles
+    db.commit()
+    db.refresh(user)
+    logger.info(f"更新用户角色: {user.username}")
+    return StandardResponse(data=UserSimpleResponse.model_validate(user))
+
+
+@router.put("/{user_id}/password", response_model=StandardResponse, summary="重置密码")
+def reset_password(
+    user_id: int,
+    password: str = Body(..., embed=True),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """重置用户密码"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return StandardResponse(code=404, message="用户不存在")
+
+    user.password_hash = auth_service.get_password_hash(password)
+    db.commit()
+    logger.info(f"重置用户密码: {user.username}")
+    return StandardResponse(message="密码重置成功")
+
+
+@router.delete("/{user_id}", response_model=StandardResponse, summary="删除用户")
+def delete_user(
+    user_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """删除用户（软删除）"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return StandardResponse(code=404, message="用户不存在")
+
+    user.is_active = False
+    db.commit()
+    logger.info(f"删除用户: {user.username}")
+    return StandardResponse(message="删除成功")
+
+
+roles_router = APIRouter(prefix="/roles", tags=["角色管理"])
+
+
+@roles_router.get("", response_model=StandardResponse[list[RoleSimpleResponse]], summary="角色列表")
+def get_roles(
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取所有角色"""
+    roles = db.query(Role).filter(Role.is_active == True).all()
+    items = [RoleSimpleResponse.model_validate(r) for r in roles]
+    return StandardResponse(data=items)

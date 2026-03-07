@@ -1,178 +1,194 @@
 <template>
   <div class="instructor-detail-page">
-    <a-breadcrumb style="margin-bottom:16px">
-      <a-breadcrumb-item @click="$router.push('/instructor')" style="cursor:pointer;color:var(--police-primary)">教官库</a-breadcrumb-item>
-      <a-breadcrumb-item>{{ inst.name }}</a-breadcrumb-item>
+    <a-breadcrumb style="margin-bottom: 16px">
+      <a-breadcrumb-item @click="$router.push('/instructor')" style="cursor: pointer; color: var(--police-primary)">教官库</a-breadcrumb-item>
+      <a-breadcrumb-item>{{ instructor.name || '教官详情' }}</a-breadcrumb-item>
     </a-breadcrumb>
 
-    <a-row :gutter="20">
-      <!-- 左：教官信息卡 -->
-      <a-col :span="8">
-        <a-card :bordered="false" class="profile-card">
-          <div class="profile-top">
-            <a-avatar :size="96" :style="{ background: inst.avatarColor, fontSize: '36px' }">
-              {{ inst.name.charAt(0) }}
-            </a-avatar>
-            <div class="inst-badge-large" :class="inst.level">{{ inst.levelLabel }}</div>
-          </div>
-          <div class="profile-name">{{ inst.name }}</div>
-          <div class="profile-title">{{ inst.title }}</div>
-          <div class="profile-unit">{{ inst.unit }}</div>
-
-          <a-divider />
-
-          <div class="profile-stats">
-            <div class="ps-item">
-              <div class="ps-num">{{ inst.courseCount }}</div>
-              <div class="ps-label">主讲课程</div>
+    <a-spin :spinning="loading">
+      <a-row :gutter="20">
+        <!-- 左：教官信息卡 -->
+        <a-col :span="8">
+          <a-card :bordered="false" class="profile-card">
+            <div class="profile-top">
+              <a-avatar :size="96" :style="{ background: avatarColor, fontSize: '36px' }">
+                {{ (instructor.name || '').charAt(0) }}
+              </a-avatar>
+              <div class="inst-badge-large" :class="levelClass">{{ levelLabel }}</div>
             </div>
-            <div class="ps-divider"></div>
-            <div class="ps-item">
-              <div class="ps-num">{{ inst.studentCount }}</div>
-              <div class="ps-label">培训人次</div>
-            </div>
-            <div class="ps-divider"></div>
-            <div class="ps-item">
-              <div class="ps-num" style="color:#faad14">{{ inst.rating }}</div>
-              <div class="ps-label">综合评分</div>
-            </div>
-          </div>
+            <div class="profile-name">{{ instructor.name }}</div>
+            <div class="profile-title">{{ instructor.title }}</div>
+            <div class="profile-unit">{{ instructor.unit }}</div>
 
-          <a-divider />
+            <a-divider />
 
-          <div class="profile-info">
-            <div class="pi-row">
-              <span class="pi-label">警种</span>
-              <span>{{ inst.policeType }}</span>
-            </div>
-            <div class="pi-row">
-              <span class="pi-label">从警年限</span>
-              <span>{{ inst.years }} 年</span>
-            </div>
-            <div class="pi-row">
-              <span class="pi-label">联系方式</span>
-              <span>{{ inst.phone }}</span>
-            </div>
-          </div>
-
-          <a-divider />
-
-          <div class="cert-section">
-            <div class="cert-title">资质证书</div>
-            <div class="cert-list">
-              <a-tag v-for="cert in inst.certificates" :key="cert" color="gold" style="margin-bottom:6px">🏅 {{ cert }}</a-tag>
-            </div>
-          </div>
-        </a-card>
-      </a-col>
-
-      <!-- 右：详情 Tabs -->
-      <a-col :span="16">
-        <a-card :bordered="false">
-          <a-tabs v-model:activeKey="activeTab">
-            <a-tab-pane key="intro" tab="教官简介">
-              <div class="intro-section">
-                <p class="bio-text">{{ inst.bio }}</p>
-                <div class="specialty-section">
-                  <h4>专业领域</h4>
-                  <div class="specialty-tags">
-                    <a-tag v-for="s in inst.specialties" :key="s" color="blue">{{ s }}</a-tag>
-                  </div>
-                </div>
+            <div class="profile-stats">
+              <div class="ps-item">
+                <div class="ps-num">{{ instructor.examCount || 0 }}</div>
+                <div class="ps-label">考试次数</div>
               </div>
-            </a-tab-pane>
-
-            <a-tab-pane key="courses" tab="主讲课程">
-              <div class="inst-courses">
-                <div v-for="c in instCourses" :key="c.id" class="course-row">
-                  <div class="cr-cover" :style="{ background: c.coverColor }">{{ getCoverIcon(c.category) }}</div>
-                  <div class="cr-info">
-                    <div class="cr-title">{{ c.title }}</div>
-                    <div class="cr-meta">{{ c.duration }}分钟 · {{ c.studentCount.toLocaleString() }} 人学过</div>
-                  </div>
-                  <div class="cr-rating">
-                    <StarFilled style="color:#faad14" /> {{ c.rating }}
-                  </div>
-                </div>
+              <div class="ps-divider"></div>
+              <div class="ps-item">
+                <div class="ps-num">{{ Math.round(instructor.studyHours || 0) }}</div>
+                <div class="ps-label">学习时长</div>
               </div>
-            </a-tab-pane>
+              <div class="ps-divider"></div>
+              <div class="ps-item">
+                <div class="ps-num" style="color: #faad14">{{ instructor.avgScore || 0 }}</div>
+                <div class="ps-label">平均分</div>
+              </div>
+            </div>
 
-            <a-tab-pane key="reviews" tab="学员评价">
-              <div class="reviews-section">
-                <div class="rating-overview">
-                  <div class="rating-big">{{ inst.rating }}</div>
-                  <div class="rating-stars">
-                    <StarFilled v-for="i in 5" :key="i" :style="{ color: i <= Math.round(inst.rating) ? '#faad14' : '#ddd' }" />
-                  </div>
-                  <div class="rating-count">共 {{ mockReviews.length }} 条评价</div>
-                </div>
-                <a-divider />
-                <div class="review-list">
-                  <div v-for="r in mockReviews" :key="r.id" class="review-item">
-                    <div class="review-header">
-                      <a-avatar size="small" :style="{ background: '#003087' }">{{ r.user.charAt(0) }}</a-avatar>
-                      <span class="rv-user">{{ r.user }}</span>
-                      <span class="rv-stars">
-                        <StarFilled v-for="i in r.rating" :key="i" style="color:#faad14;font-size:12px" />
-                      </span>
-                      <span class="rv-date">{{ r.date }}</span>
-                    </div>
-                    <div class="review-content">{{ r.content }}</div>
-                    <div class="review-tags">
-                      <a-tag v-for="t in r.tags" :key="t" size="small">{{ t }}</a-tag>
+            <a-divider />
+
+            <div class="profile-info">
+              <div class="pi-row">
+                <span class="pi-label">警号</span>
+                <span>{{ instructor.policeId || '未设置' }}</span>
+              </div>
+              <div class="pi-row">
+                <span class="pi-label">警种</span>
+                <span>{{ specialtiesText }}</span>
+              </div>
+              <div class="pi-row">
+                <span class="pi-label">联系方式</span>
+                <span>{{ instructor.phone || '未设置' }}</span>
+              </div>
+              <div class="pi-row">
+                <span class="pi-label">入警日期</span>
+                <span>{{ instructor.joinDate || '未设置' }}</span>
+              </div>
+            </div>
+          </a-card>
+        </a-col>
+
+        <!-- 右：详情 -->
+        <a-col :span="16">
+          <a-card :bordered="false">
+            <a-tabs v-model:activeKey="activeTab">
+              <a-tab-pane key="intro" tab="教官简介">
+                <div class="intro-section">
+                  <p class="bio-text">
+                    {{ introText }}
+                  </p>
+                  <div class="specialty-section">
+                    <h4>专业领域</h4>
+                    <div class="specialty-tags">
+                      <a-tag v-for="s in instructor.specialties" :key="s" color="blue">{{ s }}</a-tag>
+                      <span v-if="!instructor.specialties || instructor.specialties.length === 0" style="color: #999">未设置</span>
                     </div>
                   </div>
                 </div>
-              </div>
-            </a-tab-pane>
+              </a-tab-pane>
 
-            <a-tab-pane key="training" tab="培训记录">
-              <a-table :dataSource="trainingHistory" :columns="historyColumns" size="small" />
-            </a-tab-pane>
-          </a-tabs>
-        </a-card>
-      </a-col>
-    </a-row>
+              <a-tab-pane key="courses" tab="主讲课程">
+                <a-empty description="暂无课程数据" />
+              </a-tab-pane>
+
+              <a-tab-pane key="reviews" tab="评价数据">
+                <a-empty description="暂无评价数据" />
+              </a-tab-pane>
+            </a-tabs>
+          </a-card>
+        </a-col>
+      </a-row>
+    </a-spin>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { StarFilled } from '@ant-design/icons-vue'
-import { getInstructor } from '@/api/instructor'
-import { getCourses } from '@/api/course'
-import { MOCK_REVIEWS, getTrainingHistory } from '@/mock/reviews'
+import { getUser } from '@/api/user'
 
 const route = useRoute()
-const instId = route.params.id
-const inst = ref({ name: '', title: '', unit: '', specialties: [], certificates: [], courseCount: 0, studentCount: 0, rating: 0, level: '', levelLabel: '', bio: '', policeType: '', years: 0, phone: '', avatarColor: '#003087' })
-const activeTab = ref('intro')
-const instCourses = ref([])
+const instructorId = Number(route.params.id)
 
-onMounted(async () => {
-  try {
-    const data = await getInstructor(instId)
-    inst.value = data
-    // Fetch courses by instructor
-    const coursesRes = await getCourses({ size: -1 })
-    const allCourses = coursesRes.items || coursesRes || []
-    instCourses.value = allCourses.filter(c => c.instructor === data.name || c.instructorId == instId)
-  } catch { /* ignore */ }
+const loading = ref(false)
+const activeTab = ref('intro')
+const instructor = ref({
+  id: null,
+  name: '',
+  title: '',
+  unit: '',
+  policeId: '',
+  phone: '',
+  joinDate: '',
+  level: '',
+  specialties: [],
+  examCount: 0,
+  studyHours: 0,
+  avgScore: 0,
 })
 
-const getCoverIcon = (cat) => ({ law: '⚖️', skill: '🔧', traffic: '🚗', community: '🏘️', cyber: '💻', physical: '💪' })[cat] ?? '📚'
+const avatarColors = ['#003087', '#c8a84b', '#8B1A1A', '#1a5c2e', '#6b3a8a', '#2e86de']
+const avatarColor = computed(() => avatarColors[(instructor.value.id || 0) % avatarColors.length])
 
-const mockReviews = MOCK_REVIEWS
+const levelClass = computed(() => {
+  const level = instructor.value.level || ''
+  if (level.includes('高级') || level.includes('专家')) return 'expert'
+  if (level.includes('中级')) return 'senior'
+  return 'standard'
+})
 
-const trainingHistory = getTrainingHistory(instId)
+const levelLabel = computed(() => {
+  const level = instructor.value.level || ''
+  if (level.includes('高级') || level.includes('专家')) return '专家'
+  if (level.includes('中级')) return '资深'
+  return '教官'
+})
 
-const historyColumns = [
-  { title: '培训班名称', dataIndex: 'title', key: 'title' },
-  { title: '时间', dataIndex: 'period', key: 'period' },
-  { title: '学员数', dataIndex: 'students', key: 'students' },
-  { title: '评分', dataIndex: 'score', key: 'score' },
-]
+const specialtiesText = computed(() => {
+  const arr = instructor.value.specialties || []
+  return arr.length ? arr.join('、') : '未设置'
+})
+
+const introText = computed(() => {
+  const n = instructor.value.name || '该教官'
+  const unit = instructor.value.unit || '未分配单位'
+  const level = instructor.value.level || '教官'
+  return `${n}，当前级别：${level}，所属单位：${unit}。` +
+    `累计学习时长 ${Math.round(instructor.value.studyHours || 0)} 小时，考试次数 ${instructor.value.examCount || 0} 次，平均成绩 ${instructor.value.avgScore || 0}。`
+})
+
+onMounted(async () => {
+  loading.value = true
+  try {
+    const data = await getUser(instructorId)
+    instructor.value = {
+      ...data,
+      id: data.id,
+      name: data.nickname || data.username,
+      title: data.level || '教官',
+      unit: (data.departments && data.departments.length > 0) ? data.departments[0].name : '未分配',
+      policeId: data.policeId,
+      phone: data.phone,
+      joinDate: data.joinDate,
+      level: data.level || '',
+      specialties: (data.policeTypes || []).map((p) => p.name).filter(Boolean),
+      examCount: data.examCount || 0,
+      studyHours: data.studyHours || 0,
+      avgScore: data.avgScore || 0,
+    }
+  } catch {
+    instructor.value = {
+      id: instructorId,
+      name: '教官不存在',
+      title: '',
+      unit: '',
+      policeId: '',
+      phone: '',
+      joinDate: '',
+      level: '',
+      specialties: [],
+      examCount: 0,
+      studyHours: 0,
+      avgScore: 0,
+    }
+  } finally {
+    loading.value = false
+  }
+})
 </script>
 
 <style scoped>
@@ -194,25 +210,7 @@ const historyColumns = [
 .profile-info { text-align: left; }
 .pi-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; border-bottom: 1px solid #f8f8f8; }
 .pi-label { color: #888; }
-.cert-title { font-weight: 600; color: #333; margin-bottom: 8px; text-align: left; }
-.cert-list { display: flex; flex-wrap: wrap; gap: 4px; }
 .bio-text { font-size: 14px; color: #555; line-height: 1.8; margin-bottom: 20px; }
 .specialty-section h4 { margin-bottom: 8px; color: #333; }
 .specialty-tags { display: flex; flex-wrap: wrap; gap: 6px; }
-.inst-courses { display: flex; flex-direction: column; gap: 12px; }
-.course-row { display: flex; align-items: center; gap: 12px; padding: 10px; border: 1px solid #f0f0f0; border-radius: 6px; }
-.cr-cover { width: 48px; height: 48px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; }
-.cr-info { flex: 1; }
-.cr-title { font-size: 14px; font-weight: 500; color: #1a1a1a; }
-.cr-meta { font-size: 12px; color: #888; margin-top: 2px; }
-.rating-overview { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 0; }
-.rating-big { font-size: 52px; font-weight: 900; color: var(--police-primary); }
-.rating-count { font-size: 12px; color: #888; }
-.review-list { display: flex; flex-direction: column; gap: 16px; }
-.review-item { padding: 14px; background: #fafafa; border-radius: 8px; }
-.review-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-.rv-user { font-weight: 600; font-size: 13px; }
-.rv-date { font-size: 11px; color: #aaa; margin-left: auto; }
-.review-content { font-size: 13px; color: #555; line-height: 1.6; margin-bottom: 8px; }
-.review-tags { display: flex; gap: 4px; flex-wrap: wrap; }
 </style>
