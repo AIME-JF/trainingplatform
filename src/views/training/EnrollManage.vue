@@ -19,16 +19,16 @@
         <div class="qcard-label">总名额</div>
       </div>
       <div class="qcard">
-        <div class="qcard-num approved">{{ approvedList.length }}</div>
+        <div class="qcard-num approved">{{ enrolledCount }}</div>
         <div class="qcard-label">已录取</div>
-        <a-progress :percent="Math.round((approvedList.length / training.capacity) * 100) || 0" :show-info="false" stroke-color="#52c41a" size="small" />
+        <a-progress :percent="enrolledPercent" :show-info="false" stroke-color="#52c41a" size="small" />
       </div>
       <div class="qcard">
         <div class="qcard-num pending">{{ pendingList.length }}</div>
         <div class="qcard-label">待审核</div>
       </div>
       <div class="qcard">
-        <div class="qcard-num remain">{{ Math.max(0, training.capacity - approvedList.length) }}</div>
+        <div class="qcard-num remain">{{ Math.max(0, training.capacity - enrolledCount) }}</div>
         <div class="qcard-label">剩余名额</div>
       </div>
     </div>
@@ -39,7 +39,7 @@
       <a-radio-group v-model:value="statusFilter" button-style="solid">
         <a-radio-button value="all">全部 ({{ enrollments.length }})</a-radio-button>
         <a-radio-button value="pending">待审核 ({{ pendingList.length }})</a-radio-button>
-        <a-radio-button value="approved">已录取 ({{ approvedList.length }})</a-radio-button>
+        <a-radio-button value="approved">已录取 ({{ enrolledCount }})</a-radio-button>
         <a-radio-button value="rejected">已拒绝 ({{ rejectedList.length }})</a-radio-button>
       </a-radio-group>
       <a-button type="primary" :disabled="selectedRows.length === 0" @click="batchApprove">
@@ -82,7 +82,7 @@ import { getTraining, getEnrollments, approveEnrollment, rejectEnrollment } from
 
 const route = useRoute()
 const trainingId = route.params.id
-const training = reactive({ capacity: 0, students: [], enrolled: 0, name: '' })
+const training = reactive({ capacity: 0, studentIds: [], enrolledCount: 0, name: '' })
 
 const searchText = ref('')
 const statusFilter = ref('all')
@@ -109,23 +109,37 @@ onMounted(fetchData)
 const pendingList = computed(() => enrollments.value.filter(e => e.status === 'pending'))
 const approvedList = computed(() => enrollments.value.filter(e => e.status === 'approved'))
 const rejectedList = computed(() => enrollments.value.filter(e => e.status === 'rejected'))
+const enrolledCount = computed(() => training.enrolledCount ?? training.studentIds?.length ?? 0)
+const enrolledPercent = computed(() => {
+  if (!training.capacity) return 0
+  return Math.round((enrolledCount.value / training.capacity) * 100)
+})
 
 const filteredList = computed(() => {
   let list = enrollments.value
   if (statusFilter.value !== 'all') list = list.filter(e => e.status === statusFilter.value)
   if (searchText.value) {
     const q = searchText.value.toLowerCase()
-    list = list.filter(e => e.name.includes(q) || e.policeId.toLowerCase().includes(q) || e.unit.includes(q))
+    list = list.filter((e) => {
+      const name = (e.userNickname || e.userName || '').toLowerCase()
+      const policeId = (e.policeId || '').toLowerCase()
+      const unit = (e.departments || []).join(' ').toLowerCase()
+      return name.includes(q) || policeId.includes(q) || unit.includes(q)
+    })
   }
   return list
 })
 
 const columns = [
-  { title: '姓名', dataIndex: 'name', key: 'name', width: 80 },
+  { title: '姓名', dataIndex: 'userNickname', key: 'userNickname', width: 100 },
   { title: '警号', dataIndex: 'policeId', key: 'policeId', width: 120 },
-  { title: '所属单位', dataIndex: 'unit', key: 'unit' },
-  { title: '联系电话', dataIndex: 'phone', key: 'phone', width: 120 },
-  { title: '报名时间', dataIndex: 'enrollTime', key: 'enrollTime', width: 160 },
+  {
+    title: '所属单位',
+    dataIndex: 'departments',
+    key: 'departments',
+    customRender: ({ text }) => (Array.isArray(text) ? text.join(' / ') : ''),
+  },
+  { title: '报名时间', dataIndex: 'enrollTime', key: 'enrollTime', width: 180 },
   { title: '状态', key: 'status', width: 90 },
   { title: '操作', key: 'action', width: 140, fixed: 'right' },
 ]
@@ -138,19 +152,23 @@ function onSelectChange(keys, rows) {
   selectedRows.value = rows
 }
 
+function displayName(record) {
+  return record.userNickname || record.userName || record.userId
+}
+
 async function approve(record) {
-  if (training.students.length >= training.capacity) {
+  if (enrolledCount.value >= training.capacity) {
     message.error('名额已满，无法通过更多学员')
     return
   }
   try {
     await approveEnrollment(trainingId, record.id)
     record.status = 'approved'
-    if (!training.students.includes(record.userId)) {
-      training.students.push(record.userId)
-      training.enrolled = training.students.length
+    if (!training.studentIds.includes(record.userId)) {
+      training.studentIds.push(record.userId)
+      training.enrolledCount = training.studentIds.length
     }
-    message.success(`已通过 ${record.name} 的报名申请`)
+    message.success(`已通过 ${displayName(record)} 的报名申请`)
   } catch (e) {
     message.error(e.message || '操作失败')
   }
@@ -161,30 +179,30 @@ async function reject(record) {
     await rejectEnrollment(trainingId, record.id, '名额限制，暂无资格')
     record.status = 'rejected'
     record.note = '名额限制，暂无资格'
-    message.warning(`已拒绝 ${record.name} 的报名申请`)
+    message.warning(`已拒绝 ${displayName(record)} 的报名申请`)
   } catch (e) {
     message.error(e.message || '操作失败')
   }
 }
 
 async function batchApprove() {
-  const pendingRows = selectedRows.value.filter(r => r.status === 'pending')
-  const remain = training.capacity - training.students.length
+  const pendingRows = selectedRows.value.filter((r) => r.status === 'pending')
+  const remain = training.capacity - enrolledCount.value
   if (pendingRows.length > remain) {
     message.error(`批量通过失败：剩余名额不足（仅剩 ${remain} 人）`)
     return
   }
 
   try {
-    await Promise.all(pendingRows.map(r => approveEnrollment(trainingId, r.id)))
-    pendingRows.forEach(r => {
+    await Promise.all(pendingRows.map((r) => approveEnrollment(trainingId, r.id)))
+    pendingRows.forEach((r) => {
       r.status = 'approved'
-      if (!training.students.includes(r.userId)) {
-        training.students.push(r.userId)
+      if (!training.studentIds.includes(r.userId)) {
+        training.studentIds.push(r.userId)
       }
     })
-    training.enrolled = training.students.length
-    message.success(`已批量通过审核`)
+    training.enrolledCount = training.studentIds.length
+    message.success('已批量通过审核')
   } catch (e) {
     message.error(e.message || '批量操作失败')
   }

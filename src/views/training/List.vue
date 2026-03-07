@@ -50,13 +50,13 @@
           <div class="tc-title">{{ t.name }}</div>
           <div class="tc-meta">
             <div class="tc-meta-item"><CalendarOutlined /> {{ t.startDate }} ~ {{ t.endDate }}</div>
-            <div class="tc-meta-item"><TeamOutlined /> {{ t.enrolled }}/{{ t.capacity }} 人</div>
+            <div class="tc-meta-item"><TeamOutlined /> {{ getEnrolledCount(t) }}/{{ t.capacity }} 人</div>
             <div class="tc-meta-item"><UserOutlined /> {{ t.instructorName }}</div>
             <div class="tc-meta-item"><EnvironmentOutlined /> {{ t.location }}</div>
           </div>
           <a-progress
-            :percent="Math.round(t.enrolled / t.capacity * 100)"
-            :stroke-color="t.enrolled >= t.capacity ? '#ff4d4f' : '#003087'"
+            :percent="Number.isFinite(t.progressPercent) ? t.progressPercent : 0"
+            :stroke-color="getEnrolledCount(t) >= t.capacity ? '#ff4d4f' : '#003087'"
             size="small"
             style="margin-top:12px"
           />
@@ -70,19 +70,19 @@
 
           <!-- 学员：已报名且进行中才能扫码 -->
           <a-button size="small" type="primary" @click="goCheckin(t)"
-            v-if="t.status === 'active' && authStore.isStudent && t.students.includes(authStore.currentUser?.id)">
+            v-if="t.status === 'active' && authStore.isStudent && isMyTraining(t)">
             <template #icon><QrcodeOutlined /></template>扫码签到
           </a-button>
 
           <template v-if="t.status === 'upcoming' && authStore.isStudent">
-            <a-button size="small" disabled v-if="t.students.includes(authStore.currentUser?.id)">已报名</a-button>
+            <a-button size="small" disabled v-if="isMyTraining(t)">已报名</a-button>
             <a-button size="small" disabled v-else-if="isPending(t.id)">审核中</a-button>
             <a-button size="small" @click="goEnroll(t)" v-else>报名申请</a-button>
           </template>
 
           <!-- 学员：已报名的班级可看日程 -->
           <a-button size="small" @click="goSchedule(t)"
-            v-if="authStore.isStudent && t.students.includes(authStore.currentUser?.id)">
+            v-if="authStore.isStudent && isMyTraining(t)">
             查看日程
           </a-button>
           <a-dropdown v-if="authStore.isAdmin || authStore.isInstructor" :trigger="['click']">
@@ -173,8 +173,8 @@
               >
                 <a-select-option
                   v-for="inst in instructorList"
-                  :key="inst.id"
-                  :value="inst.id"
+                  :key="inst.userId"
+                  :value="inst.userId"
                   :label="inst.name"
                 >
                   {{ inst.name }} · {{ inst.title }}
@@ -232,7 +232,12 @@ async function fetchTrainings() {
 async function fetchInstructors() {
   try {
     const res = await getInstructors({ size: -1 })
-    instructorList.value = res.items || res || []
+    const rawList = res.items || res || []
+    instructorList.value = rawList.map((it) => ({
+      ...it,
+      userId: it.userId,
+      name: it.nickname || it.name
+    }))
   } catch { /* ignore */ }
 }
 
@@ -245,10 +250,7 @@ const filteredTrainings = computed(() => {
   let list = trainingList.value
   // 学员只看自己参与的 + 正在招生的
   if (authStore.isStudent) {
-    const myId = authStore.currentUser?.id
-    list = list.filter(t =>
-      (t.students || []).includes(myId) || t.status === 'upcoming'
-    )
+    list = list.filter(t => isMyTraining(t) || t.status === 'upcoming')
   }
   if (filterStatus.value !== 'all') list = list.filter(t => t.status === filterStatus.value)
   if (filterType.value !== 'all') list = list.filter(t => t.type === filterType.value)
@@ -277,8 +279,12 @@ const trainingForm = reactive({
   description: '',
 })
 
-const onInstructorChange = (id) => {
-  const inst = instructorList.value.find(i => i.id == id)
+const getTrainingStudentIds = (training) => training?.studentIds || training?.students || []
+const getEnrolledCount = (training) => training?.enrolledCount ?? training?.enrolled ?? getTrainingStudentIds(training).length
+const isMyTraining = (training) => getTrainingStudentIds(training).includes(authStore.currentUser?.id)
+
+const onInstructorChange = (userId) => {
+  const inst = instructorList.value.find(i => i.userId == userId)
   if (inst) trainingForm.instructorName = inst.name
 }
 

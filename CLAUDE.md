@@ -4,9 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Guangxi Police Training Platform - a role-based (admin/instructor/student) training management system built with Vue 3. Currently uses mock data (`src/mock/`) with one real API endpoint for SMS verification.
+Guangxi Police Training Platform - a role-based (admin/instructor/student) training management system with Vue 3 frontend and FastAPI backend. Frontend modules have largely switched from local mock imports to real backend APIs (see `src/api/*`).
 
 ## Commands
+
+### Frontend (repo root)
 
 ```bash
 npm run dev      # Start dev server at http://localhost:5173
@@ -14,22 +16,47 @@ npm run build    # Production build to ./dist
 npm run preview  # Preview production build
 ```
 
+### Backend (`backend/`)
+
+```bash
+python main.py                                  # Start FastAPI server on :8001
+python migrate.py current                       # Show current Alembic revision
+python migrate.py upgrade                       # Upgrade DB to head
+python migrate.py downgrade -1                  # Rollback one migration
+python migrate.py generate "message"            # Generate autogenerate migration
+python -m py_compile app/services/training.py   # Quick syntax check example
+```
+
 No test framework or linter is configured.
 
 ## Architecture
+
+### Frontend
 
 **Stack:** Vue 3.5 (Composition API + `<script setup>`) | Vite 7 | Ant Design Vue 4 | Pinia 3 | Vue Router 4 | ECharts 6
 
 **Path alias:** `@` maps to `./src` (configured in `vite.config.js`)
 **Base path:** `/trainingplatform/` (production deployment path)
 
+### Backend
+
+**Stack:** FastAPI | SQLAlchemy 2 | Alembic | Pydantic v2 | PostgreSQL | Redis
+
+**API prefix:** `/api/v1`
+
 ### Key Directories
 
 - `src/layouts/MainLayout.vue` - Single layout: collapsible sidebar (220px) + sticky topbar (64px) + mobile bottom nav. Role-aware menu rendering.
-- `src/router/index.js` - All routes with lazy-loaded components. Route meta includes `roles` (array), `requiresAuth`, `fullscreen`. Navigation guard checks `localStorage` for auth.
-- `src/stores/auth.js` - Pinia store for auth. Persists to `localStorage` keys `mockRole` and `mockUser`. Has `loginWithCredentials`, `loginWithPhone`, `switchRole`, `logout`.
-- `src/mock/` - 10 mock data files. All data is imported directly (no HTTP mocking). Structured for easy replacement with real API calls.
+- `src/router/index.js` - All routes with lazy-loaded components. Route meta includes `roles` (array), `requiresAuth`, `fullscreen`. Navigation guard checks `localStorage` token and `userInfo` role.
+- `src/stores/auth.js` - Pinia auth store. Handles `loginWithCredentials`, `loginWithPhone`, `restoreFromStorage`, `logout`, `switchRole`.
+- `src/api/` - Axios-based API modules. `request.js` converts request keys camelCase→snake_case and response keys snake_case→camelCase.
 - `src/views/` - Page components organized by feature module (ai/, auth/, courses/, exam/, training/, etc.)
+- `backend/app/` - Backend app package (`__init__.py` defines FastAPI app, routers, middleware, startup hooks).
+- `backend/app/views/` - API routes (auth/course/training/report/etc.).
+- `backend/app/services/` - Domain service layer (business logic, DB read/write orchestration).
+- `backend/app/models/` - SQLAlchemy models.
+- `backend/app/schemas/` - Pydantic request/response schemas.
+- `backend/alembic/` - Alembic migration environment and versions.
 
 ### Role System
 
@@ -42,7 +69,10 @@ Role checked via `useAuthStore()` computed properties: `isAdmin`, `isInstructor`
 
 ### Data Flow
 
-Components import mock data directly from `src/mock/*.js` files. The only real API call is SMS verification at `http://118.145.115.139:3950/api/sms/verify`. When replacing with a real backend, swap mock imports for API calls in each view component.
+- Frontend uses centralized API modules in `src/api/*` and `src/api/request.js`.
+- Request/response payload keys are auto-converted between camelCase (frontend) and snake_case (backend).
+- Backend wraps most responses in `StandardResponse` (`{ code, message, data }`), which is unwrapped by the axios response interceptor.
+- Some feature pages may still keep local mock fallback logic; prefer API source of truth when fixing bugs.
 
 ### Styling
 

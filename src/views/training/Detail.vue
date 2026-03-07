@@ -97,6 +97,11 @@
               </div>
               <a-table :dataSource="filteredStudents" :columns="studentColumnsWithAction" size="small" :pagination="{ pageSize: 10 }">
                 <template #bodyCell="{ column, record }">
+                  <template v-if="column.key === 'name'">
+                    <a-button type="link" size="small" style="padding:0" @click="goTraineeDetail(record.key)">
+                      {{ record.name }}
+                    </a-button>
+                  </template>
                   <template v-if="column.key === 'progress'">
                     <a-progress :percent="record.progress" size="small" />
                   </template>
@@ -202,8 +207,8 @@
               >
                 <a-select-option
                   v-for="inst in instructorList"
-                  :key="inst.id"
-                  :value="inst.id"
+                  :key="inst.userId"
+                  :value="inst.userId"
                   :label="inst.name"
                 >
                   {{ inst.name }} · {{ inst.title }}
@@ -353,8 +358,8 @@
               >
                 <a-select-option
                   v-for="inst in instructorList"
-                  :key="inst.id"
-                  :value="inst.id"
+                  :key="inst.userId"
+                  :value="inst.userId"
                   :label="inst.name"
                 >
                   {{ inst.name }} · {{ inst.title }}
@@ -406,9 +411,9 @@
 import { ref, computed, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
-import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QrcodeOutlined, DownloadOutlined, PlusOutlined, EditOutlined, DownOutlined } from '@ant-design/icons-vue'
+import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QrcodeOutlined, DownloadOutlined, PlusOutlined, EditOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
-import { getTraining, updateTraining as apiUpdateTraining, getStudents, getCheckinRecords as apiGetCheckinRecords } from '@/api/training'
+import { getTraining, updateTraining as apiUpdateTraining, getCheckinRecords as apiGetCheckinRecords } from '@/api/training'
 import { getInstructors } from '@/api/instructor'
 import { MOCK_USER_LIST } from '@/mock/users'
 import { getTrainingNotices, MOCK_NOTICES } from '@/mock/board'
@@ -421,20 +426,59 @@ const trainingId = route.params.id
 const instructorList = ref([])
 
 // 使用 reactive 使数据可编辑
-const trainingData = reactive({ id: trainingId, name: '', status: 'upcoming', startDate: '', endDate: '', location: '', instructorName: '', description: '', courses: [], students: [], capacity: 0, enrolled: 0, checkinRecords: [] })
+const trainingData = reactive({
+  id: trainingId,
+  name: '',
+  status: 'upcoming',
+  progressPercent: 0,
+  startDate: '',
+  endDate: '',
+  location: '',
+  instructorId: null,
+  instructorName: '',
+  description: '',
+  courses: [],
+  studentIds: [],
+  students: [],
+  capacity: 0,
+  enrolledCount: 0,
+  enrolled: 0,
+  checkinRecords: []
+})
 
 onMounted(async () => {
   try {
-    const [data, instRes] = await Promise.all([
+    const [data, instRes, checkinRes] = await Promise.all([
       getTraining(trainingId),
-      getInstructors({ size: -1 })
+      getInstructors({ size: -1 }),
+      apiGetCheckinRecords(trainingId)
     ])
+
+    const normalizedStudentIds = data.studentIds || data.students || []
+    const normalizedCheckinRecords = (checkinRes || []).map((r) => ({
+      ...r,
+      studentId: r.userId,
+      name: r.userNickname || r.userName || r.userId,
+      sessionKey: r.sessionKey || 'start'
+    }))
+
     Object.assign(trainingData, data, {
+      progressPercent: data.progressPercent || 0,
+      instructorId: data.instructorId || null,
       courses: data.courses || [],
-      students: data.students || [],
-      checkinRecords: data.checkinRecords || [],
+      studentIds: normalizedStudentIds,
+      students: normalizedStudentIds,
+      enrolledCount: data.enrolledCount ?? normalizedStudentIds.length,
+      enrolled: data.enrolledCount ?? normalizedStudentIds.length,
+      checkinRecords: normalizedCheckinRecords
     })
-    instructorList.value = instRes.items || instRes || []
+
+    instructorList.value = (instRes.items || instRes || []).map((it) => ({
+      ...it,
+      id: it.id,
+      userId: it.userId,
+      name: it.nickname || it.name
+    }))
   } catch (e) {
     message.error('加载培训班详情失败')
   }
@@ -453,7 +497,7 @@ const checkinRecords = trainingData.checkinRecords || []
 const startRecords = checkinRecords.filter(r => !r.sessionKey || r.sessionKey === 'start')
 const courseRecords = checkinRecords.filter(r => r.sessionKey && r.sessionKey !== 'start')
 
-const enrolledCount = trainingData.enrolled || trainingData.students.length || 1
+const enrolledCount = trainingData.enrolledCount || trainingData.studentIds.length || 1
 
 // 开班签到率
 const startOnTimeCount = startRecords.filter(r => r.status === 'on_time').length
@@ -468,18 +512,18 @@ const courseTotal = courseOnTimeCount + courseLateCount
 // 假定如果暂无打卡数据，给一个默认高出勤率以便展示好看。实际中应为0。
 const totalCourseRate = courseRecords.length > 0 ? Math.round((courseTotal / courseRecords.length) * 100) : Math.floor(Math.random() * 15 + 85)
 
-const completeCount = trainingData.enrolled > 0 ? Math.floor(trainingData.enrolled * (totalCourseRate / 100 || 0.8)) : 0
-const isEnrolled = computed(() => trainingData.students.includes(authStore.currentUser?.id))
+const completeCount = trainingData.enrolledCount > 0 ? Math.floor(trainingData.enrolledCount * (totalCourseRate / 100 || 0.8)) : 0
+const isEnrolled = computed(() => trainingData.studentIds.includes(authStore.currentUser?.id))
 
 const overviewStats = computed(() => [
-  { label: '报名人数', value: trainingData.students.length, color: '#003087' },
+  { label: '报名人数', value: trainingData.enrolledCount, color: '#003087' },
   { label: '班级容量', value: trainingData.capacity, color: '#555' },
   { label: '预计完成学员', value: completeCount, color: '#52c41a' },
   { label: '课程总学时', value: trainingData.courses.reduce((a, c) => a + (c.hours || 0), 0) || 0, color: '#faad14' },
 ])
 
 // ===== 学员名单 =====
-const mockStudents = computed(() => trainingData.students.map(userId => {
+const mockStudents = computed(() => trainingData.studentIds.map(userId => {
   const u = MOCK_USER_LIST.find(user => user.id === userId) || { name: '未知学员', unit: '未知单位', policeId: userId }
   // 计算该学员所有的记录
   const records = checkinRecords.filter(cr => cr.studentId === userId)
@@ -557,12 +601,18 @@ const studentColumnsWithAction = computed(() =>
   canEdit.value ? [...baseStudentColumns, { title: '操作', key: 'action', width: 80 }] : baseStudentColumns
 )
 
+function goTraineeDetail(userId) {
+  router.push({ name: 'TraineeDetail', params: { id: userId } })
+}
+
 function removeStudent(userId) {
-  const idx = trainingData.students.indexOf(userId)
+  const idx = trainingData.studentIds.indexOf(userId)
   if (idx !== -1) {
-    trainingData.students.splice(idx, 1)
-    trainingData.enrolled = trainingData.students.length
-    apiUpdateTraining(trainingId, { students: trainingData.students, enrolled: trainingData.enrolled }).catch(() => {})
+    trainingData.studentIds.splice(idx, 1)
+    trainingData.students = trainingData.studentIds
+    trainingData.enrolledCount = trainingData.studentIds.length
+    trainingData.enrolled = trainingData.enrolledCount
+    apiUpdateTraining(trainingId, { studentIds: trainingData.studentIds }).catch(() => {})
     message.success('已移除该学员')
   }
 }
@@ -573,7 +623,7 @@ const addStudentSearch = ref('')
 const selectedStudentKeys = ref([])
 
 const availableStudents = computed(() => {
-  const existing = new Set(trainingData.students)
+  const existing = new Set(trainingData.studentIds)
   let list = MOCK_USER_LIST.filter(u => !existing.has(u.id))
   if (addStudentSearch.value) {
     const q = addStudentSearch.value.toLowerCase()
@@ -590,11 +640,12 @@ const addStudentColumns = [
 
 function addSelectedStudents() {
   if (selectedStudentKeys.value.length === 0) { message.warning('请先选择要添加的学员'); return }
-  trainingData.students.push(...selectedStudentKeys.value)
-  trainingData.enrolled = trainingData.students.length
-  // 同步回 MOCK_TRAININGS
-  const orig = MOCK_TRAININGS.find(t => t.id === trainingId)
-  if (orig) { orig.students = [...trainingData.students]; orig.enrolled = trainingData.enrolled }
+  const merged = new Set([...trainingData.studentIds, ...selectedStudentKeys.value])
+  trainingData.studentIds = Array.from(merged)
+  trainingData.students = trainingData.studentIds
+  trainingData.enrolledCount = trainingData.studentIds.length
+  trainingData.enrolled = trainingData.enrolledCount
+  apiUpdateTraining(trainingId, { studentIds: trainingData.studentIds }).catch(() => {})
   message.success(`已添加 ${selectedStudentKeys.value.length} 名学员`)
   selectedStudentKeys.value = []
   addStudentSearch.value = ''
@@ -613,8 +664,8 @@ const tempTimeRange = ref([])
 // 'schedules' will store objects like { date: 'YYYY-MM-DD', timeRange: 'HH:mm~HH:mm', hours: 2 }
 const courseForm = reactive({ name: '', instructor: '', instructorId: null, hours: 0, type: 'theory', schedules: [] })
 
-function onInstructorChange(id) {
-  const inst = instructorList.value.find(i => i.id == id)
+function onInstructorChange(userId) {
+  const inst = instructorList.value.find(i => i.userId == userId)
   if (inst) courseForm.instructor = inst.name
 }
 
@@ -699,7 +750,7 @@ function openCourseModal(idx = null) {
   if (idx !== null && trainingData.courses[idx]) {
     const c = JSON.parse(JSON.stringify(trainingData.courses[idx]))
     const inst = instructorList.value.find(i => i.name === c.instructor)
-    Object.assign(courseForm, { name: c.name, instructor: c.instructor, instructorId: inst?.id ?? null, hours: c.hours, type: c.type, schedules: c.schedules || [] })
+    Object.assign(courseForm, { name: c.name, instructor: c.instructor, instructorId: inst?.userId ?? null, hours: c.hours, type: c.type, schedules: c.schedules || [] })
 
     // Migrate old legacy formats into 'schedules' array (if course has dates but no schedules)
     if (courseForm.schedules.length === 0) {
@@ -752,8 +803,7 @@ function removeCourse(idx) {
     okText: '删除', okType: 'danger', cancelText: '取消',
     onOk: () => {
       trainingData.courses.splice(idx, 1)
-      const orig = MOCK_TRAININGS.find(t => t.id === trainingId)
-      if (orig) orig.courses = [...trainingData.courses]
+      apiUpdateTraining(trainingId, { courses: trainingData.courses }).catch(() => {})
       message.success('课程已删除')
     }
   })
@@ -768,8 +818,8 @@ const editForm = reactive({
   capacity: trainingData.capacity, status: trainingData.status, description: trainingData.description || '',
 })
 
-function onEditInstructorChange(id) {
-  const inst = instructorList.value.find(i => i.id == id)
+function onEditInstructorChange(userId) {
+  const inst = instructorList.value.find(i => i.userId == userId)
   if (inst) editForm.instructorName = inst.name
 }
 

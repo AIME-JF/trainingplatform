@@ -15,12 +15,12 @@
       <div class="quota-section">
         <div class="quota-label">
           <span>名额情况</span>
-          <span class="quota-nums"><b>{{ training.enrolled }}</b> / {{ training.capacity }} 人已录取</span>
+          <span class="quota-nums"><b>{{ enrolledCount }}</b> / {{ training.capacity }} 人已录取</span>
         </div>
-        <a-progress :percent="Math.round(training.enrolled / training.capacity * 100)" :show-info="false" stroke-color="#003087" />
+        <a-progress :percent="quotaPercent" :show-info="false" stroke-color="#003087" />
         <div class="quota-tags">
-          <a-tag color="green">已录取 {{ training.enrolled }}</a-tag>
-          <a-tag color="default">剩余名额 {{ Math.max(0, training.capacity - training.enrolled) }}</a-tag>
+          <a-tag color="green">已录取 {{ enrolledCount }}</a-tag>
+          <a-tag color="default">剩余名额 {{ Math.max(0, training.capacity - enrolledCount) }}</a-tag>
         </div>
       </div>
     </div>
@@ -101,7 +101,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { CalendarOutlined, EnvironmentOutlined, UserOutlined } from '@ant-design/icons-vue'
-import { getTraining, enroll as apiEnroll } from '@/api/training'
+import { getTraining, getEnrollments, enroll as apiEnroll } from '@/api/training'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
@@ -113,21 +113,37 @@ const training = ref(null)
 const submitted = ref(false)
 const submitting = ref(false)
 const agreed = ref(false)
+const hasPendingEnrollment = ref(false)
 
 const u = authStore.currentUser || {}
 
 onMounted(async () => {
   try {
-    training.value = await getTraining(trainingId)
-    if (isAlreadyInClass.value || hasEnrolled.value) {
+    const [tData, enrollmentData] = await Promise.all([
+      getTraining(trainingId),
+      getEnrollments(trainingId, { size: -1 })
+    ])
+    training.value = tData
+
+    const myEnrollment = (enrollmentData.items || enrollmentData || []).find((item) => String(item.userId) === String(u.id))
+    hasPendingEnrollment.value = myEnrollment?.status === 'pending'
+
+    if (isAlreadyInClass.value || hasPendingEnrollment.value) {
       submitted.value = true
     }
   } catch { /* ignore */ }
 })
 
-const isAlreadyInClass = computed(() => training.value?.students?.includes(u.id))
-const hasEnrolled = computed(() => false) // Will be determined by backend
-const isFull = computed(() => training.value?.enrolled >= training.value?.capacity)
+const studentIds = computed(() => training.value?.studentIds || training.value?.students || [])
+const enrolledCount = computed(() => training.value?.enrolledCount ?? training.value?.enrolled ?? studentIds.value.length)
+const isAlreadyInClass = computed(() => studentIds.value.includes(u.id))
+const hasEnrolled = computed(() => hasPendingEnrollment.value)
+const isFull = computed(() => enrolledCount.value >= (training.value?.capacity || 0))
+const quotaPercent = computed(() => {
+  const capacity = training.value?.capacity || 0
+  if (capacity <= 0) return 0
+  return Math.round((enrolledCount.value / capacity) * 100)
+})
 const formData = ref({
   name: u.name || '',
   policeId: u.username || '',
@@ -148,6 +164,7 @@ async function handleSubmit() {
       phone: formData.value.phone,
       needAccom: formData.value.needAccom,
     })
+    hasPendingEnrollment.value = true
     submitted.value = true
     message.success('报名申请已提交，等待审核')
   } catch (e) {
