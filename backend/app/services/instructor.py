@@ -4,11 +4,14 @@
 from typing import Optional, List
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import InstructorProfile, User
+import re
+import uuid
+from app.models import InstructorProfile, User, Role
 from app.schemas.instructor import (
     InstructorProfileCreate, InstructorProfileUpdate, InstructorResponse
 )
 from app.schemas import PaginatedResponse
+from app.services.auth import auth_service
 from logger import logger
 
 
@@ -63,22 +66,46 @@ class InstructorService:
         return self._to_response(profile)
 
     def create_instructor(self, data: InstructorProfileCreate) -> InstructorResponse:
-        """新增教官"""
+        """新增教官，若未传 user_id 则自动创建用户"""
+        user_id = data.user_id
+
+        if not user_id:
+            if not data.name:
+                raise ValueError("请提供 user_id 或 name")
+            # 自动创建教官用户
+            username = f"instructor_{uuid.uuid4().hex[:8]}"
+            user = User(
+                username=username,
+                password_hash=auth_service.get_password_hash("teach2025"),
+                nickname=data.name,
+                is_active=True,
+            )
+            instructor_role = self.db.query(Role).filter(Role.code == "instructor").first()
+            if instructor_role:
+                user.roles = [instructor_role]
+            self.db.add(user)
+            self.db.flush()
+            user_id = user.id
+            logger.info(f"自动创建教官用户: {username} (id={user_id})")
+
         existing = self.db.query(InstructorProfile).filter(
-            InstructorProfile.user_id == data.user_id
+            InstructorProfile.user_id == user_id
         ).first()
         if existing:
             raise ValueError("该用户已有教官档案")
 
+        level_map = {"高级教官": "expert", "中级教官": "senior", "初级教官": "standard"}
+
         profile = InstructorProfile(
-            user_id=data.user_id, title=data.title, level=data.level,
+            user_id=user_id, title=data.title,
+            level=level_map.get(data.title, data.level),
             specialties=data.specialties, qualification=data.qualification,
             certificates=data.certificates, intro=data.intro
         )
         self.db.add(profile)
         self.db.commit()
         self.db.refresh(profile)
-        logger.info(f"创建教官档案: user_id={data.user_id}")
+        logger.info(f"创建教官档案: user_id={user_id}")
         return self._to_response(profile)
 
     def update_instructor(self, instructor_id: int, data: InstructorProfileUpdate) -> Optional[InstructorResponse]:

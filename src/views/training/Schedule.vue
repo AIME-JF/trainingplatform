@@ -110,11 +110,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { MOCK_WEEK_SCHEDULE } from '@/mock/schedules'
-import { getTrainings } from '@/api/training'
+import { getTrainings, getTraining, updateTraining } from '@/api/training'
 import { useAuthStore } from '@/stores/auth'
+import { message } from 'ant-design-vue'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -122,13 +123,6 @@ const authStore = useAuthStore()
 const canEdit = computed(() => authStore.isAdmin || authStore.isInstructor)
 
 const allTrainings = ref([])
-
-onMounted(async () => {
-  try {
-    const res = await getTrainings({ size: -1 })
-    allTrainings.value = res.items || res || []
-  } catch { /* ignore */ }
-})
 
 // 根据角色过滤可见的培训班
 const availableTrainings = computed(() => {
@@ -140,7 +134,7 @@ const availableTrainings = computed(() => {
   } else {
     const me = authStore.currentUser?.id
     return allTrainings.value.filter(t =>
-      (t.students || []).includes(me)
+      (t.studentIds || t.students || []).includes(me)
     )
   }
 })
@@ -153,43 +147,83 @@ const trainingOptions = computed(() =>
 )
 
 // 初始选中：优先路由参数 > 第一个进行中 > 列表第一个
-const initId = route.params.id || (availableTrainings.value.find(t => t.status === 'active')?.id) || availableTrainings.value[0]?.id
-const selectedTrainingId = ref(initId || null)
+const selectedTrainingId = ref(null)
 
-const selectedTraining = computed(() =>
-  availableTrainings.value.find(t => t.id === selectedTrainingId.value) || null
-)
+// 存储详情数据（含 courses）
+const trainingDetailMap = ref({})
+
+const selectedTraining = computed(() => {
+  const base = availableTrainings.value.find(t => t.id === selectedTrainingId.value) || null
+  if (!base) return null
+  const detail = trainingDetailMap.value[base.id]
+  if (detail) {
+    return { ...base, courses: detail.courses || base.courses || [] }
+  }
+  return base
+})
 
 const currentWeek = ref(0)
 
-function onTrainingChange() {
-  currentWeek.value = 0
+async function loadTrainingDetail(id) {
+  if (!id) return
+  try {
+    const detail = await getTraining(id)
+    trainingDetailMap.value[id] = detail
+  } catch { /* ignore */ }
 }
+
+async function onTrainingChange() {
+  currentWeek.value = 0
+  await loadTrainingDetail(selectedTrainingId.value)
+}
+
+onMounted(async () => {
+  try {
+    const res = await getTrainings({ size: -1 })
+    allTrainings.value = res.items || res || []
+  } catch { /* ignore */ }
+
+  // 设置初始选中
+  const initId = route.params.id
+    ? parseInt(route.params.id)
+    : (availableTrainings.value.find(t => t.status === 'active')?.id || availableTrainings.value[0]?.id)
+  selectedTrainingId.value = initId || null
+
+  // 加载详情（含 courses）
+  if (selectedTrainingId.value) {
+    await loadTrainingDetail(selectedTrainingId.value)
+  }
+})
 
 // 追踪调度更新
 const triggerUpdate = ref(0)
 const draggedItem = ref(null)
 
-// 动态计算周日期，基于选中培训班的开始时间
+// 动态计算周日期：固定周一至周日 7 天
 const weekDays = computed(() => {
   const startDateStr = selectedTraining.value?.startDate || new Date().toISOString().split('T')[0]
   const base = new Date(startDateStr.replace(/-/g, '/'))
   base.setDate(base.getDate() + currentWeek.value * 7)
-  
-  const daysOfWeek = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+
+  // 找到本周的周一
+  const dayOfWeek = base.getDay() // 0=周日, 1=周一 ...
+  const monday = new Date(base)
+  monday.setDate(base.getDate() - ((dayOfWeek === 0 ? 7 : dayOfWeek) - 1))
+
+  const daysOfWeek = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
   const today = new Date()
-  
+
   const arr = []
-  for (let i = 0; i < 5; i++) {
-    const d = new Date(base)
-    d.setDate(d.getDate() + i)
-    
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday)
+    d.setDate(monday.getDate() + i)
+
     const y = d.getFullYear()
     const m = String(d.getMonth() + 1).padStart(2, '0')
     const dt = String(d.getDate()).padStart(2, '0')
-    
+
     arr.push({
-      name: daysOfWeek[d.getDay()],
+      name: daysOfWeek[i],
       date: `${m}/${dt}`,
       fullDate: `${y}-${m}-${dt}`,
       weekday: i + 1,
@@ -201,7 +235,7 @@ const weekDays = computed(() => {
 
 const weekRange = computed(() => {
   if (!weekDays.value.length) return ''
-  return `${weekDays.value[0].date} - ${weekDays.value[4].date}`
+  return `${weekDays.value[0].date} - ${weekDays.value[6].date}`
 })
 
 const prevWeek = () => { if (currentWeek.value > 0) currentWeek.value-- }
@@ -269,7 +303,7 @@ function onDragStart(e, item) {
   e.dataTransfer.effectAllowed = 'move'
 }
 
-function onDrop(e, targetDay) {
+async function onDrop(e, targetDay) {
   if (!draggedItem.value) return
   const item = draggedItem.value
   
@@ -294,9 +328,17 @@ function onDrop(e, targetDay) {
   const scheduleRef = selectedTraining.value.courses[item.courseIdx].schedules[item.scheduleIdx]
   scheduleRef.date = targetDay.fullDate
   scheduleRef.timeRange = `${newStartString}~${newEndString}`
-  
+
   triggerUpdate.value++
   draggedItem.value = null
+
+  // 持久化到后端
+  try {
+    await updateTraining(selectedTrainingId.value, { courses: selectedTraining.value.courses })
+    message.success('课程时段已保存')
+  } catch {
+    message.error('保存失败，请重试')
+  }
 }
 
 const getTopOffset = (time) => {
@@ -308,7 +350,7 @@ const getHeight = (duration) => (duration || 90) * 1.2
 
 const statusLabels = { active: '进行中', upcoming: '未开始', ended: '已结束' }
 const statusColors = { active: 'green', upcoming: 'orange', ended: 'default' }
-const dayNames = { 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五' }
+const dayNames = { 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日' }
 const typeColors = { theory: 'blue', skill: 'green', review: 'purple', physical: 'orange', drill: 'red' }
 const typeLabels = { theory: '理论课', skill: '技能课', review: '复习', physical: '体能', drill: '演练' }
 const typeIcons = { theory: '📖', skill: '🔧', review: '📝', physical: '💪', drill: '⚠️' }

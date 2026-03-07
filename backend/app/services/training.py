@@ -108,7 +108,10 @@ class TrainingService:
                     instructor=c.instructor,
                     hours=c.hours,
                     type=c.type,
-                    schedules=[item.model_dump() for item in (c.schedules or [])]
+                    schedules=[
+                        {k: (v.isoformat() if isinstance(v, date) else v) for k, v in item.model_dump().items()}
+                        for item in (c.schedules or [])
+                    ]
                 )
                 self.db.add(tc)
 
@@ -147,13 +150,18 @@ class TrainingService:
                 TrainingCourse.training_id == training_id
             ).delete(synchronize_session=False)
             for c in courses:
+                raw_schedules = c.get('schedules') or []
+                safe_schedules = [
+                    {k: (v.isoformat() if isinstance(v, date) else v) for k, v in item.items()}
+                    for item in raw_schedules
+                ]
                 self.db.add(TrainingCourse(
                     training_id=training.id,
                     name=c['name'],
                     instructor=c.get('instructor'),
                     hours=c.get('hours') or 0,
                     type=c.get('type') or 'theory',
-                    schedules=c.get('schedules') or []
+                    schedules=safe_schedules
                 ))
 
         if student_ids is not None:

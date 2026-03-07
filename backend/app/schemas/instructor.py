@@ -7,13 +7,15 @@ from pydantic import BaseModel, Field, ConfigDict
 
 class InstructorProfileCreate(BaseModel):
     """创建教官档案"""
-    user_id: int = Field(..., description="用户ID")
+    user_id: Optional[int] = Field(None, description="用户ID(可选，不传则自动创建用户)")
+    name: Optional[str] = Field(None, max_length=100, description="教官姓名(自动创建用户时使用)")
     title: Optional[str] = Field(None, max_length=50)
     level: Optional[str] = Field(None, max_length=20)
     specialties: Optional[List[str]] = None
     qualification: Optional[List[str]] = None
     certificates: Optional[List[dict]] = None
     intro: Optional[str] = None
+    unit: Optional[str] = Field(None, description="所属单位")
 
 
 class InstructorProfileUpdate(BaseModel):

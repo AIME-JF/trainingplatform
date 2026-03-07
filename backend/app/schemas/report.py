@@ -15,6 +15,9 @@ class KpiResponse(BaseModel):
     pass_rate: float = 0
     completion_rate: float = 0
     active_trainings: int = 0
+    monthly_trainees: int = 0
+    monthly_completion_rate: float = 0
+    pending_enrollments: int = 0
 
 
 class TrendItem(BaseModel):
@@ -23,6 +26,28 @@ class TrendItem(BaseModel):
     students: int = 0
     exams: int = 0
     avg_score: float = 0
+
+
+class TrainingTrendItem(BaseModel):
+    """培训完成率趋势项"""
+    month: str
+    completion_rate: float = 0
+    total: int = 0
+    completed: int = 0
+
+
+class CityAttendanceItem(BaseModel):
+    """各市参训人数"""
+    city: str
+    count: int = 0
+
+
+class CityCompletionItem(BaseModel):
+    """各市培训完成率"""
+    city: str
+    rate: float = 0
+    total: int = 0
+    completed: int = 0
 
 
 class PoliceTypeDistribution(BaseModel):

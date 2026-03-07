@@ -57,7 +57,10 @@ from .profile import ProfileUpdate, ProfileResponse, StudyStatsResponse, ExamHis
 # 工作台
 from .dashboard import DashboardResponse
 # 数据看板
-from .report import KpiResponse, TrendItem, PoliceTypeDistribution, CityRanking
+from .report import (
+    KpiResponse, TrendItem, PoliceTypeDistribution, CityRanking,
+    TrainingTrendItem, CityAttendanceItem, CityCompletionItem
+)
 # AI功能
 from .ai import (
     AIGenerateQuestionsRequest, AIGenerateQuestionsResponse,
@@ -67,6 +70,8 @@ from .ai import (
 from .talent import TalentResponse, TalentStatsResponse
 # 文件管理
 from .media import MediaFileResponse
+# 公告
+from .notice import NoticeCreate, NoticeUpdate, NoticeResponse
 
 
 __all__ = [
@@ -113,6 +118,7 @@ __all__ = [
     "DashboardResponse",
     # 数据看板
     "KpiResponse", "TrendItem", "PoliceTypeDistribution", "CityRanking",
+    "TrainingTrendItem", "CityAttendanceItem", "CityCompletionItem",
     # AI功能
     "AIGenerateQuestionsRequest", "AIGenerateQuestionsResponse",
     "AIGenerateLessonPlanRequest", "AIGenerateLessonPlanResponse",
@@ -120,4 +126,6 @@ __all__ = [
     "TalentResponse", "TalentStatsResponse",
     # 文件管理
     "MediaFileResponse",
+    # 公告
+    "NoticeCreate", "NoticeUpdate", "NoticeResponse",
 ]

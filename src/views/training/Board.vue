@@ -10,12 +10,7 @@
         </div>
       </div>
       <div class="board-actions">
-        <a-select v-model:value="timeRange" style="width:120px">
-          <a-select-option value="month">本月</a-select-option>
-          <a-select-option value="quarter">本季度</a-select-option>
-          <a-select-option value="year">本年度</a-select-option>
-        </a-select>
-        <a-button type="primary" ghost @click="exportReport"><DownloadOutlined /> 导出报告</a-button>
+        <a-button type="primary" ghost @click="handleExportReport"><DownloadOutlined /> 导出报告</a-button>
       </div>
     </div>
 
@@ -26,9 +21,6 @@
         <div class="kpi-info">
           <a-statistic :value="kpi.value" :suffix="kpi.suffix" :value-style="{ fontSize: '28px', fontWeight: 700, color: kpi.color }" />
           <div class="kpi-label">{{ kpi.label }}</div>
-          <div class="kpi-trend" :class="kpi.trend > 0 ? 'up' : 'down'">
-            {{ kpi.trend > 0 ? '↑' : '↓' }} {{ Math.abs(kpi.trend) }}% 较上月
-          </div>
         </div>
       </div>
     </div>
@@ -37,7 +29,7 @@
     <div class="chart-row" v-if="isMounted">
       <!-- 各市局参训人数 -->
       <div class="chart-card chart-large">
-        <div class="chart-title">各市局{{ timeLabels[timeRange] }}参训人数</div>
+        <div class="chart-title">各市局本月参训人数</div>
         <v-chart class="chart" :option="barOption" autoresize />
       </div>
       <!-- 近6月完成率趋势 -->
@@ -68,9 +60,9 @@
       <div class="rank-card">
         <div class="card-title"><TrophyOutlined style="color:#c8a84b" /> 各市完成率排名</div>
         <div class="rank-list">
-          <div class="rank-item" v-for="(city, idx) in cityRanks" :key="city.name">
+          <div class="rank-item" v-for="(city, idx) in cityRanks" :key="city.city">
             <div class="rank-num" :class="idx < 3 ? `rank-${idx+1}` : ''">{{ idx + 1 }}</div>
-            <div class="rank-name">{{ city.name }}</div>
+            <div class="rank-name">{{ city.city }}</div>
             <div class="rank-bar-wrap">
               <div class="rank-bar" :style="{ width: city.rate + '%', background: idx === 0 ? '#c8a84b' : idx === 1 ? '#8c8c8c' : idx === 2 ? '#cd7f32' : '#003087' }" />
             </div>
@@ -83,7 +75,7 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -92,56 +84,63 @@ import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/compon
 import VChart from 'vue-echarts'
 import { DownloadOutlined, ExclamationCircleOutlined, TrophyOutlined } from '@ant-design/icons-vue'
 
-import { MOCK_TRAININGS } from '@/mock/trainings'
-import { MOCK_ENROLLMENTS } from '@/mock/enrollments'
-import { MOCK_TRAINING_BOARD } from '@/mock/dashboard'
+import { getKpi, getTrainingTrend, getCityAttendance, getCityCompletion, exportReport } from '@/api/report'
 
 use([CanvasRenderer, BarChart, LineChart, GridComponent, TooltipComponent, LegendComponent])
 
-const timeRange = ref('month')
 const currentDate = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
-const timeLabels = { month: '本月', quarter: '本季度', year: '本年度' }
-const timeMultiplier = { month: 1, quarter: 3, year: 12 }
 
 const isMounted = ref(false)
-import { onMounted } from 'vue'
 
-onMounted(() => {
-  // Delay chart rendering to bypass Ant Design submenu transition conflicts
+// 真实数据
+const kpiRaw = ref(null)
+const cityAttendanceData = ref([])
+const trainingTrendData = ref([])
+const cityCompletionData = ref([])
+
+onMounted(async () => {
+  // 延迟图表渲染以避免 Ant Design submenu 过渡冲突
   setTimeout(() => { isMounted.value = true }, 200)
+
+  // 并行调用 4 个 report API
+  try {
+    const [kpiRes, attendanceRes, trendRes, completionRes] = await Promise.all([
+      getKpi(),
+      getCityAttendance(),
+      getTrainingTrend(),
+      getCityCompletion()
+    ])
+    kpiRaw.value = kpiRes
+    cityAttendanceData.value = attendanceRes || []
+    trainingTrendData.value = trendRes || []
+    cityCompletionData.value = completionRes || []
+  } catch (e) {
+    message.error('加载看板数据失败')
+  }
 })
 
-const baseActiveTrainings = MOCK_TRAININGS.filter(t => t.status === 'active').length || 1
-const baseTotalEnrolled = MOCK_ENROLLMENTS.filter(e => e.status === 'approved').length || 32
-const basePending = MOCK_ENROLLMENTS.filter(e => e.status === 'pending').length || 0
-
 const kpiData = computed(() => {
-  const m = timeMultiplier[timeRange.value]
-  const config = MOCK_TRAINING_BOARD.kpiConfig.baseTrend
+  const k = kpiRaw.value || {}
   return [
-    { 
-      label: '进行中培训班', 
-      value: baseActiveTrainings * (m === 1 ? 1 : m > 1 ? 2 : 1), 
-      suffix: '个', icon: '🏫', bgColor: '#e6f0ff', color: '#003087', 
-      trend: config.inProgress 
+    {
+      label: '进行中培训班',
+      value: k.activeTrainings || 0,
+      suffix: '个', icon: '🏫', bgColor: '#e6f0ff', color: '#003087'
     },
-    { 
-      label: timeLabels[timeRange.value] + '参训人数', 
-      value: Math.round(350 * m + (baseTotalEnrolled * 2)), 
-      suffix: '人', icon: '👮', bgColor: '#e6fff0', color: '#52c41a', 
-      trend: config.attendance 
+    {
+      label: '本月参训人数',
+      value: k.monthlyTrainees || 0,
+      suffix: '人', icon: '👮', bgColor: '#e6fff0', color: '#52c41a'
     },
-    { 
-      label: timeLabels[timeRange.value] + '培训完成率', 
-      value: m === 1 ? 88 : m === 3 ? 85 : 82, 
-      suffix: '%', icon: '✅', bgColor: '#fff7e6', color: '#fa8c16', 
-      trend: config.completion 
+    {
+      label: '本月培训完成率',
+      value: k.monthlyCompletionRate || 0,
+      suffix: '%', icon: '✅', bgColor: '#fff7e6', color: '#fa8c16'
     },
-    { 
-      label: '待审核学员', 
-      value: basePending, 
-      suffix: '人', icon: '⚠️', bgColor: '#fff1f0', color: '#ff4d4f', 
-      trend: config.pending 
+    {
+      label: '待审核学员',
+      value: k.pendingEnrollments || 0,
+      suffix: '人', icon: '⚠️', bgColor: '#fff1f0', color: '#ff4d4f'
     },
   ]
 })
@@ -150,43 +149,58 @@ const barOption = computed(() => ({
   tooltip: { trigger: 'axis' },
   grid: { left: 80, right: 30, top: 20, bottom: 20 },
   xAxis: { type: 'value', axisLabel: { fontSize: 11 } },
-  yAxis: { 
-    type: 'category', 
-    data: MOCK_TRAINING_BOARD.cityAttendance.map(c => c.name), 
-    axisLabel: { fontSize: 11 } 
+  yAxis: {
+    type: 'category',
+    data: cityAttendanceData.value.map(c => c.city),
+    axisLabel: { fontSize: 11 }
   },
-  series: [{ 
-    type: 'bar', 
-    data: MOCK_TRAINING_BOARD.cityAttendance.map(c => Math.round(c.value * timeMultiplier[timeRange.value] * 0.8)), 
-    itemStyle: { color: '#003087', borderRadius: [0, 4, 4, 0] }, 
-    barMaxWidth: 20 
+  series: [{
+    type: 'bar',
+    data: cityAttendanceData.value.map(c => c.count),
+    itemStyle: { color: '#003087', borderRadius: [0, 4, 4, 0] },
+    barMaxWidth: 20
   }],
 }))
 
 const lineOption = computed(() => ({
   tooltip: { trigger: 'axis' },
   grid: { left: 40, right: 20, top: 20, bottom: 30 },
-  xAxis: { type: 'category', data: MOCK_TRAINING_BOARD.completionTrend.months },
-  yAxis: { type: 'value', min: 60, max: 100, axisLabel: { formatter: '{value}%' } },
-  series: [{ 
-    type: 'line', 
-    data: MOCK_TRAINING_BOARD.completionTrend.rates, 
-    smooth: true, 
-    lineStyle: { color: '#003087', width: 3 }, 
-    itemStyle: { color: '#003087' }, 
-    areaStyle: { color: 'rgba(0,48,135,0.08)' } 
+  xAxis: { type: 'category', data: trainingTrendData.value.map(t => t.month) },
+  yAxis: { type: 'value', min: 0, max: 100, axisLabel: { formatter: '{value}%' } },
+  series: [{
+    type: 'line',
+    data: trainingTrendData.value.map(t => t.completionRate),
+    smooth: true,
+    lineStyle: { color: '#003087', width: 3 },
+    itemStyle: { color: '#003087' },
+    areaStyle: { color: 'rgba(0,48,135,0.08)' }
   }],
 }))
 
-const warnings = computed(() => MOCK_TRAINING_BOARD.warnings)
-const cityRanks = computed(() => MOCK_TRAINING_BOARD.cityRankings)
+// 异常预警（暂保留前端 Mock，可后续接入后端预警模块）
+const warnings = computed(() => [
+  { id: 1, text: '当前暂无异常预警', time: '系统实时监测中', level: 'medium' },
+])
+
+const cityRanks = computed(() => cityCompletionData.value)
 
 // 导出报告
-function exportReport() {
-  message.loading({ content: '正在生成报告...', key: 'export', duration: 1.5 })
-  setTimeout(() => {
+async function handleExportReport() {
+  message.loading({ content: '正在生成报告...', key: 'export', duration: 0 })
+  try {
+    const blob = await exportReport()
+    const url = window.URL.createObjectURL(new Blob([blob]))
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `培训看板报告_${new Date().toISOString().split('T')[0]}.xlsx`)
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
     message.success({ content: '报告已生成并开始下载！', key: 'export' })
-  }, 1500)
+  } catch (e) {
+    message.error({ content: '导出报告失败，请重试', key: 'export' })
+  }
 }
 </script>
 
@@ -203,9 +217,6 @@ function exportReport() {
 .kpi-card { background: white; border-radius: 10px; padding: 20px; display: flex; align-items: center; gap: 16px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
 .kpi-icon { width: 52px; height: 52px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0; }
 .kpi-label { font-size: 12px; color: #8c8c8c; margin-top: 2px; }
-.kpi-trend { font-size: 11px; margin-top: 4px; }
-.kpi-trend.up { color: #52c41a; }
-.kpi-trend.down { color: #ff4d4f; }
 
 .chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
 .chart-card { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }

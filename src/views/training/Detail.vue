@@ -415,8 +415,8 @@ import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QrcodeOutlined, Do
 import dayjs from 'dayjs'
 import { getTraining, updateTraining as apiUpdateTraining, getCheckinRecords as apiGetCheckinRecords } from '@/api/training'
 import { getInstructors } from '@/api/instructor'
-import { MOCK_USER_LIST } from '@/mock/users'
-import { getTrainingNotices, MOCK_NOTICES } from '@/mock/board'
+import { getUsers } from '@/api/user'
+import { getNotices as apiGetNotices, createNotice as apiCreateNotice, updateNotice as apiUpdateNotice, deleteNotice as apiDeleteNotice } from '@/api/notice'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
@@ -446,13 +446,22 @@ const trainingData = reactive({
   checkinRecords: []
 })
 
+const allUserList = ref([])
+const userMap = computed(() => {
+  const map = {}
+  allUserList.value.forEach(u => { map[u.id] = u })
+  return map
+})
+
 onMounted(async () => {
   try {
-    const [data, instRes, checkinRes] = await Promise.all([
+    const [data, instRes, checkinRes, usersRes] = await Promise.all([
       getTraining(trainingId),
       getInstructors({ size: -1 }),
-      apiGetCheckinRecords(trainingId)
+      apiGetCheckinRecords(trainingId),
+      getUsers({ role: 'student', size: -1 })
     ])
+    allUserList.value = usersRes.items || []
 
     const normalizedStudentIds = data.studentIds || data.students || []
     const normalizedCheckinRecords = (checkinRes || []).map((r) => ({
@@ -479,6 +488,7 @@ onMounted(async () => {
       userId: it.userId,
       name: it.nickname || it.name
     }))
+    loadNotices()
   } catch (e) {
     message.error('加载培训班详情失败')
   }
@@ -492,27 +502,39 @@ const canEdit = computed(() => authStore.isAdmin || authStore.isInstructor)
 const statusLabels = { active: '进行中', upcoming: '未开始', ended: '已结束' }
 const statusColorMap = { active: 'green', upcoming: 'orange', ended: 'default' }
 
-// 签到统计 (双轨)
-const checkinRecords = trainingData.checkinRecords || []
-const startRecords = checkinRecords.filter(r => !r.sessionKey || r.sessionKey === 'start')
-const courseRecords = checkinRecords.filter(r => r.sessionKey && r.sessionKey !== 'start')
+// 签到统计 (双轨 - 响应式 computed)
+const startRecords = computed(() => (trainingData.checkinRecords || []).filter(r => !r.sessionKey || r.sessionKey === 'start'))
+const courseRecords = computed(() => (trainingData.checkinRecords || []).filter(r => r.sessionKey && r.sessionKey !== 'start'))
 
-const enrolledCount = trainingData.enrolledCount || trainingData.studentIds.length || 1
+// 开班签到率：分母为应签到人数 enrolledCount
+const startCheckinRate = computed(() => {
+  const total = trainingData.enrolledCount || trainingData.studentIds.length || 0
+  if (total === 0) return 0
+  const onTime = startRecords.value.filter(r => r.status === 'on_time').length
+  const late = startRecords.value.filter(r => r.status === 'late').length
+  return Math.round(((onTime + late) / total) * 100)
+})
 
-// 开班签到率
-const startOnTimeCount = startRecords.filter(r => r.status === 'on_time').length
-const startLateCount = startRecords.filter(r => r.status === 'late').length
-const startTotal = startOnTimeCount + startLateCount
-const startCheckinRate = startRecords.length > 0 ? Math.round((startTotal / startRecords.length) * 100) : 0
+// 课程总签到率：分母为应签到总人次（课程场次数 × 应签人数）
+const totalCourseRate = computed(() => {
+  const enrolled = trainingData.enrolledCount || trainingData.studentIds.length || 0
+  if (enrolled === 0) return 0
+  // 计算总课程场次数
+  let totalSessions = 0
+  ;(trainingData.courses || []).forEach(c => {
+    totalSessions += (c.schedules || []).length
+  })
+  if (totalSessions === 0) return 0
+  const expectedTotal = totalSessions * enrolled
+  const onTime = courseRecords.value.filter(r => r.status === 'on_time').length
+  const late = courseRecords.value.filter(r => r.status === 'late').length
+  return Math.round(((onTime + late) / expectedTotal) * 100)
+})
 
-// 课程总签到率 (所有上课阶段的数据汇总)
-const courseOnTimeCount = courseRecords.filter(r => r.status === 'on_time').length
-const courseLateCount = courseRecords.filter(r => r.status === 'late').length
-const courseTotal = courseOnTimeCount + courseLateCount
-// 假定如果暂无打卡数据，给一个默认高出勤率以便展示好看。实际中应为0。
-const totalCourseRate = courseRecords.length > 0 ? Math.round((courseTotal / courseRecords.length) * 100) : Math.floor(Math.random() * 15 + 85)
-
-const completeCount = trainingData.enrolledCount > 0 ? Math.floor(trainingData.enrolledCount * (totalCourseRate / 100 || 0.8)) : 0
+const completeCount = computed(() => {
+  const enrolled = trainingData.enrolledCount || 0
+  return enrolled > 0 ? Math.floor(enrolled * (totalCourseRate.value / 100)) : 0
+})
 const isEnrolled = computed(() => trainingData.studentIds.includes(authStore.currentUser?.id))
 
 const overviewStats = computed(() => [
@@ -524,17 +546,18 @@ const overviewStats = computed(() => [
 
 // ===== 学员名单 =====
 const mockStudents = computed(() => trainingData.studentIds.map(userId => {
-  const u = MOCK_USER_LIST.find(user => user.id === userId) || { name: '未知学员', unit: '未知单位', policeId: userId }
+  const u = userMap.value[userId] || {}
+  const name = u.nickname || u.username || '未知学员'
+  const policeId = u.policeId || String(userId)
+  const unit = (u.departments && u.departments.length > 0) ? u.departments[0].name : '未分配'
   // 计算该学员所有的记录
-  const records = checkinRecords.filter(cr => cr.studentId === userId)
-  let cRate = 100
+  const records = (trainingData.checkinRecords || []).filter(cr => cr.studentId === userId)
+  let cRate = 0
   if (records.length > 0) {
     const score = records.reduce((acc, r) => acc + (r.status === 'on_time' ? 100 : r.status === 'late' ? 80 : 0), 0)
     cRate = Math.round(score / records.length)
-  } else {
-    cRate = Math.floor(Math.random() * 20 + 80) // default fallback
   }
-  return { key: userId, name: u.name, policeId: u.policeId || userId, unit: u.unit || '机关单位', progress: Math.floor(Math.random() * 20 + 80), checkinRate: cRate }
+  return { key: userId, name, policeId, unit, progress: Math.floor(Math.random() * 20 + 80), checkinRate: cRate }
 }))
 
 const filteredStudents = computed(() =>
@@ -624,7 +647,12 @@ const selectedStudentKeys = ref([])
 
 const availableStudents = computed(() => {
   const existing = new Set(trainingData.studentIds)
-  let list = MOCK_USER_LIST.filter(u => !existing.has(u.id))
+  let list = allUserList.value.filter(u => !existing.has(u.id)).map(u => ({
+    id: u.id,
+    name: u.nickname || u.username,
+    policeId: u.policeId || '',
+    unit: (u.departments && u.departments.length > 0) ? u.departments[0].name : '未分配'
+  }))
   if (addStudentSearch.value) {
     const q = addStudentSearch.value.toLowerCase()
     list = list.filter(u => u.name.includes(q) || u.policeId.toLowerCase().includes(q))
@@ -836,8 +864,19 @@ function saveClassInfo() {
 }
 
 // ===== 公告 =====
-// ===== 公告 =====
-const notices = ref(getTrainingNotices(trainingData))
+const notices = ref([])
+
+async function loadNotices() {
+  try {
+    const res = await apiGetNotices({ type: 'training', trainingId: trainingId, size: -1 })
+    notices.value = (res.items || []).map(n => ({
+      ...n,
+      time: n.createdAt ? new Date(n.createdAt).toLocaleString('zh-CN') : ''
+    }))
+  } catch {
+    notices.value = []
+  }
+}
 
 const showNoticeModal = ref(false)
 const editingNoticeId = ref(null)
@@ -857,51 +896,37 @@ function editNotice(notice) {
   showNoticeModal.value = true
 }
 
-function deleteNotice(id) {
-  const indexGlobal = MOCK_NOTICES.findIndex(n => n.id === id)
-  if (indexGlobal > -1) MOCK_NOTICES.splice(indexGlobal, 1)
-  
-  const indexLocal = notices.value.findIndex(n => n.id === id)
-  if (indexLocal > -1) notices.value.splice(indexLocal, 1)
-  
-  message.success('公告已删除')
+async function deleteNotice(id) {
+  try {
+    await apiDeleteNotice(id)
+    notices.value = notices.value.filter(n => n.id !== id)
+    message.success('公告已删除')
+  } catch {
+    message.error('删除失败')
+  }
 }
 
-function saveNotice() {
+async function saveNotice() {
   if (!noticeForm.title || !noticeForm.content) { message.warning('请填写公告标题和内容'); return }
-  
-  if (editingNoticeId.value) {
-    // Edit existing notice
-    const globalNotice = MOCK_NOTICES.find(n => n.id === editingNoticeId.value)
-    if (globalNotice) {
-      globalNotice.title = noticeForm.title
-      globalNotice.content = noticeForm.content
+
+  try {
+    if (editingNoticeId.value) {
+      await apiUpdateNotice(editingNoticeId.value, { title: noticeForm.title, content: noticeForm.content })
+      const localNotice = notices.value.find(n => n.id === editingNoticeId.value)
+      if (localNotice) {
+        localNotice.title = noticeForm.title
+        localNotice.content = noticeForm.content
+      }
+      message.success('公告已更新')
+    } else {
+      const res = await apiCreateNotice({ title: noticeForm.title, content: noticeForm.content, type: 'training', trainingId: trainingId })
+      notices.value.unshift({ ...res, time: new Date().toLocaleString('zh-CN') })
+      message.success('公告已发布')
     }
-    const localNotice = notices.value.find(n => n.id === editingNoticeId.value)
-    if (localNotice) {
-      localNotice.title = noticeForm.title
-      localNotice.content = noticeForm.content
-    }
-    message.success('公告已更新')
-  } else {
-    // Create new notice
-    const now = new Date()
-    const timeStr = `${now.getMonth() + 1}-${now.getDate()} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-    
-    const newNotice = {
-      id: Date.now(),
-      type: 'training',
-      targetId: trainingId,
-      title: noticeForm.title,
-      content: noticeForm.content,
-      time: timeStr
-    }
-    MOCK_NOTICES.unshift(newNotice)
-    notices.value.unshift(newNotice)
-    message.success('公告已发布')
+    showNoticeModal.value = false
+  } catch {
+    message.error('操作失败')
   }
-  
-  showNoticeModal.value = false
 }
 
 function exportMsg() {

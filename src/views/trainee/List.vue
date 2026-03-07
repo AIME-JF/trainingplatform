@@ -25,102 +25,124 @@
     <a-card :bordered="false" style="margin-bottom:16px">
       <a-row :gutter="16">
         <a-col :span="12">
-          <a-input-search v-model:value="searchText" placeholder="搜索学员姓名..." allow-clear />
+          <a-input-search v-model:value="searchText" placeholder="搜索学员姓名..." allow-clear @search="loadTrainees" />
         </a-col>
       </a-row>
     </a-card>
 
-    <div class="trainee-grid">
-      <div v-for="trainee in filteredTrainees" :key="trainee.id" class="traineecard" @click="goDetail(trainee)">
-        <div class="traineeavatar-wrap">
-          <a-avatar :size="72" :style="{ background: trainee.avatarColor, fontSize: '28px' }">
-            {{ trainee.name.charAt(0) }}
-          </a-avatar>
-          <div class="traineebadge" :class="trainee.level">{{ trainee.levelLabel }}</div>
-        </div>
-        <div class="traineename">{{ trainee.name }}</div>
-        <div class="traineetitle">{{ trainee.title }}</div>
+    <a-spin :spinning="loading">
+      <div class="trainee-grid">
+        <div v-for="trainee in traineeList" :key="trainee.id" class="traineecard" @click="goDetail(trainee)">
+          <div class="traineeavatar-wrap">
+            <a-avatar :size="72" :style="{ background: getAvatarColor(trainee.id), fontSize: '28px' }">
+              {{ (trainee.nickname || trainee.username || '').charAt(0) }}
+            </a-avatar>
+            <div class="traineebadge" :class="getLevelClass(trainee.level)">{{ trainee.level || '学员' }}</div>
+          </div>
+          <div class="traineename">{{ trainee.nickname || trainee.username }}</div>
+          <div class="traineetitle">{{ trainee.policeId }}</div>
 
-        <div class="traineestats" style="margin-top: 16px;">
-          <div class="is-item">
-            <div class="is-num">{{ trainee.courseCount }}</div>
-            <div class="is-label">课程数</div>
+          <div class="traineestats" style="margin-top: 16px;">
+            <div class="is-item">
+              <div class="is-num">{{ trainee.examCount || 0 }}</div>
+              <div class="is-label">考试数</div>
+            </div>
+            <div class="is-divider"></div>
+            <div class="is-item">
+              <div class="is-num" style="font-size: 14px;">{{ getDepartment(trainee) }}</div>
+              <div class="is-label">所属单位</div>
+            </div>
+            <div class="is-divider"></div>
+            <div class="is-item">
+              <div class="is-num" style="color:#faad14">{{ trainee.avgScore || 0 }}</div>
+              <div class="is-label">平均分</div>
+            </div>
           </div>
-          <div class="is-divider"></div>
-          <div class="is-item">
-            <div class="is-num" style="font-size: 14px;">{{ trainee.unit }}</div>
-            <div class="is-label">所属单位</div>
-          </div>
-          <div class="is-divider"></div>
-          <div class="is-item">
-            <div class="is-num" style="color:#faad14">{{ trainee.rating }}</div>
-            <div class="is-label">评分</div>
-          </div>
-        </div>
 
-        <div class="trainee-card-actions" v-if="authStore.isAdmin" @click.stop>
-          <a-popconfirm :title="`确定删除学员「${trainee.name}」吗？`" ok-text="删除" cancel-text="取消" @confirm="deleteTrainee(trainee)">
-            <a-button size="small" type="text" danger><DeleteOutlined /> 删除</a-button>
-          </a-popconfirm>
+          <div class="trainee-card-actions" v-if="authStore.isAdmin" @click.stop>
+            <a-popconfirm :title="`确定删除学员「${trainee.nickname || trainee.username}」吗？`" ok-text="删除" cancel-text="取消" @confirm="deleteTrainee(trainee)">
+              <a-button size="small" type="text" danger><DeleteOutlined /> 删除</a-button>
+            </a-popconfirm>
+          </div>
         </div>
       </div>
-    </div>
+    </a-spin>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
-import { MOCK_TRAINEES } from '@/mock/trainees'
+import { getUsers } from '@/api/user'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const searchText = ref('')
+const loading = ref(false)
 
-const traineeList = ref([...MOCK_TRAINEES])
+const traineeList = ref([])
+
+const avatarColors = ['#003087', '#c8a84b', '#8B1A1A', '#1a5c2e', '#6b3a8a', '#2e86de']
+function getAvatarColor(id) {
+  return avatarColors[(id || 0) % avatarColors.length]
+}
+
+function getLevelClass(level) {
+  if (!level) return 'standard'
+  if (level.includes('高级') || level.includes('专家')) return 'expert'
+  if (level.includes('中级')) return 'senior'
+  return 'standard'
+}
+
+function getDepartment(trainee) {
+  if (trainee.departments && trainee.departments.length > 0) {
+    return trainee.departments[0].name
+  }
+  return '未分配'
+}
+
+async function loadTrainees() {
+  loading.value = true
+  try {
+    const res = await getUsers({ role: 'student', size: -1, search: searchText.value || undefined })
+    traineeList.value = res.items || []
+  } catch {
+    traineeList.value = []
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => loadTrainees())
+
+let searchTimer = null
+watch(searchText, () => {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => loadTrainees(), 300)
+})
 
 // 添加学员
 const addVisible = ref(false)
 const addForm = reactive({ name: '', title: undefined, unit: '' })
-const avatarColors = ['#003087', '#c8a84b', '#8B1A1A', '#1a5c2e', '#6b3a8a', '#2e86de']
-const levelMap = { '高级学员': { level: 'expert', label: '专家' }, '中级学员': { level: 'senior', label: '高级' }, '初级学员': { level: 'standard', label: '初级' } }
 
 const handleAdd = () => {
   if (!addForm.name) return message.warning('请输入学员姓名')
   if (!addForm.title) return message.warning('请选择等级')
-  const lv = levelMap[addForm.title] || { level: 'standard', label: '初级' }
-  const newTrainee = {
-    id: Date.now(),
-    name: addForm.name,
-    title: addForm.title,
-    unit: addForm.unit || '未指定',
-    courseCount: 0,
-    studentCount: 0,
-    rating: 0,
-    level: lv.level,
-    levelLabel: lv.label,
-    avatarColor: avatarColors[Math.floor(Math.random() * avatarColors.length)],
-  }
-  traineeList.value.unshift(newTrainee)
+  // TODO: 调用后端创建用户接口
+  message.info('添加学员功能需要后端用户创建接口支持')
   addVisible.value = false
   Object.assign(addForm, { name: '', title: undefined, unit: '' })
-  message.success('学员添加成功！')
 }
-
-const filteredTrainees = computed(() => {
-  let list = [...traineeList.value]
-  if (searchText.value) list = list.filter(i => i.name.includes(searchText.value))
-  return list
-})
 
 const goDetail = (trainee) => router.push({ name: 'TraineeDetail', params: { id: trainee.id } })
 
 function deleteTrainee(trainee) {
+  // TODO: 调用后端删除接口
   traineeList.value = traineeList.value.filter(i => i.id !== trainee.id)
-  message.success(`已删除学员「${trainee.name}」`)
+  message.success(`已删除学员「${trainee.nickname || trainee.username}」`)
 }
 </script>
 

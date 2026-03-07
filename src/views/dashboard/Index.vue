@@ -241,6 +241,7 @@
 import { computed, ref, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth.js'
 import { getDashboard } from '@/api/dashboard'
+import { getNotices } from '@/api/notice'
 import { message } from 'ant-design-vue'
 import {
   PlayCircleOutlined, FormOutlined, RobotOutlined, TeamOutlined,
@@ -283,6 +284,16 @@ onMounted(async () => {
       }
       Object.assign(dashData.value, adapted)
     }
+    // 加载系统公告
+    try {
+      const noticeRes = await getNotices({ type: 'system', size: 10 })
+      dashData.value.announcements = (noticeRes.items || []).map(n => ({
+        id: n.id,
+        title: n.title,
+        date: n.createdAt ? new Date(n.createdAt).toLocaleDateString('zh-CN') : '',
+        urgent: false
+      }))
+    } catch {}
   } catch {
     // Silently fail - dashboard will show empty state
   }

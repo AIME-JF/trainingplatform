@@ -269,9 +269,22 @@ const qrCountdown = ref(60)
 const refreshing = ref(false)
 const manualId = ref('')
 
+const allCheckinRecords = ref([])
+
+async function loadCheckinRecords() {
+  try {
+    const records = await apiGetCheckinRecords(trainingId)
+    allCheckinRecords.value = (records || []).map(r => ({
+      ...r,
+      studentId: r.userId,
+      name: r.userNickname || r.userName || r.userId,
+      sessionKey: r.sessionKey || 'start'
+    }))
+  } catch { /* ignore */ }
+}
+
 const checkinRecords = computed(() => {
-  if (!training.value.checkinRecords) return []
-  return training.value.checkinRecords.filter(r => r.sessionKey === currentSessionKey.value)
+  return allCheckinRecords.value.filter(r => r.sessionKey === currentSessionKey.value)
 })
 
 const onTimeCount = computed(() => checkinRecords.value.filter(r => r.status === 'on_time').length)
@@ -311,10 +324,16 @@ const refreshQR = async () => {
   setTimeout(() => { refreshing.value = false }, 500)
 }
 
-const manualCheckin = (id) => {
+const manualCheckin = async (id) => {
   if (!id) return
-  message.success(`工号 ${id} 签到成功！`)
-  manualId.value = ''
+  try {
+    await apiCheckin(trainingId, { sessionKey: currentSessionKey.value, userId: parseInt(id) || id })
+    message.success(`工号 ${id} 签到成功！`)
+    manualId.value = ''
+    await loadCheckinRecords()
+  } catch (e) {
+    message.error('签到失败，请重试')
+  }
 }
 
 const exportCheckinRecords = () => {
@@ -375,12 +394,18 @@ let redirectTimer = null
 
 async function confirmCheckin() {
   signing.value = true
-  await new Promise(r => setTimeout(r, 1200))
-  signing.value = false
-  checkedIn.value = true
-  const t = new Date()
-  successTime.value = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')} ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}`
-  message.success('签到成功！')
+  try {
+    await apiCheckin(trainingId, { sessionKey: currentSessionKey.value })
+    signing.value = false
+    checkedIn.value = true
+    const t = new Date()
+    successTime.value = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')} ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}`
+    message.success('签到成功！')
+  } catch (e) {
+    signing.value = false
+    message.error('签到失败，请重试')
+    return
+  }
   // 3秒后自动返回培训班
   redirectCount.value = 3
   redirectTimer = setInterval(() => {
@@ -398,13 +423,15 @@ function goTraining() {
 }
 
 let timer = null
-onMounted(() => {
+onMounted(async () => {
   if (!isStudent.value) {
     generateQR()
     timer = setInterval(() => {
       qrCountdown.value--
       if (qrCountdown.value <= 0) refreshQR()
     }, 1000)
+    // 加载已有签到记录
+    await loadCheckinRecords()
   } else if (isMobile.value) {
     startCamera()
   }

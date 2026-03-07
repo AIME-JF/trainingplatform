@@ -13,6 +13,7 @@ from .exam import Question, Exam, ExamQuestion, ExamRecord
 from .certificate import Certificate
 from .instructor import InstructorProfile
 from .media import MediaFile
+from .notice import Notice
 
 
 __all__ = [
@@ -41,4 +42,6 @@ __all__ = [
     "InstructorProfile",
     # 文件
     "MediaFile",
+    # 公告
+    "Notice",
 ]
