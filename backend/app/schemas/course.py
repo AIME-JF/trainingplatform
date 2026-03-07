@@ -13,8 +13,9 @@ class ChapterCreate(BaseModel):
     title: str = Field(..., max_length=200, description="章节标题")
     sort_order: int = Field(0, description="排序")
     duration: int = Field(0, description="时长(分钟)")
-    video_url: Optional[str] = Field(None, description="视频URL")
-    doc_url: Optional[str] = Field(None, description="文档URL")
+    video_url: Optional[str] = Field(None, description="视频URL(兼容)")
+    doc_url: Optional[str] = Field(None, description="文档URL(兼容)")
+    file_id: Optional[int] = Field(None, description="关联文件ID")
 
 
 class ChapterUpdate(BaseModel):
@@ -24,6 +25,7 @@ class ChapterUpdate(BaseModel):
     duration: Optional[int] = None
     video_url: Optional[str] = None
     doc_url: Optional[str] = None
+    file_id: Optional[int] = None
 
 
 class ChapterResponse(BaseModel):
@@ -35,6 +37,8 @@ class ChapterResponse(BaseModel):
     duration: int = 0
     video_url: Optional[str] = None
     doc_url: Optional[str] = None
+    file_id: Optional[int] = None
+    file_url: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

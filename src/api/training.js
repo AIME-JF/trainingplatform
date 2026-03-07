@@ -1,0 +1,57 @@
+import request from './request'
+
+export function getTrainings(params) {
+  return request.get('/trainings', { params })
+}
+
+export function getTraining(id) {
+  return request.get(`/trainings/${id}`)
+}
+
+export function createTraining(data) {
+  return request.post('/trainings', data)
+}
+
+export function updateTraining(id, data) {
+  return request.put(`/trainings/${id}`, data)
+}
+
+export function deleteTraining(id) {
+  return request.delete(`/trainings/${id}`)
+}
+
+export function getStudents(id, params) {
+  return request.get(`/trainings/${id}/students`, { params })
+}
+
+export function getSchedule(id) {
+  return request.get(`/trainings/${id}/schedule`)
+}
+
+export function enroll(id, data) {
+  return request.post(`/trainings/${id}/enroll`, data)
+}
+
+export function getEnrollments(id, params) {
+  return request.get(`/trainings/${id}/enrollments`, { params })
+}
+
+export function approveEnrollment(trainingId, enrollmentId) {
+  return request.put(`/trainings/${trainingId}/enrollments/${enrollmentId}/approve`)
+}
+
+export function rejectEnrollment(trainingId, enrollmentId, note) {
+  return request.put(`/trainings/${trainingId}/enrollments/${enrollmentId}/reject`, { note })
+}
+
+export function getCheckinRecords(id, date) {
+  return request.get(`/trainings/${id}/checkin/records`, { params: { date } })
+}
+
+export function checkin(id, data) {
+  return request.post(`/trainings/${id}/checkin`, data)
+}
+
+export function getCheckinQR(id) {
+  return request.get(`/trainings/${id}/checkin/qr`)
+}

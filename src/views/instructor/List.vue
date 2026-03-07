@@ -83,19 +83,28 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { PlusOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
-import { MOCK_INSTRUCTORS } from '@/mock/instructors'
+import { getInstructors, createInstructor as apiCreateInstructor } from '@/api/instructor'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const searchText = ref('')
 const filterSpecialty = ref('全部')
 
-const instructorList = ref([...MOCK_INSTRUCTORS])
+const instructorList = ref([])
+
+async function fetchInstructors() {
+  try {
+    const res = await getInstructors({ size: -1 })
+    instructorList.value = res.items || res || []
+  } catch { /* ignore */ }
+}
+
+onMounted(fetchInstructors)
 
 // 动态计算专业列表
 const specialtiesList = computed(() => {
@@ -110,27 +119,23 @@ const addForm = reactive({ name: '', title: undefined, unit: '', specialties: []
 const avatarColors = ['#003087', '#c8a84b', '#8B1A1A', '#1a5c2e', '#6b3a8a', '#2e86de']
 const levelMap = { '高级教官': { level: 'expert', label: '专家' }, '中级教官': { level: 'senior', label: '高级' }, '初级教官': { level: 'standard', label: '初级' } }
 
-const handleAdd = () => {
+const handleAdd = async () => {
   if (!addForm.name) return message.warning('请输入教官姓名')
   if (!addForm.title) return message.warning('请选择职级')
-  const lv = levelMap[addForm.title] || { level: 'standard', label: '初级' }
-  const newInst = {
-    id: Date.now(),
-    name: addForm.name,
-    title: addForm.title,
-    unit: addForm.unit || '未指定',
-    specialties: addForm.specialties.length ? addForm.specialties : ['通用'],
-    courseCount: 0,
-    studentCount: 0,
-    rating: 0,
-    level: lv.level,
-    levelLabel: lv.label,
-    avatarColor: avatarColors[Math.floor(Math.random() * avatarColors.length)],
+  try {
+    await apiCreateInstructor({
+      name: addForm.name,
+      title: addForm.title,
+      unit: addForm.unit || '未指定',
+      specialties: addForm.specialties.length ? addForm.specialties : ['通用'],
+    })
+    addVisible.value = false
+    Object.assign(addForm, { name: '', title: undefined, unit: '', specialties: [] })
+    message.success('教官添加成功！')
+    fetchInstructors()
+  } catch (e) {
+    message.error(e.message || '添加失败')
   }
-  instructorList.value.unshift(newInst)
-  addVisible.value = false
-  Object.assign(addForm, { name: '', title: undefined, unit: '', specialties: [] })
-  message.success('教官添加成功！')
 }
 
 const filteredInstructors = computed(() => {

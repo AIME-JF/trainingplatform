@@ -110,10 +110,10 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { MOCK_WEEK_SCHEDULE } from '@/mock/schedules'
-import { MOCK_TRAININGS } from '@/mock/trainings'
+import { getTrainings } from '@/api/training'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
@@ -121,19 +121,25 @@ const authStore = useAuthStore()
 
 const canEdit = computed(() => authStore.isAdmin || authStore.isInstructor)
 
+const allTrainings = ref([])
+
+onMounted(async () => {
+  try {
+    const res = await getTrainings({ size: -1 })
+    allTrainings.value = res.items || res || []
+  } catch { /* ignore */ }
+})
+
 // 根据角色过滤可见的培训班
 const availableTrainings = computed(() => {
   if (authStore.isAdmin) {
-    // 管理员看所有
-    return MOCK_TRAININGS
+    return allTrainings.value
   } else if (authStore.isInstructor) {
-    // 教官看自己主讲的班
     const myName = authStore.currentUser?.name || authStore.currentUser?.username
-    return MOCK_TRAININGS.filter(t => t.instructorName === myName || t.instructorId === authStore.currentUser?.username)
+    return allTrainings.value.filter(t => t.instructorName === myName || t.instructorId === authStore.currentUser?.username)
   } else {
-    // 学员看自己已报名或已加入的班
     const me = authStore.currentUser?.id
-    return MOCK_TRAININGS.filter(t =>
+    return allTrainings.value.filter(t =>
       (t.students || []).includes(me)
     )
   }

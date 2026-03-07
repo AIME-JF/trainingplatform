@@ -217,7 +217,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { ClockCircleOutlined } from '@ant-design/icons-vue'
 import QRCode from 'qrcode'
-import { MOCK_TRAININGS } from '@/mock/trainings'
+import { getTraining, checkin as apiCheckin, getCheckinRecords as apiGetCheckinRecords } from '@/api/training'
 import { useAuthStore } from '@/stores/auth'
 import dayjs from 'dayjs'
 
@@ -226,7 +226,14 @@ const router = useRouter()
 const authStore = useAuthStore()
 const trainingId = route.params.id
 const currentSessionKey = ref(route.params.sessionKey || 'start')
-const training = MOCK_TRAININGS.find(t => t.id === trainingId) || MOCK_TRAININGS[0]
+const training = ref({ id: trainingId, name: '', courses: [], checkinRecords: [], enrolled: 0 })
+
+onMounted(async () => {
+  try {
+    const data = await getTraining(trainingId)
+    training.value = data
+  } catch { /* ignore */ }
+})
 
 const handleSessionChange = (newKey) => {
   router.replace(`/training/${trainingId}/checkin/${newKey}`)
@@ -238,8 +245,8 @@ const sessionName = computed(() => {
     const parts = currentSessionKey.value.split('-')
     const cIdx = parseInt(parts[1], 10)
     const sIdx = parseInt(parts[2], 10)
-    if (!isNaN(cIdx) && !isNaN(sIdx) && training.courses[cIdx]) {
-      const c = training.courses[cIdx]
+    if (!isNaN(cIdx) && !isNaN(sIdx) && training.value.courses[cIdx]) {
+      const c = training.value.courses[cIdx]
       const sch = c.schedules ? c.schedules[sIdx] : null
       if (sch) {
         return `${c.name} (${sch.date} ${sch.timeRange})`
@@ -263,8 +270,8 @@ const refreshing = ref(false)
 const manualId = ref('')
 
 const checkinRecords = computed(() => {
-  if (!training.checkinRecords) return []
-  return training.checkinRecords.filter(r => r.sessionKey === currentSessionKey.value)
+  if (!training.value.checkinRecords) return []
+  return training.value.checkinRecords.filter(r => r.sessionKey === currentSessionKey.value)
 })
 
 const onTimeCount = computed(() => checkinRecords.value.filter(r => r.status === 'on_time').length)
@@ -272,8 +279,8 @@ const lateCount = computed(() => checkinRecords.value.filter(r => r.status === '
 const absentCount = computed(() => checkinRecords.value.filter(r => r.status === 'absent').length)
 const totalCheckedIn = computed(() => onTimeCount.value + lateCount.value)
 const checkinRate = computed(() => {
-  if (training.enrolled === 0) return 0
-  return Math.round((totalCheckedIn.value / training.enrolled) * 100)
+  if (training.value.enrolled === 0) return 0
+  return Math.round((totalCheckedIn.value / training.value.enrolled) * 100)
 })
 const recentArrivals = computed(() => checkinRecords.value.filter(r => r.status !== 'absent').slice(-3).reverse())
 
@@ -290,7 +297,7 @@ const columns = [
 const generateQR = async () => {
   if (!qrCanvas.value) return
   try {
-    await QRCode.toCanvas(qrCanvas.value, `checkin:${training.id}:${currentSessionKey.value}:${Date.now()}`, {
+    await QRCode.toCanvas(qrCanvas.value, `checkin:${training.value.id}:${currentSessionKey.value}:${Date.now()}`, {
       width: 200,
       color: { dark: '#003087', light: '#ffffff' }
     })
@@ -330,7 +337,7 @@ const exportCheckinRecords = () => {
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
   link.setAttribute("href", url)
-  link.setAttribute("download", `${training.name}_${sessionName.value}_签到记录.csv`)
+  link.setAttribute("download", `${training.value.name}_${sessionName.value}_签到记录.csv`)
   link.style.visibility = 'hidden'
   document.body.appendChild(link)
   link.click()

@@ -41,11 +41,13 @@ class Chapter(Base):
     title = Column(String(200), nullable=False, comment='章节标题')
     sort_order = Column(Integer, default=0, comment='排序')
     duration = Column(Integer, default=0, comment='时长(分钟)')
-    video_url = Column(String(500), nullable=True, comment='视频URL')
-    doc_url = Column(String(500), nullable=True, comment='文档URL')
+    video_url = Column(String(500), nullable=True, comment='视频URL(兼容旧数据)')
+    doc_url = Column(String(500), nullable=True, comment='文档URL(兼容旧数据)')
+    file_id = Column(Integer, ForeignKey('media_files.id'), nullable=True, comment='关联文件ID')
 
     # 关联关系
     course = relationship("Course", back_populates="chapters")
+    file = relationship("MediaFile", foreign_keys=[file_id])
 
 
 class CourseProgress(Base):

@@ -249,22 +249,31 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, reactive } from 'vue'
+import { ref, computed, watch, nextTick, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { LockOutlined, CheckCircleFilled, DownloadOutlined, EditOutlined, DeleteOutlined, InboxOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
-import { MOCK_COURSES } from '@/mock/courses'
+import { getCourse, updateCourse as apiUpdateCourse, updateChapterProgress } from '@/api/course'
+import { uploadFile } from '@/api/media'
 import { MOCK_COURSE_QA } from '@/mock/scores'
 
 const route = useRoute()
 const authStore = useAuthStore()
 
 const courseId = route.params.id
-const course = computed(() => MOCK_COURSES.find(c => c.id === courseId) || MOCK_COURSES[0])
 
-// 本地可编辑副本，使用 reactive 以支持编辑后即时刷新
-const localCourse = ref({ ...course.value, chapters: [...(course.value.chapters || [])] })
+// 本地可编辑副本
+const localCourse = ref({ title: '', chapters: [], fileType: 'video', description: '', instructor: '', duration: 0, studentCount: 0 })
+
+onMounted(async () => {
+  try {
+    const data = await getCourse(courseId)
+    localCourse.value = { ...data, chapters: data.chapters || [] }
+  } catch (e) {
+    message.error('加载课程失败')
+  }
+})
 
 const isVideo = computed(() => (localCourse.value.fileType || 'video') === 'video')
 
@@ -291,8 +300,8 @@ const totalDuration = ref('--:--')
 const videoError = ref(false)
 const showPlayIcon = ref(false)
 
-const currentVideoUrl = computed(() => currentChapter.value.videoUrl || localCourse.value.videoUrl || '')
-const currentDocUrl = computed(() => currentChapter.value.docUrl || localCourse.value.docUrl || '')
+const currentVideoUrl = computed(() => currentChapter.value.fileUrl || currentChapter.value.videoUrl || localCourse.value.videoUrl || '')
+const currentDocUrl = computed(() => currentChapter.value.fileUrl || currentChapter.value.docUrl || localCourse.value.docUrl || '')
 
 let playIconTimer = null
 const togglePlay = () => {
@@ -406,54 +415,63 @@ const openEdit = () => {
   editVisible.value = true
 }
 
-const saveEdit = () => {
+const editSaving = ref(false)
+
+const saveEdit = async () => {
   if (!editForm.title.trim()) return message.warning('课程名称不能为空')
   if (editForm.chapters.some(ch => !ch.title.trim())) return message.warning('章节名称不能为空')
 
-  const newChapters = editForm.chapters.map((ch, idx) => {
-    let videoUrl = ch._videoUrl || ''
-    let docUrl = ch._docUrl || ''
-    if (ch.fileList?.length > 0) {
-      const f = ch.fileList[0].originFileObj || ch.fileList[0]
-      if (f && f.name) {
-        const ext = f.name.split('.').pop().toLowerCase()
-        try {
-          const blobUrl = URL.createObjectURL(f)
-          if (ext === 'mp4') videoUrl = blobUrl
-          else docUrl = blobUrl
-        } catch {}
+  editSaving.value = true
+  try {
+    // 上传新文件并构建章节数据
+    const newChapters = []
+    for (let idx = 0; idx < editForm.chapters.length; idx++) {
+      const ch = editForm.chapters[idx]
+      const existing = localCourse.value.chapters[idx] || {}
+      let fileId = existing.fileId || null
+
+      if (ch.fileList?.length > 0) {
+        const rawFile = ch.fileList[0].originFileObj || ch.fileList[0]
+        if (rawFile && rawFile.name) {
+          const fileRes = await uploadFile(rawFile)
+          fileId = fileRes.id
+        }
       }
-    }
-    return {
-      ...(localCourse.value.chapters[idx] || {}),
-      title: ch.title,
-      duration: ch.duration || 30,
-      ...(videoUrl ? { videoUrl } : {}),
-      ...(docUrl ? { docUrl } : {}),
-    }
-  })
 
-  // 更新本地课程数据
-  Object.assign(localCourse.value, {
-    title: editForm.title,
-    description: editForm.description,
-    instructor: editForm.instructor,
-    difficulty: editForm.difficulty,
-    tags: editForm.tags,
-    isRequired: editForm.isRequired,
-    chapters: newChapters,
-    chapterCount: newChapters.length,
-    duration: newChapters.reduce((s, c) => s + c.duration, 0),
-    updateDate: new Date().toISOString().split('T')[0],
-  })
+      newChapters.push({
+        title: ch.title,
+        sortOrder: idx,
+        duration: ch.duration || 30,
+        fileId,
+      })
+    }
 
-  // 如果章节数变少，重置到第一章
-  if (currentChapterIdx.value >= newChapters.length) {
-    currentChapterIdx.value = 0
+    const courseData = {
+      title: editForm.title,
+      description: editForm.description,
+      difficulty: editForm.difficulty,
+      tags: editForm.tags,
+      isRequired: editForm.isRequired,
+      duration: newChapters.reduce((s, c) => s + c.duration, 0),
+    }
+
+    await apiUpdateCourse(courseId, courseData)
+
+    // 重新加载课程数据
+    const data = await getCourse(courseId)
+    localCourse.value = { ...data, chapters: data.chapters || [] }
+
+    if (currentChapterIdx.value >= localCourse.value.chapters.length) {
+      currentChapterIdx.value = 0
+    }
+
+    editVisible.value = false
+    message.success('课程信息已更新')
+  } catch (e) {
+    message.error(e.message || '保存失败')
+  } finally {
+    editSaving.value = false
   }
-
-  editVisible.value = false
-  message.success('课程信息已更新')
 }
 </script>
 

@@ -97,19 +97,18 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { CalendarOutlined, EnvironmentOutlined, UserOutlined } from '@ant-design/icons-vue'
-import { MOCK_TRAININGS } from '@/mock/trainings'
-import { MOCK_ENROLLMENTS, addEnrollment } from '@/mock/enrollments'
+import { getTraining, enroll as apiEnroll } from '@/api/training'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const authStore = useAuthStore()
 
 const trainingId = route.params.id
-const training = MOCK_TRAININGS.find(t => t.id === trainingId)
+const training = ref(null)
 
 const submitted = ref(false)
 const submitting = ref(false)
@@ -117,13 +116,18 @@ const agreed = ref(false)
 
 const u = authStore.currentUser || {}
 
-const isAlreadyInClass = computed(() => training?.students.includes(u.id))
-const hasEnrolled = computed(() => MOCK_ENROLLMENTS.some(e => e.trainingId === trainingId && e.userId === u.id))
-const isFull = computed(() => training?.enrolled >= training?.capacity)
+onMounted(async () => {
+  try {
+    training.value = await getTraining(trainingId)
+    if (isAlreadyInClass.value || hasEnrolled.value) {
+      submitted.value = true
+    }
+  } catch { /* ignore */ }
+})
 
-if (isAlreadyInClass.value || hasEnrolled.value) {
-  submitted.value = true
-}
+const isAlreadyInClass = computed(() => training.value?.students?.includes(u.id))
+const hasEnrolled = computed(() => false) // Will be determined by backend
+const isFull = computed(() => training.value?.enrolled >= training.value?.capacity)
 const formData = ref({
   name: u.name || '',
   policeId: u.username || '',
@@ -138,21 +142,19 @@ async function handleSubmit() {
   if (isFull.value) { message.error('该班级名额已满，无法申请'); return }
   
   submitting.value = true
-  await new Promise(r => setTimeout(r, 600))
-  
-  addEnrollment({
-    trainingId,
-    userId: u.id,
-    name: formData.value.name,
-    policeId: formData.value.policeId,
-    unit: formData.value.unit,
-    phone: formData.value.phone,
-    reason: formData.value.reason
-  })
-  
-  submitting.value = false
-  submitted.value = true
-  message.success('报名申请已提交，等待审核')
+  try {
+    await apiEnroll(trainingId, {
+      note: formData.value.reason,
+      phone: formData.value.phone,
+      needAccom: formData.value.needAccom,
+    })
+    submitted.value = true
+    message.success('报名申请已提交，等待审核')
+  } catch (e) {
+    message.error(e.message || '报名失败')
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 

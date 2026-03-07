@@ -240,8 +240,7 @@
 <script setup>
 import { computed, ref, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth.js'
-import { MOCK_PERSONAL_DASHBOARD } from '../../mock/dashboard.js'
-import { MOCK_TRAININGS } from '../../mock/trainings.js'
+import { getDashboard } from '@/api/dashboard'
 import { message } from 'ant-design-vue'
 import {
   PlayCircleOutlined, FormOutlined, RobotOutlined, TeamOutlined,
@@ -265,26 +264,28 @@ const hour = now.getHours()
 const greeting = hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好'
 const today = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`
 
-const dashData = computed(() => {
-  if (isAdmin.value) {
-    // 管理员：用真实培训数据覆盖 recentTrainings 和部分 stats
-    const activeCount = MOCK_TRAININGS.filter(t => t.status === 'active').length
-    const upcomingCount = MOCK_TRAININGS.filter(t => t.status === 'upcoming').length
-    const recentTrainings = MOCK_TRAININGS.filter(t => t.status === 'active' || t.status === 'upcoming').slice(0, 3)
-    const adminData = MOCK_PERSONAL_DASHBOARD.admin
-    return {
-      ...adminData,
-      stats: [
-        adminData.stats[0],
-        adminData.stats[1],
-        { label: '进行中培训班', value: activeCount, unit: '个', trend: `+${upcomingCount} 即将开始`, trendType: 'up' },
-        adminData.stats[3],
-      ],
-      recentTrainings,
+const dashData = ref({ stats: [], pendingTasks: [], recentCourses: [], weekSchedule: [], monthProgress: 0, announcements: [], recentTrainings: [], studentProgressData: [] })
+
+onMounted(async () => {
+  try {
+    const role = isAdmin.value ? 'admin' : isInstructor.value ? 'instructor' : 'student'
+    const res = await getDashboard(role)
+    // Adapt backend response format to frontend expected structure
+    if (res) {
+      const adapted = { ...res }
+      // If stats is a dict, convert to array format expected by frontend
+      if (res.stats && !Array.isArray(res.stats)) {
+        adapted.stats = Object.entries(res.stats).map(([key, val]) => ({
+          label: key,
+          value: val,
+          unit: '',
+        }))
+      }
+      Object.assign(dashData.value, adapted)
     }
+  } catch {
+    // Silently fail - dashboard will show empty state
   }
-  if (isInstructor.value) return MOCK_PERSONAL_DASHBOARD.instructor
-  return MOCK_PERSONAL_DASHBOARD.student
 })
 
 const announceMsg = () => message.info('公告发布功能开发中...')

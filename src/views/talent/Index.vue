@@ -81,25 +81,43 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { RobotOutlined } from '@ant-design/icons-vue'
-import { MOCK_TALENTS } from '@/mock/scores'
+import { getTalents, getTalentStats } from '@/api/talent'
 
 const searchText = ref('')
 const filterTier = ref('all')
 const filterUnit = ref('all')
 
-const topStats = [
-  { icon: '🏆', label: 'S级人才', value: 3, color: '#c8a84b' },
-  { icon: '⭐', label: 'A级人才', value: 8, color: '#003087' },
-  { icon: '✅', label: '本月新入库', value: 5, color: '#52c41a' },
-  { icon: '📊', label: '评估覆盖率', value: '94%', color: '#722ed1' },
-]
+const topStats = ref([
+  { icon: '🏆', label: 'S级人才', value: 0, color: '#c8a84b' },
+  { icon: '⭐', label: 'A级人才', value: 0, color: '#003087' },
+  { icon: '✅', label: '本月新入库', value: 0, color: '#52c41a' },
+  { icon: '📊', label: '评估覆盖率', value: '0%', color: '#722ed1' },
+])
 
-const TALENTS = MOCK_TALENTS
+const talentList = ref([])
+
+onMounted(async () => {
+  try {
+    const [talentRes, statsRes] = await Promise.all([
+      getTalents({ size: -1 }),
+      getTalentStats().catch(() => null),
+    ])
+    talentList.value = talentRes.items || talentRes || []
+    if (statsRes) {
+      topStats.value = [
+        { icon: '🏆', label: 'S级人才', value: statsRes.sTier ?? 0, color: '#c8a84b' },
+        { icon: '⭐', label: 'A级人才', value: statsRes.aTier ?? 0, color: '#003087' },
+        { icon: '✅', label: '本月新入库', value: statsRes.newThisMonth ?? 0, color: '#52c41a' },
+        { icon: '📊', label: '评估覆盖率', value: (statsRes.coverageRate ?? 0) + '%', color: '#722ed1' },
+      ]
+    }
+  } catch { /* ignore */ }
+})
 
 const filteredTalents = computed(() => {
-  let list = [...TALENTS]
+  let list = [...talentList.value]
   if (searchText.value) list = list.filter(t => t.name.includes(searchText.value))
   if (filterTier.value !== 'all') list = list.filter(t => t.tier === filterTier.value)
   return list

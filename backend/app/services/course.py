@@ -7,11 +7,13 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 
 from app.models import Course, Chapter, CourseProgress, User
+from app.models.media import MediaFile
 from app.schemas.course import (
     CourseCreate, CourseUpdate, CourseResponse, CourseListResponse,
     ChapterResponse, CourseProgressUpdate, CourseProgressResponse
 )
 from app.schemas import PaginatedResponse
+from config import settings
 from logger import logger
 
 
@@ -94,7 +96,7 @@ class CourseService:
                     course_id=course.id, title=ch.title,
                     sort_order=ch.sort_order or idx,
                     duration=ch.duration, video_url=ch.video_url,
-                    doc_url=ch.doc_url
+                    doc_url=ch.doc_url, file_id=ch.file_id
                 )
                 self.db.add(chapter)
 
@@ -161,11 +163,24 @@ class CourseService:
         self.db.refresh(record)
         return CourseProgressResponse.model_validate(record)
 
+    def _chapter_to_response(self, ch: Chapter) -> ChapterResponse:
+        """转换章节为响应，填充 file_url"""
+        file_url = None
+        if ch.file_id:
+            file_url = f"{settings.API_V1_STR}/media/files/{ch.file_id}"
+        resp = ChapterResponse(
+            id=ch.id, course_id=ch.course_id, title=ch.title,
+            sort_order=ch.sort_order, duration=ch.duration,
+            video_url=ch.video_url, doc_url=ch.doc_url,
+            file_id=ch.file_id, file_url=file_url,
+        )
+        return resp
+
     def _to_response(self, course: Course) -> CourseResponse:
         """转换为响应"""
         chapters = []
         if hasattr(course, 'chapters') and course.chapters:
-            chapters = [ChapterResponse.model_validate(ch) for ch in
+            chapters = [self._chapter_to_response(ch) for ch in
                         sorted(course.chapters, key=lambda x: x.sort_order)]
 
         return CourseResponse(

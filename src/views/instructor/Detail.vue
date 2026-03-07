@@ -137,19 +137,30 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { StarFilled } from '@ant-design/icons-vue'
-import { MOCK_INSTRUCTORS } from '@/mock/instructors'
-import { MOCK_COURSES } from '@/mock/courses'
+import { getInstructor } from '@/api/instructor'
+import { getCourses } from '@/api/course'
 import { MOCK_REVIEWS, getTrainingHistory } from '@/mock/reviews'
 
 const route = useRoute()
 const instId = route.params.id
-const inst = computed(() => MOCK_INSTRUCTORS.find(i => i.id === instId) || MOCK_INSTRUCTORS[0])
+const inst = ref({ name: '', title: '', unit: '', specialties: [], certificates: [], courseCount: 0, studentCount: 0, rating: 0, level: '', levelLabel: '', bio: '', policeType: '', years: 0, phone: '', avatarColor: '#003087' })
 const activeTab = ref('intro')
+const instCourses = ref([])
 
-const instCourses = computed(() => MOCK_COURSES.filter(c => c.instructor === inst.value.name))
+onMounted(async () => {
+  try {
+    const data = await getInstructor(instId)
+    inst.value = data
+    // Fetch courses by instructor
+    const coursesRes = await getCourses({ size: -1 })
+    const allCourses = coursesRes.items || coursesRes || []
+    instCourses.value = allCourses.filter(c => c.instructor === data.name || c.instructorId == instId)
+  } catch { /* ignore */ }
+})
+
 const getCoverIcon = (cat) => ({ law: '⚖️', skill: '🔧', traffic: '🚗', community: '🏘️', cyber: '💻', physical: '💪' })[cat] ?? '📚'
 
 const mockReviews = MOCK_REVIEWS

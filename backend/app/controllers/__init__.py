@@ -18,6 +18,7 @@ from .dashboard import DashboardController
 from .report import ReportController
 from .ai import AIController
 from .talent import TalentController
+from .media import MediaController
 
 __all__ = [
     "UserController",
@@ -37,4 +38,5 @@ __all__ = [
     "ReportController",
     "AIController",
     "TalentController",
+    "MediaController",
 ]

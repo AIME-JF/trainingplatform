@@ -133,7 +133,7 @@ def init_db():
             Course, Chapter, CourseProgress,
             Training, TrainingCourse, Enrollment, CheckinRecord, ScheduleItem,
             Question, Exam, ExamQuestion, ExamRecord,
-            Certificate, InstructorProfile
+            Certificate, InstructorProfile, MediaFile
         )
         
         # 创建所有表

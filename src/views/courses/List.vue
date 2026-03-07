@@ -124,8 +124,8 @@
         <div style="display:flex;gap:8px">
           <a-button v-if="currentStep > 0" @click="currentStep--">上一步</a-button>
           <a-button v-if="currentStep < 1" type="primary" @click="goNextStep">下一步 →</a-button>
-          <a-button v-if="currentStep === 1" type="primary" @click="handleSubmit">
-            {{ editingId ? '保存修改' : '提交课程' }}
+          <a-button v-if="currentStep === 1" type="primary" :loading="uploading" @click="handleSubmit">
+            {{ uploading ? `上传中 ${uploadPercent}%` : (editingId ? '保存修改' : '提交课程') }}
           </a-button>
         </div>
       </div>
@@ -191,11 +191,11 @@
           <div class="course-category">{{ getCategoryLabel(course.category) }}</div>
           <div class="course-title">{{ course.title }}</div>
           <div class="course-tags">
-            <a-tag v-for="tag in course.tags.slice(0, 2)" :key="tag" size="small">{{ tag }}</a-tag>
+            <a-tag v-for="tag in (course.tags || []).slice(0, 2)" :key="tag" size="small">{{ tag }}</a-tag>
           </div>
           <div class="course-instructor">
-            <a-avatar size="small" :style="{ background: '#003087', fontSize: '10px' }">{{ course.instructor.charAt(0) }}</a-avatar>
-            <span class="instructor-name">{{ course.instructor }}</span>
+            <a-avatar size="small" :style="{ background: '#003087', fontSize: '10px' }">{{ (course.instructor || course.instructorName || '?').charAt(0) }}</a-avatar>
+            <span class="instructor-name">{{ course.instructor || course.instructorName || '' }}</span>
             <span class="difficulty">
               <span v-for="i in 5" :key="i" :class="i <= course.difficulty ? 'star-filled' : 'star-empty'">★</span>
             </span>
@@ -205,7 +205,7 @@
             <span class="progress-text">{{ getCourseProgress(course.id) }}% 完成</span>
           </div>
           <div class="course-footer">
-            <span><TeamOutlined /> {{ course.studentCount.toLocaleString() }} 人学过</span>
+            <span><TeamOutlined /> {{ (course.studentCount || 0).toLocaleString() }} 人学过</span>
             <span class="rating"><StarFilled style="color:#faad14" /> {{ course.rating || '新课' }}</span>
           </div>
         </div>
@@ -216,12 +216,14 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { PlusOutlined, TeamOutlined, StarFilled, InboxOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
-import { MOCK_COURSES, COURSE_CATEGORIES } from '@/mock/courses'
+import { getCourses, createCourse as apiCreateCourse, updateCourse as apiUpdateCourse, getProgress } from '@/api/course'
+import { uploadFile } from '@/api/media'
+import { COURSE_CATEGORIES } from '@/mock/courses'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -229,7 +231,22 @@ const searchText = ref('')
 const selectedCategory = ref('all')
 const sortBy = ref('default')
 const allCategories = [{ key: 'all', label: '全部' }, ...COURSE_CATEGORIES]
-const courseList = ref([...MOCK_COURSES])
+const courseList = ref([])
+const loading = ref(false)
+
+async function fetchCourses() {
+  loading.value = true
+  try {
+    const res = await getCourses({ size: -1 })
+    courseList.value = res.items || res || []
+  } catch (e) {
+    console.error('Failed to load courses:', e)
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => { fetchCourses() })
 
 // ─── 弹窗状态 ───
 const modalVisible = ref(false)
@@ -311,70 +328,80 @@ const removeChapter = (idx) => {
 
 const coverColors = ['#8B1A1A', '#003087', '#1a5c2e', '#6b3a8a', '#8b6914', '#2e4057', '#1a4a6b', '#3d1a5c']
 
-const handleSubmit = () => {
+const uploading = ref(false)
+const uploadPercent = ref(0)
+
+const handleSubmit = async () => {
   if (form.chapters.some(ch => !ch.title.trim())) {
     return message.warning('请填写所有章节名称')
   }
 
-  let detectedFileType = 'video'
-  const chapters = form.chapters.map((ch, idx) => {
-    let videoUrl = ''
-    let docUrl = ''
-    if (ch.fileList.length > 0) {
-      const f = ch.fileList[0].originFileObj || ch.fileList[0]
-      if (f && f.name) {
-        const ext = f.name.split('.').pop().toLowerCase()
-        const isVid = ext === 'mp4'
-        try {
-          const blobUrl = URL.createObjectURL(f)
-          if (isVid) videoUrl = blobUrl
-          else docUrl = blobUrl
-        } catch {}
-        if (idx === 0) detectedFileType = isVid ? 'video' : 'document'
+  uploading.value = true
+  uploadPercent.value = 0
+
+  try {
+    // 1. 逐章上传文件，拿到 file_id
+    let detectedFileType = 'video'
+    const chaptersData = []
+    const totalFiles = form.chapters.filter(ch => ch.fileList.length > 0).length
+
+    for (let idx = 0; idx < form.chapters.length; idx++) {
+      const ch = form.chapters[idx]
+      let fileId = null
+
+      if (ch.fileList.length > 0) {
+        const rawFile = ch.fileList[0].originFileObj || ch.fileList[0]
+        if (rawFile && rawFile.name) {
+          const ext = rawFile.name.split('.').pop().toLowerCase()
+          if (idx === 0) detectedFileType = ext === 'mp4' ? 'video' : 'document'
+
+          // 上传文件
+          const fileRes = await uploadFile(rawFile, (percent) => {
+            uploadPercent.value = Math.round(((idx + percent / 100) / (totalFiles || 1)) * 100)
+          })
+          fileId = fileRes.id
+        }
       }
-    }
-    return {
-      id: `ch_${Date.now()}_${idx}`,
-      title: ch.title,
-      duration: ch.duration || 30,
-      unlocked: idx === 0,
-      progress: 0,
-      ...(videoUrl ? { videoUrl } : {}),
-      ...(docUrl ? { docUrl } : {}),
-    }
-  })
 
-  const totalDuration = chapters.reduce((s, c) => s + c.duration, 0)
-  const courseData = {
-    id: editingId.value || `c${Date.now()}`,
-    title: form.title,
-    category: form.category,
-    fileType: detectedFileType,
-    description: form.description || '',
-    instructor: form.instructor || '未指定',
-    difficulty: form.difficulty,
-    tags: form.tags.length ? form.tags : [getCategoryLabel(form.category)],
-    isRequired: form.isRequired,
-    categoryLabel: getCategoryLabel(form.category),
-    chapters,
-    chapterCount: chapters.length,
-    duration: totalDuration,
-    studentCount: 0,
-    rating: 0,
-    coverColor: coverColors[Math.floor(Math.random() * coverColors.length)],
-    createDate: new Date().toISOString().split('T')[0],
-    updateDate: new Date().toISOString().split('T')[0],
-  }
+      chaptersData.push({
+        title: ch.title,
+        sortOrder: idx,
+        duration: ch.duration || 30,
+        fileId,
+      })
+    }
 
-  if (editingId.value) {
-    const i = courseList.value.findIndex(c => c.id === editingId.value)
-    if (i >= 0) courseList.value.splice(i, 1, courseData)
-    message.success(`课程『${courseData.title}』修改成功`)
-  } else {
-    courseList.value.unshift(courseData)
-    message.success(`课程『${courseData.title}』上传成功！`)
+    // 2. 构建课程数据
+    const totalDuration = chaptersData.reduce((s, c) => s + c.duration, 0)
+    const courseData = {
+      title: form.title,
+      category: form.category,
+      fileType: detectedFileType,
+      description: form.description || '',
+      difficulty: form.difficulty,
+      tags: form.tags.length ? form.tags : [getCategoryLabel(form.category)],
+      isRequired: form.isRequired,
+      coverColor: coverColors[Math.floor(Math.random() * coverColors.length)],
+      duration: totalDuration,
+      chapters: chaptersData,
+    }
+
+    // 3. 创建或更新课程
+    if (editingId.value) {
+      await apiUpdateCourse(editingId.value, courseData)
+      message.success(`课程『${courseData.title}』修改成功`)
+    } else {
+      await apiCreateCourse(courseData)
+      message.success(`课程『${courseData.title}』上传成功！`)
+    }
+    closeModal()
+    fetchCourses()
+  } catch (e) {
+    message.error(e.message || '操作失败')
+  } finally {
+    uploading.value = false
+    uploadPercent.value = 0
   }
-  closeModal()
 }
 
 // ─── 列表 ───
@@ -389,10 +416,23 @@ const filteredCourses = computed(() => {
   return list
 })
 
-const progressMap = { 'c001': 65, 'c002': 100, 'c003': 30, 'c004': 0, 'c005': 82, 'c006': 45 }
-const getCourseProgress = (id) => progressMap[id] ?? 0
-const completedCount = computed(() => Object.values(progressMap).filter(p => p === 100).length)
-const inProgressCount = computed(() => Object.values(progressMap).filter(p => p > 0 && p < 100).length)
+const progressMap = ref({})
+async function fetchProgress() {
+  try {
+    const res = await getProgress()
+    const list = res.items || res || []
+    const map = {}
+    list.forEach(p => {
+      const cid = p.courseId
+      if (!map[cid] || p.progress > map[cid]) map[cid] = p.progress
+    })
+    progressMap.value = map
+  } catch { /* ignore */ }
+}
+onMounted(() => { if (authStore.isStudent) fetchProgress() })
+const getCourseProgress = (id) => progressMap.value[id] ?? 0
+const completedCount = computed(() => Object.values(progressMap.value).filter(p => p === 100).length)
+const inProgressCount = computed(() => Object.values(progressMap.value).filter(p => p > 0 && p < 100).length)
 const getCategoryLabel = (cat) => COURSE_CATEGORIES.find(c => c.key === cat)?.label ?? cat
 const formatDuration = (mins) => mins >= 60 ? `${Math.floor(mins / 60)}h${mins % 60 > 0 ? mins % 60 + 'min' : ''}` : `${mins}min`
 const coverIcons = { law: '⚖️', fraud: '🔍', traffic: '🚗', community: '🏘️', cybersec: '💻', physical: '💪' }

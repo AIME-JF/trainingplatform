@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { MOCK_USERS } from '../mock/users.js'
+import { login as apiLogin, loginByPhone as apiLoginByPhone, getCurrentUser } from '@/api/auth'
 
 export const useAuthStore = defineStore('auth', () => {
   const currentUser = ref(null)
@@ -11,57 +11,86 @@ export const useAuthStore = defineStore('auth', () => {
   const isInstructor = computed(() => role.value === 'instructor')
   const isStudent = computed(() => role.value === 'student')
 
-  function login(roleKey) {
-    currentUser.value = MOCK_USERS[roleKey]
-    localStorage.setItem('mockRole', roleKey)
-    localStorage.setItem('mockUser', JSON.stringify(MOCK_USERS[roleKey]))
+  function setUserFromResponse(user) {
+    // Map backend user fields to frontend expected shape
+    const mapped = {
+      ...user,
+      name: user.nickname || user.name || user.username,
+      role: user.roles?.[0]?.code || user.role || 'student',
+      policeId: user.policeId || user.police_id,
+      unit: user.departments?.[0]?.name || user.unit || '',
+      studyHours: user.studyHours ?? 0,
+      examCount: user.examCount ?? 0,
+      avgScore: user.avgScore ?? 0,
+      level: user.level || '',
+    }
+    currentUser.value = mapped
+    localStorage.setItem('userInfo', JSON.stringify(mapped))
+  }
+
+  async function loginWithCredentials(username, password) {
+    try {
+      const res = await apiLogin(username, password)
+      const token = res.accessToken || res.access_token
+      if (token) {
+        localStorage.setItem('token', token)
+      }
+      setUserFromResponse(res.user || res)
+      return { success: true }
+    } catch (e) {
+      return { success: false, error: e.message || '登录失败' }
+    }
+  }
+
+  async function loginWithPhone(phone, code) {
+    try {
+      const res = await apiLoginByPhone(phone, code)
+      const token = res.accessToken || res.access_token
+      if (token) {
+        localStorage.setItem('token', token)
+      }
+      setUserFromResponse(res.user || res)
+      return { success: true }
+    } catch (e) {
+      return { success: false, error: e.message || '登录失败' }
+    }
   }
 
   function logout() {
     currentUser.value = null
-    localStorage.removeItem('mockRole')
-    localStorage.removeItem('mockUser')
+    localStorage.removeItem('token')
+    localStorage.removeItem('userInfo')
   }
 
-  function restoreFromStorage() {
-    const savedUser = localStorage.getItem('mockUser')
-    if (savedUser) {
-      try {
-        currentUser.value = JSON.parse(savedUser)
-      } catch {
+  async function restoreFromStorage() {
+    const token = localStorage.getItem('token')
+    if (!token) return
+    // Try to get fresh user info from server
+    try {
+      const user = await getCurrentUser()
+      setUserFromResponse(user)
+    } catch {
+      // If server unavailable, fallback to cached user info
+      const savedUser = localStorage.getItem('userInfo')
+      if (savedUser) {
+        try {
+          currentUser.value = JSON.parse(savedUser)
+        } catch {
+          logout()
+        }
+      } else {
         logout()
       }
     }
   }
 
-  function loginWithCredentials(username, password) {
-    const userEntry = Object.values(MOCK_USERS).find(u => u.username === username)
-    if (!userEntry) return { success: false, error: '账号不存在' }
-    if (userEntry.password !== password) return { success: false, error: '密码不正确' }
-    currentUser.value = userEntry
-    localStorage.setItem('mockRole', userEntry.role)
-    localStorage.setItem('mockUser', JSON.stringify(userEntry))
-    return { success: true }
-  }
-
   function switchRole(roleKey) {
-    login(roleKey)
+    // For dev/demo convenience: update role in current user
+    if (currentUser.value) {
+      currentUser.value = { ...currentUser.value, role: roleKey }
+      localStorage.setItem('userInfo', JSON.stringify(currentUser.value))
+    }
   }
 
-  // 手机号验证码登录：调用火山服务器 SMS API
-  async function loginWithPhone(phone, code, roleKey) {
-    const res = await fetch('http://118.145.115.139:3950/api/sms/verify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, code, role: roleKey }),
-    })
-    const data = await res.json()
-    if (!data.success) return { success: false, error: data.message }
-    currentUser.value = data.user
-    localStorage.setItem('mockRole', data.user.role)
-    localStorage.setItem('mockUser', JSON.stringify(data.user))
-    return { success: true }
-  }
-
-  return { currentUser, isLoggedIn, role, isAdmin, isInstructor, isStudent, login, loginWithCredentials, loginWithPhone, logout, restoreFromStorage, switchRole }
+  return { currentUser, isLoggedIn, role, isAdmin, isInstructor, isStudent, loginWithCredentials, loginWithPhone, logout, restoreFromStorage, switchRole }
 })

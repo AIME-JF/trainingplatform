@@ -64,6 +64,8 @@ from .ai import (
 )
 # 人才库
 from .talent import TalentResponse, TalentStatsResponse
+# 文件管理
+from .media import MediaFileResponse
 
 
 __all__ = [
@@ -115,4 +117,6 @@ __all__ = [
     "AIGenerateLessonPlanRequest", "AIGenerateLessonPlanResponse",
     # 人才库
     "TalentResponse", "TalentStatsResponse",
+    # 文件管理
+    "MediaFileResponse",
 ]

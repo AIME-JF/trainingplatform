@@ -83,44 +83,35 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, DownloadOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '../../stores/auth.js'
-import { MOCK_TRAININGS } from '../../mock/trainings.js'
+import { getCertificates, createCertificate } from '@/api/certificate'
+import { getTrainings } from '@/api/training'
 import { MOCK_USER_LIST } from '../../mock/users.js'
 
 const authStore = useAuthStore()
 const isAdmin = authStore.isAdmin
 
-const certificates = ref([
-  {
-    id: 'cert001',
-    certNo: 'ZHJY-2025-0312-0089',
-    studentName: '张伟',
-    trainingName: '2024年南宁市基层民警执法规范化培训（第2期）',
-    startDate: '2024-11-06',
-    endDate: '2024-11-17',
-    score: 89,
-    issueDate: '2024-11-22',
-    expireDate: '2026-11-22',
-  },
-  {
-    id: 'cert002',
-    certNo: 'ZHJY-2024-0816-0156',
-    studentName: '张伟',
-    trainingName: '2024年刑事侦查专项培训（第1期）',
-    startDate: '2024-08-05',
-    endDate: '2024-08-16',
-    score: 92,
-    issueDate: '2024-08-20',
-    expireDate: '2026-08-20',
-  },
-])
+const certificates = ref([])
+const endedTrainings = ref([])
 
 // 动态下拉数据
 const studentOptions = MOCK_USER_LIST.filter(u => u.status === 'active')
-const endedTrainings = MOCK_TRAININGS.filter(t => t.status === 'ended' || t.status === 'active')
+
+onMounted(async () => {
+  try {
+    const [certRes, trainingRes] = await Promise.all([
+      getCertificates({ size: -1 }),
+      getTrainings({ size: -1 })
+    ])
+    certificates.value = certRes.items || certRes || []
+    const allTrainings = trainingRes.items || trainingRes || []
+    endedTrainings.value = allTrainings.filter(t => t.status === 'ended' || t.status === 'active')
+  } catch { /* ignore */ }
+})
+
 function filterStudent(input, option) {
   const u = studentOptions.find(s => s.id === option.value)
   return u && (u.name.includes(input) || u.policeId.toLowerCase().includes(input.toLowerCase()))
@@ -150,25 +141,24 @@ async function handleIssue() {
     return
   }
   issuing.value = true
-  await new Promise(r => setTimeout(r, 800))
-  const now = new Date()
-  const student = MOCK_USER_LIST.find(u => u.id === issueForm.value.studentId)
-  const training = MOCK_TRAININGS.find(t => t.id === issueForm.value.trainingId)
-  certificates.value.unshift({
-    id: `cert${Date.now()}`,
-    certNo: `ZHJY-${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${String(Math.floor(Math.random()*900)+100)}`,
-    studentName: student?.name || '未知',
-    trainingName: training?.name || '未知培训班',
-    startDate: training?.startDate || '',
-    endDate: training?.endDate || '',
-    score: issueForm.value.score,
-    issueDate: issueForm.value.issueDate || now.toISOString().split('T')[0],
-    expireDate: `${now.getFullYear()+2}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`,
-  })
-  issuing.value = false
-  issueVisible.value = false
-  message.success('证书已成功颁发')
-  issueForm.value = { studentId: '', trainingId: '', score: 80, issueDate: '' }
+  try {
+    await createCertificate({
+      studentId: issueForm.value.studentId,
+      trainingId: issueForm.value.trainingId,
+      score: issueForm.value.score,
+      issueDate: issueForm.value.issueDate || new Date().toISOString().split('T')[0],
+    })
+    message.success('证书已成功颁发')
+    issueVisible.value = false
+    issueForm.value = { studentId: '', trainingId: '', score: 80, issueDate: '' }
+    // Refresh list
+    const certRes = await getCertificates({ size: -1 })
+    certificates.value = certRes.items || certRes || []
+  } catch (e) {
+    message.error(e.message || '颁发失败')
+  } finally {
+    issuing.value = false
+  }
 }
 </script>
 

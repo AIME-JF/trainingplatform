@@ -74,25 +74,37 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive } from 'vue'
+import { ref, computed, reactive, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { ArrowLeftOutlined, DownloadOutlined } from '@ant-design/icons-vue'
-import { MOCK_ENROLLMENTS } from '@/mock/enrollments.js'
-import { MOCK_TRAININGS } from '@/mock/trainings.js'
+import { getTraining, getEnrollments, approveEnrollment, rejectEnrollment } from '@/api/training'
 
 const route = useRoute()
 const trainingId = route.params.id
-// 使用 reactive 包装，以便在修改 enrolled / students 数量后页面能响应式更新
-const training = reactive(MOCK_TRAININGS.find(t => t.id === trainingId) || {})
+const training = reactive({ capacity: 0, students: [], enrolled: 0, name: '' })
 
 const searchText = ref('')
 const statusFilter = ref('all')
 const selectedRowKeys = ref([])
 const selectedRows = ref([])
 
-// 直接引用全局数据，从而真实改变 mock 状态
-const enrollments = ref(MOCK_ENROLLMENTS.filter(e => e.trainingId === trainingId))
+const enrollments = ref([])
+
+async function fetchData() {
+  try {
+    const [tData, eData] = await Promise.all([
+      getTraining(trainingId),
+      getEnrollments(trainingId, { size: -1 })
+    ])
+    Object.assign(training, tData)
+    enrollments.value = eData.items || eData || []
+  } catch (e) {
+    message.error('加载数据失败')
+  }
+}
+
+onMounted(fetchData)
 
 const pendingList = computed(() => enrollments.value.filter(e => e.status === 'pending'))
 const approvedList = computed(() => enrollments.value.filter(e => e.status === 'approved'))
@@ -126,43 +138,56 @@ function onSelectChange(keys, rows) {
   selectedRows.value = rows
 }
 
-function approve(record) {
+async function approve(record) {
   if (training.students.length >= training.capacity) {
     message.error('名额已满，无法通过更多学员')
     return
   }
-  record.status = 'approved'
-  if (!training.students.includes(record.userId)) {
-    training.students.push(record.userId)
-    training.enrolled = training.students.length
+  try {
+    await approveEnrollment(trainingId, record.id)
+    record.status = 'approved'
+    if (!training.students.includes(record.userId)) {
+      training.students.push(record.userId)
+      training.enrolled = training.students.length
+    }
+    message.success(`已通过 ${record.name} 的报名申请`)
+  } catch (e) {
+    message.error(e.message || '操作失败')
   }
-  message.success(`已通过 ${record.name} 的报名申请`)
 }
 
-function reject(record) {
-  record.status = 'rejected'
-  record.note = '名额限制，暂无资格'
-  message.warning(`已拒绝 ${record.name} 的报名申请`)
+async function reject(record) {
+  try {
+    await rejectEnrollment(trainingId, record.id, '名额限制，暂无资格')
+    record.status = 'rejected'
+    record.note = '名额限制，暂无资格'
+    message.warning(`已拒绝 ${record.name} 的报名申请`)
+  } catch (e) {
+    message.error(e.message || '操作失败')
+  }
 }
 
-function batchApprove() {
-  const pendingCount = selectedRows.value.filter(r => r.status === 'pending').length
+async function batchApprove() {
+  const pendingRows = selectedRows.value.filter(r => r.status === 'pending')
   const remain = training.capacity - training.students.length
-  if (pendingCount > remain) {
+  if (pendingRows.length > remain) {
     message.error(`批量通过失败：剩余名额不足（仅剩 ${remain} 人）`)
     return
   }
 
-  selectedRows.value.forEach(r => { 
-    if (r.status === 'pending') {
+  try {
+    await Promise.all(pendingRows.map(r => approveEnrollment(trainingId, r.id)))
+    pendingRows.forEach(r => {
       r.status = 'approved'
       if (!training.students.includes(r.userId)) {
         training.students.push(r.userId)
       }
-    }
-  })
-  training.enrolled = training.students.length
-  message.success(`已批量通过审核`)
+    })
+    training.enrolled = training.students.length
+    message.success(`已批量通过审核`)
+  } catch (e) {
+    message.error(e.message || '批量操作失败')
+  }
   selectedRowKeys.value = []
   selectedRows.value = []
 }

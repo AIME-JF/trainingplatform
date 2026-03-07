@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30 * 24 * 60  # 30天
 
     # 文件上传配置
-    MAX_UPLOAD_SIZE: int = 20 * 1024 * 1024  # 20MB
+    MAX_UPLOAD_SIZE: int = 500 * 1024 * 1024  # 500MB
 
     # 数据库迁移配置
     AUTO_MIGRATE_ON_STARTUP: bool = True

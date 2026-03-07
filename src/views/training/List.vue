@@ -44,7 +44,7 @@
         <div class="tc-header" :class="'status-' + t.status">
           <div class="tc-status-dot"></div>
           <span class="tc-status-text">{{ statusLabels[t.status] }}</span>
-          <a-tag size="small" style="margin-left:auto;font-size:11px">{{ t.typeLabel }}</a-tag>
+          <a-tag size="small" style="margin-left:auto;font-size:11px">{{ typeLabels[t.type] || t.typeLabel || t.type }}</a-tag>
         </div>
         <div class="tc-body">
           <div class="tc-title">{{ t.name }}</div>
@@ -172,7 +172,7 @@
                 @change="onInstructorChange"
               >
                 <a-select-option
-                  v-for="inst in MOCK_INSTRUCTORS"
+                  v-for="inst in instructorList"
                   :key="inst.id"
                   :value="inst.id"
                   :label="inst.name"
@@ -194,14 +194,13 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive } from 'vue'
+import { ref, computed, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import { PlusOutlined, CalendarOutlined, TeamOutlined, UserOutlined, EnvironmentOutlined, QrcodeOutlined, EllipsisOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
-import { MOCK_TRAININGS, TRAINING_TYPES } from '@/mock/trainings'
-import { MOCK_ENROLLMENTS } from '@/mock/enrollments'
-import { MOCK_INSTRUCTORS } from '@/mock/instructors'
+import { getTrainings, createTraining as apiCreateTraining, updateTraining as apiUpdateTraining, deleteTraining as apiDeleteTraining } from '@/api/training'
+import { getInstructors } from '@/api/instructor'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -210,17 +209,37 @@ const filterType = ref('all')
 const searchText = ref('')
 const showCreateModal = ref(false)
 const editingTraining = ref(null)
+const instructorList = ref([])
 
 const statusLabels = { active: '进行中', upcoming: '未开始', ended: '已结束' }
 
 const typeLabels = { basic: '基础训练', special: '专项训练', promotion: '晋升培训', online: '线上培训' }
 
-const isPending = (trainingId) => {
-  return authStore.isStudent && MOCK_ENROLLMENTS.some(e => e.trainingId === trainingId && e.userId === authStore.currentUser?.id && e.status === 'pending')
-}
+const isPending = () => false // Enrollment status will be checked via API
 
 // 本地可修改的培训班列表
-const trainingList = ref([...MOCK_TRAININGS])
+const trainingList = ref([])
+
+async function fetchTrainings() {
+  try {
+    const res = await getTrainings({ size: -1 })
+    trainingList.value = res.items || res || []
+  } catch (e) {
+    console.error('Failed to load trainings:', e)
+  }
+}
+
+async function fetchInstructors() {
+  try {
+    const res = await getInstructors({ size: -1 })
+    instructorList.value = res.items || res || []
+  } catch { /* ignore */ }
+}
+
+onMounted(() => {
+  fetchTrainings()
+  fetchInstructors()
+})
 
 const filteredTrainings = computed(() => {
   let list = trainingList.value
@@ -259,7 +278,7 @@ const trainingForm = reactive({
 })
 
 const onInstructorChange = (id) => {
-  const inst = MOCK_INSTRUCTORS.find(i => i.id === id)
+  const inst = instructorList.value.find(i => i.id == id)
   if (inst) trainingForm.instructorName = inst.name
 }
 
@@ -286,55 +305,24 @@ const handleEdit = (t) => {
   showCreateModal.value = true
 }
 
-const handleSubmitTraining = () => {
+const handleSubmitTraining = async () => {
   if (!trainingForm.name || !trainingForm.startDate || !trainingForm.endDate || !trainingForm.location) {
     message.warning('请填写必填项：培训班名称、日期、地点')
     return
   }
-  const typeMap = { basic: '基础训练', special: '专项训练', promotion: '晋升培训', online: '线上培训' }
-  if (editingTraining.value) {
-    // 编辑
-    const idx = trainingList.value.findIndex(t => t.id === editingTraining.value.id)
-    if (idx !== -1) {
-      trainingList.value[idx] = {
-        ...trainingList.value[idx],
-        name: trainingForm.name,
-        type: trainingForm.type,
-        typeLabel: typeMap[trainingForm.type],
-        capacity: trainingForm.capacity,
-        startDate: trainingForm.startDate,
-        endDate: trainingForm.endDate,
-        location: trainingForm.location,
-        instructorId: trainingForm.instructorId,
-        instructorName: trainingForm.instructorName,
-        description: trainingForm.description,
-      }
+  try {
+    if (editingTraining.value) {
+      await apiUpdateTraining(editingTraining.value.id, { ...trainingForm })
+      message.success('培训班信息已更新')
+    } else {
+      await apiCreateTraining({ ...trainingForm })
+      message.success('培训班创建成功')
     }
-    message.success('培训班信息已更新')
-  } else {
-    // 新建
-    const newId = `t${String(Date.now()).slice(-4)}`
-    trainingList.value.unshift({
-      id: newId,
-      name: trainingForm.name,
-      type: trainingForm.type,
-      typeLabel: typeMap[trainingForm.type],
-      status: 'upcoming',
-      startDate: trainingForm.startDate,
-      endDate: trainingForm.endDate,
-      location: trainingForm.location,
-      instructorName: trainingForm.instructorName,
-      capacity: trainingForm.capacity,
-      enrolled: 0,
-      students: [],
-      description: trainingForm.description,
-      subjects: [],
-      courses: [],
-      checkinRecords: [],
-    })
-    message.success('培训班创建成功')
+    resetForm()
+    fetchTrainings()
+  } catch (e) {
+    message.error(e.message || '操作失败')
   }
-  resetForm()
 }
 
 const handleDelete = (t) => {
@@ -344,9 +332,14 @@ const handleDelete = (t) => {
     okText: '确认删除',
     okType: 'danger',
     cancelText: '取消',
-    onOk: () => {
-      trainingList.value = trainingList.value.filter(item => item.id !== t.id)
-      message.success('已删除')
+    onOk: async () => {
+      try {
+        await apiDeleteTraining(t.id)
+        trainingList.value = trainingList.value.filter(item => item.id !== t.id)
+        message.success('已删除')
+      } catch (e) {
+        message.error(e.message || '删除失败')
+      }
     },
   })
 }

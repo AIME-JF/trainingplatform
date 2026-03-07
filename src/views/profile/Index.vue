@@ -137,15 +137,16 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { RadarChart } from 'echarts/charts'
 import { TooltipComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import { useAuthStore } from '@/stores/auth'
-import { MOCK_COURSES } from '@/mock/courses'
-import { MOCK_ABILITIES, MOCK_EXAM_HISTORY, MOCK_CERT_LIST, MOCK_POINT_HISTORY } from '@/mock/profile'
+import { getProfile, getStudyStats, getExamHistory } from '@/api/profile'
+import { getCertificates } from '@/api/certificate'
+import { MOCK_ABILITIES, MOCK_POINT_HISTORY } from '@/mock/profile'
 
 use([CanvasRenderer, RadarChart, TooltipComponent])
 
@@ -185,18 +186,23 @@ const radarOption = {
   }]
 }
 
-const courseIcons = { law: '⚖️', fraud: '🔍', traffic: '🚗', community: '🏨', cybersec: '💻', physical: '💪' }
-const courseColors = { law: '#e6f7ff', fraud: '#f0f5ff', traffic: '#f6ffed', community: '#fff7e6', cybersec: '#f9f0ff', physical: '#fff1f0' }
-const recentCourses = MOCK_COURSES.slice(0, 3).map(c => ({
-  id: c.id,
-  title: c.title,
-  icon: courseIcons[c.category] || '📚',
-  color: courseColors[c.category] || '#f0f5ff',
-  lastTime: c.updateDate || '3天前',
-  progress: Math.floor(Math.random() * 60 + 30),
-}))
+const recentCourses = ref([])
+const examHistory = ref([])
 
-const examHistory = MOCK_EXAM_HISTORY
+onMounted(async () => {
+  try {
+    const [studyRes, examRes, certRes] = await Promise.all([
+      getStudyStats().catch(() => null),
+      getExamHistory().catch(() => []),
+      getCertificates({ userId: user?.id }).catch(() => ({ items: [] })),
+    ])
+    if (studyRes?.recentCourses) {
+      recentCourses.value = studyRes.recentCourses
+    }
+    examHistory.value = examRes?.items || examRes || []
+    certList.value = certRes?.items || certRes || []
+  } catch { /* ignore */ }
+})
 
 const examColumns = [
   { title: '考试名称', dataIndex: 'title', key: 'title' },
@@ -205,7 +211,7 @@ const examColumns = [
   { title: '结果', key: 'result' },
 ]
 
-const certList = MOCK_CERT_LIST
+const certList = ref([])
 
 const pointHistory = MOCK_POINT_HISTORY
 </script>

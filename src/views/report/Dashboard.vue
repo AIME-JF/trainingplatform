@@ -94,7 +94,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
@@ -102,52 +102,84 @@ import { LineChart, PieChart, BarChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import { DownloadOutlined } from '@ant-design/icons-vue'
-import { MOCK_REPORT_DATA } from '@/mock/dashboard'
+import { getKpi, getTrend, getPoliceTypeDistribution, getCityRanking } from '@/api/report'
 
 use([CanvasRenderer, LineChart, PieChart, BarChart, GridComponent, TooltipComponent, LegendComponent])
 
 const timeRange = ref('month')
 
-const kpiCards = [
-  { label: '参训民警总数', value: MOCK_REPORT_DATA.overview.trainedThisYear.toLocaleString(), change: `↑ 8.2%`, up: true, icon: '👮', color: '#003087' },
-  { label: '课程完成率', value: MOCK_REPORT_DATA.overview.trainingRate + '%', change: '↑ 5.1%', up: true, icon: '📊', color: '#52c41a' },
-  { label: '平均考核分', value: MOCK_REPORT_DATA.overview.avgScore, change: '↑ 3.2', up: true, icon: '⏱', color: '#faad14' },
-  { label: '考试通过率', value: MOCK_REPORT_DATA.overview.passRate + '%', change: '↓ 1.3%', up: false, icon: '📝', color: '#722ed1' },
-]
-
-const trendMonths = MOCK_REPORT_DATA.monthlyTrend.map(m => m.month.split('-')[1] + '月')
-const trendTrained = MOCK_REPORT_DATA.monthlyTrend.map(m => Math.round(m.trained / MOCK_REPORT_DATA.overview.totalPolice * 100))
-const trendHours = MOCK_REPORT_DATA.monthlyTrend.map(m => Math.round(m.hours / m.trained * 0.8))
-const trendOption = {
-  tooltip: { trigger: 'axis' },
-  legend: { data: ['完成率', '合格率'] },
-  grid: { left: 40, right: 20, bottom: 30, top: 40 },
-  xAxis: { type: 'category', data: trendMonths, axisLine: { lineStyle: { color: '#ddd' } } },
-  yAxis: { type: 'value', max: 100, axisLabel: { formatter: '{value}%' } },
-  series: [
-    { name: '完成率', type: 'line', smooth: true, data: trendTrained, lineStyle: { color: '#003087', width: 2 }, itemStyle: { color: '#003087' }, areaStyle: { color: 'rgba(0,48,135,0.08)' } },
-    { name: '合格率', type: 'line', smooth: true, data: trendHours, lineStyle: { color: '#c8a84b', width: 2 }, itemStyle: { color: '#c8a84b' } },
-  ]
-}
+const kpiCards = ref([])
+const trendOption = ref({})
+const pieOption = ref({})
+const cityRanking = ref([])
 
 const pieColors = ['#003087', '#1890ff', '#52c41a', '#faad14', '#c8a84b']
-const pieOption = {
-  tooltip: { trigger: 'item', formatter: '{b}: {c}人 ({d}%)' },
-  legend: { bottom: 0, textStyle: { fontSize: 11 }, icon: 'circle', itemWidth: 8, itemGap: 14 },
-  series: [{
-    type: 'pie', radius: ['35%', '60%'], center: ['50%', '42%'],
-    data: MOCK_REPORT_DATA.policeTypeDistribution.map((p, i) => ({
-      name: p.type, value: p.trained, itemStyle: { color: pieColors[i % pieColors.length] },
-    })),
-    label: { formatter: '{d}%', fontSize: 11, position: 'outside' },
-    labelLine: { length: 10, length2: 8 },
-    emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0,0,0,0.2)' } },
-  }]
-}
 
-const cityRanking = MOCK_REPORT_DATA.cityComparison
-  .map(c => ({ name: c.city + '市公安局', score: c.avgScore }))
-  .sort((a, b) => b.score - a.score)
+onMounted(async () => {
+  try {
+    const [kpiRes, trendRes, pieRes, cityRes] = await Promise.all([
+      getKpi().catch(() => null),
+      getTrend().catch(() => null),
+      getPoliceTypeDistribution().catch(() => null),
+      getCityRanking().catch(() => null),
+    ])
+
+    // KPI cards
+    if (kpiRes) {
+      kpiCards.value = [
+        { label: '参训民警总数', value: (kpiRes.totalStudents ?? 0).toLocaleString(), change: '↑ 8.2%', up: true, icon: '👮', color: '#003087' },
+        { label: '课程完成率', value: (kpiRes.completionRate ?? 0) + '%', change: '↑ 5.1%', up: true, icon: '📊', color: '#52c41a' },
+        { label: '平均考核分', value: kpiRes.avgScore ?? 0, change: '↑ 3.2', up: true, icon: '⏱', color: '#faad14' },
+        { label: '考试通过率', value: (kpiRes.passRate ?? 0) + '%', change: '↓ 1.3%', up: false, icon: '📝', color: '#722ed1' },
+      ]
+    }
+
+    // Trend chart
+    if (trendRes) {
+      const items = trendRes.items || trendRes || []
+      const months = items.map(m => (m.month || '').split('-')[1] + '月')
+      const completionRates = items.map(m => m.completionRate ?? 0)
+      const passRates = items.map(m => m.passRate ?? 0)
+      trendOption.value = {
+        tooltip: { trigger: 'axis' },
+        legend: { data: ['完成率', '合格率'] },
+        grid: { left: 40, right: 20, bottom: 30, top: 40 },
+        xAxis: { type: 'category', data: months, axisLine: { lineStyle: { color: '#ddd' } } },
+        yAxis: { type: 'value', max: 100, axisLabel: { formatter: '{value}%' } },
+        series: [
+          { name: '完成率', type: 'line', smooth: true, data: completionRates, lineStyle: { color: '#003087', width: 2 }, itemStyle: { color: '#003087' }, areaStyle: { color: 'rgba(0,48,135,0.08)' } },
+          { name: '合格率', type: 'line', smooth: true, data: passRates, lineStyle: { color: '#c8a84b', width: 2 }, itemStyle: { color: '#c8a84b' } },
+        ]
+      }
+    }
+
+    // Pie chart
+    if (pieRes) {
+      const items = pieRes.items || pieRes || []
+      pieOption.value = {
+        tooltip: { trigger: 'item', formatter: '{b}: {c}人 ({d}%)' },
+        legend: { bottom: 0, textStyle: { fontSize: 11 }, icon: 'circle', itemWidth: 8, itemGap: 14 },
+        series: [{
+          type: 'pie', radius: ['35%', '60%'], center: ['50%', '42%'],
+          data: items.map((p, i) => ({
+            name: p.type, value: p.trained ?? p.count ?? 0, itemStyle: { color: pieColors[i % pieColors.length] },
+          })),
+          label: { formatter: '{d}%', fontSize: 11, position: 'outside' },
+          labelLine: { length: 10, length2: 8 },
+          emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0,0,0,0.2)' } },
+        }]
+      }
+    }
+
+    // City ranking
+    if (cityRes) {
+      const items = cityRes.items || cityRes || []
+      cityRanking.value = items
+        .map(c => ({ name: (c.city || c.name || '') + (c.city ? '市公安局' : ''), score: c.avgScore ?? c.score ?? 0 }))
+        .sort((a, b) => b.score - a.score)
+    }
+  } catch { /* ignore */ }
+})
 
 const aiInsights = [
   { id: 1, type: 'positive', icon: '🎯', title: '南宁市完成率持续领先', desc: '连续3个月在全区排名第一，学习积极性高，建议分享经验。' },

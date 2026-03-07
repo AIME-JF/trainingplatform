@@ -201,25 +201,47 @@ const roles = [
 const isPhoneValid = computed(() => /^1[3-9]\d{9}$/.test(phone.value))
 
 // 账号密码登录
-function handlePasswordLogin() {
+async function handlePasswordLogin() {
   if (!username.value.trim()) { message.warning('请输入账号'); return }
   if (!password.value.trim()) { message.warning('请输入密码'); return }
   loading.value = true
-  const result = authStore.loginWithCredentials(username.value.trim(), password.value.trim())
-  if (result.success) {
-    message.success(`欢迎，${authStore.currentUser.name}`)
-    router.push('/')
-  } else {
-    message.error(result.error)
+  try {
+    const result = await authStore.loginWithCredentials(username.value.trim(), password.value.trim())
+    if (result.success) {
+      message.success(`欢迎，${authStore.currentUser.name}`)
+      router.push('/')
+    } else {
+      message.error(result.error)
+    }
+  } catch {
+    message.error('网络异常，请稍后重试')
+  } finally {
+    loading.value = false
   }
-  loading.value = false
 }
 
-// 快速演示登录
-function quickLogin(roleKey) {
-  authStore.login(roleKey)
-  message.success(`欢迎，${authStore.currentUser.name}`)
-  router.push('/')
+// 快速演示登录（使用预设账号密码）
+const quickAccounts = {
+  admin: { username: 'admin', password: 'police2025' },
+  instructor: { username: 'instructor', password: 'teach2025' },
+  student: { username: 'student', password: 'learn2025' },
+}
+async function quickLogin(roleKey) {
+  const acct = quickAccounts[roleKey]
+  loading.value = true
+  try {
+    const result = await authStore.loginWithCredentials(acct.username, acct.password)
+    if (result.success) {
+      message.success(`欢迎，${authStore.currentUser.name}`)
+      router.push('/')
+    } else {
+      message.error(result.error)
+    }
+  } catch {
+    message.error('网络异常，请稍后重试')
+  } finally {
+    loading.value = false
+  }
 }
 
 // 发送验证码
@@ -260,7 +282,7 @@ async function handleLogin() {
   if (!code.value.trim()) { message.warning('请输入验证码'); return }
   loading.value = true
   try {
-    const result = await authStore.loginWithPhone(phone.value, code.value.trim(), selectedRole.value)
+    const result = await authStore.loginWithPhone(phone.value, code.value.trim())
     if (result.success) {
       message.success(`欢迎，${authStore.currentUser.name}`)
       router.push('/')

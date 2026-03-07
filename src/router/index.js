@@ -189,18 +189,29 @@ const router = createRouter({
   ],
 })
 
-// 导航守卫（Demo 版：检查登录 + 角色权限）
+// 导航守卫：检查 JWT token + 角色权限
 router.beforeEach((to) => {
-  const savedRole = localStorage.getItem('mockRole')
-  if (to.meta.requiresAuth && !savedRole) {
+  const token = localStorage.getItem('token')
+  if (to.meta.requiresAuth && !token) {
     return '/login'
   }
-  if (to.path === '/login' && savedRole) {
+  if (to.path === '/login' && token) {
     return '/'
   }
   // 角色权限检查
-  if (to.meta.roles && savedRole && !to.meta.roles.includes(savedRole)) {
-    return '/'
+  if (to.meta.roles && token) {
+    const userInfo = localStorage.getItem('userInfo')
+    if (userInfo) {
+      try {
+        const user = JSON.parse(userInfo)
+        const userRole = user.role
+        if (userRole && !to.meta.roles.includes(userRole)) {
+          return '/'
+        }
+      } catch {
+        // ignore parse errors
+      }
+    }
   }
 })
 

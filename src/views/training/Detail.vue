@@ -201,7 +201,7 @@
                 @change="onInstructorChange"
               >
                 <a-select-option
-                  v-for="inst in MOCK_INSTRUCTORS"
+                  v-for="inst in instructorList"
                   :key="inst.id"
                   :value="inst.id"
                   :label="inst.name"
@@ -352,7 +352,7 @@
                 @change="onEditInstructorChange"
               >
                 <a-select-option
-                  v-for="inst in MOCK_INSTRUCTORS"
+                  v-for="inst in instructorList"
                   :key="inst.id"
                   :value="inst.id"
                   :label="inst.name"
@@ -403,14 +403,14 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive } from 'vue'
+import { ref, computed, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QrcodeOutlined, DownloadOutlined, PlusOutlined, EditOutlined, DownOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
-import { MOCK_TRAININGS } from '@/mock/trainings'
+import { getTraining, updateTraining as apiUpdateTraining, getStudents, getCheckinRecords as apiGetCheckinRecords } from '@/api/training'
+import { getInstructors } from '@/api/instructor'
 import { MOCK_USER_LIST } from '@/mock/users'
-import { MOCK_INSTRUCTORS } from '@/mock/instructors'
 import { getTrainingNotices, MOCK_NOTICES } from '@/mock/board'
 import { useAuthStore } from '@/stores/auth'
 
@@ -418,10 +418,27 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const trainingId = route.params.id
-const originalTraining = MOCK_TRAININGS.find(t => t.id === trainingId) || MOCK_TRAININGS[0]
+const instructorList = ref([])
 
 // 使用 reactive 使数据可编辑
-const trainingData = reactive({ ...originalTraining, courses: [...(originalTraining.courses || [])], students: [...(originalTraining.students || [])] })
+const trainingData = reactive({ id: trainingId, name: '', status: 'upcoming', startDate: '', endDate: '', location: '', instructorName: '', description: '', courses: [], students: [], capacity: 0, enrolled: 0, checkinRecords: [] })
+
+onMounted(async () => {
+  try {
+    const [data, instRes] = await Promise.all([
+      getTraining(trainingId),
+      getInstructors({ size: -1 })
+    ])
+    Object.assign(trainingData, data, {
+      courses: data.courses || [],
+      students: data.students || [],
+      checkinRecords: data.checkinRecords || [],
+    })
+    instructorList.value = instRes.items || instRes || []
+  } catch (e) {
+    message.error('加载培训班详情失败')
+  }
+})
 
 const activeTab = ref('overview')
 const studentSearch = ref('')
@@ -545,9 +562,7 @@ function removeStudent(userId) {
   if (idx !== -1) {
     trainingData.students.splice(idx, 1)
     trainingData.enrolled = trainingData.students.length
-    // 同步回 MOCK_TRAININGS
-    const orig = MOCK_TRAININGS.find(t => t.id === trainingId)
-    if (orig) { orig.students = [...trainingData.students]; orig.enrolled = trainingData.enrolled }
+    apiUpdateTraining(trainingId, { students: trainingData.students, enrolled: trainingData.enrolled }).catch(() => {})
     message.success('已移除该学员')
   }
 }
@@ -599,7 +614,7 @@ const tempTimeRange = ref([])
 const courseForm = reactive({ name: '', instructor: '', instructorId: null, hours: 0, type: 'theory', schedules: [] })
 
 function onInstructorChange(id) {
-  const inst = MOCK_INSTRUCTORS.find(i => i.id === id)
+  const inst = instructorList.value.find(i => i.id == id)
   if (inst) courseForm.instructor = inst.name
 }
 
@@ -683,7 +698,7 @@ function openCourseModal(idx = null) {
   
   if (idx !== null && trainingData.courses[idx]) {
     const c = JSON.parse(JSON.stringify(trainingData.courses[idx]))
-    const inst = MOCK_INSTRUCTORS.find(i => i.name === c.instructor)
+    const inst = instructorList.value.find(i => i.name === c.instructor)
     Object.assign(courseForm, { name: c.name, instructor: c.instructor, instructorId: inst?.id ?? null, hours: c.hours, type: c.type, schedules: c.schedules || [] })
 
     // Migrate old legacy formats into 'schedules' array (if course has dates but no schedules)
@@ -727,15 +742,7 @@ function saveCourse() {
     trainingData.courses.push(courseData)
     message.success('课程已添加')
   }
-  // 同步回 MOCK_TRAININGS
-  const orig = MOCK_TRAININGS.find(t => t.id === trainingId)
-  if (orig) orig.courses = [...trainingData.courses]
-  // 同步到授课教官的课程计划
-  const instructor = MOCK_INSTRUCTORS.find(i => i.id === courseForm.instructorId)
-  if (instructor) {
-    if (!instructor.recentCourses) instructor.recentCourses = []
-    if (!instructor.recentCourses.includes(trainingId)) instructor.recentCourses.unshift(trainingId)
-  }
+  apiUpdateTraining(trainingId, { courses: trainingData.courses }).catch(() => {})
   showCourseModal.value = false
 }
 
@@ -762,7 +769,7 @@ const editForm = reactive({
 })
 
 function onEditInstructorChange(id) {
-  const inst = MOCK_INSTRUCTORS.find(i => i.id === id)
+  const inst = instructorList.value.find(i => i.id == id)
   if (inst) editForm.instructorName = inst.name
 }
 
@@ -773,9 +780,7 @@ function saveClassInfo() {
     location: editForm.location, instructorId: editForm.instructorId, instructorName: editForm.instructorName,
     capacity: editForm.capacity, status: editForm.status, description: editForm.description,
   })
-  // 同步回 MOCK_TRAININGS
-  const orig = MOCK_TRAININGS.find(t => t.id === trainingId)
-  if (orig) Object.assign(orig, { name: editForm.name, startDate: editForm.startDate, endDate: editForm.endDate, location: editForm.location, instructorId: editForm.instructorId, instructorName: editForm.instructorName, capacity: editForm.capacity, status: editForm.status, description: editForm.description })
+  apiUpdateTraining(trainingId, { ...editForm }).catch(() => {})
   message.success('班级信息已更新')
   showEditModal.value = false
 }
