@@ -1,6 +1,7 @@
 """
 文件管理服务
 """
+import json
 import hashlib
 import uuid
 from datetime import datetime
@@ -38,6 +39,7 @@ class MediaService:
     """文件服务"""
 
     _bucket_ready = False
+    _bucket_policy_ready = False
 
     # MinIO 同步 SDK，放在线程池中执行避免阻塞事件循环
     @staticmethod
@@ -51,14 +53,31 @@ class MediaService:
         self._ensure_bucket()
 
     def _ensure_bucket(self):
-        """确保桶存在"""
-        if MediaService._bucket_ready:
-            return
-
+        """确保桶存在并设置只读公共策略"""
         bucket = settings.MINIO_BUCKET
-        if not self.minio.bucket_exists(bucket):
-            self.minio.make_bucket(bucket)
-        MediaService._bucket_ready = True
+
+        if not MediaService._bucket_ready:
+            if not self.minio.bucket_exists(bucket):
+                self.minio.make_bucket(bucket)
+                logger.info(f"MinIO桶不存在，已创建: {bucket}")
+            MediaService._bucket_ready = True
+
+        if not MediaService._bucket_policy_ready:
+            public_readonly_policy = {
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Principal": {"AWS": ["*"]},
+                        "Action": ["s3:GetObject"],
+                        "Resource": [f"arn:aws:s3:::{bucket}/*"],
+                    }
+                ],
+            }
+
+            self.minio.set_bucket_policy(bucket, json.dumps(public_readonly_policy))
+            MediaService._bucket_policy_ready = True
+            logger.info(f"MinIO桶策略已设置为公共只读: {bucket}")
 
     async def upload_file(self, file: UploadFile, uploader_id: int) -> MediaFileResponse:
         """
