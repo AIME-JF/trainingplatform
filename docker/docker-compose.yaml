@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:15-alpine
+    image: ccr.ccs.tencentyun.com/z5882852/postgres
     container_name: police-training-postgres
     restart: unless-stopped
     env_file:
@@ -19,7 +19,7 @@ services:
       retries: 20
 
   redis:
-    image: redis:7-alpine
+    image: ccr.ccs.tencentyun.com/z5882852/redis
     container_name: police-training-redis
     restart: unless-stopped
     command: redis-server --appendonly yes
