@@ -188,9 +188,31 @@
                 <a-tag v-if="n.urgent" color="red" size="small">紧急</a-tag>
                 <span class="notice-title">{{ n.title }}</span>
                 <span class="notice-date">{{ n.date }}</span>
+                <a-button size="small" type="text" danger @click.stop="handleDeleteNotice(n)" style="margin-left:auto;font-size:11px">删除</a-button>
               </div>
+              <a-empty v-if="!dashData.announcements.length" description="暂无公告" :image-style="{ height: '40px' }" />
             </div>
           </div>
+
+    <!-- 发布公告弹窗 -->
+    <a-modal
+      v-model:open="noticeModalVisible"
+      title="发布系统公告"
+      :width="520"
+      ok-text="发布"
+      cancel-text="取消"
+      :confirm-loading="noticeSubmitting"
+      @ok="submitNotice"
+    >
+      <a-form :label-col="{ span: 4 }" style="margin-top:16px">
+        <a-form-item label="公告标题" required>
+          <a-input v-model:value="noticeForm.title" placeholder="请输入公告标题" :maxlength="100" />
+        </a-form-item>
+        <a-form-item label="公告内容">
+          <a-textarea v-model:value="noticeForm.content" :rows="4" placeholder="请输入公告内容..." :maxlength="500" show-count />
+        </a-form-item>
+      </a-form>
+    </a-modal>
 
           <!-- 近期培训班 -->
           <div class="police-card">
@@ -238,11 +260,11 @@
 </template>
 
 <script setup>
-import { computed, ref, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { useAuthStore } from '../../stores/auth.js'
 import { getDashboard } from '@/api/dashboard'
-import { getNotices } from '@/api/notice'
-import { message } from 'ant-design-vue'
+import { getNotices, createNotice, deleteNotice } from '@/api/notice'
+import { message, Modal } from 'ant-design-vue'
 import {
   PlayCircleOutlined, FormOutlined, RobotOutlined, TeamOutlined,
   BarChartOutlined, PlusOutlined, RightOutlined, ArrowUpOutlined,
@@ -276,10 +298,32 @@ onMounted(async () => {
       const adapted = { ...res }
       // If stats is a dict, convert to array format expected by frontend
       if (res.stats && !Array.isArray(res.stats)) {
+        const labelMap = {
+          total_users: { label: '总用户数', unit: '人' },
+          total_courses: { label: '总课程数', unit: '门' },
+          total_exams: { label: '总考试数', unit: '场' },
+          active_trainings: { label: '进行中培训', unit: '个' },
+          my_courses: { label: '我的课程', unit: '门' },
+          my_trainings: { label: '我的培训班', unit: '个' },
+          my_exams: { label: '创建的考试', unit: '场' },
+          pending_enrollments: { label: '待审批报名', unit: '人' },
+          courses_in_progress: { label: '学习中课程', unit: '门' },
+          exams_taken: { label: '已完成考试', unit: '场' },
+          trainings_enrolled: { label: '参加培训', unit: '个' },
+        }
         adapted.stats = Object.entries(res.stats).map(([key, val]) => ({
-          label: key,
+          label: labelMap[key]?.label || key,
           value: val,
-          unit: '',
+          unit: labelMap[key]?.unit || '',
+        }))
+      }
+      // Map recent_trainings from backend (snake_case) to frontend format
+      if (res.recentTrainings || res.recent_trainings) {
+        adapted.recentTrainings = (res.recentTrainings || res.recent_trainings || []).map(t => ({
+          name: t.name || t.title || '',
+          enrolled: t.enrolled || t.enrolledCount || t.student_count || 0,
+          startDate: t.startDate || t.start_date || '',
+          status: t.status || 'pending',
         }))
       }
       Object.assign(dashData.value, adapted)
@@ -299,7 +343,62 @@ onMounted(async () => {
   }
 })
 
-const announceMsg = () => message.info('公告发布功能开发中...')
+const announceMsg = () => {
+  noticeForm.title = ''
+  noticeForm.content = ''
+  noticeModalVisible.value = true
+}
+
+// 发布公告
+const noticeModalVisible = ref(false)
+const noticeSubmitting = ref(false)
+const noticeForm = reactive({ title: '', content: '' })
+
+const submitNotice = async () => {
+  if (!noticeForm.title.trim()) return message.warning('请输入公告标题')
+  noticeSubmitting.value = true
+  try {
+    await createNotice({ title: noticeForm.title, content: noticeForm.content, type: 'system' })
+    message.success('公告发布成功')
+    noticeModalVisible.value = false
+    await loadNotices()
+  } catch (e) {
+    message.error(e.message || '发布失败')
+  } finally {
+    noticeSubmitting.value = false
+  }
+}
+
+const handleDeleteNotice = (n) => {
+  Modal.confirm({
+    title: '确认删除',
+    content: `确定删除公告「${n.title}」吗？`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      try {
+        await deleteNotice(n.id)
+        message.success('公告已删除')
+        await loadNotices()
+      } catch (e) {
+        message.error(e.message || '删除失败')
+      }
+    }
+  })
+}
+
+async function loadNotices() {
+  try {
+    const noticeRes = await getNotices({ type: 'system', size: 10 })
+    dashData.value.announcements = (noticeRes.items || []).map(n => ({
+      id: n.id,
+      title: n.title,
+      date: n.createdAt ? new Date(n.createdAt).toLocaleDateString('zh-CN') : '',
+      urgent: false
+    }))
+  } catch {}
+}
 </script>
 
 <style scoped>

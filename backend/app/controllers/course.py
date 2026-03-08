@@ -57,6 +57,18 @@ class CourseController:
             logger.error(f"更新课程异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新课程失败")
 
+    def delete_course(self, course_id: int):
+        try:
+            result = self.service.delete_course(course_id)
+            if not result:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="课程不存在")
+            return True
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"删除课程异常: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="删除课程失败")
+
     def get_user_progress(self, user_id: int):
         return self.service.get_user_progress(user_id)
 

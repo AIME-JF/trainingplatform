@@ -13,6 +13,21 @@
       >
         <template #icon><EditOutlined /></template>编辑课程
       </a-button>
+      <a-popconfirm
+        v-if="authStore.isAdmin || authStore.isInstructor"
+        title="确定删除此课程吗？删除后不可恢复。"
+        ok-text="确认删除"
+        cancel-text="取消"
+        @confirm="handleDeleteCourse"
+      >
+        <a-button
+          v-if="authStore.isAdmin || authStore.isInstructor"
+          size="small"
+          danger
+        >
+          <template #icon><DeleteOutlined /></template>删除课程
+        </a-button>
+      </a-popconfirm>
     </div>
 
     <a-row :gutter="20">
@@ -263,13 +278,14 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, reactive, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { LockOutlined, CheckCircleFilled, DownloadOutlined, EditOutlined, DeleteOutlined, InboxOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
 import {
   getCourse,
   updateCourse as apiUpdateCourse,
+  deleteCourse as apiDeleteCourse,
   updateChapterProgress,
   getCourseNote,
   saveCourseNote,
@@ -278,6 +294,7 @@ import { getUsers } from '@/api/user'
 import { uploadFile } from '@/api/media'
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 
 const courseId = route.params.id
@@ -623,6 +640,16 @@ const saveEdit = async () => {
   } finally {
     editSaving.value = false
     editUploadPercent.value = 0
+  }
+}
+
+const handleDeleteCourse = async () => {
+  try {
+    await apiDeleteCourse(courseId)
+    message.success('课程已删除')
+    router.push('/courses')
+  } catch (err) {
+    message.error(err.message || '删除失败')
   }
 }
 </script>

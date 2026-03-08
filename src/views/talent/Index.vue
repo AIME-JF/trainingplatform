@@ -49,10 +49,10 @@
       <div v-for="talent in filteredTalents" :key="talent.id" class="talent-card" :class="'tier-' + talent.tier">
         <div class="tc-tier-badge">{{ talent.tierLabel }}</div>
         <div class="tc-avatar-wrap">
-          <a-avatar :size="64" :style="{ background: talent.avatarColor, fontSize: '22px' }">{{ talent.name.charAt(0) }}</a-avatar>
+          <a-avatar :size="64" :style="{ background: talent.avatarColor, fontSize: '22px' }">{{ (talent.name || '?').charAt(0) }}</a-avatar>
           <div class="tc-rank-badge">第{{ talent.rank }}名</div>
         </div>
-        <div class="tc-name">{{ talent.name }}</div>
+        <div class="tc-name">{{ talent.name || '-' }}</div>
         <div class="tc-unit">{{ talent.unit }}</div>
         <div class="tc-score-row">
           <div class="tc-score-item">
@@ -117,8 +117,8 @@ onMounted(async () => {
 })
 
 const filteredTalents = computed(() => {
-  let list = [...talentList.value]
-  if (searchText.value) list = list.filter(t => t.name.includes(searchText.value))
+  let list = talentList.value.filter(t => t.name)
+  if (searchText.value) list = list.filter(t => (t.name || '').includes(searchText.value))
   if (filterTier.value !== 'all') list = list.filter(t => t.tier === filterTier.value)
   return list
 })

@@ -82,6 +82,18 @@ def update_course(
     return StandardResponse(data=result)
 
 
+@router.delete("/{course_id}", response_model=StandardResponse, summary="删除课程")
+def delete_course(
+    course_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """删除课程"""
+    controller = CourseController(db)
+    controller.delete_course(course_id)
+    return StandardResponse(message="课程已删除")
+
+
 @router.put("/{course_id}/chapters/{chapter_id}/progress",
             response_model=StandardResponse[CourseProgressResponse], summary="更新章节进度")
 def update_chapter_progress(

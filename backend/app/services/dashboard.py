@@ -42,6 +42,10 @@ class DashboardService:
             Exam.created_at.desc()
         ).limit(5).all()
 
+        recent_trainings = self.db.query(Training).order_by(
+            Training.created_at.desc()
+        ).limit(5).all()
+
         return DashboardResponse(
             stats={
                 "total_users": total_users,
@@ -50,7 +54,13 @@ class DashboardService:
                 "active_trainings": active_trainings
             },
             recent_courses=[{"id": c.id, "title": c.title, "category": c.category} for c in recent_courses],
-            recent_exams=[{"id": e.id, "title": e.title, "status": e.status} for e in recent_exams]
+            recent_exams=[{"id": e.id, "title": e.title, "status": e.status} for e in recent_exams],
+            recent_trainings=[{
+                "name": t.name,
+                "status": t.status or "upcoming",
+                "start_date": t.start_date.strftime("%Y-%m-%d") if t.start_date else "",
+                "enrolled": len(t.enrollments) if t.enrollments else 0
+            } for t in recent_trainings]
         )
 
     def _instructor_dashboard(self, user_id: int) -> DashboardResponse:

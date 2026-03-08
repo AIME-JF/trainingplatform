@@ -164,6 +164,24 @@ class CourseService:
         logger.info(f"更新课程: {course.title}")
         return self._to_response(course)
 
+    def delete_course(self, course_id: int) -> bool:
+        """删除课程及其关联的章节、笔记、进度记录"""
+        course = self.db.query(Course).filter(Course.id == course_id).first()
+        if not course:
+            return False
+
+        # 删除关联的学习进度
+        self.db.query(CourseProgress).filter(CourseProgress.course_id == course_id).delete()
+        # 删除关联的课程笔记
+        self.db.query(CourseNote).filter(CourseNote.course_id == course_id).delete()
+        # 删除关联的章节
+        self.db.query(Chapter).filter(Chapter.course_id == course_id).delete()
+        # 删除课程本体
+        self.db.delete(course)
+        self.db.commit()
+        logger.info(f"课程已删除: id={course_id}, title={course.title}")
+        return True
+
     def get_user_progress(self, user_id: int) -> List[CourseProgressResponse]:
         """获取用户学习进度"""
         records = self.db.query(CourseProgress).filter(

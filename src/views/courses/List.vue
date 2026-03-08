@@ -72,7 +72,7 @@
         <a-alert
           type="info"
           show-icon
-          message="每个章节可单独上传对应的视频（MP4）或文档（PDF/PPT）文件，不同章节内容可以不同。"
+          message="每个章节可单独上传对应的视频（MP4）或文档（PDF）文件，不同章节内容可以不同。"
           style="margin-bottom:16px;font-size:12px"
         />
         <div v-for="(ch, idx) in form.chapters" :key="idx" class="chapter-row">
@@ -108,14 +108,14 @@
             v-model:fileList="ch.fileList"
             :before-upload="() => false"
             :max-count="1"
-            accept=".mp4,.pdf,.pptx,.ppt,.doc,.docx"
+            accept=".mp4,.pdf"
             class="chapter-upload"
           >
             <p><InboxOutlined style="font-size:26px;color:#003087" /></p>
             <p style="font-size:13px;font-weight:500;margin:4px 0">
               {{ ch.fileList.length ? '已选择文件，点击可更换' : '点击或拖拽上传此章节媒体文件' }}
             </p>
-            <p style="font-size:11px;color:#aaa">MP4 视频 / PDF 文档 / PPT 课件，单文件 ≤ 500MB</p>
+            <p style="font-size:11px;color:#aaa">仅支持 MP4 视频 / PDF 文档，单文件 ≤ 500MB</p>
           </a-upload-dragger>
         </div>
 
@@ -192,6 +192,20 @@
           >
             <EditOutlined /> 编辑
           </div>
+          <a-popconfirm
+            v-if="authStore.isAdmin || authStore.isInstructor"
+            title="确定删除此课程吗？删除后不可恢复。"
+            ok-text="确认删除"
+            cancel-text="取消"
+            @confirm="handleDelete(course, $event)"
+          >
+            <div
+              class="cover-delete-btn"
+              @click.stop
+            >
+              <DeleteOutlined /> 删除
+            </div>
+          </a-popconfirm>
         </div>
         <div class="course-body">
           <div class="course-category">{{ getCategoryLabel(course.category) }}</div>
@@ -227,7 +241,7 @@ import { useRouter } from 'vue-router'
 import { PlusOutlined, TeamOutlined, StarFilled, InboxOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
-import { getCourses, getCourse as apiGetCourse, createCourse as apiCreateCourse, updateCourse as apiUpdateCourse, getProgress } from '@/api/course'
+import { getCourses, getCourse as apiGetCourse, createCourse as apiCreateCourse, updateCourse as apiUpdateCourse, deleteCourse as apiDeleteCourse, getProgress } from '@/api/course'
 import { getUsers } from '@/api/user'
 import { uploadFile } from '@/api/media'
 import { COURSE_CATEGORIES } from '@/mock/courses'
@@ -511,6 +525,17 @@ const formatDuration = (mins) => mins >= 60 ? `${Math.floor(mins / 60)}h${mins %
 const coverIcons = { law: '⚖️', fraud: '🔍', traffic: '🚗', community: '🏘️', cybersec: '💻', physical: '💪' }
 const getCoverIcon = (cat) => coverIcons[cat] ?? '📚'
 const goDetail = (course) => router.push({ name: 'CourseDetail', params: { id: course.id } })
+
+const handleDelete = async (course, e) => {
+  e?.stopPropagation()
+  try {
+    await apiDeleteCourse(course.id)
+    message.success(`课程『${course.title}』已删除`)
+    fetchCourses()
+  } catch (err) {
+    message.error(err.message || '删除失败')
+  }
+}
 </script>
 
 <style scoped>
@@ -536,6 +561,13 @@ const goDetail = (course) => router.push({ name: 'CourseDetail', params: { id: c
   opacity: 0; transition: opacity 0.2s; cursor: pointer;
 }
 .course-card:hover .cover-edit-btn { opacity: 1; }
+.cover-delete-btn {
+  position: absolute; bottom: 8px; left: 80px;
+  background: rgba(207,19,34,0.85); color: #fff;
+  padding: 2px 10px; border-radius: 10px; font-size: 11px;
+  opacity: 0; transition: opacity 0.2s; cursor: pointer;
+}
+.course-card:hover .cover-delete-btn { opacity: 1; }
 .course-body { padding: 14px; }
 .course-category { color: var(--police-primary); font-size: 11px; font-weight: 600; margin-bottom: 4px; }
 .course-title { font-size: 15px; font-weight: 600; color: #1a1a1a; line-height: 1.4; margin-bottom: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
