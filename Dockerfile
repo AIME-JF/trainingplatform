@@ -1,11 +1,14 @@
-FROM node:20-alpine AS builder
+FROM ccr.ccs.tencentyun.com/z5882852/node:22-alpine3.21 AS builder
 
 WORKDIR /app
 
 RUN corepack enable
 
 COPY package.json pnpm-lock.yaml ./
-RUN pnpm install --frozen-lockfile
+
+RUN npm install -g pnpm --registry https://registry.npmmirror.com/
+
+RUN pnpm install --frozen-lockfile --registry https://registry.npmmirror.com/
 
 COPY . .
 RUN pnpm build
