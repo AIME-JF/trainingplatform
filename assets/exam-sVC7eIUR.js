@@ -1,0 +1,1 @@
+import{y as e}from"./index-Dxitkzqh.js";function n(t){return e.get("/exams",{params:t})}function r(t){return e.get(`/exams/${t}/records/analysis`)}function u(t){return e.post("/exams",t)}function m(t,a){return e.put(`/exams/${t}`,a)}function o(t){return e.get(`/exams/${t}`)}function x(t,a){return e.post(`/exams/${t}/submit`,a)}export{o as a,r as b,u as c,n as g,x as s,m as u};

@@ -1,0 +1,1 @@
+import{y as e}from"./index-Dxitkzqh.js";function c(t){return e.get("/notices",{params:t})}function i(t){return e.post("/notices",t)}function r(t,n){return e.put(`/notices/${t}`,n)}function s(t){return e.delete(`/notices/${t}`)}export{i as c,s as d,c as g,r as u};

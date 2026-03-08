@@ -1,0 +1,1 @@
+import{y as e}from"./index-Dxitkzqh.js";function u(t){return e.get("/questions",{params:t})}function o(t){return e.post("/questions",t)}function i(t,s){return e.put(`/questions/${t}`,s)}function r(t){return e.delete(`/questions/${t}`)}function a(t){return e.post("/questions/batch",t)}export{a as b,o as c,r as d,u as g,i as u};
