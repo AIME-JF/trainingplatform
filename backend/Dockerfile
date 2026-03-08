@@ -19,7 +19,7 @@ RUN apt-get update && \
 COPY requirements.txt /app/requirements.txt
 
 # 安装Python依赖
-RUN pip install --no-cache-dir -r requirements.txt -i https://mirrors.cloud.tencent.com/pypi/simple
+RUN pip install --no-cache-dir -r requirements.txt -i https://mirrors.aliyun.com/pypi/simple
 
 # 复制项目文件
 COPY . /app/
