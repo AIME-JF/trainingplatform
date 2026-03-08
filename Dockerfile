@@ -6,7 +6,7 @@ RUN corepack enable
 
 COPY package.json pnpm-lock.yaml ./
 
-RUN npm install -g pnpm --registry https://registry.npmmirror.com/
+RUN npm install -g pnpm --force --registry https://registry.npmmirror.com/
 
 RUN pnpm install --frozen-lockfile --registry https://registry.npmmirror.com/
 
