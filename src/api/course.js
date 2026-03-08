@@ -35,3 +35,11 @@ export function getCourseNote(courseId) {
 export function saveCourseNote(courseId, content) {
   return request.put(`/courses/${courseId}/note`, { content })
 }
+
+export function getCourseQA(courseId) {
+  return request.get(`/courses/${courseId}/qa`)
+}
+
+export function createCourseQA(courseId, data) {
+  return request.post(`/courses/${courseId}/qa`, data)
+}

@@ -1,7 +1,7 @@
 """
 用户管理路由
 """
-from typing import Optional
+from typing import Optional, List
 from fastapi import APIRouter, Depends, Query, Body
 from sqlalchemy.orm import Session
 
@@ -9,7 +9,10 @@ from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.schemas import StandardResponse, PaginatedResponse, TokenData, UserSimpleResponse, UserCreate, UserUpdate
 from app.schemas.role import RoleSimpleResponse
+from app.schemas.department import DepartmentSimpleResponse
 from app.models import User, Role
+from app.models.department import Department
+from app.models.police_type import PoliceType
 from app.services.auth import auth_service
 from logger import logger
 
@@ -109,6 +112,14 @@ def create_user(
         roles = db.query(Role).filter(Role.id.in_(data.role_ids)).all()
         user.roles = roles
 
+    if data.department_ids:
+        departments = db.query(Department).filter(Department.id.in_(data.department_ids)).all()
+        user.departments = departments
+
+    if data.police_type_ids:
+        police_types = db.query(PoliceType).filter(PoliceType.id.in_(data.police_type_ids)).all()
+        user.police_types = police_types
+
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -155,6 +166,46 @@ def update_user_roles(
     db.commit()
     db.refresh(user)
     logger.info(f"更新用户角色: {user.username}")
+    return StandardResponse(data=UserSimpleResponse.model_validate(user))
+
+
+@router.put("/{user_id}/departments", response_model=StandardResponse[UserSimpleResponse], summary="更新用户所属单位")
+def update_user_departments(
+    user_id: int,
+    department_ids: list[int] = Body(..., embed=True),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """更新用户所属单位"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return StandardResponse(code=404, message="用户不存在")
+
+    departments = db.query(Department).filter(Department.id.in_(department_ids)).all()
+    user.departments = departments
+    db.commit()
+    db.refresh(user)
+    logger.info(f"更新用户所属单位: {user.username}")
+    return StandardResponse(data=UserSimpleResponse.model_validate(user))
+
+
+@router.put("/{user_id}/police-types", response_model=StandardResponse[UserSimpleResponse], summary="更新用户警种")
+def update_user_police_types(
+    user_id: int,
+    police_type_ids: list[int] = Body(..., embed=True),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """更新用户警种"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return StandardResponse(code=404, message="用户不存在")
+
+    police_types = db.query(PoliceType).filter(PoliceType.id.in_(police_type_ids)).all()
+    user.police_types = police_types
+    db.commit()
+    db.refresh(user)
+    logger.info(f"更新用户警种: {user.username}")
     return StandardResponse(data=UserSimpleResponse.model_validate(user))
 
 
@@ -205,3 +256,42 @@ def get_roles(
     roles = db.query(Role).filter(Role.is_active == True).all()
     items = [RoleSimpleResponse.model_validate(r) for r in roles]
     return StandardResponse(data=items)
+
+
+# 部门列表路由
+departments_router = APIRouter(prefix="/departments", tags=["部门管理"])
+
+
+@departments_router.get("", response_model=StandardResponse[List[DepartmentSimpleResponse]], summary="部门列表")
+def get_departments(
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取所有激活的部门列表"""
+    depts = db.query(Department).filter(Department.is_active == True).order_by(Department.id).all()
+    items = [DepartmentSimpleResponse.model_validate(d) for d in depts]
+    return StandardResponse(data=items)
+
+
+@departments_router.post("", response_model=StandardResponse[DepartmentSimpleResponse], summary="新建部门")
+def create_department(
+    name: str = Body(..., embed=True),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """快速创建新部门（名称不能重复）"""
+    name = name.strip()
+    if not name:
+        return StandardResponse(code=400, message="部门名称不能为空")
+    existing = db.query(Department).filter(Department.name == name).first()
+    if existing:
+        return StandardResponse(data=DepartmentSimpleResponse.model_validate(existing))
+    # 生成唯一 code：用名称拼音首字母 + id，这里简单用时间戳
+    import time
+    code = f"dept_{int(time.time() * 1000) % 10**9}"
+    dept = Department(name=name, code=code, is_active=True)
+    db.add(dept)
+    db.commit()
+    db.refresh(dept)
+    logger.info(f"新建部门: {name}")
+    return StandardResponse(data=DepartmentSimpleResponse.model_validate(dept))

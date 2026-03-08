@@ -36,8 +36,9 @@
         <a-sub-menu key="exam" v-if="!isStudent">
           <template #icon><FormOutlined /></template>
           <template #title>考试系统</template>
+          <a-menu-item key="/exam/manage">考试场次</a-menu-item>
           <a-menu-item key="/exam/bank">题库管理</a-menu-item>
-          <a-menu-item key="/exam/scores">成绩管理</a-menu-item>
+          <a-menu-item key="/exam/scores">成绩统计</a-menu-item>
         </a-sub-menu>
         <a-menu-item key="/exam/list" v-else>
           <template #icon><FormOutlined /></template>
@@ -122,8 +123,9 @@
         <a-sub-menu key="exam" v-if="!isStudent">
           <template #icon><FormOutlined /></template>
           <template #title>考试系统</template>
+          <a-menu-item key="/exam/manage">考试场次</a-menu-item>
           <a-menu-item key="/exam/bank">题库管理</a-menu-item>
-          <a-menu-item key="/exam/scores">成绩管理</a-menu-item>
+          <a-menu-item key="/exam/scores">成绩统计</a-menu-item>
         </a-sub-menu>
         <a-menu-item key="/exam/list" v-else>
           <template #icon><FormOutlined /></template>

@@ -61,3 +61,10 @@ class ExamController:
         except Exception as e:
             logger.error(f"获取成绩列表异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取成绩列表失败")
+
+    def get_exam_analysis(self, exam_id: int):
+        try:
+            return self.service.get_exam_analysis(exam_id)
+        except Exception as e:
+            logger.error(f"获取考试分析数据异常: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取考试分析数据失败")

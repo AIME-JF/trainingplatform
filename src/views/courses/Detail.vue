@@ -142,8 +142,8 @@
               <div class="qa-list" v-if="qaList.length">
                 <div class="qa-item" v-for="q in qaList" :key="q.id">
                   <div class="qa-question">
-                    <a-avatar size="small" style="background:#003087">{{ (q.user || '?').charAt(0) }}</a-avatar>
-                    <span class="qa-user">{{ q.user }}</span>
+                    <a-avatar size="small" style="background:#003087">{{ (q.userName || '?').charAt(0) }}</a-avatar>
+                    <span class="qa-user">{{ q.userName }}</span>
                     <span class="qa-text">{{ q.question }}</span>
                   </div>
                   <div class="qa-answer" v-if="q.answer">
@@ -153,7 +153,14 @@
                 </div>
               </div>
               <a-empty v-else description="暂无答疑内容" />
-              <a-input-search placeholder="提问..." enter-button="提交" style="margin-top:12px" />
+              <a-input-search
+                v-model:value="qaInput"
+                placeholder="输入你的问题，按回车或点提交..."
+                enter-button="提交"
+                :loading="qaSubmitting"
+                style="margin-top:12px"
+                @search="handleQASubmit"
+              />
             </a-tab-pane>
           </a-tabs>
         </a-card>
@@ -283,12 +290,9 @@ import { LockOutlined, CheckCircleFilled, DownloadOutlined, EditOutlined, Delete
 import { message } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
 import {
-  getCourse,
-  updateCourse as apiUpdateCourse,
-  deleteCourse as apiDeleteCourse,
-  updateChapterProgress,
-  getCourseNote,
-  saveCourseNote,
+  getCourse, getProgress, updateChapterProgress,
+  getCourseNote, saveCourseNote,
+  getCourseQA, createCourseQA
 } from '@/api/course'
 import { getUsers } from '@/api/user'
 import { uploadFile } from '@/api/media'
@@ -341,13 +345,23 @@ async function fetchCourse() {
 
 onMounted(async () => {
   try {
-    await Promise.all([fetchInstructors(), fetchCourse(), fetchNote()])
+    await Promise.all([fetchInstructors(), fetchCourse(), fetchNote(), fetchQA()])
   } catch {
     message.error('加载课程失败')
   }
 })
 
-const isVideo = computed(() => (localCourse.value.fileType || 'video') === 'video')
+// 按当前章节的文件后缀判断类型（不同章节可能是视频或 PDF）
+const currentChapterFileType = computed(() => {
+  const ch = localCourse.value.chapters[currentChapterIdx.value] || {}
+  const url = ch.fileUrl || ch.videoUrl || ch.docUrl || ''
+  if (!url) {
+    // 没有 fileUrl 则回退到课程级别类型
+    return (localCourse.value.fileType || 'video')
+  }
+  return url.toLowerCase().endsWith('.pdf') ? 'doc' : 'video'
+})
+const isVideo = computed(() => currentChapterFileType.value === 'video')
 
 // ─── 章节 ───
 const currentChapterIdx = ref(0)
@@ -380,6 +394,7 @@ const totalDuration = ref('--:--')
 const videoError = ref(false)
 const showPlayIcon = ref(false)
 
+// 无论是视频还是文档，都统一从 fileUrl 取；分开两个 computed 只是模板使用习惯
 const currentVideoUrl = computed(() => currentChapter.value.fileUrl || currentChapter.value.videoUrl || localCourse.value.videoUrl || '')
 const currentDocUrl = computed(() => currentChapter.value.fileUrl || currentChapter.value.docUrl || localCourse.value.docUrl || '')
 
@@ -479,14 +494,24 @@ const enterFullscreen = () => {
 }
 
 watch(currentChapterIdx, () => {
+  // 总是重置报错状态
+  videoError.value = false
+  docLoadError.value = false
+
   nextTick(() => {
-    if (videoRef.value) {
-      videoRef.value.pause()
-      videoRef.value.currentTime = 0
+    if (isVideo.value) {
+      // 新章节是视频：重置视频播放器
+      if (videoRef.value) {
+        videoRef.value.pause()
+        videoRef.value.currentTime = 0
+      }
       isPlaying.value = false
       playProgress.value = 0
       currentTime.value = '00:00'
       totalDuration.value = '--:--'
+    } else {
+      // 新章节是文档：重置 loading 状态让 iframe 重新加载
+      docLoading.value = true
     }
   })
 })
@@ -499,6 +524,33 @@ const docLoadError = ref(false)
 const activeTab = ref('intro')
 const notesSaved = ref(false)
 const qaList = ref([])
+const qaInput = ref('')
+const qaSubmitting = ref(false)
+
+async function fetchQA() {
+  try {
+    const res = await getCourseQA(courseId)
+    qaList.value = res || []
+  } catch {
+    qaList.value = []
+  }
+}
+
+async function handleQASubmit() {
+  const q = qaInput.value.trim()
+  if (!q) return message.warning('请输入提问内容')
+  qaSubmitting.value = true
+  try {
+    const res = await createCourseQA(courseId, { question: q })
+    qaList.value.unshift(res)
+    qaInput.value = ''
+    message.success('提问已提交')
+  } catch {
+    message.error('提交失败，请稍后重试')
+  } finally {
+    qaSubmitting.value = false
+  }
+}
 
 const noteContent = ref('')
 const noteSaving = ref(false)
@@ -668,6 +720,31 @@ const handleDeleteCourse = async () => {
 .video-player-wrap { background: #000; border-radius: 8px; overflow: hidden; }
 .video-player { position: relative; }
 .course-video { width: 100%; height: 400px; display: block; object-fit: contain; background: #000; }
+/* 全屏时让视频充满整个屏幕，不再固定 400px */
+.video-player-wrap:fullscreen .course-video,
+.video-player-wrap:-webkit-full-screen .course-video,
+.video-player:fullscreen .course-video,
+.video-player:-webkit-full-screen .course-video {
+  height: 100vh !important;
+  height: 100dvh !important;
+  object-fit: contain !important;
+}
+.video-player-wrap:fullscreen,
+.video-player-wrap:-webkit-full-screen,
+.video-player:fullscreen,
+.video-player:-webkit-full-screen {
+  display: flex;
+  flex-direction: column;
+  background: #000;
+  width: 100vw !important;
+  height: 100vh !important;
+}
+.video-player-wrap:fullscreen .video-controls,
+.video-player-wrap:-webkit-full-screen .video-controls,
+.video-player:fullscreen .video-controls,
+.video-player:-webkit-full-screen .video-controls {
+  flex-shrink: 0;
+}
 .video-click-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 48px; cursor: pointer; z-index: 2; }
 .video-error-mask { position: absolute; inset: 0; background: linear-gradient(135deg, #001236, #003087); display: flex; flex-direction: column; align-items: center; justify-content: center; color: rgba(255,255,255,0.8); font-size: 15px; z-index: 5; }
 .play-center-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 52px; color: rgba(255,255,255,0.85); background: rgba(0,0,0,0.35); width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; z-index: 3; pointer-events: none; }

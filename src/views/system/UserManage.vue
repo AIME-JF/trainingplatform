@@ -32,6 +32,12 @@
             <a-tag v-for="r in record.roles" :key="r.id" :color="getRoleColor(r.code)">{{ r.name }}</a-tag>
             <span v-if="!record.roles || record.roles.length === 0" style="color: #999">未分配</span>
           </template>
+          <template v-if="column.key === 'departments'">
+            <template v-if="record.departments && record.departments.length">
+              <a-tag v-for="d in record.departments" :key="d.id" color="cyan">{{ d.name }}</a-tag>
+            </template>
+            <span v-else style="color: #999">-</span>
+          </template>
           <template v-if="column.key === 'isActive'">
             <a-tag :color="record.isActive ? 'green' : 'red'">{{ record.isActive ? '正常' : '已禁用' }}</a-tag>
           </template>
@@ -80,6 +86,32 @@
         <a-form-item label="邮箱">
           <a-input v-model:value="form.email" placeholder="请输入邮箱" />
         </a-form-item>
+        <a-form-item label="入警日期">
+          <a-date-picker v-model:value="form.joinDate" value-format="YYYY-MM-DD" placeholder="请选择入警日期" style="width:100%" />
+        </a-form-item>
+        <a-form-item label="所属单位">
+          <a-select
+            v-model:value="form.departmentIds"
+            mode="tags"
+            placeholder="搜索或输入后回车新建单位（可多选）"
+            :options="departmentOptions"
+            :filter-option="deptFilterOption"
+            @change="onDepartmentChange"
+            allow-clear
+            show-search
+            style="width:100%"
+          />
+        </a-form-item>
+        <a-form-item label="警种">
+          <a-select
+            v-model:value="form.policeTypeIds"
+            mode="multiple"
+            placeholder="请选择警种"
+            :options="policeTypeOptions"
+            allow-clear
+            style="width:100%"
+          />
+        </a-form-item>
       </a-form>
     </a-modal>
 
@@ -96,10 +128,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
-import { getUsers, createUser, updateUser, updateUserRoles, resetPassword, deleteUser, getRoles } from '@/api/user'
+import { getUsers, createUser, updateUser, updateUserRoles, updateUserDepartments, updateUserPoliceTypes, resetPassword, deleteUser, getRoles, getDepartments, getPoliceTypes, createDepartment } from '@/api/user'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -107,6 +139,36 @@ const searchText = ref('')
 const filterRole = ref(undefined)
 const userList = ref([])
 const roleList = ref([])
+const departmentList = ref([])
+const departmentOptions = computed(() => departmentList.value.map(d => ({ value: d.id, label: d.name })))
+
+const policeTypeList = ref([])
+const policeTypeOptions = computed(() => policeTypeList.value.map(pt => ({ value: pt.id, label: pt.name })))
+
+const deptFilterOption = (input, option) => option.label.toLowerCase().includes(input.toLowerCase())
+
+async function onDepartmentChange(values) {
+  for (let i = 0; i < values.length; i++) {
+    const val = values[i]
+    if (typeof val === 'string') {
+      try {
+        const res = await createDepartment(val)
+        const dept = res?.id ? res : res
+        if (dept?.id) {
+          departmentList.value.push(dept)
+          // 替换掉文本值
+          values[i] = dept.id
+          message.success(`已自动新建单位「${val}」`)
+        }
+      } catch {
+        message.error(`「${val}」新建失败`)
+        // 移除失败的文本值
+        values.splice(i, 1)
+        i--
+      }
+    }
+  }
+}
 
 const pagination = reactive({ current: 1, pageSize: 10, total: 0 })
 
@@ -114,6 +176,7 @@ const columns = [
   { title: '用户名', dataIndex: 'username', key: 'username' },
   { title: '姓名', dataIndex: 'nickname', key: 'nickname' },
   { title: '角色', key: 'roles' },
+  { title: '所属单位', key: 'departments' },
   { title: '警号', dataIndex: 'policeId', key: 'policeId' },
   { title: '手机号', dataIndex: 'phone', key: 'phone' },
   { title: '状态', key: 'isActive', width: 80 },
@@ -150,6 +213,20 @@ async function loadRoles() {
   } catch { /* ignore */ }
 }
 
+async function loadDepartments() {
+  try {
+    const res = await getDepartments()
+    departmentList.value = Array.isArray(res) ? res : (res.items || res || [])
+  } catch { /* ignore */ }
+}
+
+async function loadPoliceTypes() {
+  try {
+    const res = await getPoliceTypes()
+    policeTypeList.value = Array.isArray(res) ? res : (res.items || res?.data?.items || res || [])
+  } catch { /* ignore */ }
+}
+
 function handleTableChange(pag) {
   pagination.current = pag.current
   pagination.pageSize = pag.pageSize
@@ -158,6 +235,8 @@ function handleTableChange(pag) {
 
 onMounted(() => {
   loadRoles()
+  loadDepartments()
+  loadPoliceTypes()
   loadUsers()
 })
 
@@ -170,10 +249,13 @@ const form = reactive({
   password: '',
   nickname: '',
   roleIds: [],
+  departmentIds: [],
+  policeTypeIds: [],
   gender: undefined,
   phone: '',
   policeId: '',
   email: '',
+  joinDate: null,
 })
 
 function resetForm() {
@@ -181,10 +263,13 @@ function resetForm() {
   form.password = ''
   form.nickname = ''
   form.roleIds = []
+  form.departmentIds = []
+  form.policeTypeIds = []
   form.gender = undefined
   form.phone = ''
   form.policeId = ''
   form.email = ''
+  form.joinDate = null
 }
 
 function openCreateModal() {
@@ -201,10 +286,13 @@ function openEditModal(record) {
   form.password = ''
   form.nickname = record.nickname || ''
   form.roleIds = (record.roles || []).map(r => r.id)
+  form.departmentIds = (record.departments || []).map(d => d.id)
+  form.policeTypeIds = (record.policeTypes || []).map(p => p.id)
   form.gender = record.gender || undefined
   form.phone = record.phone || ''
   form.policeId = record.policeId || ''
   form.email = record.email || ''
+  form.joinDate = record.join_date || record.joinDate || null
   modalVisible.value = true
 }
 
@@ -224,8 +312,17 @@ async function handleSubmit() {
         phone: form.phone || undefined,
         policeId: form.policeId || undefined,
         email: form.email || undefined,
+        join_date: form.joinDate || undefined,
       })
       await updateUserRoles(editingId.value, form.roleIds)
+      // 同步更新所属单位
+      if (form.departmentIds !== undefined) {
+        try { await updateUserDepartments(editingId.value, form.departmentIds) } catch { /* ignore */ }
+      }
+      // 同步更新警种
+      if (form.policeTypeIds !== undefined) {
+        try { await updateUserPoliceTypes(editingId.value, form.policeTypeIds) } catch { /* ignore */ }
+      }
       message.success('更新成功')
     } else {
       await createUser({
@@ -236,7 +333,10 @@ async function handleSubmit() {
         phone: form.phone || undefined,
         policeId: form.policeId || undefined,
         email: form.email || undefined,
+        join_date: form.joinDate || undefined,
         roleIds: form.roleIds,
+        departmentIds: form.departmentIds,
+        police_type_ids: form.policeTypeIds,
       })
       message.success('创建成功')
     }

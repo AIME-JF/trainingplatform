@@ -31,6 +31,7 @@ class Course(Base):
     instructor = relationship("User", foreign_keys=[instructor_id])
     chapters = relationship("Chapter", back_populates="course", cascade="all, delete-orphan")
     notes = relationship("CourseNote", back_populates="course", cascade="all, delete-orphan")
+    qa_list = relationship("CourseQA", back_populates="course", cascade="all, delete-orphan")
 
 
 class Chapter(Base):
@@ -91,3 +92,23 @@ class CourseProgress(Base):
     user = relationship("User", foreign_keys=[user_id])
     course = relationship("Course", foreign_keys=[course_id])
     chapter = relationship("Chapter", foreign_keys=[chapter_id])
+
+
+class CourseQA(Base):
+    """课程答疑表"""
+    __tablename__ = 'course_qa'
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, comment='用户ID')
+    course_id = Column(Integer, ForeignKey('courses.id', ondelete='CASCADE'), nullable=False, comment='课程ID')
+    question = Column(Text, nullable=False, comment='问题内容')
+    answer = Column(Text, nullable=True, comment='回答内容')
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), comment='提问时间')
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), comment='更新时间')
+
+    __table_args__ = (
+        {'comment': '课程答疑表'},
+    )
+
+    user = relationship("User", foreign_keys=[user_id])
+    course = relationship("Course", back_populates="qa_list", foreign_keys=[course_id])

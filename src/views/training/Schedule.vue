@@ -56,6 +56,7 @@
                 :style="{ top: getTopOffset(item.timeStart) + 'px', height: getHeight(item.duration) + 'px' }"
                 :draggable="canEdit"
                 @dragstart="canEdit ? onDragStart($event, item) : null"
+                @click.stop="canEdit ? openEditItem(item) : null"
               >
                 <div class="si-title">{{ item.title }}</div>
                 <div class="si-meta">{{ item.timeStart }} · {{ item.location }}</div>
@@ -106,6 +107,61 @@
         </a-col>
       </a-row>
     </template>
+
+    <!-- 编辑课程项弹窗 -->
+    <a-modal
+      v-model:open="editItemVisible"
+      title="编辑课程安排"
+      ok-text="保存"
+      cancel-text="取消"
+      :confirm-loading="editItemSaving"
+      @ok="saveEditItem"
+      :width="480"
+    >
+      <a-form :label-col="{ span: 6 }" style="margin-top:16px">
+        <a-form-item label="课程名称">
+          <a-input v-model:value="editItemForm.title" placeholder="课程名称" />
+        </a-form-item>
+        <a-form-item label="开始时间">
+          <a-time-picker
+            v-model:value="editItemForm.timeStartObj"
+            format="HH:mm"
+            :minute-step="5"
+            style="width:100%"
+            placeholder="选择开始时间"
+          />
+        </a-form-item>
+        <a-form-item label="结束时间">
+          <a-time-picker
+            v-model:value="editItemForm.timeEndObj"
+            format="HH:mm"
+            :minute-step="5"
+            style="width:100%"
+            placeholder="选择结束时间"
+          />
+        </a-form-item>
+        <a-form-item label="课时（自动）">
+          <a-input-number
+            :value="editItemComputedHours"
+            :disabled="true"
+            addon-after="小时"
+            style="width:100%"
+          />
+        </a-form-item>
+        <a-form-item label="上课地点">
+          <a-input v-model:value="editItemForm.location" placeholder="上课地点" />
+        </a-form-item>
+        <a-form-item label="课程类型">
+          <a-select v-model:value="editItemForm.type" style="width:100%">
+            <a-select-option value="theory">📖 理论课</a-select-option>
+            <a-select-option value="skill">🔧 技能课</a-select-option>
+            <a-select-option value="review">📝 复习</a-select-option>
+            <a-select-option value="physical">💪 体能</a-select-option>
+            <a-select-option value="drill">⚠️ 演练</a-select-option>
+          </a-select>
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -116,6 +172,7 @@ import { MOCK_WEEK_SCHEDULE } from '@/mock/schedules'
 import { getTrainings, getTraining, updateTraining } from '@/api/training'
 import { useAuthStore } from '@/stores/auth'
 import { message } from 'ant-design-vue'
+import dayjs from 'dayjs'
 
 const route = useRoute()
 const authStore = useAuthStore()
@@ -364,6 +421,90 @@ const weekStats = computed(() => {
     { icon: '📖', label: '理论课时', value: items.filter(s => s.type === 'theory').length + '节', color: '#722ed1' },
   ]
 })
+
+// ─── 编辑课程项弹窗 ───
+const editItemVisible = ref(false)
+const editItemSaving = ref(false)
+const editItemTarget = ref(null) // 正在编辑的 item 对象
+const editItemForm = ref({
+  title: '',
+  timeStartObj: null,
+  timeEndObj: null,
+  location: '',
+  type: 'theory',
+})
+
+// 根据起止时间自动计算课时（小时，保留1位小数）
+const editItemComputedHours = computed(() => {
+  const s = editItemForm.value.timeStartObj
+  const e = editItemForm.value.timeEndObj
+  if (!s || !e) return 0
+  const diffMins = e.diff(s, 'minute')
+  return diffMins > 0 ? Number((diffMins / 60).toFixed(1)) : 0
+})
+
+function openEditItem(item) {
+  editItemTarget.value = item
+  const [sh, sm] = (item.timeStart || '09:00').split(':').map(Number)
+  const endMins = sh * 60 + sm + (item.duration || 90)
+  const eh = Math.floor(endMins / 60)
+  const em = endMins % 60
+  const endStr = `${String(eh).padStart(2,'0')}:${String(em).padStart(2,'0')}`
+
+  editItemForm.value = {
+    title: item.title,
+    timeStartObj: dayjs(`2000-01-01 ${item.timeStart}`),
+    timeEndObj: dayjs(`2000-01-01 ${endStr}`),
+    location: item.location || selectedTraining.value?.location || '',
+    type: item.type,
+  }
+  editItemVisible.value = true
+}
+
+async function saveEditItem() {
+  const item = editItemTarget.value
+  if (!item) return
+
+  const form = editItemForm.value
+  if (!form.timeStartObj || !form.timeEndObj) {
+    message.warning('请选择上课起止时间')
+    return
+  }
+  const newStart = form.timeStartObj.format('HH:mm')
+  const newEnd = form.timeEndObj.format('HH:mm')
+  if (form.timeEndObj.isBefore(form.timeStartObj)) {
+    message.warning('结束时间不能早于开始时间')
+    return
+  }
+
+  editItemSaving.value = true
+  try {
+    // 更新 courses 中对应的 schedule
+    const scheduleRef = selectedTraining.value.courses[item.courseIdx].schedules[item.scheduleIdx]
+    scheduleRef.timeRange = `${newStart}~${newEnd}`
+
+    // 更新课程名称和类型（写回 course 层）
+    const courseRef = selectedTraining.value.courses[item.courseIdx]
+    courseRef.name = form.title
+    courseRef.type = form.type === 'skill' ? 'practice' : 'theory'
+
+    // 更新 location（存在 training 层，需要更新 selectedTraining）
+    if (form.location && form.location !== selectedTraining.value.location) {
+      // location 是每个 schedule-item 展示的字段，这里直接修改视图数据
+      item.location = form.location
+    }
+
+    triggerUpdate.value++
+
+    await updateTraining(selectedTrainingId.value, { courses: selectedTraining.value.courses })
+    message.success('课程安排已保存')
+    editItemVisible.value = false
+  } catch {
+    message.error('保存失败，请重试')
+  } finally {
+    editItemSaving.value = false
+  }
+}
 </script>
 
 <style scoped>

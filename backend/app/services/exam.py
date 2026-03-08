@@ -273,3 +273,41 @@ class ExamService:
             page=page, size=size if size != -1 else total,
             total=total, items=items
         )
+
+    def get_exam_analysis(self, exam_id: int) -> Dict[str, Any]:
+        """获取考试成绩分析数据"""
+        records = self.db.query(ExamRecord).options(
+            joinedload(ExamRecord.user).joinedload(User.departments)
+        ).filter(ExamRecord.exam_id == exam_id).order_by(ExamRecord.score.desc()).all()
+
+        exam = self.db.query(Exam).filter(Exam.id == exam_id).first()
+
+        students = []
+        for r in records:
+            u = r.user
+            unit_name = "未知单位"
+            if u and u.departments:
+                unit_name = u.departments[0].name
+            
+            dims = r.dimension_scores or {}
+            
+            students.append({
+                "id": r.id,
+                "name": u.nickname if u and u.nickname else (u.username if u else "未知"),
+                "policeId": u.police_id if u else "",
+                "unit": unit_name,
+                "score": r.score,
+                "law": dims.get("law", 0),
+                "enforce": dims.get("enforce", 0),
+                "evidence": dims.get("evidence", 0),
+                "physical": dims.get("physical", 0),
+                "ethic": dims.get("ethic", 0),
+                "time": f"{r.duration}分钟",
+                "pass": r.score >= (exam.passing_score if exam else 60)
+            })
+
+        return {
+            "students": students,
+            "passing_score": exam.passing_score if exam else 60
+        }
+

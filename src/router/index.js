@@ -38,7 +38,13 @@ const router = createRouter({
           path: 'exam/list',
           name: 'ExamList',
           component: () => import('../views/exam/ExamList.vue'),
-          meta: { title: '参加考试', roles: ['student'] },
+          meta: { title: '参加考试' },
+        },
+        {
+          path: 'exam/manage',
+          name: 'ExamManage',
+          component: () => import('../views/exam/ExamManage.vue'),
+          meta: { title: '考试场次管理', roles: ['admin', 'instructor'] },
         },
         {
           path: 'exam/bank',

@@ -26,10 +26,10 @@
     <a-card :bordered="false" style="margin-bottom:16px">
       <a-row :gutter="16">
         <a-col :span="8">
-          <a-input-search v-model:value="searchText" placeholder="搜索题目内容..." allow-clear />
+          <a-input-search v-model:value="searchText" placeholder="搜索题目内容..." allow-clear @search="onSearch" />
         </a-col>
         <a-col :span="4">
-          <a-select v-model:value="filterType" style="width:100%">
+          <a-select v-model:value="filterType" style="width:100%" @change="onFilterChange">
             <a-select-option value="all">全部题型</a-select-option>
             <a-select-option value="single">单选题</a-select-option>
             <a-select-option value="multi">多选题</a-select-option>
@@ -37,7 +37,7 @@
           </a-select>
         </a-col>
         <a-col :span="4">
-          <a-select v-model:value="filterDiff" style="width:100%">
+          <a-select v-model:value="filterDiff" style="width:100%" @change="onFilterChange">
             <a-select-option value="all">全部难度</a-select-option>
             <a-select-option value="easy">简单</a-select-option>
             <a-select-option value="medium">中等</a-select-option>
@@ -50,11 +50,13 @@
     <!-- 题目列表 -->
     <a-card :bordered="false">
       <a-table
-        :dataSource="filteredQuestions"
+        :dataSource="questionList"
         :columns="columns"
         :row-selection="rowSelection"
         size="small"
-        :pagination="{ pageSize: 10, showTotal: t => `共 ${t} 道题` }"
+        :pagination="pagination"
+        :loading="loading"
+        @change="handleTableChange"
         row-key="id"
       >
         <template #expandedRowRender="{ record }">
@@ -184,11 +186,11 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive } from 'vue'
+import { ref, computed, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import { PlusOutlined, RobotOutlined } from '@ant-design/icons-vue'
-import { MOCK_QUESTIONS } from '@/mock/exams'
+import { getQuestions, createQuestion, updateQuestion, deleteQuestion, batchCreateQuestions } from '@/api/question'
 
 const router = useRouter()
 const searchText = ref('')
@@ -208,35 +210,93 @@ function numToDiff(n) {
   if (n === 3) return 'medium'
   return 'hard'
 }
+function diffToNum(str) {
+  if (str === 'easy') return 2
+  if (str === 'medium') return 3
+  return 4
+}
 
-// 本地可编辑题库列表
-const questionList = ref(
-  MOCK_QUESTIONS.map((q, i) => ({
-    ...q,
-    key: q.id || String(i),
-    diffLevel: numToDiff(q.difficulty),
-    // 判断题补充选项
-    options: q.options || [
-      { key: 'A', text: '正确' },
-      { key: 'B', text: '错误' },
-    ],
-  }))
-)
+const loading = ref(false)
+const questionList = ref([])
 
-const filteredQuestions = computed(() => {
-  let list = questionList.value
-  if (searchText.value) list = list.filter(q => q.content?.includes(searchText.value))
-  if (filterType.value !== 'all') list = list.filter(q => q.type === filterType.value)
-  if (filterDiff.value !== 'all') list = list.filter(q => q.diffLevel === filterDiff.value)
-  return list
+const pagination = reactive({
+  current: 1,
+  pageSize: 10,
+  total: 0,
+  showTotal: t => `共 ${t} 道题`
+})
+
+const statsData = reactive({
+  total: 0,
+  single: 0,
+  multi: 0,
+  judge: 0
 })
 
 const stats = computed(() => [
-  { label: '题目总数', value: questionList.value.length },
-  { label: '单选题', value: questionList.value.filter(q => q.type === 'single').length },
-  { label: '多选题', value: questionList.value.filter(q => q.type === 'multi').length },
-  { label: '判断题', value: questionList.value.filter(q => q.type === 'judge').length },
+  { label: '题目总数', value: statsData.total },
+  { label: '单选题', value: statsData.single },
+  { label: '多选题', value: statsData.multi },
+  { label: '判断题', value: statsData.judge },
 ])
+
+async function loadQuestions() {
+  loading.value = true
+  try {
+    const params = {
+      page: pagination.current,
+      size: pagination.pageSize,
+      search: searchText.value || undefined,
+      type: filterType.value !== 'all' ? filterType.value : undefined,
+      difficulty: filterDiff.value !== 'all' ? diffToNum(filterDiff.value) : undefined
+    }
+    const res = await getQuestions(params)
+    questionList.value = (res.items || []).map(q => ({
+      ...q,
+      key: q.id,
+      diffLevel: numToDiff(q.difficulty),
+      options: q.options || (q.type === 'judge' ? [{key:'A',text:'正确'},{key:'B',text:'错误'}] : []),
+    }))
+    pagination.total = res.total || 0
+  } catch (e) {
+    message.error('加载题目失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function loadStats() {
+  try {
+    const p1 = getQuestions({ size: 1 })
+    const p2 = getQuestions({ size: 1, type: 'single' })
+    const p3 = getQuestions({ size: 1, type: 'multi' })
+    const p4 = getQuestions({ size: 1, type: 'judge' })
+    const [r1, r2, r3, r4] = await Promise.all([p1, p2, p3, p4])
+    statsData.total = r1.total || 0
+    statsData.single = r2.total || 0
+    statsData.multi = r3.total || 0
+    statsData.judge = r4.total || 0
+  } catch { /* ignore */ }
+}
+
+function onSearch() {
+  pagination.current = 1
+  loadQuestions()
+}
+function onFilterChange() {
+  pagination.current = 1
+  loadQuestions()
+}
+function handleTableChange(pag) {
+  pagination.current = pag.current
+  pagination.pageSize = pag.pageSize
+  loadQuestions()
+}
+
+onMounted(() => {
+  loadQuestions()
+  loadStats()
+})
 
 const rowSelection = { type: 'checkbox' }
 
@@ -315,36 +375,44 @@ const closeModal = () => {
   editingQ.value = null
 }
 
-const handleSaveQ = () => {
+const submitting = ref(false)
+
+const handleSaveQ = async () => {
   if (!qForm.content.trim()) { message.warning('请填写题目内容'); return }
   const finalAnswer = qForm.type === 'multi' ? [...qForm.answerArr] : qForm.answer
   if (!finalAnswer || (Array.isArray(finalAnswer) && !finalAnswer.length)) {
     message.warning('请设置正确答案'); return
   }
-  const newQ = {
-    id: editingQ.value?.id || `q${Date.now()}`,
-    key: editingQ.value?.id || `q${Date.now()}`,
+  const payload = {
     type: qForm.type,
-    diffLevel: qForm.diffLevel,
     content: qForm.content,
-    knowledgePoint: qForm.knowledgePoint,
+    knowledge_point: qForm.knowledgePoint,
     options: qForm.type === 'judge'
       ? [{ key: 'A', text: '正确' }, { key: 'B', text: '错误' }]
-      : qForm.options.map(o => ({ ...o })),
+      : qForm.options.map(o => ({ key: o.key, text: o.text })),
     answer: finalAnswer,
     explanation: qForm.explanation,
-    difficulty: qForm.diffLevel === 'easy' ? 2 : qForm.diffLevel === 'medium' ? 3 : 4,
+    difficulty: diffToNum(qForm.diffLevel),
     score: 2,
   }
-  if (editingQ.value) {
-    const idx = questionList.value.findIndex(q => q.id === editingQ.value.id)
-    if (idx !== -1) questionList.value[idx] = newQ
-    message.success('题目已更新')
-  } else {
-    questionList.value.unshift(newQ)
-    message.success('题目已添加到题库')
+
+  submitting.value = true
+  try {
+    if (editingQ.value && editingQ.value.id) {
+      await updateQuestion(editingQ.value.id, payload)
+      message.success('题目已更新')
+    } else {
+      await createQuestion(payload)
+      message.success('题目已添加')
+    }
+    closeModal()
+    loadQuestions()
+    loadStats()
+  } catch (e) {
+    message.error(e.message || '操作失败')
+  } finally {
+    submitting.value = false
   }
-  closeModal()
 }
 
 const handleDelete = (record) => {
@@ -354,27 +422,40 @@ const handleDelete = (record) => {
     okText: '确认删除',
     okType: 'danger',
     cancelText: '取消',
-    onOk: () => {
-      questionList.value = questionList.value.filter(q => q.id !== record.id)
-      message.success('已删除')
+    onOk: async () => {
+      try {
+        await deleteQuestion(record.id)
+        message.success('已删除')
+        loadQuestions()
+        loadStats()
+      } catch (e) {
+        message.error('删除失败')
+      }
     },
   })
 }
 
 // 供 AI 组卷页面调用：保存到题库
-window.__addQuestionsToBank = (questions) => {
-  const newQs = questions.map((q, i) => ({
-    ...q,
-    id: `ai_${Date.now()}_${i}`,
-    key: `ai_${Date.now()}_${i}`,
-    diffLevel: 'medium',
+window.__addQuestionsToBank = async (questions) => {
+  const payloadQuestions = questions.map((q) => ({
+    type: q.type || 'single',
+    difficulty: 3, // 默认中等
     options: q.options
-      ? q.options.map((text, oi) => ({ key: String.fromCharCode(65 + oi), text }))
+      ? q.options.map((text, oi) => ({ key: String.fromCharCode(65 + oi), text: String(text) }))
       : [],
     content: q.stem || q.content || '',
+    answer: q.answer,
+    explanation: q.explanation || '',
+    knowledge_point: q.knowledgePoint || ''
   }))
-  questionList.value.unshift(...newQs)
-  message.success(`已保存 ${newQs.length} 道 AI 生成题目到题库`)
+  try {
+    await batchCreateQuestions({ questions: payloadQuestions })
+    message.success(`已保存 ${payloadQuestions.length} 道 AI 生成题目到真实题库`)
+    loadQuestions()
+    loadStats()
+  } catch (e) {
+    message.error('保存失败')
+  }
 }
 </script>
 

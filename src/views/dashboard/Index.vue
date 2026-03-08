@@ -183,15 +183,16 @@
               <span class="card-title">系统公告</span>
               <a-button size="small" type="text" @click="announceMsg">发布公告</a-button>
             </div>
-            <div class="notice-list">
-              <div v-for="n in dashData.announcements" :key="n.id" class="notice-item">
-                <a-tag v-if="n.urgent" color="red" size="small">紧急</a-tag>
-                <span class="notice-title">{{ n.title }}</span>
-                <span class="notice-date">{{ n.date }}</span>
-                <a-button size="small" type="text" danger @click.stop="handleDeleteNotice(n)" style="margin-left:auto;font-size:11px">删除</a-button>
-              </div>
-              <a-empty v-if="!dashData.announcements.length" description="暂无公告" :image-style="{ height: '40px' }" />
-            </div>
+            <a-empty v-if="!dashData.announcements.length" description="暂无公告" :image-style="{ height: '40px' }" />
+            <a-collapse v-else :bordered="false" class="notice-collapse">
+              <a-collapse-panel v-for="n in dashData.announcements" :key="n.id" :header="n.title">
+                <template #extra>
+                  <span class="notice-date" @click.stop>{{ n.date }}</span>
+                  <a-button size="small" type="text" danger @click.stop="handleDeleteNotice(n)" style="margin-left:8px;font-size:11px">删除</a-button>
+                </template>
+                <p class="notice-content-text">{{ n.content || '（无详细内容）' }}</p>
+              </a-collapse-panel>
+            </a-collapse>
           </div>
 
     <!-- 发布公告弹窗 -->
@@ -299,17 +300,17 @@ onMounted(async () => {
       // If stats is a dict, convert to array format expected by frontend
       if (res.stats && !Array.isArray(res.stats)) {
         const labelMap = {
-          total_users: { label: '总用户数', unit: '人' },
-          total_courses: { label: '总课程数', unit: '门' },
-          total_exams: { label: '总考试数', unit: '场' },
-          active_trainings: { label: '进行中培训', unit: '个' },
-          my_courses: { label: '我的课程', unit: '门' },
-          my_trainings: { label: '我的培训班', unit: '个' },
-          my_exams: { label: '创建的考试', unit: '场' },
-          pending_enrollments: { label: '待审批报名', unit: '人' },
-          courses_in_progress: { label: '学习中课程', unit: '门' },
-          exams_taken: { label: '已完成考试', unit: '场' },
-          trainings_enrolled: { label: '参加培训', unit: '个' },
+          totalUsers: { label: '总用户数', unit: '人' },
+          totalCourses: { label: '总课程数', unit: '门' },
+          totalExams: { label: '总考试数', unit: '场' },
+          activeTrainings: { label: '进行中培训', unit: '个' },
+          myCourses: { label: '我的课程', unit: '门' },
+          myTrainings: { label: '我的培训班', unit: '个' },
+          myExams: { label: '创建的考试', unit: '场' },
+          pendingEnrollments: { label: '待审批报名', unit: '人' },
+          coursesInProgress: { label: '学习中课程', unit: '门' },
+          examsTaken: { label: '已完成考试', unit: '场' },
+          trainingsEnrolled: { label: '参加培训', unit: '个' },
         }
         adapted.stats = Object.entries(res.stats).map(([key, val]) => ({
           label: labelMap[key]?.label || key,
@@ -334,6 +335,7 @@ onMounted(async () => {
       dashData.value.announcements = (noticeRes.items || []).map(n => ({
         id: n.id,
         title: n.title,
+        content: n.content || '',
         date: n.createdAt ? new Date(n.createdAt).toLocaleDateString('zh-CN') : '',
         urgent: false
       }))
@@ -394,6 +396,7 @@ async function loadNotices() {
     dashData.value.announcements = (noticeRes.items || []).map(n => ({
       id: n.id,
       title: n.title,
+      content: n.content || '',
       date: n.createdAt ? new Date(n.createdAt).toLocaleDateString('zh-CN') : '',
       urgent: false
     }))
@@ -403,6 +406,27 @@ async function loadNotices() {
 
 <style scoped>
 .dashboard {}
+
+/* 系统公告折叠面板 */
+:deep(.notice-collapse .ant-collapse-item) {
+  border-bottom: 1px solid #f0f0f0;
+}
+:deep(.notice-collapse .ant-collapse-header) {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--police-text-primary);
+  padding: 10px 0;
+}
+:deep(.notice-collapse .ant-collapse-content-box) {
+  padding: 8px 0 12px;
+}
+.notice-content-text {
+  font-size: 13px;
+  color: var(--police-text-secondary);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  margin: 0;
+}
 
 .welcome-bar {
   display: flex;

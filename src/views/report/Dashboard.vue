@@ -175,7 +175,7 @@ onMounted(async () => {
     if (cityRes) {
       const items = cityRes.items || cityRes || []
       cityRanking.value = items
-        .map(c => ({ name: (c.city || c.name || '') + (c.city ? '市公安局' : ''), score: c.avgScore ?? c.score ?? 0 }))
+        .map(c => ({ name: c.city || c.name || '', score: c.avgScore ?? c.score ?? 0 }))
         .sort((a, b) => b.score - a.score)
     }
   } catch { /* ignore */ }

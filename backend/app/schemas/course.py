@@ -39,6 +39,7 @@ class ChapterResponse(BaseModel):
     doc_url: Optional[str] = None
     file_id: Optional[int] = None
     file_url: Optional[str] = None
+    progress: int = 0  # 当前用户学习进度(0-100)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -151,5 +152,31 @@ class CourseProgressResponse(BaseModel):
     chapter_id: Optional[int] = None
     progress: int = 0
     last_studied_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# ========== CourseQA ==========
+
+class CourseQACreate(BaseModel):
+    """提出问题"""
+    question: str = Field(..., description="问题内容")
+
+
+class CourseQAUpdate(BaseModel):
+    """回答问题（仅教官/管理员）"""
+    answer: str = Field(..., description="回答内容")
+
+
+class CourseQAResponse(BaseModel):
+    """答疑响应"""
+    id: int
+    user_id: int
+    user_name: Optional[str] = None
+    course_id: int
+    question: str
+    answer: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)

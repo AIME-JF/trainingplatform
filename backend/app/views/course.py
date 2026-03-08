@@ -11,7 +11,8 @@ from app.schemas import (
     StandardResponse, TokenData, PaginatedResponse,
     CourseCreate, CourseUpdate, CourseResponse, CourseListResponse,
     CourseProgressUpdate, CourseProgressResponse,
-    CourseNoteUpdate, CourseNoteResponse
+    CourseNoteUpdate, CourseNoteResponse,
+    CourseQACreate, CourseQAResponse
 )
 from app.controllers import CourseController
 
@@ -63,9 +64,9 @@ def get_course(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    """获取课程详情"""
+    """获取课程详情（含当前用户章节进度）"""
     controller = CourseController(db)
-    data = controller.get_course_by_id(course_id)
+    data = controller.get_course_by_id(course_id, user_id=current_user.user_id)
     return StandardResponse(data=data)
 
 
@@ -131,4 +132,27 @@ def update_course_note(
     """保存当前用户课程笔记"""
     controller = CourseController(db)
     result = controller.update_course_note(course_id, current_user.user_id, data)
+    return StandardResponse(data=result)
+@router.get("/{course_id}/qa", response_model=StandardResponse[List[CourseQAResponse]], summary="获取课程答疑列表")
+def get_course_qa(
+    course_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取课程答疑列表"""
+    controller = CourseController(db)
+    result = controller.get_course_qa(course_id)
+    return StandardResponse(data=result)
+
+
+@router.post("/{course_id}/qa", response_model=StandardResponse[CourseQAResponse], summary="提交课程提问")
+def create_course_qa(
+    course_id: int,
+    data: CourseQACreate,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """提交课程提问"""
+    controller = CourseController(db)
+    result = controller.create_course_qa(course_id, current_user.user_id, data)
     return StandardResponse(data=result)

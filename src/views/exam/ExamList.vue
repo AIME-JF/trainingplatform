@@ -19,8 +19,8 @@
               </a-tag>
             </div>
             <div class="exam-status-badge">
-              <a-tag :color="exam.status === 'active' ? 'green' : 'orange'" style="font-size:11px;margin:0">
-                {{ exam.status === 'active' ? '● 进行中' : '◷ 即将开始' }}
+              <a-tag :color="exam.status === 'active' ? 'green' : exam.status === 'upcoming' ? 'orange' : 'default'" style="font-size:11px;margin:0">
+                {{ exam.status === 'active' ? '● 进行中' : exam.status === 'upcoming' ? '◷ 即将开始' : '已结束' }}
               </a-tag>
             </div>
             <div class="exam-icon">{{ exam.type === 'formal' ? '📝' : '📋' }}</div>
@@ -37,22 +37,22 @@
               </div>
               <div class="info-item">
                 <FileTextOutlined />
-                <span>{{ exam.questionCount }} 题</span>
+                <span>{{ exam.questionCount || exam.question_count || 0 }} 题</span>
               </div>
               <div class="info-item">
                 <TrophyOutlined />
-                <span>满分 {{ exam.totalScore }} 分</span>
+                <span>满分 {{ exam.totalScore || exam.total_score || 0 }} 分</span>
               </div>
               <div class="info-item">
                 <CheckCircleOutlined />
-                <span>及格 {{ exam.passingScore }} 分</span>
+                <span>及格 {{ exam.passingScore || exam.passing_score || 0 }} 分</span>
               </div>
             </div>
 
             <div class="exam-meta-row">
-              <span class="exam-scope"><TeamOutlined /> {{ exam.scope }}</span>
+              <span class="exam-scope"><TeamOutlined /> {{ exam.scope || '全体人员' }}</span>
               <span class="exam-time">
-                {{ exam.startTime.split(' ')[0] }} ~ {{ exam.endTime.split(' ')[0] }}
+                {{ (exam.startTime || exam.start_time || '').replace('T', ' ').split(' ')[0] }} ~ {{ (exam.endTime || exam.end_time || '').replace('T', ' ').split(' ')[0] }}
               </span>
             </div>
 
@@ -87,33 +87,54 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { Modal } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import {
   ClockCircleOutlined, FileTextOutlined, TrophyOutlined,
   CheckCircleOutlined, TeamOutlined, EditOutlined,
 } from '@ant-design/icons-vue'
-import { MOCK_EXAMS } from '@/mock/exams'
+import { getExams } from '@/api/exam'
 
 const router = useRouter()
 
-const activeExams = computed(() => MOCK_EXAMS.filter(e => e.status === 'active'))
-const upcomingExams = computed(() => MOCK_EXAMS.filter(e => e.status === 'upcoming'))
-const allExams = computed(() => [...activeExams.value, ...upcomingExams.value])
+const loading = ref(false)
+const rawExams = ref([])
+
+const activeExams = computed(() => rawExams.value.filter(e => e.status === 'active'))
+const upcomingExams = computed(() => rawExams.value.filter(e => e.status === 'upcoming'))
+const allExams = computed(() => rawExams.value) // We only fetch active/upcoming from backend usually, but we filter client-side just in case
 
 const headerColors = ['#003087', '#8b1a1a', '#1a5c2e', '#6b3a8a', '#2e4057']
 
 const getHeaderBg = (exam) => {
-  const idx = MOCK_EXAMS.indexOf(exam)
-  const c = headerColors[idx % headerColors.length]
+  const index = exam.id % headerColors.length
+  const c = headerColors[index]
   return `linear-gradient(135deg, ${c}, ${c}cc)`
 }
+
+async function fetchExams() {
+  loading.value = true
+  try {
+    // 获取正在进行和即将开始的考试。此系统为了演示，先拉所有未结束的
+    const resA = await getExams({ size: 100, status: 'active' })
+    const resU = await getExams({ size: 100, status: 'upcoming' })
+    rawExams.value = [...(resA.items || []), ...(resU.items || [])]
+  } catch (e) {
+    message.error('获取考试列表失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  fetchExams()
+})
 
 const startExam = (exam) => {
   Modal.confirm({
     title: '确认开始考试',
-    content: `即将进入【${exam.title}】，考试时长 ${exam.duration} 分钟，共 ${exam.questionCount} 题，满分 ${exam.totalScore} 分。开始后不可暂停，确认继续？`,
+    content: `即将进入【${exam.title}】，考试时长 ${exam.duration} 分钟，共 ${exam.questionCount || exam.question_count || 0} 题，满分 ${exam.totalScore || exam.total_score || 0} 分。开始后不可暂停，确认继续？`,
     okText: '开始考试',
     cancelText: '再想想',
     centered: true,

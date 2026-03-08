@@ -1,37 +1,43 @@
 <template>
   <div class="exam-page">
-    <!-- 考试头部 -->
-    <div class="exam-header">
-      <div class="exam-info">
-        <h3>{{ exam.title }}</h3>
-        <div class="exam-meta">
-          <a-tag color="blue">{{ exam.questionCount }}题</a-tag>
-          <a-tag color="orange">满分 {{ exam.totalScore }} 分</a-tag>
-          <a-tag color="green">及格 {{ exam.passScore }} 分</a-tag>
-        </div>
-      </div>
-      <div class="exam-timer" :class="{ urgent: remainingTime < 300 }">
-        <ClockCircleOutlined />
-        <span class="time-text">{{ formatTime(remainingTime) }}</span>
-      </div>
+    <!-- 加载中 -->
+    <div v-if="loading" style="text-align: center; padding: 100px;">
+      <a-spin size="large" tip="正在加载试卷..." />
     </div>
 
-    <a-row :gutter="20">
-      <!-- 左：题目区 -->
-      <a-col :span="17">
-        <a-card :bordered="false" class="question-card">
-          <div class="q-progress-bar">
-            <span class="q-progress-text">第 {{ currentIdx+1 }} / {{ questions.length }} 题</span>
-            <a-progress :percent="Math.round((answeredCount/questions.length)*100)" size="small" style="flex:1;margin:0 16px" />
-            <span class="answered-count">已答 {{ answeredCount }} 题</span>
+    <div v-else>
+      <!-- 考试头部 -->
+      <div class="exam-header">
+        <div class="exam-info">
+          <h3>{{ exam.title }}</h3>
+          <div class="exam-meta">
+            <a-tag color="blue">{{ exam.questionCount || 0 }}题</a-tag>
+            <a-tag color="orange">满分 {{ exam.totalScore || 0 }} 分</a-tag>
+            <a-tag color="green">及格 {{ exam.passingScore || 60 }} 分</a-tag>
           </div>
+        </div>
+        <div class="exam-timer" :class="{ urgent: remainingTime < 300 }">
+          <ClockCircleOutlined />
+          <span class="time-text">{{ formatTime(remainingTime) }}</span>
+        </div>
+      </div>
 
-          <div class="question-display">
+      <a-row :gutter="20">
+        <!-- 左：题目区 -->
+        <a-col :span="17">
+          <a-card :bordered="false" class="question-card">
+            <div class="q-progress-bar">
+              <span class="q-progress-text">第 {{ currentIdx+1 }} / {{ questions.length }} 题</span>
+              <a-progress :percent="questions.length ? Math.round((answeredCount/questions.length)*100) : 0" size="small" style="flex:1;margin:0 16px" />
+              <span class="answered-count">已答 {{ answeredCount }} 题</span>
+            </div>
+
+          <div class="question-display" v-if="currentQ">
             <div class="q-type-badge">
               <a-tag :color="typeColors[currentQ.type]">{{ typeLabels[currentQ.type] }}</a-tag>
-              <span class="q-score">{{ currentQ.score }}分</span>
+              <span class="q-score">{{ currentQ.score || 2 }}分</span>
             </div>
-            <div class="q-stem">{{ currentIdx+1 }}. {{ currentQ.stem }}</div>
+            <div class="q-stem">{{ currentIdx+1 }}. {{ currentQ.content || currentQ.stem }}</div>
 
             <!-- 单选题 -->
             <a-radio-group
@@ -42,11 +48,11 @@
               <a-radio
                 v-for="(opt, i) in currentQ.options"
                 :key="i"
-                :value="String.fromCharCode(65+i)"
+                :value="opt.key"
                 class="option-item"
               >
-                <span class="opt-key">{{ String.fromCharCode(65+i) }}</span>
-                {{ opt }}
+                <span class="opt-key">{{ opt.key }}</span>
+                {{ opt.text }}
               </a-radio>
             </a-radio-group>
 
@@ -59,11 +65,11 @@
               <a-checkbox
                 v-for="(opt, i) in currentQ.options"
                 :key="i"
-                :value="String.fromCharCode(65+i)"
+                :value="opt.key"
                 class="option-item"
               >
-                <span class="opt-key">{{ String.fromCharCode(65+i) }}</span>
-                {{ opt }}
+                <span class="opt-key">{{ opt.key }}</span>
+                {{ opt.text }}
               </a-checkbox>
             </a-checkbox-group>
 
@@ -120,6 +126,7 @@
         </a-card>
       </a-col>
     </a-row>
+    </div>
   </div>
 </template>
 
@@ -128,20 +135,22 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { Modal, message } from 'ant-design-vue'
 import { ClockCircleOutlined, StarOutlined } from '@ant-design/icons-vue'
-import { MOCK_EXAMS, MOCK_QUESTIONS } from '@/mock/exams'
+import { getExamDetail, submitExam } from '@/api/exam'
 
 const router = useRouter()
 const route = useRoute()
 const examId = route.params.id
-const exam = MOCK_EXAMS.find(e => e.id === examId) || MOCK_EXAMS[0]
-const questions = exam.questionIds
-  ? MOCK_QUESTIONS.filter(q => exam.questionIds.includes(q.id))
-  : MOCK_QUESTIONS.slice(0, 8)
+
+const loading = ref(true)
+const submitting = ref(false)
+const exam = ref({})
+const questions = ref([])
 
 const currentIdx = ref(0)
-const answers = ref(Array(questions.length).fill(null))
+const answers = ref([])
 const markedQuestions = ref([])
-const remainingTime = ref(exam.duration * 60)
+const remainingTime = ref(0)
+const startTime = ref(null)
 
 const currentQ = computed(() => questions[currentIdx.value])
 const answeredCount = computed(() => answers.value.filter(a => a !== null && (!Array.isArray(a) || a.length > 0)).length)
@@ -162,19 +171,86 @@ const markQuestion = (idx) => {
   else markedQuestions.value.push(idx)
 }
 
+const startTimer = () => {
+  timer = setInterval(() => { 
+    if (remainingTime.value > 0) remainingTime.value--; 
+    else {
+      clearInterval(timer)
+      message.warning('考试时间到，正在自动交卷...')
+      submit()
+    }
+  }, 1000)
+}
+
+const loadExam = async () => {
+  try {
+    const res = await getExamDetail(examId)
+    const data = res.data || res
+    exam.value = {
+      title: data.title,
+      questionCount: data.question_count,
+      totalScore: data.total_score,
+      passingScore: data.passing_score,
+      duration: data.duration
+    }
+    questions.value = data.questions || []
+    answers.value = Array(questions.value.length).fill(null)
+    
+    // 初始化多选题答案为数组
+    questions.value.forEach((q, idx) => {
+      if (q.type === 'multi') {
+        answers.value[idx] = []
+      }
+    })
+
+    remainingTime.value = (data.duration || 60) * 60
+    startTime.value = new Date().toISOString()
+    startTimer()
+    loading.value = false
+  } catch (e) {
+    message.error('加载试卷失败')
+    router.replace('/exam/list')
+  }
+}
+
+const submit = async () => {
+  submitting.value = true
+  try {
+    const submitAnswers = {}
+    questions.value.forEach((q, idx) => {
+      submitAnswers[q.id] = answers.value[idx]
+    })
+    
+    await submitExam(examId, {
+      start_time: startTime.value,
+      answers: submitAnswers
+    })
+    
+    message.success('交卷成功！')
+    router.replace(`/exam/result/${examId}`)
+  } catch (e) {
+    message.error('交卷失败，请重试')
+    submitting.value = false
+  }
+}
+
 const confirmSubmit = () => {
   Modal.confirm({
     title: '确认提交试卷？',
-    content: `已答 ${answeredCount.value} 题，共 ${questions.length} 题。提交后不可修改。`,
+    content: `已答 ${answeredCount.value} 题，共 ${questions.value.length} 题。提交后不可修改。`,
     okText: '确认提交',
     cancelText: '继续作答',
     okType: 'danger',
-    onOk: () => router.push('/exam/result/1')
+    onOk: () => {
+      clearInterval(timer)
+      submit()
+    }
   })
 }
 
-let timer = null
-onMounted(() => { timer = setInterval(() => { if (remainingTime.value > 0) remainingTime.value--; else clearInterval(timer) }, 1000) })
+onMounted(() => {
+  loadExam()
+})
 onUnmounted(() => clearInterval(timer))
 </script>
 

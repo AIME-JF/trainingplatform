@@ -6,12 +6,14 @@ from datetime import datetime
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, cast, String
 
-from app.models import Course, Chapter, CourseNote, CourseProgress, User
+from app.models.course import Course, Chapter, CourseNote, CourseProgress, CourseQA
+from app.models.user import User
 from app.models.media import MediaFile
 from app.schemas.course import (
     CourseCreate, CourseUpdate, CourseResponse, CourseListResponse,
     ChapterResponse, CourseProgressUpdate, CourseProgressResponse,
-    CourseNoteUpdate, CourseNoteResponse
+    CourseNoteUpdate, CourseNoteResponse,
+    CourseQACreate, CourseQAResponse
 )
 from app.schemas import PaginatedResponse
 from config import settings
@@ -113,8 +115,8 @@ class CourseService:
         logger.info(f"创建课程: {course.title}")
         return self._to_response(course)
 
-    def get_course_by_id(self, course_id: int) -> Optional[CourseResponse]:
-        """获取课程详情"""
+    def get_course_by_id(self, course_id: int, user_id: Optional[int] = None) -> Optional[CourseResponse]:
+        """获取课程详情（含当前用户的章节进度）"""
         course = self.db.query(Course).options(
             joinedload(Course.instructor),
             joinedload(Course.chapters)
@@ -122,7 +124,7 @@ class CourseService:
 
         if not course:
             return None
-        return self._to_response(course)
+        return self._to_response(course, user_id=user_id)
 
     def update_course(self, course_id: int, data: CourseUpdate) -> Optional[CourseResponse]:
         """更新课程"""
@@ -130,7 +132,7 @@ class CourseService:
         if not course:
             return None
 
-        update_data = data.model_dump(exclude_unset=True)
+        update_data = data.model_dump(exclude_none=True)  # 使用 exclude_none 而非 exclude_unset，这样 tags=[] 空数组也会被正确保存
         chapters_data = update_data.pop('chapters', None)
 
         for field, value in update_data.items():
@@ -212,6 +214,18 @@ class CourseService:
 
         self.db.commit()
         self.db.refresh(record)
+
+        # 实时更新 student_count：统计此课程有学习记录的不重复用户数
+        try:
+            from sqlalchemy import func as sa_func
+            real_count = self.db.query(sa_func.count(sa_func.distinct(CourseProgress.user_id))).filter(
+                CourseProgress.course_id == course_id
+            ).scalar() or 0
+            self.db.query(Course).filter(Course.id == course_id).update({'student_count': real_count})
+            self.db.commit()
+        except Exception as e:
+            logger.warning(f"更新 student_count 失败: {e}")
+
         return CourseProgressResponse.model_validate(record)
 
     def get_course_note(self, course_id: int, user_id: int) -> CourseNoteResponse:
@@ -254,8 +268,8 @@ class CourseService:
         self.db.refresh(note)
         return CourseNoteResponse.model_validate(note)
 
-    def _chapter_to_response(self, ch: Chapter) -> ChapterResponse:
-        """转换章节为响应，填充 file_url"""
+    def _chapter_to_response(self, ch: Chapter, user_progress: dict = None) -> ChapterResponse:
+        """转换章节为响应，填充 file_url 和用户进度"""
         file_url = None
         if ch.file_id:
             media = self.db.query(MediaFile).filter(MediaFile.id == ch.file_id).first()
@@ -269,19 +283,30 @@ class CourseService:
                     file_url = f"{settings.API_V1_STR}/media/files/{ch.file_id}"
             else:
                 file_url = f"{settings.API_V1_STR}/media/files/{ch.file_id}"
+        progress = (user_progress or {}).get(ch.id, 0)
         resp = ChapterResponse(
             id=ch.id, course_id=ch.course_id, title=ch.title,
             sort_order=ch.sort_order, duration=ch.duration,
             video_url=ch.video_url, doc_url=ch.doc_url,
             file_id=ch.file_id, file_url=file_url,
+            progress=progress,
         )
         return resp
 
-    def _to_response(self, course: Course) -> CourseResponse:
-        """转换为响应"""
+    def _to_response(self, course: Course, user_id: Optional[int] = None) -> CourseResponse:
+        """转换为响应，user_id 用于注入章节进度"""
+        # 预查询该用户对这门课的所有章节进度
+        user_progress = {}
+        if user_id:
+            records = self.db.query(CourseProgress).filter(
+                CourseProgress.user_id == user_id,
+                CourseProgress.course_id == course.id
+            ).all()
+            user_progress = {r.chapter_id: r.progress for r in records}
+
         chapters = []
         if hasattr(course, 'chapters') and course.chapters:
-            chapters = [self._chapter_to_response(ch) for ch in
+            chapters = [self._chapter_to_response(ch, user_progress) for ch in
                         sorted(course.chapters, key=lambda x: x.sort_order)]
 
         return CourseResponse(
@@ -294,4 +319,48 @@ class CourseService:
             is_required=course.is_required, cover_color=course.cover_color,
             tags=course.tags, chapters=chapters,
             created_at=course.created_at, updated_at=course.updated_at
+        )
+    def get_course_qa(self, course_id: int) -> List[CourseQAResponse]:
+        """获取课程答疑列表"""
+        qa_list = self.db.query(CourseQA).options(joinedload(CourseQA.user)).filter(
+            CourseQA.course_id == course_id
+        ).order_by(CourseQA.created_at.desc()).all()
+        
+        results = []
+        for qa in qa_list:
+            results.append(CourseQAResponse(
+                id=qa.id,
+                user_id=qa.user_id,
+                user_name=qa.user.nickname if qa.user else "未知用户",
+                course_id=qa.course_id,
+                question=qa.question,
+                answer=qa.answer,
+                created_at=qa.created_at,
+                updated_at=qa.updated_at
+            ))
+        return results
+
+    def create_course_qa(self, course_id: int, user_id: int, data: CourseQACreate) -> CourseQAResponse:
+        """创建课程提问"""
+        qa = CourseQA(
+            user_id=user_id,
+            course_id=course_id,
+            question=data.question
+        )
+        self.db.add(qa)
+        self.db.commit()
+        self.db.refresh(qa)
+        
+        # 关联查询用户信息
+        user = self.db.query(User).filter(User.id == user_id).first()
+        
+        return CourseQAResponse(
+            id=qa.id,
+            user_id=qa.user_id,
+            user_name=user.nickname if user else "我",
+            course_id=qa.course_id,
+            question=qa.question,
+            answer=qa.answer,
+            created_at=qa.created_at,
+            updated_at=qa.updated_at
         )

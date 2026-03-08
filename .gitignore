@@ -12,6 +12,16 @@ dist
 dist-ssr
 *.local
 
+# Docker volumes
+docker/volumes/*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
@@ -22,3 +32,4 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+*.bak

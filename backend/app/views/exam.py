@@ -95,3 +95,15 @@ def get_exam_scores(
     controller = ExamController(db)
     data = controller.get_exam_scores(exam_id, page, size)
     return StandardResponse(data=data)
+
+
+@router.get("/{exam_id}/records/analysis", summary="获取考试分析报表")
+def get_exam_analysis(
+    exam_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取某场考试的平铺成绩明细，供前端报表展示"""
+    controller = ExamController(db)
+    data = controller.get_exam_analysis(exam_id)
+    return StandardResponse(data=data)

@@ -31,3 +31,23 @@ export function deleteUser(id) {
 export function getRoles() {
   return request.get('/roles')
 }
+
+export function getDepartments() {
+  return request.get('/departments')
+}
+
+export function createDepartment(name) {
+  return request.post('/departments', { name })
+}
+
+export function updateUserDepartments(id, departmentIds) {
+  return request.put(`/users/${id}/departments`, { departmentIds })
+}
+
+export function getPoliceTypes() {
+  return request.get('/police-types', { params: { size: -1 } })
+}
+
+export function updateUserPoliceTypes(id, policeTypeIds) {
+  return request.put(`/users/${id}/police-types`, { police_type_ids: policeTypeIds })
+}

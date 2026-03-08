@@ -1,7 +1,7 @@
 """
 课程管理控制器
 """
-from typing import Optional
+from typing import Optional, List
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
@@ -10,6 +10,7 @@ from app.schemas import (
     CourseCreate, CourseUpdate, CourseResponse, CourseListResponse,
     CourseProgressUpdate, CourseProgressResponse,
     CourseNoteUpdate, CourseNoteResponse,
+    CourseQACreate, CourseQAResponse,
     PaginatedResponse
 )
 from logger import logger
@@ -39,8 +40,8 @@ class CourseController:
             logger.error(f"创建课程异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建课程失败")
 
-    def get_course_by_id(self, course_id: int):
-        result = self.service.get_course_by_id(course_id)
+    def get_course_by_id(self, course_id: int, user_id: int = None):
+        result = self.service.get_course_by_id(course_id, user_id=user_id)
         if not result:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="课程不存在")
         return result
@@ -92,3 +93,16 @@ class CourseController:
         except Exception as e:
             logger.error(f"更新课程笔记异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新课程笔记失败")
+    def get_course_qa(self, course_id: int) -> List[CourseQAResponse]:
+        try:
+            return self.service.get_course_qa(course_id)
+        except Exception as e:
+            logger.error(f"获取答疑列表异常: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取答疑列表失败")
+
+    def create_course_qa(self, course_id: int, user_id: int, data: CourseQACreate) -> CourseQAResponse:
+        try:
+            return self.service.create_course_qa(course_id, user_id, data)
+        except Exception as e:
+            logger.error(f"创建答疑提问异常: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="提出问题失败")
