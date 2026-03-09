@@ -6,6 +6,10 @@
   padding: 0;
 }
 
+:root {
+  --app-vh: 1vh;
+}
+
 html, body {
   height: 100%;
   font-family: var(--police-font);

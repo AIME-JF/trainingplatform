@@ -1,35 +1,34 @@
 <template>
   <div
     class="resource-recommend-page"
-    @touchstart.passive="onTouchStart"
-    @touchmove.passive="onTouchMove"
-    @touchend.passive="onTouchEnd"
+    @touchstart.capture="onTouchStart"
+    @touchmove.capture="onTouchMove"
+    @touchend.capture="onTouchEnd"
   >
-    <div class="page-header">
-      <h2>资源推荐</h2>
-      <a-space>
-        <a-button @click="$router.push('/resource/library')">资源库</a-button>
-        <a-button v-if="!isMobile" type="primary" @click="nextRecommendation">下一个</a-button>
-      </a-space>
+    <div class="recommend-top-actions">
+      <a-button size="small" @click="$router.push('/resource/library')">资源库</a-button>
+      <a-button v-if="!isMobile" size="small" type="primary" @click="nextRecommendation">下一个</a-button>
     </div>
 
-    <a-spin :spinning="loadingResource">
-      <a-empty v-if="!currentResource && !loadingResource" description="暂无推荐内容" />
-      <ResourceViewer
-        v-else
-        :resource="currentResource"
-        @click="recordCurrentEvent('click')"
-        @play="recordCurrentEvent('play')"
-        @complete="recordCurrentEvent('complete')"
-      />
-    </a-spin>
+    <div class="recommend-body">
+      <a-spin :spinning="loadingResource">
+        <a-empty v-if="!currentResource && !loadingResource" description="暂无推荐内容" />
+        <ResourceViewer
+          v-else
+          class="recommend-viewer"
+          mode="recommend"
+          :resource="currentResource"
+          @click="recordCurrentEvent('click')"
+          @play="recordCurrentEvent('play')"
+          @complete="recordCurrentEvent('complete')"
+        />
+      </a-spin>
+    </div>
 
-    <div class="recommend-footer" v-if="currentResource">
-      <a-space>
-        <a-button @click="goDetail">查看详情</a-button>
-        <a-button v-if="isMobile" type="primary" @click="nextRecommendation">下一条</a-button>
-      </a-space>
-      <span class="recommend-index">{{ currentIndex + 1 }} / {{ feedItems.length }}</span>
+    <div class="recommend-mobile-actions" v-if="currentResource">
+      <a-button class="action-detail" @click="goDetail">查看详情</a-button>
+      <div class="recommend-index">{{ currentIndex + 1 }} / {{ feedItems.length }}</div>
+      <a-button class="action-next" type="primary" @click="nextRecommendation">下一条</a-button>
     </div>
   </div>
 </template>
@@ -58,7 +57,13 @@ const isMobile = ref(window.innerWidth <= 768)
 
 const resourceCache = new Map()
 const impressionRecorded = new Set()
-const gesture = ref({ startX: 0, startY: 0, axis: '', triggered: false })
+const gesture = ref({
+  startX: 0,
+  startY: 0,
+  axis: '',
+  triggered: false,
+  ignore: false,
+})
 
 const currentFeedItem = computed(() => feedItems.value[currentIndex.value] || null)
 
@@ -177,17 +182,25 @@ async function recordCurrentEvent(eventType) {
 }
 
 function onTouchStart(event) {
+  if (!isMobile.value) return
+
+  const target = event.target
+  const ignore = target instanceof Element && !!target.closest('.recommend-mobile-actions .ant-btn')
   const touch = event.touches?.[0]
   if (!touch) return
+
   gesture.value = {
     startX: touch.clientX,
     startY: touch.clientY,
     axis: '',
     triggered: false,
+    ignore,
   }
 }
 
 function onTouchMove(event) {
+  if (!isMobile.value || gesture.value.ignore) return
+
   const touch = event.touches?.[0]
   if (!touch || gesture.value.triggered) return
 
@@ -199,16 +212,22 @@ function onTouchMove(event) {
   if (!gesture.value.axis && (absX > 12 || absY > 12)) {
     gesture.value.axis = absY > absX ? 'y' : 'x'
   }
+
+  if (gesture.value.axis === 'y' && deltaY > 0 && event.cancelable) {
+    event.preventDefault()
+  }
 }
 
 function onTouchEnd(event) {
+  if (!isMobile.value || gesture.value.ignore) return
   if (gesture.value.axis !== 'y' || gesture.value.triggered) return
 
   const touch = event.changedTouches?.[0]
   if (!touch) return
 
+  const deltaX = touch.clientX - gesture.value.startX
   const deltaY = touch.clientY - gesture.value.startY
-  if (deltaY > 90) {
+  if (deltaY > 80 && Math.abs(deltaY) > Math.abs(deltaX)) {
     gesture.value.triggered = true
     nextRecommendation()
   }
@@ -216,12 +235,73 @@ function onTouchEnd(event) {
 </script>
 
 <style scoped>
-.resource-recommend-page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.recommend-footer { display: flex; justify-content: space-between; align-items: center; }
-.recommend-index { color: #666; font-size: 13px; }
+.resource-recommend-page {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  background: #000;
+  overflow: hidden;
+}
+
+.recommend-top-actions {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 35;
+  display: flex;
+  gap: 8px;
+}
+
+.recommend-body {
+  width: 100%;
+  height: 100%;
+}
+
+.recommend-body :deep(.ant-spin-nested-loading),
+.recommend-body :deep(.ant-spin-container) {
+  width: 100%;
+  height: 100%;
+}
+
+.recommend-viewer {
+  width: 100%;
+  height: 100%;
+}
+
+.recommend-mobile-actions {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 36;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.action-detail,
+.action-next {
+  flex: 0 0 auto;
+}
+
+.recommend-index {
+  flex: 1;
+  text-align: center;
+  font-weight: 500;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.55);
+}
 
 @media (max-width: 768px) {
-  .recommend-footer { gap: 8px; flex-direction: column; align-items: flex-start; }
+  .recommend-top-actions {
+    top: 10px;
+    right: 10px;
+  }
+
+  .recommend-mobile-actions {
+    bottom: calc(8px + env(safe-area-inset-bottom));
+  }
 }
 </style>

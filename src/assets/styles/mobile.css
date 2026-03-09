@@ -55,7 +55,14 @@
     padding: 12px !important;
     padding-bottom: 76px !important;
     /* 留出底部导航空间 */
-    min-height: calc(100vh - 52px - 64px) !important;
+    min-height: calc(var(--app-vh, 1vh) * 100 - 52px - 64px) !important;
+  }
+
+  .content-area.immersive-content {
+    padding: 0 !important;
+    padding-bottom: 0 !important;
+    min-height: calc(var(--app-vh, 1vh) * 100 - 52px - 64px) !important;
+    background: #000 !important;
   }
 
   /* ================================================

@@ -254,7 +254,7 @@
       </a-layout-header>
 
       <!-- 内容区 -->
-      <a-layout-content class="content-area">
+      <a-layout-content class="content-area" :class="{ 'immersive-content': isImmersiveRoute }">
         <router-view v-if="isMounted" />
       </a-layout-content>
     </a-layout>
@@ -309,11 +309,24 @@ const openKeys = ref([])
 const isMobile = ref(window.innerWidth <= 768)
 const isMounted = ref(false)
 
-function onResize() { isMobile.value = window.innerWidth <= 768 }
+const isImmersiveRoute = computed(() => route.path.startsWith('/resource/recommend'))
+
+function updateAppVh() {
+  const vh = window.innerHeight * 0.01
+  document.documentElement.style.setProperty('--app-vh', `${vh}px`)
+}
+
+function onResize() {
+  isMobile.value = window.innerWidth <= 768
+  updateAppVh()
+}
+
 onMounted(() => {
+  updateAppVh()
   window.addEventListener('resize', onResize)
   setTimeout(() => { isMounted.value = true }, 50)
 })
+
 onUnmounted(() => window.removeEventListener('resize', onResize))
 
 const isStudent = computed(() => authStore.isStudent)
@@ -518,7 +531,12 @@ function handleLogout() {
 .content-area {
   padding: 24px;
   background: var(--police-bg);
-  min-height: calc(100vh - 64px);
+  min-height: calc(var(--app-vh, 1vh) * 100 - 64px);
+}
+
+.content-area.immersive-content {
+  padding: 0;
+  background: #000;
 }
 
 /* 用户下拉菜单 */

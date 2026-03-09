@@ -8,7 +8,8 @@
       "Bash(git:*)",
       "Bash(alembic:*)",
       "Bash(grep:*)",
-      "WebSearch"
+      "WebSearch",
+      "Bash(pnpm add:*)"
     ]
   }
 }
