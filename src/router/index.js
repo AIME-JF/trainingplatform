@@ -108,6 +108,49 @@ const router = createRouter({
           component: () => import('../views/training/Checkin.vue'),
           meta: { title: '扫码签到' },
         },
+        // 资源库
+        {
+          path: 'resource/library',
+          name: 'ResourceLibrary',
+          component: () => import('../views/resource/Library.vue'),
+          meta: { title: '资源库' },
+        },
+        {
+          path: 'resource/recommend',
+          name: 'ResourceRecommend',
+          component: () => import('../views/resource/Recommend.vue'),
+          meta: { title: '资源推荐' },
+        },
+        {
+          path: 'resource/detail/:id',
+          name: 'ResourceDetail',
+          component: () => import('../views/resource/Detail.vue'),
+          meta: { title: '资源详情' },
+        },
+        {
+          path: 'resource/upload',
+          name: 'ResourceUpload',
+          component: () => import('../views/resource/Upload.vue'),
+          meta: { title: '上传资源', roles: ['admin', 'instructor'] },
+        },
+        {
+          path: 'resource/my',
+          name: 'MyResources',
+          component: () => import('../views/resource/MyResources.vue'),
+          meta: { title: '我的资源', roles: ['admin', 'instructor'] },
+        },
+        {
+          path: 'resource/review',
+          name: 'ResourceReviewQueue',
+          component: () => import('../views/resource/ReviewQueue.vue'),
+          meta: { title: '审核工作台', roles: ['admin', 'instructor'] },
+        },
+        {
+          path: 'resource/policy',
+          name: 'ResourcePolicyManage',
+          component: () => import('../views/resource/PolicyManage.vue'),
+          meta: { title: '审核策略', roles: ['admin'] },
+        },
         // 教官管理
         {
           path: 'instructor',

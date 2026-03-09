@@ -16,6 +16,7 @@ class ChapterCreate(BaseModel):
     video_url: Optional[str] = Field(None, description="视频URL(兼容)")
     doc_url: Optional[str] = Field(None, description="文档URL(兼容)")
     file_id: Optional[int] = Field(None, description="关联文件ID")
+    resource_id: Optional[int] = Field(None, description="关联资源ID")
 
 
 class ChapterUpdate(BaseModel):
@@ -26,6 +27,7 @@ class ChapterUpdate(BaseModel):
     video_url: Optional[str] = None
     doc_url: Optional[str] = None
     file_id: Optional[int] = None
+    resource_id: Optional[int] = None
 
 
 class ChapterResponse(BaseModel):
@@ -38,6 +40,7 @@ class ChapterResponse(BaseModel):
     video_url: Optional[str] = None
     doc_url: Optional[str] = None
     file_id: Optional[int] = None
+    resource_id: Optional[int] = None
     file_url: Optional[str] = None
     progress: int = 0  # 当前用户学习进度(0-100)
 

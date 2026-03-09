@@ -19,6 +19,9 @@ from .report import ReportService
 from .ai import AIService
 from .talent import TalentService
 from .media import MediaService
+from .resource import ResourceService
+from .review import ReviewService
+from .recommendation import RecommendationService
 
 __all__ = [
     "AuthService", "UserService", "DepartmentService", "RoleService", "PermissionService",
@@ -27,4 +30,5 @@ __all__ = [
     "CertificateService", "ProfileService",
     "DashboardService", "ReportService", "AIService", "TalentService",
     "MediaService",
+    "ResourceService", "ReviewService", "RecommendationService",
 ]

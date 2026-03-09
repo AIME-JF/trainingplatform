@@ -12,9 +12,11 @@ from app.schemas import (
     StandardResponse, TokenData, PaginatedResponse,
     TrainingCreate, TrainingUpdate, TrainingResponse, TrainingListResponse,
     EnrollmentCreate, EnrollmentResponse,
-    CheckinCreate, CheckinResponse, ScheduleItemResponse
+    CheckinCreate, CheckinResponse, ScheduleItemResponse,
+    TrainingResourceBindRequest, ResourceListItemResponse
 )
 from app.controllers import TrainingController
+from app.services.training import TrainingService
 
 router = APIRouter(prefix="/trainings", tags=["培训管理"])
 
@@ -209,3 +211,40 @@ def get_checkin_qr(
     controller = TrainingController(db)
     data = controller.generate_checkin_qr(training_id)
     return StandardResponse(data=data)
+
+
+@router.post("/{training_id}/resources", response_model=StandardResponse[ResourceListItemResponse], summary="培训绑定资源")
+def add_training_resource(
+    training_id: int,
+    data: TrainingResourceBindRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    service = TrainingService(db)
+    result = service.add_training_resource(training_id, data)
+    return StandardResponse(data=result)
+
+
+@router.get("/{training_id}/resources", response_model=StandardResponse[List[ResourceListItemResponse]], summary="培训资源列表")
+def list_training_resources(
+    training_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    service = TrainingService(db)
+    result = service.list_training_resources(training_id)
+    return StandardResponse(data=result)
+
+
+@router.delete("/{training_id}/resources/{resource_id}", response_model=StandardResponse, summary="培训解绑资源")
+def remove_training_resource(
+    training_id: int,
+    resource_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    service = TrainingService(db)
+    ok = service.remove_training_resource(training_id, resource_id)
+    if not ok:
+        return StandardResponse(code=404, message="绑定关系不存在")
+    return StandardResponse(message="解绑成功")

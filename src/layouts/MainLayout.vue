@@ -60,6 +60,17 @@
           <a-menu-item key="/training/board" v-if="isAdmin">培训看板</a-menu-item>
         </a-sub-menu>
 
+        <a-sub-menu key="resource">
+          <template #icon><BookOutlined /></template>
+          <template #title>资源中心</template>
+          <a-menu-item key="/resource/library">资源库</a-menu-item>
+          <a-menu-item key="/resource/recommend">资源推荐</a-menu-item>
+          <a-menu-item key="/resource/upload" v-if="!isStudent">上传资源</a-menu-item>
+          <a-menu-item key="/resource/my" v-if="!isStudent">我的资源</a-menu-item>
+          <a-menu-item key="/resource/review" v-if="!isStudent">审核工作台</a-menu-item>
+          <a-menu-item key="/resource/policy" v-if="isAdmin">审核策略</a-menu-item>
+        </a-sub-menu>
+
         <a-menu-item key="/instructor" v-if="!isStudent">
           <template #icon><UserOutlined /></template>
           教官库
@@ -143,6 +154,16 @@
           <a-menu-item key="/training">培训班列表</a-menu-item>
           <a-menu-item key="/training/schedule">周训练计划</a-menu-item>
           <a-menu-item key="/training/board" v-if="isAdmin">培训看板</a-menu-item>
+        </a-sub-menu>
+        <a-sub-menu key="resource">
+          <template #icon><BookOutlined /></template>
+          <template #title>资源中心</template>
+          <a-menu-item key="/resource/library">资源库</a-menu-item>
+          <a-menu-item key="/resource/recommend">资源推荐</a-menu-item>
+          <a-menu-item key="/resource/upload" v-if="!isStudent">上传资源</a-menu-item>
+          <a-menu-item key="/resource/my" v-if="!isStudent">我的资源</a-menu-item>
+          <a-menu-item key="/resource/review" v-if="!isStudent">审核工作台</a-menu-item>
+          <a-menu-item key="/resource/policy" v-if="isAdmin">审核策略</a-menu-item>
         </a-sub-menu>
         <a-menu-item key="/instructor" v-if="!isStudent">
           <template #icon><UserOutlined /></template>
@@ -270,7 +291,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
 import {
   HomeOutlined, PlayCircleOutlined, FormOutlined, RobotOutlined,
-  TeamOutlined, UserOutlined, StarOutlined, BarChartOutlined,
+  TeamOutlined, UserOutlined, StarOutlined, BarChartOutlined, BookOutlined,
   MenuUnfoldOutlined, MenuFoldOutlined, DownOutlined, LogoutOutlined,
   SafetyCertificateOutlined, IdcardOutlined, SettingOutlined,
 } from '@ant-design/icons-vue'

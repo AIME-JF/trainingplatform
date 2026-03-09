@@ -130,6 +130,17 @@ def init_permissions():
                 # 工作台
                 {"path": "/api/v1/dashboard", "code": "GET_DASHBOARD", "description": "获取工作台数据"},
 
+                # 资源库与审核推荐
+                {"path": "/api/v1/resources", "code": "CREATE_RESOURCE", "description": "创建资源"},
+                {"path": "/api/v1/resources/{id}", "code": "UPDATE_RESOURCE", "description": "更新资源"},
+                {"path": "/api/v1/resources/list", "code": "VIEW_RESOURCE_ALL", "description": "全局查看资源"},
+                {"path": "/api/v1/resources/list/department", "code": "VIEW_RESOURCE_DEPARTMENT", "description": "按部门查看资源"},
+                {"path": "/api/v1/resources/{id}/visibility", "code": "MANAGE_RESOURCE_VISIBILITY", "description": "管理资源可见域"},
+                {"path": "/api/v1/resources/{id}/submit", "code": "SUBMIT_RESOURCE_REVIEW", "description": "提交资源审核"},
+                {"path": "/api/v1/reviews/tasks", "code": "REVIEW_RESOURCE_STAGE1", "description": "资源一级审核"},
+                {"path": "/api/v1/reviews/tasks", "code": "REVIEW_RESOURCE_STAGE2", "description": "资源二级审核"},
+                {"path": "/api/v1/review-policies", "code": "MANAGE_REVIEW_POLICY", "description": "管理审核策略"},
+
                 # 警种管理
                 {"path": "/api/v1/police-types", "code": "GET_POLICE_TYPES", "description": "获取警种列表"},
                 {"path": "/api/v1/police-types/create", "code": "CREATE_POLICE_TYPE", "description": "创建警种"},
@@ -255,6 +266,9 @@ def init_roles():
                 "GET_CERTIFICATES", "CREATE_CERTIFICATE",
                 "GET_PROFILE", "UPDATE_PROFILE", "GET_STUDY_STATS", "GET_EXAM_HISTORY",
                 "AI_GENERATE_QUESTIONS", "AI_GENERATE_LESSON_PLAN",
+                "CREATE_RESOURCE", "UPDATE_RESOURCE", "VIEW_RESOURCE_DEPARTMENT",
+                "MANAGE_RESOURCE_VISIBILITY", "SUBMIT_RESOURCE_REVIEW",
+                "REVIEW_RESOURCE_STAGE1", "REVIEW_RESOURCE_STAGE2",
             ]
             instructor_role = Role(
                 code="instructor", name="教官",

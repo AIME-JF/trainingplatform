@@ -25,6 +25,15 @@
 
   .page-title {
     font-size: 14px !important;
+    max-width: calc(100vw - 160px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .topbar-left,
+  .topbar-right {
+    min-width: 0;
   }
 
   /* 演示角色切换 - 移动端简化 */
@@ -172,6 +181,35 @@
   .toolbar {
     flex-wrap: wrap !important;
     gap: 8px !important;
+  }
+
+  /* ---- 通用操作栏与筛选栏兜底 ---- */
+  .action-bar,
+  .actions,
+  .search-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* ---- 表单控件移动端自适应 ---- */
+  .ant-form-item-control-input,
+  .ant-form-item-control-input-content,
+  .ant-picker,
+  .ant-select,
+  .ant-input-search,
+  .ant-input-number {
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* ---- Drawer / Modal 进一步兜底 ---- */
+  .ant-drawer-content-wrapper {
+    max-width: calc(100vw - 20px) !important;
+  }
+
+  .ant-modal-content {
+    border-radius: 8px;
   }
 }
 

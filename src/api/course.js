@@ -43,3 +43,15 @@ export function getCourseQA(courseId) {
 export function createCourseQA(courseId, data) {
   return request.post(`/courses/${courseId}/qa`, data)
 }
+
+export function bindCourseResource(courseId, data) {
+  return request.post(`/courses/${courseId}/resources`, data)
+}
+
+export function getCourseResources(courseId) {
+  return request.get(`/courses/${courseId}/resources`)
+}
+
+export function unbindCourseResource(courseId, resourceId) {
+  return request.delete(`/courses/${courseId}/resources/${resourceId}`)
+}

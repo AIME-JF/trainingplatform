@@ -16,6 +16,9 @@ from .police_type import router as police_type_router
 from .media import router as media_router
 from .user import router as user_router, roles_router, departments_router
 from .notice import router as notice_router
+from .resource import router as resource_router
+from .review import router as review_router
+from .recommendation import router as recommendation_router
 
 all_routers = [
     auth_router,
@@ -35,6 +38,9 @@ all_routers = [
     notice_router,
     roles_router,
     departments_router,
+    resource_router,
+    review_router,
+    recommendation_router,
 ]
 
 __all__ = [
@@ -44,4 +50,5 @@ __all__ = [
     "certificate_router", "profile_router", "report_router",
     "ai_router", "talent_router", "police_type_router",
     "media_router", "user_router", "notice_router", "roles_router", "departments_router",
+    "resource_router", "review_router", "recommendation_router",
 ]

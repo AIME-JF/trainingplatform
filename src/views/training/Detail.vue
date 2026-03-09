@@ -47,11 +47,11 @@
                     <div class="ci-instructor">{{ c.instructor }}</div>
                     <div class="ci-time" v-if="c.schedules && c.schedules.length">
                       <a-space size="small">
-                        <a-select 
-                          v-model:value="selectedSchedules[idx]" 
-                          placeholder="选择排课课次" 
-                          size="small" 
-                          style="width: 260px"
+                        <a-select
+                          v-model:value="selectedSchedules[idx]"
+                          placeholder="选择排课课次"
+                          size="small"
+                          class="course-schedule-select"
                           @click.stop
                         >
                           <a-select-option v-for="(sch, i) in c.schedules" :key="i" :value="i">
@@ -77,7 +77,7 @@
                   <div class="ci-right">
                     <span class="ci-hours">{{ c.hours }}课时</span>
                     <a-tag :color="c.type === 'theory' ? 'blue' : 'green'" size="small">{{ c.type === 'theory' ? '理论' : '实操' }}</a-tag>
-                    <span class="ci-hours" style="color: #52c41a; min-width: 60px;">签到率: {{ c.checkinRate || 100 }}%</span>
+                    <span class="ci-hours ci-rate">签到率: {{ c.checkinRate || 100 }}%</span>
                     <template v-if="canEdit">
                       <a-button size="small" type="link" @click="openCourseModal(idx)">编辑</a-button>
                       <a-button size="small" type="link" danger @click="removeCourse(idx)">删除</a-button>
@@ -90,7 +90,7 @@
             <!-- ===== 学员名单 (Admin/Instructor 可管理) ===== -->
             <a-tab-pane key="students" tab="学员名单" v-if="!authStore.isStudent">
               <div class="section-header" style="margin-bottom:16px">
-                <a-input-search v-model:value="studentSearch" placeholder="搜索学员..." style="width:240px" />
+                <a-input-search v-model:value="studentSearch" placeholder="搜索学员..." class="student-search-input" />
                 <a-button type="primary" size="small" @click="showStudentModal = true" v-if="canEdit">
                   <template #icon><PlusOutlined /></template>添加学员
                 </a-button>
@@ -113,6 +113,40 @@
                   <template v-if="column.key === 'action'">
                     <a-popconfirm title="确定移除该学员？" @confirm="removeStudent(record.key)" v-if="canEdit">
                       <a-button size="small" type="link" danger>移除</a-button>
+                    </a-popconfirm>
+                  </template>
+                </template>
+              </a-table>
+            </a-tab-pane>
+
+            <a-tab-pane key="resources" tab="培训资源" v-if="canEdit">
+              <div class="section-header" style="margin-bottom:16px">
+                <h4>资源绑定</h4>
+                <a-space>
+                  <a-select
+                    v-model:value="selectedTrainingResourceId"
+                    show-search
+                    :options="trainingResourceOptions"
+                    :filter-option="(input, option) => (option?.label || '').toLowerCase().includes(input.toLowerCase())"
+                    placeholder="选择已发布资源"
+                    class="training-resource-select"
+                  />
+                  <a-button type="primary" size="small" @click="bindSelectedTrainingResource">绑定</a-button>
+                  <a-button size="small" @click="loadTrainingResources">刷新</a-button>
+                </a-space>
+              </div>
+
+              <a-empty v-if="trainingResources.length === 0" description="暂无绑定资源" />
+              <a-table v-else :data-source="trainingResources" :columns="trainingResourceColumns" row-key="id" :pagination="false">
+                <template #bodyCell="{ column, record }">
+                  <template v-if="column.key === 'tags'">
+                    <a-space wrap>
+                      <a-tag v-for="tag in (record.tags || [])" :key="tag">{{ tag }}</a-tag>
+                    </a-space>
+                  </template>
+                  <template v-if="column.key === 'action'">
+                    <a-popconfirm title="确认解绑该资源？" @confirm="removeTrainingResource(record.id)">
+                      <a-button size="small" danger type="link">解绑</a-button>
                     </a-popconfirm>
                   </template>
                 </template>
@@ -231,31 +265,31 @@
                   {{ sch.date }} ({{ sch.timeRange }}) · {{ sch.hours }}课时
                 </a-tag>
               </div>
-              <div style="border: 1px dashed #d9d9d9; padding: 12px; border-radius: 6px;">
-                <div style="margin-bottom: 8px;">
+              <div class="schedule-editor-box">
+                <div class="schedule-mode-row">
                   <a-radio-group v-model:value="dateAddMode" size="small">
                     <a-radio-button value="single">单日排课</a-radio-button>
                     <a-radio-button value="range">多日同段连排</a-radio-button>
                   </a-radio-group>
                 </div>
-                <div style="display: flex; gap: 12px; align-items: center;">
+                <div class="schedule-editor-row">
                   <a-date-picker
                     v-if="dateAddMode === 'single'"
                     v-model:value="tempDate"
-                    style="flex: 1"
+                    class="schedule-date-picker"
                     format="YYYY-MM-DD"
                     placeholder="选择日期"
                   />
                   <a-range-picker
                     v-else
                     v-model:value="tempDateRange"
-                    style="flex: 1"
+                    class="schedule-date-picker"
                     format="YYYY-MM-DD"
                     :placeholder="['开始日期', '结束日期']"
                   />
                   <a-time-range-picker
                     v-model:value="tempTimeRange"
-                    style="width: 220px;"
+                    class="schedule-time-range"
                     format="HH:mm"
                     :minute-step="5"
                     :placeholder="['开始', '结束']"
@@ -413,7 +447,15 @@ import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QrcodeOutlined, DownloadOutlined, PlusOutlined, EditOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
-import { getTraining, updateTraining as apiUpdateTraining, getCheckinRecords as apiGetCheckinRecords } from '@/api/training'
+import {
+  getTraining,
+  updateTraining as apiUpdateTraining,
+  getCheckinRecords as apiGetCheckinRecords,
+  getTrainingResources,
+  bindTrainingResource,
+  unbindTrainingResource,
+} from '@/api/training'
+import { getResources } from '@/api/resource'
 import { getUsers } from '@/api/user'
 import { getNotices as apiGetNotices, createNotice as apiCreateNotice, updateNotice as apiUpdateNotice, deleteNotice as apiDeleteNotice } from '@/api/notice'
 import { useAuthStore } from '@/stores/auth'
@@ -487,6 +529,7 @@ onMounted(async () => {
       userId: it.id,
       name: it.nickname || it.username
     }))
+    await Promise.all([loadTrainingResources(), loadResourceCandidates()])
     loadNotices()
   } catch (e) {
     message.error('加载培训班详情失败')
@@ -497,6 +540,21 @@ const activeTab = ref('overview')
 const studentSearch = ref('')
 const selectedSchedules = reactive({}) // { courseIdx: scheduleIdx }
 const canEdit = computed(() => authStore.isAdmin || authStore.isInstructor)
+
+const trainingResources = ref([])
+const resourceCandidates = ref([])
+const selectedTrainingResourceId = ref(undefined)
+const trainingResourceColumns = [
+  { title: '标题', dataIndex: 'title', key: 'title' },
+  { title: '类型', dataIndex: 'contentType', key: 'contentType', width: 120 },
+  { title: '状态', dataIndex: 'status', key: 'status', width: 120 },
+  { title: '标签', key: 'tags' },
+  { title: '操作', key: 'action', width: 100 },
+]
+const trainingResourceOptions = computed(() => (resourceCandidates.value || []).map(r => ({
+  value: r.id,
+  label: `${r.title}（${r.status || '-'}）`,
+})))
 
 const statusLabels = { active: '进行中', upcoming: '未开始', ended: '已结束' }
 const statusColorMap = { active: 'green', upcoming: 'orange', ended: 'default' }
@@ -928,6 +986,54 @@ async function saveNotice() {
   }
 }
 
+async function loadTrainingResources() {
+  if (!canEdit.value) return
+  try {
+    trainingResources.value = await getTrainingResources(trainingId) || []
+  } catch {
+    trainingResources.value = []
+  }
+}
+
+async function loadResourceCandidates() {
+  if (!canEdit.value) return
+  try {
+    const res = await getResources({ page: 1, size: 200, status: 'published' })
+    resourceCandidates.value = res.items || []
+  } catch {
+    resourceCandidates.value = []
+  }
+}
+
+async function bindSelectedTrainingResource() {
+  if (!selectedTrainingResourceId.value) {
+    message.warning('请选择资源')
+    return
+  }
+  try {
+    await bindTrainingResource(trainingId, {
+      resourceId: selectedTrainingResourceId.value,
+      usageType: 'required',
+      sortOrder: 0,
+    })
+    message.success('资源绑定成功')
+    selectedTrainingResourceId.value = undefined
+    loadTrainingResources()
+  } catch (e) {
+    message.error(e.message || '资源绑定失败')
+  }
+}
+
+async function removeTrainingResource(resourceId) {
+  try {
+    await unbindTrainingResource(trainingId, resourceId)
+    message.success('资源解绑成功')
+    loadTrainingResources()
+  } catch (e) {
+    message.error(e.message || '资源解绑失败')
+  }
+}
+
 function exportMsg() {
   if (filteredStudents.value.length === 0) {
     message.warning('暂无学员数据可导出')
@@ -994,9 +1100,85 @@ function exportMsg() {
 .cd-item.orange { color: #faad14; }
 .cd-item.red { color: #ff4d4f; }
 
+.course-schedule-select {
+  width: 260px;
+}
+
+.student-search-input {
+  width: 240px;
+}
+
+.training-resource-select {
+  width: 320px;
+}
+
+.schedule-editor-box {
+  border: 1px dashed #d9d9d9;
+  padding: 12px;
+  border-radius: 6px;
+}
+
+.schedule-mode-row {
+  margin-bottom: 8px;
+}
+
+.schedule-editor-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.schedule-date-picker {
+  flex: 1;
+}
+
+.schedule-time-range {
+  width: 220px;
+}
+
+.ci-rate {
+  color: #52c41a;
+  min-width: 60px;
+}
+
 @media (max-width: 768px) {
   .overview-stats { grid-template-columns: 1fr 1fr !important; }
   .training-banner { padding: 16px !important; }
   .training-title { font-size: 18px !important; }
+  .section-header {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .course-item {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .ci-right {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+  .ci-rate {
+    min-width: 0;
+  }
+  .course-schedule-select,
+  .student-search-input,
+  .training-resource-select {
+    width: 100%;
+  }
+  .schedule-editor-row {
+    flex-wrap: wrap;
+  }
+  .schedule-date-picker,
+  .schedule-time-range,
+  .schedule-editor-row :deep(.ant-btn) {
+    width: 100%;
+  }
+  .checkin-summary {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 12px;
+  }
 }
 </style>

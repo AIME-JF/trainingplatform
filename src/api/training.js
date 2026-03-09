@@ -55,3 +55,15 @@ export function checkin(id, data) {
 export function getCheckinQR(id) {
   return request.get(`/trainings/${id}/checkin/qr`)
 }
+
+export function bindTrainingResource(trainingId, data) {
+  return request.post(`/trainings/${trainingId}/resources`, data)
+}
+
+export function getTrainingResources(trainingId) {
+  return request.get(`/trainings/${trainingId}/resources`)
+}
+
+export function unbindTrainingResource(trainingId, resourceId) {
+  return request.delete(`/trainings/${trainingId}/resources/${resourceId}`)
+}

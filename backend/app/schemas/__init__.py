@@ -71,6 +71,23 @@ from .talent import TalentResponse, TalentStatsResponse
 from .media import MediaFileResponse
 # 公告
 from .notice import NoticeCreate, NoticeUpdate, NoticeResponse
+from .resource import (
+    ResourceCreate, ResourceUpdate,
+    ResourceMediaLinkPayload, ResourceMediaLinkResponse,
+    ResourceListItemResponse, ResourceDetailResponse,
+    CourseResourceBindRequest, TrainingResourceBindRequest
+)
+from .review import (
+    ReviewPolicyCreate, ReviewPolicyUpdate,
+    ReviewPolicyResponse, ReviewPolicyStageResponse,
+    ReviewTaskActionRequest, ReviewTaskResponse,
+    ReviewWorkflowResponse
+)
+from .recommendation import (
+    ResourceBehaviorEventCreate,
+    ResourceRecommendationItem, ResourceRecommendationFeedResponse,
+    RecommendationScoreBreakdown
+)
 
 
 __all__ = [
@@ -126,4 +143,17 @@ __all__ = [
     "MediaFileResponse",
     # 公告
     "NoticeCreate", "NoticeUpdate", "NoticeResponse",
+    # 资源库
+    "ResourceCreate", "ResourceUpdate",
+    "ResourceMediaLinkPayload", "ResourceMediaLinkResponse",
+    "ResourceListItemResponse", "ResourceDetailResponse",
+    "CourseResourceBindRequest", "TrainingResourceBindRequest",
+    # 审核
+    "ReviewPolicyCreate", "ReviewPolicyUpdate",
+    "ReviewPolicyResponse", "ReviewPolicyStageResponse",
+    "ReviewTaskActionRequest", "ReviewTaskResponse", "ReviewWorkflowResponse",
+    # 推荐
+    "ResourceBehaviorEventCreate",
+    "ResourceRecommendationItem", "ResourceRecommendationFeedResponse",
+    "RecommendationScoreBreakdown",
 ]

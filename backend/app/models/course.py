@@ -46,10 +46,12 @@ class Chapter(Base):
     video_url = Column(String(500), nullable=True, comment='视频URL(兼容旧数据)')
     doc_url = Column(String(500), nullable=True, comment='文档URL(兼容旧数据)')
     file_id = Column(Integer, ForeignKey('media_files.id'), nullable=True, comment='关联文件ID')
+    resource_id = Column(Integer, ForeignKey('resources.id'), nullable=True, index=True, comment='关联资源ID')
 
     # 关联关系
     course = relationship("Course", back_populates="chapters")
     file = relationship("MediaFile", foreign_keys=[file_id])
+    resource = relationship("Resource", foreign_keys=[resource_id])
 
 
 class CourseNote(Base):
@@ -92,6 +94,8 @@ class CourseProgress(Base):
     user = relationship("User", foreign_keys=[user_id])
     course = relationship("Course", foreign_keys=[course_id])
     chapter = relationship("Chapter", foreign_keys=[chapter_id])
+
+
 
 
 class CourseQA(Base):

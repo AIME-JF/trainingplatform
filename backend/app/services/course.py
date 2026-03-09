@@ -9,12 +9,14 @@ from sqlalchemy import or_, cast, String
 from app.models.course import Course, Chapter, CourseNote, CourseProgress, CourseQA
 from app.models.user import User
 from app.models.media import MediaFile
+from app.models.resource import Resource, ResourceMediaLink, CourseResourceRef, ResourceTagRelation
 from app.schemas.course import (
     CourseCreate, CourseUpdate, CourseResponse, CourseListResponse,
     ChapterResponse, CourseProgressUpdate, CourseProgressResponse,
     CourseNoteUpdate, CourseNoteResponse,
     CourseQACreate, CourseQAResponse
 )
+from app.schemas.resource import CourseResourceBindRequest, ResourceListItemResponse
 from app.schemas import PaginatedResponse
 from config import settings
 from logger import logger
@@ -106,7 +108,8 @@ class CourseService:
                     course_id=course.id, title=ch.title,
                     sort_order=ch.sort_order or idx,
                     duration=ch.duration, video_url=ch.video_url,
-                    doc_url=ch.doc_url, file_id=ch.file_id
+                    doc_url=ch.doc_url, file_id=ch.file_id,
+                    resource_id=getattr(ch, 'resource_id', None)
                 )
                 self.db.add(chapter)
 
@@ -154,7 +157,8 @@ class CourseService:
                     duration=ch.get('duration', 0),
                     video_url=ch.get('video_url'),
                     doc_url=ch.get('doc_url'),
-                    file_id=ch.get('file_id')
+                    file_id=ch.get('file_id'),
+                    resource_id=ch.get('resource_id')
                 )
                 self.db.add(chapter)
 
@@ -268,10 +272,125 @@ class CourseService:
         self.db.refresh(note)
         return CourseNoteResponse.model_validate(note)
 
+    def add_course_resource(self, course_id: int, data: CourseResourceBindRequest) -> ResourceListItemResponse:
+        course = self.db.query(Course).filter(Course.id == course_id).first()
+        if not course:
+            raise ValueError('课程不存在')
+
+        resource = self.db.query(Resource).options(
+            joinedload(Resource.uploader),
+            joinedload(Resource.owner_department),
+            joinedload(Resource.cover_media),
+            joinedload(Resource.tag_relations).joinedload(ResourceTagRelation.tag)
+        ).filter(Resource.id == data.resource_id).first()
+        if not resource:
+            raise ValueError('资源不存在')
+
+        ref = self.db.query(CourseResourceRef).filter(
+            CourseResourceRef.course_id == course_id,
+            CourseResourceRef.resource_id == data.resource_id
+        ).first()
+
+        if not ref:
+            ref = CourseResourceRef(
+                course_id=course_id,
+                resource_id=data.resource_id,
+                usage_type=data.usage_type,
+                sort_order=data.sort_order,
+            )
+            self.db.add(ref)
+        else:
+            ref.usage_type = data.usage_type
+            ref.sort_order = data.sort_order
+
+        self.db.commit()
+
+        tags = [rel.tag.name for rel in (resource.tag_relations or []) if rel.tag]
+        return ResourceListItemResponse(
+            id=resource.id,
+            title=resource.title,
+            summary=resource.summary,
+            content_type=resource.content_type,
+            source_type=resource.source_type,
+            status=resource.status,
+            visibility_type=resource.visibility_type,
+            uploader_id=resource.uploader_id,
+            uploader_name=resource.uploader.nickname if resource.uploader else None,
+            owner_department_id=resource.owner_department_id,
+            owner_department_name=resource.owner_department.name if resource.owner_department else None,
+            cover_media_file_id=resource.cover_media_file_id,
+            cover_url=None,
+            tags=tags,
+            created_at=resource.created_at,
+            updated_at=resource.updated_at,
+        )
+
+    def list_course_resources(self, course_id: int) -> List[ResourceListItemResponse]:
+        refs = self.db.query(CourseResourceRef).options(
+            joinedload(CourseResourceRef.resource).joinedload(Resource.uploader),
+            joinedload(CourseResourceRef.resource).joinedload(Resource.owner_department),
+            joinedload(CourseResourceRef.resource).joinedload(Resource.cover_media),
+            joinedload(CourseResourceRef.resource).selectinload(Resource.tag_relations).joinedload(ResourceTagRelation.tag),
+        ).filter(CourseResourceRef.course_id == course_id).order_by(CourseResourceRef.sort_order.asc(), CourseResourceRef.id.asc()).all()
+
+        items = []
+        for ref in refs:
+            r = ref.resource
+            if not r:
+                continue
+            tags = [rel.tag.name for rel in (r.tag_relations or []) if rel.tag]
+            items.append(ResourceListItemResponse(
+                id=r.id,
+                title=r.title,
+                summary=r.summary,
+                content_type=r.content_type,
+                source_type=r.source_type,
+                status=r.status,
+                visibility_type=r.visibility_type,
+                uploader_id=r.uploader_id,
+                uploader_name=r.uploader.nickname if r.uploader else None,
+                owner_department_id=r.owner_department_id,
+                owner_department_name=r.owner_department.name if r.owner_department else None,
+                cover_media_file_id=r.cover_media_file_id,
+                cover_url=None,
+                tags=tags,
+                created_at=r.created_at,
+                updated_at=r.updated_at,
+            ))
+        return items
+
+    def remove_course_resource(self, course_id: int, resource_id: int) -> bool:
+        ref = self.db.query(CourseResourceRef).filter(
+            CourseResourceRef.course_id == course_id,
+            CourseResourceRef.resource_id == resource_id,
+        ).first()
+        if not ref:
+            return False
+        self.db.delete(ref)
+        self.db.commit()
+        return True
+
     def _chapter_to_response(self, ch: Chapter, user_progress: dict = None) -> ChapterResponse:
         """转换章节为响应，填充 file_url 和用户进度"""
         file_url = None
-        if ch.file_id:
+        if getattr(ch, 'resource_id', None):
+            resource = self.db.query(Resource).options(
+                joinedload(Resource.media_links).joinedload(ResourceMediaLink.media_file)
+            ).filter(Resource.id == ch.resource_id).first()
+            if resource and resource.status == 'published':
+                links = sorted((resource.media_links or []), key=lambda x: x.sort_order)
+                main_link = next((l for l in links if l.media_role == 'main'), None) or (links[0] if links else None)
+                media = main_link.media_file if main_link else None
+                if media and media.storage_path:
+                    base = (settings.MINIO_PUBLIC_URL or "").rstrip("/")
+                    bucket = (settings.MINIO_BUCKET or "").strip("/")
+                    path = media.storage_path.lstrip("/")
+                    if base and bucket and path:
+                        file_url = f"{base}/{bucket}/{path}"
+                    else:
+                        file_url = f"{settings.API_V1_STR}/media/files/{media.id}"
+
+        if not file_url and ch.file_id:
             media = self.db.query(MediaFile).filter(MediaFile.id == ch.file_id).first()
             if media and media.storage_path:
                 base = (settings.MINIO_PUBLIC_URL or "").rstrip("/")
@@ -288,7 +407,7 @@ class CourseService:
             id=ch.id, course_id=ch.course_id, title=ch.title,
             sort_order=ch.sort_order, duration=ch.duration,
             video_url=ch.video_url, doc_url=ch.doc_url,
-            file_id=ch.file_id, file_url=file_url,
+            file_id=ch.file_id, resource_id=getattr(ch, 'resource_id', None), file_url=file_url,
             progress=progress,
         )
         return resp

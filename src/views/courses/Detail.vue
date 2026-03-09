@@ -138,6 +138,34 @@
                 {{ notesSaved ? '✓ 已保存' : '保存笔记' }}
               </a-button>
             </a-tab-pane>
+            <a-tab-pane key="resources" tab="关联资源" v-if="authStore.isAdmin || authStore.isInstructor">
+              <div class="resource-bind-toolbar">
+                <a-select
+                  v-model:value="selectedResourceId"
+                  show-search
+                  :options="resourceOptions"
+                  :filter-option="(input, option) => (option?.label || '').toLowerCase().includes(input.toLowerCase())"
+                  placeholder="选择资源后绑定到课程"
+                  class="resource-bind-select"
+                />
+                <a-button type="primary" @click="bindSelectedResource">绑定资源</a-button>
+                <a-button @click="loadCourseResources">刷新</a-button>
+              </div>
+              <a-table :data-source="courseResources" :columns="resourceColumns" row-key="id" :pagination="false">
+                <template #bodyCell="{ column, record }">
+                  <template v-if="column.key === 'tags'">
+                    <a-space wrap>
+                      <a-tag v-for="tag in (record.tags || [])" :key="tag">{{ tag }}</a-tag>
+                    </a-space>
+                  </template>
+                  <template v-if="column.key === 'action'">
+                    <a-popconfirm title="确认解绑该资源？" @confirm="removeResource(record.id)">
+                      <a-button size="small" danger>解绑</a-button>
+                    </a-popconfirm>
+                  </template>
+                </template>
+              </a-table>
+            </a-tab-pane>
             <a-tab-pane key="qa" tab="答疑区">
               <div class="qa-list" v-if="qaList.length">
                 <div class="qa-item" v-for="q in qaList" :key="q.id">
@@ -290,10 +318,14 @@ import { LockOutlined, CheckCircleFilled, DownloadOutlined, EditOutlined, Delete
 import { message } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
 import {
-  getCourse, getProgress, updateChapterProgress,
+  getCourse, updateChapterProgress,
   getCourseNote, saveCourseNote,
-  getCourseQA, createCourseQA
+  getCourseQA, createCourseQA,
+  getCourseResources, bindCourseResource, unbindCourseResource,
+  updateCourse as apiUpdateCourse,
+  deleteCourse as apiDeleteCourse,
 } from '@/api/course'
+import { getResources } from '@/api/resource'
 import { getUsers } from '@/api/user'
 import { uploadFile } from '@/api/media'
 
@@ -345,7 +377,7 @@ async function fetchCourse() {
 
 onMounted(async () => {
   try {
-    await Promise.all([fetchInstructors(), fetchCourse(), fetchNote(), fetchQA()])
+    await Promise.all([fetchInstructors(), fetchCourse(), fetchNote(), fetchQA(), loadResourceCandidates(), loadCourseResources()])
   } catch {
     message.error('加载课程失败')
   }
@@ -527,6 +559,21 @@ const qaList = ref([])
 const qaInput = ref('')
 const qaSubmitting = ref(false)
 
+const courseResources = ref([])
+const availableResources = ref([])
+const selectedResourceId = ref(undefined)
+const resourceColumns = [
+  { title: '标题', dataIndex: 'title', key: 'title' },
+  { title: '类型', dataIndex: 'contentType', key: 'contentType', width: 120 },
+  { title: '状态', dataIndex: 'status', key: 'status', width: 120 },
+  { title: '标签', key: 'tags' },
+  { title: '操作', key: 'action', width: 120 },
+]
+const resourceOptions = computed(() => (availableResources.value || []).map(r => ({
+  value: r.id,
+  label: `${r.title}（${r.status || '-'}）`,
+})))
+
 async function fetchQA() {
   try {
     const res = await getCourseQA(courseId)
@@ -549,6 +596,47 @@ async function handleQASubmit() {
     message.error('提交失败，请稍后重试')
   } finally {
     qaSubmitting.value = false
+  }
+}
+
+async function loadResourceCandidates() {
+  if (!(authStore.isAdmin || authStore.isInstructor)) return
+  try {
+    const res = await getResources({ page: 1, size: 200, status: 'published' })
+    availableResources.value = res.items || []
+  } catch {
+    availableResources.value = []
+  }
+}
+
+async function loadCourseResources() {
+  if (!(authStore.isAdmin || authStore.isInstructor)) return
+  try {
+    courseResources.value = await getCourseResources(courseId) || []
+  } catch {
+    courseResources.value = []
+  }
+}
+
+async function bindSelectedResource() {
+  if (!selectedResourceId.value) return message.warning('请选择资源')
+  try {
+    await bindCourseResource(courseId, { resourceId: selectedResourceId.value, usageType: 'required', sortOrder: 0 })
+    message.success('绑定成功')
+    selectedResourceId.value = undefined
+    loadCourseResources()
+  } catch (e) {
+    message.error(e.message || '绑定失败')
+  }
+}
+
+async function removeResource(resourceId) {
+  try {
+    await unbindCourseResource(courseId, resourceId)
+    message.success('解绑成功')
+    loadCourseResources()
+  } catch (e) {
+    message.error(e.message || '解绑失败')
   }
 }
 
@@ -809,5 +897,33 @@ const handleDeleteCourse = async () => {
   .meta-grid { grid-template-columns: 1fr !important; }
   .video-controls { flex-wrap: wrap; gap: 8px; justify-content: space-between; }
   .progress-bar-wrap { width: 100%; order: -1; padding: 4px 0; }
+  .top-bar {
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .resource-bind-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .resource-bind-select {
+    width: 100%;
+    min-width: 0;
+  }
+}
+
+.resource-bind-toolbar {
+  margin-bottom: 12px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.resource-bind-select {
+  flex: 1;
+  min-width: 320px;
 }
 </style>

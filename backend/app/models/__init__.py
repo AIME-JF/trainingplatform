@@ -13,6 +13,15 @@ from .exam import Question, Exam, ExamQuestion, ExamRecord
 from .certificate import Certificate
 from .media import MediaFile
 from .notice import Notice
+from .resource import (
+    Resource, ResourceMediaLink, ResourceTag, ResourceTagRelation,
+    ResourceVisibilityScope, CourseResourceRef, TrainingResourceRef
+)
+from .review import (
+    ReviewPolicy, ReviewPolicyStage, ResourceReviewWorkflow,
+    ResourceReviewTask, ResourceReviewLog
+)
+from .recommendation import ResourceBehaviorEvent, ResourceRecommendScore
 
 
 __all__ = [
@@ -41,4 +50,12 @@ __all__ = [
     "MediaFile",
     # 公告
     "Notice",
+    # 资源库
+    "Resource", "ResourceMediaLink", "ResourceTag", "ResourceTagRelation",
+    "ResourceVisibilityScope", "CourseResourceRef", "TrainingResourceRef",
+    # 审核
+    "ReviewPolicy", "ReviewPolicyStage", "ResourceReviewWorkflow",
+    "ResourceReviewTask", "ResourceReviewLog",
+    # 推荐
+    "ResourceBehaviorEvent", "ResourceRecommendScore",
 ]

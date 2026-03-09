@@ -9,11 +9,13 @@ from sqlalchemy.orm import Session, joinedload
 from app.models import (
     Training, TrainingCourse, Enrollment, CheckinRecord, ScheduleItem, Certificate
 )
+from app.models.resource import Resource, TrainingResourceRef, ResourceTagRelation
 from app.schemas.training import (
     TrainingCreate, TrainingUpdate, TrainingResponse, TrainingListResponse,
     TrainingCourseResponse, EnrollmentCreate, EnrollmentResponse,
     CheckinCreate, CheckinResponse, ScheduleItemResponse
 )
+from app.schemas.resource import TrainingResourceBindRequest, ResourceListItemResponse
 from app.schemas import PaginatedResponse
 from logger import logger
 
@@ -393,6 +395,104 @@ class TrainingService:
             "url": f"/mobile/checkin/{token}",
             "expire_at": datetime.now().isoformat()
         }
+
+    def add_training_resource(self, training_id: int, data: TrainingResourceBindRequest) -> ResourceListItemResponse:
+        training = self.db.query(Training).filter(Training.id == training_id).first()
+        if not training:
+            raise ValueError('培训班不存在')
+
+        resource = self.db.query(Resource).options(
+            joinedload(Resource.uploader),
+            joinedload(Resource.owner_department),
+            joinedload(Resource.cover_media),
+            joinedload(Resource.tag_relations).joinedload(ResourceTagRelation.tag),
+        ).filter(Resource.id == data.resource_id).first()
+        if not resource:
+            raise ValueError('资源不存在')
+
+        ref = self.db.query(TrainingResourceRef).filter(
+            TrainingResourceRef.training_id == training_id,
+            TrainingResourceRef.resource_id == data.resource_id,
+        ).first()
+
+        if not ref:
+            ref = TrainingResourceRef(
+                training_id=training_id,
+                resource_id=data.resource_id,
+                usage_type=data.usage_type,
+                sort_order=data.sort_order,
+            )
+            self.db.add(ref)
+        else:
+            ref.usage_type = data.usage_type
+            ref.sort_order = data.sort_order
+
+        self.db.commit()
+
+        tags = [rel.tag.name for rel in (resource.tag_relations or []) if rel.tag]
+        return ResourceListItemResponse(
+            id=resource.id,
+            title=resource.title,
+            summary=resource.summary,
+            content_type=resource.content_type,
+            source_type=resource.source_type,
+            status=resource.status,
+            visibility_type=resource.visibility_type,
+            uploader_id=resource.uploader_id,
+            uploader_name=resource.uploader.nickname if resource.uploader else None,
+            owner_department_id=resource.owner_department_id,
+            owner_department_name=resource.owner_department.name if resource.owner_department else None,
+            cover_media_file_id=resource.cover_media_file_id,
+            cover_url=None,
+            tags=tags,
+            created_at=resource.created_at,
+            updated_at=resource.updated_at,
+        )
+
+    def list_training_resources(self, training_id: int) -> List[ResourceListItemResponse]:
+        refs = self.db.query(TrainingResourceRef).options(
+            joinedload(TrainingResourceRef.resource).joinedload(Resource.uploader),
+            joinedload(TrainingResourceRef.resource).joinedload(Resource.owner_department),
+            joinedload(TrainingResourceRef.resource).joinedload(Resource.cover_media),
+            joinedload(TrainingResourceRef.resource).selectinload(Resource.tag_relations).joinedload(ResourceTagRelation.tag),
+        ).filter(TrainingResourceRef.training_id == training_id).order_by(TrainingResourceRef.sort_order.asc(), TrainingResourceRef.id.asc()).all()
+
+        items = []
+        for ref in refs:
+            r = ref.resource
+            if not r:
+                continue
+            tags = [rel.tag.name for rel in (r.tag_relations or []) if rel.tag]
+            items.append(ResourceListItemResponse(
+                id=r.id,
+                title=r.title,
+                summary=r.summary,
+                content_type=r.content_type,
+                source_type=r.source_type,
+                status=r.status,
+                visibility_type=r.visibility_type,
+                uploader_id=r.uploader_id,
+                uploader_name=r.uploader.nickname if r.uploader else None,
+                owner_department_id=r.owner_department_id,
+                owner_department_name=r.owner_department.name if r.owner_department else None,
+                cover_media_file_id=r.cover_media_file_id,
+                cover_url=None,
+                tags=tags,
+                created_at=r.created_at,
+                updated_at=r.updated_at,
+            ))
+        return items
+
+    def remove_training_resource(self, training_id: int, resource_id: int) -> bool:
+        ref = self.db.query(TrainingResourceRef).filter(
+            TrainingResourceRef.training_id == training_id,
+            TrainingResourceRef.resource_id == resource_id,
+        ).first()
+        if not ref:
+            return False
+        self.db.delete(ref)
+        self.db.commit()
+        return True
 
     def _to_response(self, training: Training) -> TrainingResponse:
         """转换为响应"""

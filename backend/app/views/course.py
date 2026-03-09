@@ -12,9 +12,11 @@ from app.schemas import (
     CourseCreate, CourseUpdate, CourseResponse, CourseListResponse,
     CourseProgressUpdate, CourseProgressResponse,
     CourseNoteUpdate, CourseNoteResponse,
-    CourseQACreate, CourseQAResponse
+    CourseQACreate, CourseQAResponse,
+    CourseResourceBindRequest, ResourceListItemResponse
 )
 from app.controllers import CourseController
+from app.services.course import CourseService
 
 router = APIRouter(prefix="/courses", tags=["课程管理"])
 
@@ -156,3 +158,40 @@ def create_course_qa(
     controller = CourseController(db)
     result = controller.create_course_qa(course_id, current_user.user_id, data)
     return StandardResponse(data=result)
+
+
+@router.post("/{course_id}/resources", response_model=StandardResponse[ResourceListItemResponse], summary="课程绑定资源")
+def add_course_resource(
+    course_id: int,
+    data: CourseResourceBindRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    service = CourseService(db)
+    result = service.add_course_resource(course_id, data)
+    return StandardResponse(data=result)
+
+
+@router.get("/{course_id}/resources", response_model=StandardResponse[List[ResourceListItemResponse]], summary="课程资源列表")
+def list_course_resources(
+    course_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    service = CourseService(db)
+    result = service.list_course_resources(course_id)
+    return StandardResponse(data=result)
+
+
+@router.delete("/{course_id}/resources/{resource_id}", response_model=StandardResponse, summary="课程解绑资源")
+def remove_course_resource(
+    course_id: int,
+    resource_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    service = CourseService(db)
+    ok = service.remove_course_resource(course_id, resource_id)
+    if not ok:
+        return StandardResponse(code=404, message="绑定关系不存在")
+    return StandardResponse(message="解绑成功")
