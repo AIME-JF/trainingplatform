@@ -253,7 +253,41 @@ python main.py
 - `POST /trainings/{training_id}/checkin` 签到
 - `GET /trainings/{training_id}/checkin/qr` 生成签到二维码
 
-### 9.7 教官信息（通过用户接口）
+### 9.7 资源中心（`/resources` + 审核/推荐扩展）
+
+- `GET /resources` 资源列表（分页/搜索/状态/内容类型/my_only）
+- `POST /resources` 创建资源
+- `GET /resources/{resource_id}` 资源详情
+- `PUT /resources/{resource_id}` 更新资源
+- `POST /resources/{resource_id}/publish` 发布资源
+- `POST /resources/{resource_id}/offline` 下线资源
+
+### 9.8 资源审核（`/resources` + `/reviews` + `/review-policies`）
+
+- `POST /resources/{resource_id}/submit` 提交审核
+- `GET /reviews/tasks` 我的审核任务（status）
+- `POST /reviews/tasks/{task_id}/approve` 审核通过
+- `POST /reviews/tasks/{task_id}/reject` 审核驳回
+- `GET /reviews/workflows/{resource_id}` 资源审核轨迹
+- `GET /review-policies` 审核策略列表
+- `POST /review-policies` 创建审核策略
+- `PUT /review-policies/{policy_id}` 更新审核策略
+
+### 9.9 资源推荐（`/resources/recommendations/*`）
+
+- `GET /resources/recommendations/feed` 推荐资源流
+- `POST /resources/{resource_id}/events` 记录资源行为事件（impression/click/play/complete）
+
+### 9.10 资源绑定（课程/培训）
+
+- `POST /courses/{course_id}/resources` 课程绑定资源
+- `GET /courses/{course_id}/resources` 课程资源列表
+- `DELETE /courses/{course_id}/resources/{resource_id}` 课程解绑资源
+- `POST /trainings/{training_id}/resources` 培训绑定资源
+- `GET /trainings/{training_id}/resources` 培训资源列表
+- `DELETE /trainings/{training_id}/resources/{resource_id}` 培训解绑资源
+
+### 9.11 教官信息（通过用户接口）
 
 - `GET /users?role=instructor` 教官用户列表
 - `GET /users/{user_id}` 教官用户详情
@@ -271,33 +305,33 @@ python main.py
 
 > `/instructors` 专用接口已下线。
 
-### 9.8 证书管理（`/certificates`）
+### 9.12 证书管理（`/certificates`）
 
 - `GET /certificates` 证书列表
 - `POST /certificates` 签发证书
 
-### 9.9 个人中心（`/profile`）
+### 9.13 个人中心（`/profile`）
 
 - `GET /profile` 个人信息
 - `PUT /profile` 更新个人信息
 - `GET /profile/study-stats` 学习统计
 - `GET /profile/exam-history` 考试历史
 
-### 9.10 数据看板（`/report`）
+### 9.14 数据看板（`/report`）
 
 - `GET /report/kpi` KPI 数据
 - `GET /report/trend` 月度趋势
 - `GET /report/police-type-distribution` 警种分布
 - `GET /report/city-ranking` 城市/单位排名
 
-### 9.11 AI 功能（`/ai`）
+### 9.15 AI 功能（`/ai`）
 
 - `POST /ai/generate-questions` AI 智能组卷
 - `POST /ai/generate-lesson-plan` AI 教案生成
 
 > 若外部大模型鉴权失败，服务会记录错误日志并返回降级结果（空题目/空教案），接口本身仍可返回成功结构。
 
-### 9.12 人才库（`/talent`）
+### 9.16 人才库（`/talent`）
 
 - `GET /talent` 人才列表（search/tier/unit）
 - `GET /talent/stats` 统计概览

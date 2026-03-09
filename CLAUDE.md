@@ -33,7 +33,7 @@ No test framework or linter is configured.
 
 ### Frontend
 
-**Stack:** Vue 3.5 (Composition API + `<script setup>`) | Vite 7 | Ant Design Vue 4 | Pinia 3 | Vue Router 4 | ECharts 6
+**Stack:** Vue 3.5 (Composition API + `<script setup>`) | Vite 7 | Ant Design Vue 4 | Pinia 3 | Vue Router 4 | ECharts 6 | xgplayer 3
 
 **Path alias:** `@` maps to `./src` (configured in `vite.config.js`)
 **Base path:** `/trainingplatform/` (production deployment path)
@@ -50,7 +50,10 @@ No test framework or linter is configured.
 - `src/router/index.js` - All routes with lazy-loaded components. Route meta includes `roles` (array), `requiresAuth`, `fullscreen`. Navigation guard checks `localStorage` token and `userInfo` role.
 - `src/stores/auth.js` - Pinia auth store. Handles `loginWithCredentials`, `loginWithPhone`, `restoreFromStorage`, `logout`, `switchRole`.
 - `src/api/` - Axios-based API modules. `request.js` converts request keys camelCase→snake_case and response keys snake_case→camelCase.
-- `src/views/` - Page components organized by feature module (ai/, auth/, courses/, exam/, training/, etc.)
+- `src/views/` - Page components organized by feature module (ai/, auth/, courses/, exam/, resource/, training/, etc.)
+- `src/views/resource/Recommend.vue` - Immersive recommendation feed page.
+- `src/views/resource/Detail.vue` - Resource detail page (left media area + right metadata panel).
+- `src/views/resource/components/ResourceViewer.vue` - Shared viewer kernel for recommend/detail with xgplayer-based video rendering.
 - `backend/app/` - Backend app package (`__init__.py` defines FastAPI app, routers, middleware, startup hooks).
 - `backend/app/views/` - API routes (auth/course/training/report/etc.).
 - `backend/app/services/` - Domain service layer (business logic, DB read/write orchestration).
@@ -72,6 +75,7 @@ Role checked via `useAuthStore()` computed properties: `isAdmin`, `isInstructor`
 - Frontend uses centralized API modules in `src/api/*` and `src/api/request.js`.
 - Request/response payload keys are auto-converted between camelCase (frontend) and snake_case (backend).
 - Backend wraps most responses in `StandardResponse` (`{ code, message, data }`), which is unwrapped by the axios response interceptor.
+- Resource center APIs are split by concern: `resource.js` (library CRUD/bind), `review.js` (workflow/policy), `recommendation.js` (feed/events), `media.js` (upload/file URL).
 - Some feature pages may still keep local mock fallback logic; prefer API source of truth when fixing bugs.
 
 ### Styling

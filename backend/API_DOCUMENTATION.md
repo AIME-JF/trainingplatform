@@ -503,24 +503,172 @@ Authorization: Bearer <access_token>
 
 ---
 
-## 9. 教官信息（通过用户接口）
+## 9. 资源中心模块（`/api/v1/resources` + 审核/推荐扩展）
+
+### 9.1 资源列表
+
+- **Method**: `GET`
+- **URL**: `/api/v1/resources`
+- **Auth**: 是
+- **参数（Query）**: `page`, `size`, `search`, `status`, `content_type`, `my_only`
+
+### 9.2 创建资源
+
+- **Method**: `POST`
+- **URL**: `/api/v1/resources`
+- **Auth**: 是
+- **Body(JSON)**: `ResourceCreate`
+
+### 9.3 资源详情
+
+- **Method**: `GET`
+- **URL**: `/api/v1/resources/{resource_id}`
+- **Auth**: 是
+
+### 9.4 更新资源
+
+- **Method**: `PUT`
+- **URL**: `/api/v1/resources/{resource_id}`
+- **Auth**: 是
+- **Body(JSON)**: `ResourceUpdate`
+
+### 9.5 发布资源
+
+- **Method**: `POST`
+- **URL**: `/api/v1/resources/{resource_id}/publish`
+- **Auth**: 是
+
+### 9.6 下线资源
+
+- **Method**: `POST`
+- **URL**: `/api/v1/resources/{resource_id}/offline`
+- **Auth**: 是
+
+### 9.7 提交审核
+
+- **Method**: `POST`
+- **URL**: `/api/v1/resources/{resource_id}/submit`
+- **Auth**: 是
+
+### 9.8 我的审核任务
+
+- **Method**: `GET`
+- **URL**: `/api/v1/reviews/tasks`
+- **Auth**: 是
+- **参数（Query）**: `status`
+
+### 9.9 审核通过
+
+- **Method**: `POST`
+- **URL**: `/api/v1/reviews/tasks/{task_id}/approve`
+- **Auth**: 是
+- **Body(JSON)**: `ReviewTaskActionRequest`
+
+### 9.10 审核驳回
+
+- **Method**: `POST`
+- **URL**: `/api/v1/reviews/tasks/{task_id}/reject`
+- **Auth**: 是
+- **Body(JSON)**: `ReviewTaskActionRequest`
+
+### 9.11 审核轨迹
+
+- **Method**: `GET`
+- **URL**: `/api/v1/reviews/workflows/{resource_id}`
+- **Auth**: 是
+
+### 9.12 审核策略列表
+
+- **Method**: `GET`
+- **URL**: `/api/v1/review-policies`
+- **Auth**: 是
+
+### 9.13 创建审核策略
+
+- **Method**: `POST`
+- **URL**: `/api/v1/review-policies`
+- **Auth**: 是
+- **Body(JSON)**: `ReviewPolicyCreate`
+
+### 9.14 更新审核策略
+
+- **Method**: `PUT`
+- **URL**: `/api/v1/review-policies/{policy_id}`
+- **Auth**: 是
+- **Body(JSON)**: `ReviewPolicyUpdate`
+
+### 9.15 推荐流
+
+- **Method**: `GET`
+- **URL**: `/api/v1/resources/recommendations/feed`
+- **Auth**: 是
+- **参数（Query）**: `page`, `size`
+
+### 9.16 行为埋点
+
+- **Method**: `POST`
+- **URL**: `/api/v1/resources/{resource_id}/events`
+- **Auth**: 是
+- **Body(JSON)**: `ResourceBehaviorEventCreate`（`event_type`: impression/click/play/complete）
+
+### 9.17 课程资源绑定
+
+- **Method**: `POST`
+- **URL**: `/api/v1/courses/{course_id}/resources`
+- **Auth**: 是
+- **Body(JSON)**: `CourseResourceBindRequest`
+
+### 9.18 课程资源列表
+
+- **Method**: `GET`
+- **URL**: `/api/v1/courses/{course_id}/resources`
+- **Auth**: 是
+
+### 9.19 课程资源解绑
+
+- **Method**: `DELETE`
+- **URL**: `/api/v1/courses/{course_id}/resources/{resource_id}`
+- **Auth**: 是
+
+### 9.20 培训资源绑定
+
+- **Method**: `POST`
+- **URL**: `/api/v1/trainings/{training_id}/resources`
+- **Auth**: 是
+- **Body(JSON)**: `TrainingResourceBindRequest`
+
+### 9.21 培训资源列表
+
+- **Method**: `GET`
+- **URL**: `/api/v1/trainings/{training_id}/resources`
+- **Auth**: 是
+
+### 9.22 培训资源解绑
+
+- **Method**: `DELETE`
+- **URL**: `/api/v1/trainings/{training_id}/resources/{resource_id}`
+- **Auth**: 是
+
+---
+
+## 10. 教官信息（通过用户接口）
 
 > 教官专用接口 `/api/v1/instructors*` 已下线，请改用用户接口按角色筛选。
 
-### 9.1 教官用户列表
+### 10.1 教官用户列表
 
 - **Method**: `GET`
 - **URL**: `/api/v1/users?role=instructor`
 - **Auth**: 是
 - **参数（Query）**: `page`, `size`, `search`, `role`
 
-### 9.2 教官用户详情
+### 10.2 教官用户详情
 
 - **Method**: `GET`
 - **URL**: `/api/v1/users/{user_id}`
 - **Auth**: 是
 
-### 9.3 创建/更新教官信息
+### 10.3 创建/更新教官信息
 
 - **Method**: `POST` / `PUT`
 - **URL**: `/api/v1/users` / `/api/v1/users/{user_id}`
@@ -542,16 +690,16 @@ Authorization: Bearer <access_token>
 
 ---
 
-## 10. 证书模块（`/api/v1/certificates`）
+## 11. 证书模块（`/api/v1/certificates`）
 
-### 10.1 证书列表
+### 11.1 证书列表
 
 - **Method**: `GET`
 - **URL**: `/api/v1/certificates`
 - **Auth**: 是
 - **参数（Query）**: `page`, `size`, `user_id`, `training_id`
 
-### 10.2 签发证书
+### 11.2 签发证书
 
 - **Method**: `POST`
 - **URL**: `/api/v1/certificates`
@@ -569,15 +717,15 @@ Authorization: Bearer <access_token>
 
 ---
 
-## 11. 个人中心模块（`/api/v1/profile`）
+## 12. 个人中心模块（`/api/v1/profile`）
 
-### 11.1 个人信息
+### 12.1 个人信息
 
 - **Method**: `GET`
 - **URL**: `/api/v1/profile`
 - **Auth**: 是
 
-### 11.2 更新个人信息
+### 12.2 更新个人信息
 
 - **Method**: `PUT`
 - **URL**: `/api/v1/profile`
@@ -592,13 +740,13 @@ Authorization: Bearer <access_token>
 | phone | string | 否 | 手机 |
 | avatar | string | 否 | 头像 |
 
-### 11.3 学习统计
+### 12.3 学习统计
 
 - **Method**: `GET`
 - **URL**: `/api/v1/profile/study-stats`
 - **Auth**: 是
 
-### 11.4 考试历史
+### 12.4 考试历史
 
 - **Method**: `GET`
 - **URL**: `/api/v1/profile/exam-history`
@@ -606,27 +754,27 @@ Authorization: Bearer <access_token>
 
 ---
 
-## 12. 数据看板模块（`/api/v1/report`）
+## 13. 数据看板模块（`/api/v1/report`）
 
-### 12.1 KPI 数据
+### 13.1 KPI 数据
 
 - **Method**: `GET`
 - **URL**: `/api/v1/report/kpi`
 - **Auth**: 是
 
-### 12.2 月度趋势
+### 13.2 月度趋势
 
 - **Method**: `GET`
 - **URL**: `/api/v1/report/trend`
 - **Auth**: 是
 
-### 12.3 警种分布
+### 13.3 警种分布
 
 - **Method**: `GET`
 - **URL**: `/api/v1/report/police-type-distribution`
 - **Auth**: 是
 
-### 12.4 城市排名
+### 13.4 城市排名
 
 - **Method**: `GET`
 - **URL**: `/api/v1/report/city-ranking`
@@ -634,9 +782,9 @@ Authorization: Bearer <access_token>
 
 ---
 
-## 13. AI 模块（`/api/v1/ai`）
+## 14. AI 模块（`/api/v1/ai`）
 
-### 13.1 AI 智能组卷
+### 14.1 AI 智能组卷
 
 - **Method**: `POST`
 - **URL**: `/api/v1/ai/generate-questions`
@@ -657,7 +805,7 @@ Authorization: Bearer <access_token>
 | questions | array | 生成题目列表 |
 | total | int | 题目数量 |
 
-### 13.2 AI 教案生成
+### 14.2 AI 教案生成
 
 - **Method**: `POST`
 - **URL**: `/api/v1/ai/generate-lesson-plan`
@@ -684,16 +832,16 @@ Authorization: Bearer <access_token>
 
 ---
 
-## 14. 人才库模块（`/api/v1/talent`）
+## 15. 人才库模块（`/api/v1/talent`）
 
-### 14.1 人才列表
+### 15.1 人才列表
 
 - **Method**: `GET`
 - **URL**: `/api/v1/talent`
 - **Auth**: 是
 - **参数（Query）**: `page`, `size`, `search`, `tier`, `unit`
 
-### 14.2 统计概览
+### 15.2 统计概览
 
 - **Method**: `GET`
 - **URL**: `/api/v1/talent/stats`
@@ -701,9 +849,9 @@ Authorization: Bearer <access_token>
 
 ---
 
-## 15. 常见数据结构摘要
+## 16. 常见数据结构摘要
 
-### 15.1 `UserResponse`（登录与用户接口常见）
+### 16.1 `UserResponse`（登录与用户接口常见）
 
 | 字段 | 说明 |
 |---|---|
@@ -716,7 +864,7 @@ Authorization: Bearer <access_token>
 | roles | 角色列表 |
 | departments | 部门列表 |
 
-### 15.2 `EnrollmentResponse`（培训报名相关）
+### 16.2 `EnrollmentResponse`（培训报名相关）
 
 | 字段 | 说明 |
 |---|---|
@@ -727,7 +875,7 @@ Authorization: Bearer <access_token>
 | note | 报名备注或拒绝原因 |
 | enroll_time | 报名时间 |
 
-### 15.3 `ExamRecordResponse`（考试结果相关）
+### 16.3 `ExamRecordResponse`（考试结果相关）
 
 | 字段 | 说明 |
 |---|---|
@@ -740,9 +888,9 @@ Authorization: Bearer <access_token>
 
 ---
 
-## 16. 调用示例
+## 17. 调用示例
 
-### 16.1 登录并调用受保护接口
+### 17.1 登录并调用受保护接口
 
 ```bash
 # 1) 登录
@@ -755,7 +903,7 @@ curl "http://127.0.0.1:8001/api/v1/courses?page=1&size=10" \
   -H "Authorization: Bearer <access_token>"
 ```
 
-### 16.2 创建培训班
+### 17.2 创建培训班
 
 ```bash
 curl -X POST "http://127.0.0.1:8001/api/v1/trainings" \
@@ -772,7 +920,7 @@ curl -X POST "http://127.0.0.1:8001/api/v1/trainings" \
 
 ---
 
-## 17. 版本信息
+## 18. 版本信息
 
 - 文档生成依据：当前代码实现
 - 应用版本：`1.0.0`

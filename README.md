@@ -25,8 +25,9 @@
 - 🤖 **AI 智能辅助** — 支持 AI 智能组卷和 AI 教案自动生成
 - 👮 **三色角色体系** — 管理员 / 教官 / 学员 三种角色各有专属工作台和功能权限
 - 📱 **移动端适配** — 支持移动端底部导航栏及扫码签到功能
+- 📚 **资源中心闭环** — 资源上传、审核流转、推荐浏览、详情学习一体化
 - 📊 **数据可视化** — 基于 ECharts 的数据看板，实时呈现培训数据
-- 🎓 **全流程覆盖** — 课程学习 → 培训管理 → 在线考试 → 结业证书 完整闭环
+- 🎓 **全流程覆盖** — 课程学习 → 培训管理 → 资源中心 → 在线考试 → 结业证书 完整闭环
 
 ---
 
@@ -40,6 +41,7 @@
 | **状态管理** | Pinia 3 |
 | **路由管理** | Vue Router 4 |
 | **图表可视化** | ECharts 6 + vue-echarts 8 |
+| **视频播放器** | xgplayer 3 |
 | **日期处理** | Day.js |
 | **二维码生成** | qrcode |
 
@@ -49,66 +51,49 @@
 
 ```
 policetrainingplatform/
-├── public/                  # 静态资源
+├── public/                      # 静态资源
 ├── src/
-│   ├── assets/              # 样式、图片等静态资源
-│   │   └── styles/          # 全局样式文件
-│   ├── layouts/             # 布局组件
-│   │   └── MainLayout.vue   # 主布局（侧边栏 + 顶栏 + 移动端底部导航）
-│   ├── mock/                # Mock 数据层
-│   │   ├── ai-questions.js  # AI 题目数据
-│   │   ├── courses.js       # 课程数据
-│   │   ├── dashboard.js     # 仪表盘数据
-│   │   ├── enrollments.js   # 报名数据
-│   │   ├── exam-records.js  # 考试记录
-│   │   ├── exams.js         # 考试数据
-│   │   ├── instructors.js   # 教官数据
-│   │   ├── schedules.js     # 课程表数据
-│   │   ├── trainings.js     # 培训班数据
-│   │   └── users.js         # 用户数据
-│   ├── router/              # 路由配置
-│   │   └── index.js         # 路由定义与导航守卫
-│   ├── stores/              # Pinia 状态管理
-│   │   └── auth.js          # 认证状态（登录/登出/角色切换）
-│   ├── views/               # 页面组件
-│   │   ├── ai/              # AI 功能模块
-│   │   │   ├── QuestionGen.vue  # AI 智能组卷
-│   │   │   └── LessonPlan.vue   # AI 教案生成
-│   │   ├── auth/            # 认证模块
-│   │   │   └── Login.vue    # 登录页
-│   │   ├── certificate/     # 结业证书
-│   │   ├── courses/         # 课程学习
-│   │   │   ├── List.vue     # 课程列表
-│   │   │   └── Detail.vue   # 课程详情
-│   │   ├── dashboard/       # 工作台
-│   │   │   └── Index.vue    # 首页仪表盘（三角色差异化视图）
-│   │   ├── exam/            # 考试系统
-│   │   │   ├── QuestionBank.vue  # 题库管理
-│   │   │   ├── Exam.vue     # 在线考试
-│   │   │   ├── Result.vue   # 考试结果
-│   │   │   └── Scores.vue   # 成绩管理
-│   │   ├── instructor/      # 教官管理
-│   │   │   ├── List.vue     # 教官列表
-│   │   │   └── Detail.vue   # 教官详情
-│   │   ├── mobile/          # 移动端
-│   │   │   └── Checkin.vue  # 移动端扫码签到
-│   │   ├── profile/         # 个人中心
-│   │   ├── report/          # 数据看板
-│   │   ├── talent/          # 人才库
-│   │   └── training/        # 培训管理
-│   │       ├── List.vue     # 培训班列表
-│   │       ├── Detail.vue   # 培训班详情
-│   │       ├── Schedule.vue # 周训练计划
-│   │       ├── Board.vue    # 培训看板
-│   │       ├── Checkin.vue  # 签到管理
-│   │       ├── Enroll.vue   # 报名申请
-│   │       └── EnrollManage.vue  # 报名审核
-│   ├── App.vue              # 根组件
-│   └── main.js              # 应用入口
-├── index.html               # HTML 入口
-├── vite.config.js           # Vite 配置
-├── package.json             # 依赖管理
-└── package-lock.json        # 依赖锁定
+│   ├── api/                     # Axios API 模块（已对接后端）
+│   │   ├── request.js           # 请求封装（camelCase/snake_case 自动转换）
+│   │   ├── resource.js          # 资源库接口
+│   │   ├── review.js            # 资源审核接口
+│   │   ├── recommendation.js    # 推荐与埋点接口
+│   │   └── ...
+│   ├── assets/                  # 样式、图片等静态资源
+│   │   └── styles/              # 全局样式文件
+│   ├── layouts/                 # 布局组件
+│   │   └── MainLayout.vue       # 主布局（侧边栏 + 顶栏 + 移动端底部导航）
+│   ├── mock/                    # 历史 mock 数据（部分页面可能仍保留兜底）
+│   ├── router/
+│   │   └── index.js             # 路由定义与导航守卫
+│   ├── stores/
+│   │   └── auth.js              # 认证状态（登录/登出/角色切换）
+│   ├── views/
+│   │   ├── resource/            # 资源中心
+│   │   │   ├── Library.vue      # 资源库
+│   │   │   ├── Recommend.vue    # 资源推荐（沉浸式）
+│   │   │   ├── Detail.vue       # 资源详情（左右布局）
+│   │   │   ├── Upload.vue       # 上传资源
+│   │   │   ├── ReviewQueue.vue  # 审核工作台
+│   │   │   ├── PolicyManage.vue # 审核策略
+│   │   │   └── components/ResourceViewer.vue
+│   │   ├── ai/
+│   │   ├── auth/
+│   │   ├── courses/
+│   │   ├── dashboard/
+│   │   ├── exam/
+│   │   ├── instructor/
+│   │   ├── mobile/
+│   │   ├── profile/
+│   │   ├── report/
+│   │   ├── talent/
+│   │   └── training/
+│   ├── App.vue
+│   └── main.js
+├── backend/                     # FastAPI 后端
+├── index.html
+├── vite.config.js
+└── package.json
 ```
 
 ---
@@ -216,6 +201,13 @@ npm run preview
 - **报名管理**：学员报名 + 管理员/教官审核
 - **签到管理**：二维码扫码签到
 
+### 📚 资源中心 (Resource)
+- **资源库**：按标题/状态/类型检索与筛选资源
+- **资源推荐**：沉浸式推荐流浏览（支持移动端手势切换）
+- **资源详情**：左侧媒体区 + 右侧资源信息区
+- **上传与发布**：支持视频/文档/图文类型上传、草稿保存与发布
+- **审核流**：提交审核、审核任务、审核策略管理
+
 ### 👮 教官管理 (Instructor)
 教官信息库、教官详情查看。
 
@@ -264,7 +256,9 @@ npm run preview
 - 登录状态持久化
 
 ### 数据层
-当前版本使用 Mock 数据（位于 `src/mock/` 目录），后续可替换为真实 API 接口。
+当前版本以前后端 API 联调为主（`src/api/*`），请求与响应字段会在 `src/api/request.js` 中自动完成 `camelCase <-> snake_case` 转换。
+
+> 说明：`src/mock/` 目录仍保留历史数据与少量页面兜底逻辑。
 
 ---
 
