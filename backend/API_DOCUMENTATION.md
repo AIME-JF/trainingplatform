@@ -518,6 +518,10 @@ Authorization: Bearer <access_token>
 - **URL**: `/api/v1/resources`
 - **Auth**: 是
 - **Body(JSON)**: `ResourceCreate`
+- **说明**:
+  - `content_type` 支持 `video` / `image_text` / `document`
+  - `image_text` 表示图片类资源（jpg/jpeg/png/webp），文字说明通过 `summary` 提交
+  - 一个资源可关联多个 `media_links` 文件，后端会按 `content_type` 严格校验扩展名
 
 ### 9.3 资源详情
 
@@ -603,6 +607,7 @@ Authorization: Bearer <access_token>
 - **URL**: `/api/v1/resources/recommendations/feed`
 - **Auth**: 是
 - **参数（Query）**: `page`, `size`
+- **说明**: 推荐接口返回资源流数据；前端当前推荐页按“文件名 + 下载按钮”展示，不在推荐页内直接预览媒体
 
 ### 9.16 行为埋点
 

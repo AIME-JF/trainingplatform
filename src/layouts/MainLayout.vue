@@ -537,6 +537,9 @@ function handleLogout() {
 .content-area.immersive-content {
   padding: 0;
   background: #000;
+  height: calc(var(--app-vh, 1vh) * 100 - 64px);
+  min-height: calc(var(--app-vh, 1vh) * 100 - 64px);
+  overflow: hidden;
 }
 
 /* 用户下拉菜单 */

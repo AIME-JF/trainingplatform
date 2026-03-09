@@ -10,19 +10,22 @@
         <a-form-item label="资源标题" required>
           <a-input v-model:value="form.title" placeholder="请输入标题" />
         </a-form-item>
+
         <a-form-item label="资源摘要">
-          <a-textarea v-model:value="form.summary" :rows="4" />
+          <a-textarea v-model:value="form.summary" :rows="4" placeholder="图文资源请在此填写文字说明" />
         </a-form-item>
+
         <a-row :gutter="12">
           <a-col :span="8">
             <a-form-item label="内容类型">
               <a-select v-model:value="form.contentType">
                 <a-select-option value="video">视频</a-select-option>
+                <a-select-option value="image_text">图文（图片）</a-select-option>
                 <a-select-option value="document">文档</a-select-option>
-                <a-select-option value="image_text">图文</a-select-option>
               </a-select>
             </a-form-item>
           </a-col>
+
           <a-col :span="8">
             <a-form-item label="可见范围">
               <a-select v-model:value="form.visibilityType">
@@ -33,6 +36,7 @@
               </a-select>
             </a-form-item>
           </a-col>
+
           <a-col :span="8">
             <a-form-item label="标签">
               <a-select v-model:value="form.tags" mode="tags" />
@@ -44,17 +48,19 @@
           <a-upload-dragger
             v-model:fileList="fileList"
             :before-upload="beforeUpload"
-            :max-count="1"
             :accept="currentAccept"
+            :multiple="true"
+            :progress="{ strokeWidth: 2, showInfo: true }"
           >
             <p class="ant-upload-drag-icon">📁</p>
-            <p>点击或拖拽上传资源文件</p>
+            <p>点击或拖拽上传资源文件（可多选）</p>
+            <p class="upload-hint">当前类型允许：{{ currentAccept || '无' }}</p>
           </a-upload-dragger>
         </a-form-item>
 
         <a-space>
           <a-button type="primary" :loading="submitting" @click="submit">保存草稿</a-button>
-          <a-button :loading="submitting" @click="submitAndPublish">保存并发布</a-button>
+          <a-button :loading="submitting" @click="submitAndSubmitReview">提交审核</a-button>
         </a-space>
       </a-form>
     </a-card>
@@ -66,7 +72,8 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message, Upload } from 'ant-design-vue'
 import { uploadFile } from '@/api/media'
-import { createResource, publishResource } from '@/api/resource'
+import { createResource } from '@/api/resource'
+import { submitResource } from '@/api/review'
 
 const router = useRouter()
 const submitting = ref(false)
@@ -92,14 +99,21 @@ const currentAccept = computed(() => {
   return extList.map((ext) => `.${ext}`).join(',')
 })
 
+
 watch(
   () => form.contentType,
   () => {
     if (!fileList.value.length) return
-    const file = fileList.value[0].originFileObj || fileList.value[0]
-    if (!isAllowedFile(file, form.contentType)) {
-      fileList.value = []
-      message.warning('已清空不匹配当前内容类型的文件，请重新上传')
+
+    const nextList = fileList.value.filter((item) => {
+      const rawFile = item.originFileObj || item
+      return isAllowedFile(rawFile, form.contentType)
+    })
+
+    if (nextList.length !== fileList.value.length) {
+      const removedCount = fileList.value.length - nextList.length
+      fileList.value = nextList
+      message.warning(`已移除 ${removedCount} 个不匹配当前内容类型的文件`)
     }
   }
 )
@@ -109,9 +123,20 @@ function getExt(filename = '') {
   return dot >= 0 ? filename.slice(dot + 1).toLowerCase() : ''
 }
 
+function getFileKey(item, index) {
+  return item.uid || `${item.name || item.originFileObj?.name || 'file'}-${index}`
+}
+
 function isAllowedFile(file, contentType) {
   const ext = getExt(file?.name || file?.filename || '')
   return (ALLOWED_EXTENSIONS[contentType] || []).includes(ext)
+}
+
+function patchFileListItem(fileKey, patch) {
+  fileList.value = fileList.value.map((item, index) => {
+    if (getFileKey(item, index) !== fileKey) return item
+    return { ...item, ...patch }
+  })
 }
 
 function beforeUpload(file) {
@@ -121,6 +146,7 @@ function beforeUpload(file) {
   }
   return false
 }
+
 
 async function createDraft() {
   if (!form.title.trim()) {
@@ -132,13 +158,33 @@ async function createDraft() {
     return null
   }
 
-  const rawFile = fileList.value[0].originFileObj || fileList.value[0]
-  if (!isAllowedFile(rawFile, form.contentType)) {
-    message.warning(`文件类型不匹配当前内容类型（允许：${currentAccept.value}）`)
-    return null
+  const selectedFiles = fileList.value.map((item, index) => ({
+    key: getFileKey(item, index),
+    file: item.originFileObj || item,
+  }))
+
+  for (const selected of selectedFiles) {
+    if (!isAllowedFile(selected.file, form.contentType)) {
+      message.warning(`文件类型不匹配当前内容类型（允许：${currentAccept.value}）`)
+      return null
+    }
   }
 
-  const uploadRes = await uploadFile(rawFile)
+  const uploadedFiles = []
+  for (const selected of selectedFiles) {
+    try {
+      patchFileListItem(selected.key, { status: 'uploading', percent: 0 })
+      const uploadRes = await uploadFile(selected.file, (percent) => {
+        patchFileListItem(selected.key, { status: 'uploading', percent })
+      })
+      patchFileListItem(selected.key, { status: 'done', percent: 100 })
+      uploadedFiles.push(uploadRes)
+    } catch (e) {
+      patchFileListItem(selected.key, { status: 'error' })
+      throw e
+    }
+  }
+
   const payload = {
     title: form.title,
     summary: form.summary,
@@ -146,8 +192,12 @@ async function createDraft() {
     visibilityType: form.visibilityType,
     tags: form.tags,
     visibilityScopes: form.visibilityScopes,
-    mediaLinks: [{ mediaFileId: uploadRes.id, mediaRole: 'main', sortOrder: 0 }],
-    coverMediaFileId: uploadRes.id,
+    mediaLinks: uploadedFiles.map((file, index) => ({
+      mediaFileId: file.id,
+      mediaRole: 'main',
+      sortOrder: index,
+    })),
+    coverMediaFileId: uploadedFiles[0]?.id || null,
   }
   return createResource(payload)
 }
@@ -166,16 +216,16 @@ async function submit() {
   }
 }
 
-async function submitAndPublish() {
+async function submitAndSubmitReview() {
   submitting.value = true
   try {
     const res = await createDraft()
     if (!res) return
-    await publishResource(res.id)
-    message.success('资源创建并发布成功')
-    router.push('/resource/library')
+    await submitResource(res.id)
+    message.success('资源已提交审核')
+    router.push('/resource/my')
   } catch (e) {
-    message.error(e.message || '发布失败')
+    message.error(e.message || '提交审核失败')
   } finally {
     submitting.value = false
   }
@@ -185,4 +235,6 @@ async function submitAndPublish() {
 <style scoped>
 .resource-upload-page { padding: 0; }
 .page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+.upload-hint { margin-top: 6px; font-size: 12px; color: #8c8c8c; }
 </style>
+

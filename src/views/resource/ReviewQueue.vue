@@ -15,6 +15,7 @@
           </template>
           <template v-if="column.key === 'action'">
             <a-space>
+              <a-button size="small" @click="viewDetail(record)">查看</a-button>
               <a-button size="small" type="primary" @click="approve(record)">通过</a-button>
               <a-button size="small" danger @click="openReject(record)">驳回</a-button>
             </a-space>
@@ -31,16 +32,18 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { getReviewTasks, approveReviewTask, rejectReviewTask } from '@/api/review'
 
+const router = useRouter()
 const tasks = ref([])
 const columns = [
   { title: '资源', dataIndex: 'resourceTitle', key: 'resourceTitle' },
   { title: '阶段', dataIndex: 'stageOrder', key: 'stageOrder', width: 100 },
   { title: '状态', dataIndex: 'status', key: 'status', width: 120 },
   { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 180 },
-  { title: '操作', key: 'action', width: 160 },
+  { title: '操作', key: 'action', width: 220 },
 ]
 
 const rejectVisible = ref(false)
@@ -60,6 +63,14 @@ async function fetchTasks() {
   } catch (e) {
     message.error(e.message || '加载任务失败')
   }
+}
+
+function viewDetail(task) {
+  if (!task?.resourceId) {
+    message.warning('未找到对应资源')
+    return
+  }
+  router.push(`/resource/detail/${task.resourceId}`)
 }
 
 async function approve(task) {

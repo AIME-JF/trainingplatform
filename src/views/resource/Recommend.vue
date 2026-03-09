@@ -26,8 +26,8 @@
     </div>
 
     <div class="recommend-mobile-actions" v-if="currentResource">
-      <a-button class="action-detail" @click="goDetail">查看详情</a-button>
       <div class="recommend-index">{{ currentIndex + 1 }} / {{ feedItems.length }}</div>
+      <a-button class="action-detail" @click="goDetail">详情</a-button>
       <a-button class="action-next" type="primary" @click="nextRecommendation">下一条</a-button>
     </div>
   </div>
@@ -236,10 +236,13 @@ function onTouchEnd(event) {
 
 <style scoped>
 .resource-recommend-page {
+  --player-control-safe-offset: 56px;
   position: relative;
   width: 100%;
   height: 100%;
   min-height: 100%;
+  display: flex;
+  flex-direction: column;
   background: #000;
   overflow: hidden;
 }
@@ -254,10 +257,12 @@ function onTouchEnd(event) {
 }
 
 .recommend-body {
+  flex: 1;
   width: 100%;
-  height: 100%;
+  min-height: 0;
 }
 
+.recommend-body :deep(.ant-spin),
 .recommend-body :deep(.ant-spin-nested-loading),
 .recommend-body :deep(.ant-spin-container) {
   width: 100%;
@@ -273,7 +278,7 @@ function onTouchEnd(event) {
   position: absolute;
   left: 12px;
   right: 12px;
-  bottom: 12px;
+  bottom: calc(12px + var(--player-control-safe-offset));
   z-index: 36;
   display: flex;
   align-items: center;
@@ -301,7 +306,7 @@ function onTouchEnd(event) {
   }
 
   .recommend-mobile-actions {
-    bottom: calc(8px + env(safe-area-inset-bottom));
+    bottom: calc(8px + env(safe-area-inset-bottom) + var(--player-control-safe-offset));
   }
 }
 </style>

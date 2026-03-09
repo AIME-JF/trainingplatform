@@ -61,7 +61,9 @@
   .content-area.immersive-content {
     padding: 0 !important;
     padding-bottom: 0 !important;
+    height: calc(var(--app-vh, 1vh) * 100 - 52px - 64px) !important;
     min-height: calc(var(--app-vh, 1vh) * 100 - 52px - 64px) !important;
+    overflow: hidden !important;
     background: #000 !important;
   }
 

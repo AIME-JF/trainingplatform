@@ -51,9 +51,9 @@ No test framework or linter is configured.
 - `src/stores/auth.js` - Pinia auth store. Handles `loginWithCredentials`, `loginWithPhone`, `restoreFromStorage`, `logout`, `switchRole`.
 - `src/api/` - Axios-based API modules. `request.js` converts request keys camelCase→snake_case and response keys snake_case→camelCase.
 - `src/views/` - Page components organized by feature module (ai/, auth/, courses/, exam/, resource/, training/, etc.)
-- `src/views/resource/Recommend.vue` - Immersive recommendation feed page.
+- `src/views/resource/Recommend.vue` - Recommendation feed page (file list + download, no preview).
 - `src/views/resource/Detail.vue` - Resource detail page (left media area + right metadata panel).
-- `src/views/resource/components/ResourceViewer.vue` - Shared viewer kernel for recommend/detail with xgplayer-based video rendering.
+- `src/views/resource/components/ResourceViewer.vue` - Shared viewer kernel for detail view with xgplayer-based video rendering.
 - `backend/app/` - Backend app package (`__init__.py` defines FastAPI app, routers, middleware, startup hooks).
 - `backend/app/views/` - API routes (auth/course/training/report/etc.).
 - `backend/app/services/` - Domain service layer (business logic, DB read/write orchestration).

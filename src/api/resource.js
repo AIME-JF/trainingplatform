@@ -24,6 +24,10 @@ export function offlineResource(id) {
   return request.post(`/resources/${id}/offline`)
 }
 
+export function deleteResource(id) {
+  return request.delete(`/resources/${id}`)
+}
+
 export function bindCourseResource(courseId, data) {
   return request.post(`/courses/${courseId}/resources`, data)
 }

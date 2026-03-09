@@ -256,7 +256,7 @@ python main.py
 ### 9.7 资源中心（`/resources` + 审核/推荐扩展）
 
 - `GET /resources` 资源列表（分页/搜索/状态/内容类型/my_only）
-- `POST /resources` 创建资源
+- `POST /resources` 创建资源（`content_type`: video/image_text/document；`image_text` 表示图片资源，文字说明写在 `summary`）
 - `GET /resources/{resource_id}` 资源详情
 - `PUT /resources/{resource_id}` 更新资源
 - `POST /resources/{resource_id}/publish` 发布资源
@@ -275,7 +275,7 @@ python main.py
 
 ### 9.9 资源推荐（`/resources/recommendations/*`）
 
-- `GET /resources/recommendations/feed` 推荐资源流
+- `GET /resources/recommendations/feed` 推荐资源流（前端当前展示为“文件名 + 下载”，不做推荐页内预览）
 - `POST /resources/{resource_id}/events` 记录资源行为事件（impression/click/play/complete）
 
 ### 9.10 资源绑定（课程/培训）

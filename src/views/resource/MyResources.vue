@@ -35,10 +35,19 @@
         </template>
         <template v-if="column.key === 'action'">
           <a-space>
+            <a-button size="small" @click="viewDetail(record.id)">查看</a-button>
             <a-button size="small" @click="viewWorkflow(record)">轨迹</a-button>
             <a-button size="small" type="primary" ghost v-if="canSubmit(record)" @click="submitReview(record.id)">提交审核</a-button>
             <a-button size="small" v-if="canRepublish(record)" @click="publish(record.id)">重新发布</a-button>
             <a-button size="small" danger ghost v-if="record.status === 'published'" @click="offline(record.id)">下线</a-button>
+            <a-popconfirm
+              title="确认删除该资源吗？"
+              ok-text="删除"
+              cancel-text="取消"
+              @confirm="removeResource(record.id)"
+            >
+              <a-button size="small" danger>删除</a-button>
+            </a-popconfirm>
           </a-space>
         </template>
       </template>
@@ -68,10 +77,12 @@
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { getResources, publishResource, offlineResource } from '@/api/resource'
+import { getResources, publishResource, offlineResource, deleteResource } from '@/api/resource'
 import { submitResource, getReviewWorkflow } from '@/api/review'
 
+const router = useRouter()
 const query = reactive({ page: 1, size: 10, search: '', status: '' })
 const rows = ref([])
 const total = ref(0)
@@ -85,14 +96,14 @@ const columns = [
   { title: '状态', dataIndex: 'status', key: 'status', width: 120 },
   { title: '类型', dataIndex: 'contentType', key: 'contentType', width: 120 },
   { title: '标签', dataIndex: 'tags', key: 'tags' },
-  { title: '操作', key: 'action', width: 340 },
+  { title: '操作', key: 'action', width: 460 },
 ]
 
 const tableScroll = ref(undefined)
 
 function updateMobileState() {
   isMobile.value = window.innerWidth <= 768
-  tableScroll.value = isMobile.value ? { x: 680 } : undefined
+  tableScroll.value = isMobile.value ? { x: 860 } : undefined
 }
 
 onMounted(() => {
@@ -167,6 +178,25 @@ async function offline(id) {
     fetchMine()
   } catch (e) {
     message.error(e.message || '下线失败')
+  }
+}
+
+function viewDetail(id) {
+  router.push(`/resource/detail/${id}`)
+}
+
+async function removeResource(id) {
+  try {
+    await deleteResource(id)
+    message.success('删除成功')
+    fetchMine()
+  } catch (e) {
+    const status = e?.response?.status
+    if (status === 404 || status === 405) {
+      message.warning('当前后端暂未开放资源删除接口')
+      return
+    }
+    message.error(e.message || '删除失败')
   }
 }
 

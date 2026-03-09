@@ -31,7 +31,7 @@
 
           <div v-else-if="currentMedia && currentMediaKind === 'document'" class="media-document">
             <iframe class="doc-frame" :src="currentMedia.fileUrl" title="资源文档预览" />
-            <a-button type="link" @click="openCurrentMedia">新窗口打开文档</a-button>
+            <a-button type="link" @click="downloadCurrentMedia">下载文档</a-button>
           </div>
 
           <a-empty v-else description="暂无可预览文件" />
@@ -71,7 +71,7 @@
 
         <div v-else-if="currentMedia && currentMediaKind === 'document'" class="media-document">
           <iframe class="doc-frame" :src="currentMedia.fileUrl" title="资源文档预览" />
-          <a-button type="link" @click.stop="openCurrentMedia">新窗口打开文档</a-button>
+          <a-button type="link" @click.stop="downloadCurrentMedia">下载文档</a-button>
         </div>
 
         <a-empty v-else description="暂无可预览文件" />
@@ -161,7 +161,7 @@ function setupPlayer() {
   player = new Player({
     el: videoContainer.value,
     url: currentMedia.value.fileUrl,
-    fluid: true,
+    fluid: !isRecommend.value,
     autoplay: false,
     playsinline: true,
     videoInit: true,
@@ -224,9 +224,17 @@ function nextMedia() {
   mediaIndex.value = (mediaIndex.value + 1) % mediaList.value.length
 }
 
-function openCurrentMedia() {
+function downloadCurrentMedia() {
   if (!currentMedia.value?.fileUrl) return
-  window.open(currentMedia.value.fileUrl, '_blank', 'noopener,noreferrer')
+  const url = currentMedia.value.fileUrl
+  const link = document.createElement('a')
+  link.href = url
+  link.download = ''
+  link.target = '_blank'
+  link.rel = 'noopener noreferrer'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
 }
 
 function onMediaTouchStart(event) {
@@ -377,6 +385,10 @@ function onMediaTouchEnd(event) {
   max-height: 100% !important;
 }
 
+.mode-recommend .xgplayer-container :deep(video) {
+  object-fit: contain !important;
+}
+
 .mode-recommend .media-image {
   object-fit: contain;
 }
@@ -402,10 +414,9 @@ function onMediaTouchEnd(event) {
   position: absolute;
   left: 14px;
   right: 14px;
-  bottom: 14px;
+  bottom: calc(14px + var(--player-control-safe-offset, 56px));
   color: #fff;
   z-index: 2;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0), rgba(0, 0, 0, 0.68));
   padding: 48px 12px 10px;
   border-radius: 8px;
   pointer-events: none;
