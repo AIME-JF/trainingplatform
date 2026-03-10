@@ -35,6 +35,7 @@ RESOURCE_ALLOWED_TRANSITIONS = {
 RESOURCE_CONTENT_FILE_EXTENSIONS = {
     'video': {'.mp4'},
     'document': {'.pdf', '.doc', '.docx', '.ppt', '.pptx'},
+    'image': {'.jpg', '.jpeg', '.png', '.webp'},
     'image_text': {'.jpg', '.jpeg', '.png', '.webp'},
 }
 
@@ -69,7 +70,11 @@ class ResourceService:
         if status:
             query = query.filter(Resource.status == status)
         if content_type:
-            query = query.filter(Resource.content_type == content_type)
+            normalized_content_type = self._normalize_content_type(content_type)
+            if normalized_content_type == 'image':
+                query = query.filter(Resource.content_type.in_(['image', 'image_text']))
+            else:
+                query = query.filter(Resource.content_type == normalized_content_type)
 
         query = query.order_by(Resource.created_at.desc())
 
@@ -101,16 +106,17 @@ class ResourceService:
     def create_resource(self, data: ResourceCreate, current_user_id: int) -> ResourceDetailResponse:
         user_ctx = self._get_user_context(current_user_id)
         owner_department_id = data.owner_department_id or (next(iter(user_ctx['department_ids'])) if user_ctx['department_ids'] else None)
+        normalized_content_type = self._normalize_content_type(data.content_type)
 
         media_file_ids = self._extract_media_file_ids(data.media_links)
         if data.cover_media_file_id:
             media_file_ids.append(data.cover_media_file_id)
-        self._validate_media_file_ids(data.content_type, media_file_ids)
+        self._validate_media_file_ids(normalized_content_type, media_file_ids)
 
         resource = Resource(
             title=data.title,
             summary=data.summary,
-            content_type=data.content_type,
+            content_type=normalized_content_type,
             source_type=data.source_type,
             status='draft',
             visibility_type=data.visibility_type,
@@ -165,6 +171,8 @@ class ResourceService:
         visibility_scopes = update_data.pop('visibility_scopes', None)
 
         for field, value in update_data.items():
+            if field == 'content_type' and value is not None:
+                value = self._normalize_content_type(value)
             setattr(resource, field, value)
 
         if tags is not None:
@@ -219,6 +227,22 @@ class ResourceService:
         self.db.refresh(resource)
         resource = self._get_resource_entity(resource_id)
         return self._to_detail_response(resource)
+
+    def delete_resource(
+        self,
+        resource_id: int,
+        current_user_id: int,
+        user_permissions: List[str],
+    ) -> bool:
+        resource = self.db.query(Resource).filter(Resource.id == resource_id).first()
+        if not resource:
+            return False
+        if not self._can_edit_resource(resource, current_user_id, user_permissions):
+            raise PermissionError('无权限删除该资源')
+
+        self.db.delete(resource)
+        self.db.commit()
+        return True
 
     def transition_resource_status(self, resource: Resource, target_status: str, force: bool = False):
         current_status = resource.status
@@ -372,6 +396,11 @@ class ResourceService:
             selectinload(Resource.tag_relations).joinedload(ResourceTagRelation.tag),
             selectinload(Resource.visibility_scopes),
         ).filter(Resource.id == resource_id).first()
+
+    def _normalize_content_type(self, content_type: Optional[str]) -> Optional[str]:
+        if content_type == 'image_text':
+            return 'image'
+        return content_type
 
     def _sync_tags(self, resource: Resource, tags: List[str]):
         self.db.query(ResourceTagRelation).filter(ResourceTagRelation.resource_id == resource.id).delete()
@@ -556,7 +585,7 @@ class ResourceService:
             id=resource.id,
             title=resource.title,
             summary=resource.summary,
-            content_type=resource.content_type,
+            content_type=self._normalize_content_type(resource.content_type),
             source_type=resource.source_type,
             status=resource.status,
             visibility_type=resource.visibility_type,

@@ -18,7 +18,7 @@
             <a-select-option value="">全部类型</a-select-option>
             <a-select-option value="video">视频</a-select-option>
             <a-select-option value="document">文档</a-select-option>
-            <a-select-option value="image_text">图文</a-select-option>
+            <a-select-option value="image">图片</a-select-option>
           </a-select>
         </a-col>
         <a-col :span="6">
@@ -45,7 +45,7 @@
             </div>
           </template>
           <p class="summary">{{ item.summary || '暂无摘要' }}</p>
-          <div class="meta">类型：{{ item.contentType }} · 上传者：{{ item.uploaderName || '-' }}</div>
+          <div class="meta">类型：{{ contentTypeLabel(item.contentType) }} · 上传者：{{ item.uploaderName || '-' }}</div>
           <div class="meta">标签：{{ (item.tags || []).join(' / ') || '-' }}</div>
           <div class="actions">
             <a-space>
@@ -94,6 +94,16 @@ function statusLabel(status) {
     published: '已发布', rejected: '已驳回', offline: '已下线'
   }
   return map[status] || status
+}
+
+function contentTypeLabel(type) {
+  const map = {
+    video: '视频',
+    image: '图片',
+    image_text: '图片',
+    document: '文档',
+  }
+  return map[type] || type || '-'
 }
 
 async function fetchResources() {

@@ -33,6 +33,9 @@
             <a-tag v-for="tag in (record.tags || [])" :key="tag">{{ tag }}</a-tag>
           </a-space>
         </template>
+        <template v-if="column.key === 'contentType'">
+          {{ contentTypeLabel(record.contentType) }}
+        </template>
         <template v-if="column.key === 'action'">
           <a-space>
             <a-button size="small" @click="viewDetail(record.id)">查看</a-button>
@@ -133,6 +136,16 @@ function statusColor(status) {
   return map[status] || 'default'
 }
 
+function contentTypeLabel(type) {
+  const map = {
+    video: '视频',
+    image: '图片',
+    image_text: '图片',
+    document: '文档',
+  }
+  return map[type] || type || '-'
+}
+
 function canSubmit(record) {
   return ['draft', 'rejected'].includes(record.status)
 }
@@ -191,11 +204,6 @@ async function removeResource(id) {
     message.success('删除成功')
     fetchMine()
   } catch (e) {
-    const status = e?.response?.status
-    if (status === 404 || status === 405) {
-      message.warning('当前后端暂未开放资源删除接口')
-      return
-    }
     message.error(e.message || '删除失败')
   }
 }

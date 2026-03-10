@@ -140,6 +140,12 @@ const router = createRouter({
           meta: { title: '我的资源', roles: ['admin', 'instructor'] },
         },
         {
+          path: 'resource/manage',
+          name: 'ResourceManage',
+          component: () => import('../views/resource/Manage.vue'),
+          meta: { title: '资源管理', roles: ['admin'] },
+        },
+        {
           path: 'resource/review',
           name: 'ResourceReviewQueue',
           component: () => import('../views/resource/ReviewQueue.vue'),

@@ -12,7 +12,7 @@
         </a-form-item>
 
         <a-form-item label="资源摘要">
-          <a-textarea v-model:value="form.summary" :rows="4" placeholder="图文资源请在此填写文字说明" />
+          <a-textarea v-model:value="form.summary" :rows="4" placeholder="图片资源请在此填写文字说明" />
         </a-form-item>
 
         <a-row :gutter="12">
@@ -20,7 +20,7 @@
             <a-form-item label="内容类型">
               <a-select v-model:value="form.contentType">
                 <a-select-option value="video">视频</a-select-option>
-                <a-select-option value="image_text">图文（图片）</a-select-option>
+                <a-select-option value="image">图片</a-select-option>
                 <a-select-option value="document">文档</a-select-option>
               </a-select>
             </a-form-item>
@@ -82,7 +82,7 @@ const fileList = ref([])
 const ALLOWED_EXTENSIONS = {
   video: ['mp4'],
   document: ['pdf', 'doc', 'docx', 'ppt', 'pptx'],
-  image_text: ['jpg', 'jpeg', 'png', 'webp'],
+  image: ['jpg', 'jpeg', 'png', 'webp'],
 }
 
 const form = reactive({

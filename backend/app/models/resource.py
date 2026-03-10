@@ -18,7 +18,7 @@ class Resource(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(200), nullable=False, comment='资源标题')
     summary = Column(Text, nullable=True, comment='资源摘要')
-    content_type = Column(String(30), nullable=False, default='video', comment='内容类型: video/image_text/document/mixed')
+    content_type = Column(String(30), nullable=False, default='video', comment='内容类型: video/image/document（兼容历史值 image_text）/mixed')
     uploader_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True, comment='上传者ID')
     source_type = Column(String(30), nullable=False, default='ugc', comment='来源类型: ugc/official/imported')
     status = Column(String(30), nullable=False, default='draft', index=True, comment='状态: draft/pending_review/reviewing/published/rejected/offline')

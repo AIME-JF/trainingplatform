@@ -102,3 +102,14 @@ def offline_resource(
     return StandardResponse(data=result)
 
 
+@router.delete('/{resource_id}', response_model=StandardResponse[dict], summary='Delete resource')
+def delete_resource(
+    resource_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = ResourceController(db)
+    result = controller.delete_resource(resource_id, current_user.user_id, current_user.permissions)
+    return StandardResponse(data=result)
+
+

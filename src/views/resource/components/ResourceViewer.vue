@@ -199,7 +199,8 @@ function contentTypeLabel(contentType) {
   const map = {
     video: '视频',
     document: '文档',
-    image_text: '图文',
+    image: '图片',
+    image_text: '图片',
   }
   return map[contentType] || contentType || '-'
 }

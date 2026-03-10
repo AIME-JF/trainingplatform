@@ -67,6 +67,7 @@
           <a-menu-item key="/resource/recommend">资源推荐</a-menu-item>
           <a-menu-item key="/resource/upload" v-if="!isStudent">上传资源</a-menu-item>
           <a-menu-item key="/resource/my" v-if="!isStudent">我的资源</a-menu-item>
+          <a-menu-item key="/resource/manage" v-if="isAdmin">资源管理</a-menu-item>
           <a-menu-item key="/resource/review" v-if="!isStudent">审核工作台</a-menu-item>
           <a-menu-item key="/resource/policy" v-if="isAdmin">审核策略</a-menu-item>
         </a-sub-menu>
@@ -162,6 +163,7 @@
           <a-menu-item key="/resource/recommend">资源推荐</a-menu-item>
           <a-menu-item key="/resource/upload" v-if="!isStudent">上传资源</a-menu-item>
           <a-menu-item key="/resource/my" v-if="!isStudent">我的资源</a-menu-item>
+          <a-menu-item key="/resource/manage" v-if="isAdmin">资源管理</a-menu-item>
           <a-menu-item key="/resource/review" v-if="!isStudent">审核工作台</a-menu-item>
           <a-menu-item key="/resource/policy" v-if="isAdmin">审核策略</a-menu-item>
         </a-sub-menu>

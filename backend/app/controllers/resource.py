@@ -88,6 +88,24 @@ class ResourceController:
             logger.error(f"发布资源异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='发布资源失败')
 
+    def delete_resource(self, resource_id: int, current_user_id: int, user_permissions: list):
+        try:
+            ok = self.service.delete_resource(
+                resource_id=resource_id,
+                current_user_id=current_user_id,
+                user_permissions=user_permissions,
+            )
+            if not ok:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Resource not found')
+            return {'success': True}
+        except PermissionError as e:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"Delete resource error: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='Delete resource failed')
+
     def offline_resource(self, resource_id: int, current_user_id: int, user_permissions: list):
         try:
             result = self.service.offline_resource(
