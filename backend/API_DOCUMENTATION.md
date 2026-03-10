@@ -950,6 +950,7 @@ curl -X POST "http://127.0.0.1:8001/api/v1/trainings" \
 - `PUT /roles/{role_id}` 或 `POST /roles/{role_id}/update`：更新角色
 - `DELETE /roles/{role_id}` 或 `POST /roles/{role_id}/delete`：删除角色
 - `POST /roles/{role_id}/permissions`：更新角色权限
+- 约束：当目标角色 `code=admin` 时，后端拒绝更新角色信息、删除角色、更新角色权限
 
 ### 19.2 部门管理（`/api/v1/departments`）
 
@@ -963,12 +964,19 @@ curl -X POST "http://127.0.0.1:8001/api/v1/trainings" \
 
 ### 19.3 权限管理（`/api/v1/permissions`）
 
-- `POST /permissions` 或 `POST /permissions/create`：创建权限
-- `GET /permissions/list`：权限列表（支持 `page`、`size`）
-- `GET /permissions/{permission_id}/detail`：权限详情
-- `PUT /permissions/{permission_id}` 或 `POST /permissions/{permission_id}/update`：更新权限
+- `POST /permissions` 或 `POST /permissions/create`：创建权限（支持可选字段 `group`）
+- `GET /permissions/list`：权限列表（支持 `page`、`size`，返回项包含 `group`）
+- `GET /permissions/{permission_id}/detail`：权限详情（包含 `group`）
+- `PUT /permissions/{permission_id}` 或 `POST /permissions/{permission_id}/update`：更新权限（支持可选字段 `group`）
 - `DELETE /permissions/{permission_id}` 或 `POST /permissions/{permission_id}/delete`：删除权限
 - `POST /permissions/sync`：按路由同步权限
+
+权限分组规则：
+
+- 若创建/更新/同步时未传 `group`，后端会根据 `path` 自动推断分组
+- 若显式传入空字符串，后端会按 `path` 回退推断
+- 未命中规则时默认分组为 `SYSTEM`
+- 典型分组：`AUTH`、`USER_MANAGEMENT`、`ROLE_MANAGEMENT`、`PERMISSION_MANAGEMENT`、`DEPARTMENT_MANAGEMENT`、`COURSE_MANAGEMENT`、`EXAM_MANAGEMENT`、`QUESTION_BANK`、`TRAINING_MANAGEMENT`、`RESOURCE_REVIEW`
 
 ### 19.4 用户管理补充说明
 

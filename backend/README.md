@@ -68,6 +68,12 @@
 1. `init_data.main()`（初始化种子数据）
 2. 启动 uvicorn（默认 `0.0.0.0:8001`）
 
+### 3.4 权限分组（Permission Group）
+
+- `permissions` 表新增 `group` 字段（`NOT NULL`，默认 `SYSTEM`，并建立索引 `ix_permissions_group`）。
+- 迁移版本：`d4e5f6a7b8c9`（文件：`alembic/versions/2026_03_10_1030-d4e5f6a7b8c9_add_permission_group_field.py`）。
+- 创建/更新/同步权限时，若未传或传空 `group`，后端会按 `path` 自动推断，未命中规则时回退到 `SYSTEM`。
+
 ---
 
 ## 4. 目录结构
@@ -181,6 +187,7 @@ python main.py
 ## 8. 初始化数据（`init_data.py`）
 
 首次初始化会创建权限、部门、角色、用户（含教官扩展字段）。
+- 初始化权限时会调用 `infer_permission_group(path)` 自动写入权限分组。
 
 ### 默认账号
 
@@ -193,6 +200,7 @@ python main.py
 - `admin`：全权限
 - `instructor`：教学/培训/题库/考试/证书等管理权限
 - `student`：学习/考试/报名/签到/个人中心权限
+- `admin` 角色后端受保护：禁止更新角色信息、禁止删除角色、禁止修改角色权限。
 
 ---
 

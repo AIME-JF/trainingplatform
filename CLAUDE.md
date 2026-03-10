@@ -46,7 +46,7 @@ No test framework or linter is configured.
 
 ### Key Directories
 
-- `src/layouts/MainLayout.vue` - Single layout: collapsible sidebar (220px) + sticky topbar (64px) + mobile bottom nav. Role-aware menu rendering.
+- `src/layouts/MainLayout.vue` - Single layout: collapsible sidebar (220px) + sticky topbar (64px) + mobile bottom nav. Role-aware menu rendering; sidebar supports internal scroll with hidden scrollbar.
 - `src/router/index.js` - All routes with lazy-loaded components. Route meta includes `roles` (array), `requiresAuth`, `fullscreen`. Navigation guard checks `localStorage` token and `userInfo` role.
 - `src/stores/auth.js` - Pinia auth store. Handles `loginWithCredentials`, `loginWithPhone`, `restoreFromStorage`, `logout`, `switchRole`.
 - `src/api/` - Axios-based API modules. `request.js` converts request keys camelCase→snake_case and response keys snake_case→camelCase.
@@ -54,11 +54,13 @@ No test framework or linter is configured.
 - `src/views/resource/Recommend.vue` - Recommendation feed page (file list + download, no preview).
 - `src/views/resource/Detail.vue` - Resource detail page (left media area + right metadata panel).
 - `src/views/resource/components/ResourceViewer.vue` - Shared viewer kernel for detail view with xgplayer-based video rendering.
+- `src/views/system/components/PermissionTransfer.vue` - Shared permission transfer UI for role/department assignment; searchable and sorted by permission code.
 - `backend/app/` - Backend app package (`__init__.py` defines FastAPI app, routers, middleware, startup hooks).
 - `backend/app/views/` - API routes (auth/course/training/report/etc.).
 - `backend/app/services/` - Domain service layer (business logic, DB read/write orchestration).
 - `backend/app/models/` - SQLAlchemy models.
 - `backend/app/schemas/` - Pydantic request/response schemas.
+- `backend/app/utils/permission_group.py` - Permission group inference helper based on API path prefixes.
 - `backend/alembic/` - Alembic migration environment and versions.
 
 ### Role System
@@ -70,6 +72,10 @@ Three roles with different menu visibility and route access:
 
 Role checked via `useAuthStore()` computed properties: `isAdmin`, `isInstructor`, `isStudent`.
 
+Additional protection rules:
+- `admin` role cannot be updated/deleted/re-permissioned (enforced in backend role service).
+- protected `admin` user has role assignment locked in user management UI.
+
 ### Data Flow
 
 - Frontend uses centralized API modules in `src/api/*` and `src/api/request.js`.
@@ -77,6 +83,7 @@ Role checked via `useAuthStore()` computed properties: `isAdmin`, `isInstructor`
 - Backend wraps most responses in `StandardResponse` (`{ code, message, data }`), which is unwrapped by the axios response interceptor.
 - Resource center APIs are split by concern: `resource.js` (library CRUD/bind), `review.js` (workflow/policy), `recommendation.js` (feed/events), `media.js` (upload/file URL).
 - Some feature pages may still keep local mock fallback logic; prefer API source of truth when fixing bugs.
+- Permission APIs include `group`; when omitted (or empty), backend infers it from `path` (default fallback `SYSTEM`).
 
 ### Styling
 
@@ -95,8 +102,9 @@ Role checked via `useAuthStore()` computed properties: `isAdmin`, `isInstructor`
 - All UI text is in Chinese (Simplified)
 - Vue components use `<script setup>` with Composition API (`ref`, `computed`, `watch`)
 - Component files: PascalCase. Mock data exports: UPPER_SNAKE_CASE constants.
-- Ant Design Vue components used directly (globally registered via `app.use(Antd)`)
+- Ant Design Vue components used directly (globally registered via `app.use(Antd)`), with global Chinese locale (`zh_CN`) and dayjs locale `zh-cn`.
 - Question types in exam system: `single` (single choice), `multi` (multiple choice), `judge` (true/false), `blank` (fill-in)
+- Permission assignment dialogs (role/department) use `Transfer` with search; item text format is `{code}-{name}` and both panes are sorted by permission code ascending.
 
 ## Deployment
 

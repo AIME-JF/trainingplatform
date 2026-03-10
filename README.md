@@ -43,6 +43,7 @@
 | **图表可视化** | ECharts 6 + vue-echarts 8 |
 | **视频播放器** | xgplayer 3 |
 | **日期处理** | Day.js |
+| **本地化** | Ant Design Vue `zh_CN` + Day.js `zh-cn` |
 | **二维码生成** | qrcode |
 
 ---
@@ -293,3 +294,12 @@ npm run preview
 - 角色管理：`/api/v1/roles/*`
 - 部门管理：`/api/v1/departments/*`
 - 权限管理：`/api/v1/permissions/*`
+
+系统管理补充说明：
+
+- 角色管理、部门管理的权限分配弹窗统一使用 Ant Design Vue `Transfer` 组件并支持搜索，弹窗宽度为 `1080px`。
+- 权限项展示格式统一为 `{code}-{name}`，可选列表与已选列表都按 `code` 升序。
+- `admin` 角色在角色管理页不可编辑、不可删除、不可修改状态、不可重新分配权限。
+- `admin` 用户在用户管理页角色选择为禁用，避免误操作移除管理员角色。
+- 后端服务层同样限制 `admin` 角色：禁止更新、删除、修改角色权限。
+- 权限数据新增 `group` 字段；创建/更新/同步时若未传 `group`，后端会按 `path` 自动推断分组，未命中时使用 `SYSTEM`。
