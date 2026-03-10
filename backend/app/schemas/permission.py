@@ -10,12 +10,14 @@ class PermissionCreate(BaseModel):
     """创建权限请求"""
     path: str = Field(..., description="接口路径")
     code: str = Field(..., min_length=2, max_length=100, description="权限编码")
+    group: Optional[str] = Field(None, max_length=100, description="权限分组")
     description: Optional[str] = Field(None, description="权限描述")
 
 
 class PermissionUpdate(BaseModel):
     """更新权限请求"""
     path: Optional[str] = Field(None, description="接口路径")
+    group: Optional[str] = Field(None, max_length=100, description="权限分组")
     description: Optional[str] = Field(None, description="权限描述")
     is_active: Optional[bool] = Field(None, description="是否激活")
 
@@ -25,6 +27,7 @@ class PermissionResponse(BaseModel):
     id: int
     path: str
     code: str
+    group: str
     description: Optional[str] = None
     is_active: bool
     created_at: datetime

@@ -101,6 +101,8 @@
           <template #icon><SettingOutlined /></template>
           <template #title>系统管理</template>
           <a-menu-item key="/system/users">用户管理</a-menu-item>
+          <a-menu-item key="/system/roles">角色管理</a-menu-item>
+          <a-menu-item key="/system/departments">部门管理</a-menu-item>
         </a-sub-menu>
       </a-menu>
     </a-layout-sider>
@@ -192,6 +194,8 @@
           <template #icon><SettingOutlined /></template>
           <template #title>系统管理</template>
           <a-menu-item key="/system/users">用户管理</a-menu-item>
+          <a-menu-item key="/system/roles">角色管理</a-menu-item>
+          <a-menu-item key="/system/departments">部门管理</a-menu-item>
         </a-sub-menu>
       </a-menu>
     </a-drawer>

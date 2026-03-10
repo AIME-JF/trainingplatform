@@ -106,7 +106,9 @@
 import { ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { getReviewPolicies, createReviewPolicy, updateReviewPolicy } from '@/api/review'
-import { getUsers, getRoles, getDepartments } from '@/api/user'
+import { getUsers } from '@/api/user'
+import { getRoleList } from '@/api/role'
+import { getDepartmentList } from '@/api/department'
 
 const policies = ref([])
 const visible = ref(false)
@@ -183,12 +185,12 @@ async function ensureReviewerOptionsLoaded() {
   reviewerOptionsLoading.value = true
   reviewerOptionsPromise = Promise.all([
     getUsers({ size: -1 }).catch(() => null),
-    getRoles().catch(() => null),
-    getDepartments().catch(() => null),
+    getRoleList({ size: -1 }).catch(() => null),
+    getDepartmentList({ size: -1 }).catch(() => null),
   ]).then(([usersRes, rolesRes, departmentsRes]) => {
     const users = usersRes?.items || []
-    const roles = Array.isArray(rolesRes) ? rolesRes : (rolesRes?.items || [])
-    const departments = Array.isArray(departmentsRes) ? departmentsRes : (departmentsRes?.items || [])
+    const roles = rolesRes?.items || []
+    const departments = departmentsRes?.items || []
 
     userReviewerOptions.value = mapToOptions(users, item => item.nickname || item.username, '用户')
     roleReviewerOptions.value = mapToOptions(roles, item => item.name || item.code, '角色')

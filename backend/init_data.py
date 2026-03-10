@@ -7,6 +7,7 @@ from app.database import engine, init_db
 from app.models import User, Role, Permission, Department, PoliceType, user_roles, role_permissions
 from app.models.system import Config, ConfigGroup, ConfigFormat, SystemMeta
 from app.services.auth import auth_service
+from app.utils.permission_group import infer_permission_group
 from logger import logger
 
 
@@ -154,6 +155,7 @@ def init_permissions():
                 permission = Permission(
                     path=perm_data["path"],
                     code=perm_data["code"],
+                    group=(perm_data.get("group") or "").strip() or infer_permission_group(perm_data["path"]),
                     description=perm_data["description"],
                     is_active=True
                 )
@@ -242,7 +244,7 @@ def init_roles():
                 return
 
             all_permissions = db.query(Permission).all()
-            perm_map = {p.code: p for p in all_permissions}
+            perm_map = {str(p.code): p for p in all_permissions}
 
             # 管理员角色 - 全部权限
             admin_role = Role(

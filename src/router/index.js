@@ -20,7 +20,6 @@ const router = createRouter({
           component: () => import('../views/dashboard/Index.vue'),
           meta: { title: '工作台', icon: 'HomeOutlined' },
         },
-        // 课程学习
         {
           path: 'courses',
           name: 'CourseList',
@@ -33,7 +32,6 @@ const router = createRouter({
           component: () => import('../views/courses/Detail.vue'),
           meta: { title: '课程详情' },
         },
-        // 考试系统
         {
           path: 'exam/list',
           name: 'ExamList',
@@ -64,7 +62,6 @@ const router = createRouter({
           component: () => import('../views/exam/Result.vue'),
           meta: { title: '考试结果' },
         },
-        // AI 功能
         {
           path: 'ai/question-gen',
           name: 'QuestionGen',
@@ -77,7 +74,6 @@ const router = createRouter({
           component: () => import('../views/ai/LessonPlan.vue'),
           meta: { title: 'AI教案生成', roles: ['instructor'] },
         },
-        // 培训管理（静态路由必须在 /:id 之前）
         {
           path: 'training',
           name: 'TrainingList',
@@ -108,7 +104,6 @@ const router = createRouter({
           component: () => import('../views/training/Checkin.vue'),
           meta: { title: '扫码签到' },
         },
-        // 资源库
         {
           path: 'resource/library',
           name: 'ResourceLibrary',
@@ -157,7 +152,6 @@ const router = createRouter({
           component: () => import('../views/resource/PolicyManage.vue'),
           meta: { title: '审核策略', roles: ['admin'] },
         },
-        // 教官管理
         {
           path: 'instructor',
           name: 'InstructorList',
@@ -170,7 +164,6 @@ const router = createRouter({
           component: () => import('../views/instructor/Detail.vue'),
           meta: { title: '教官详情', roles: ['admin', 'instructor'] },
         },
-        // 学员库
         {
           path: 'trainee',
           name: 'TraineeList',
@@ -183,35 +176,42 @@ const router = createRouter({
           component: () => import('../views/trainee/Detail.vue'),
           meta: { title: '学员详情' },
         },
-        // 人才库
         {
           path: 'talent',
           name: 'Talent',
           component: () => import('../views/talent/Index.vue'),
           meta: { title: '人才库', roles: ['admin'] },
         },
-        // 数据看板
         {
           path: 'report',
           name: 'Report',
           component: () => import('../views/report/Dashboard.vue'),
           meta: { title: '数据看板', roles: ['admin'] },
         },
-        // 系统管理
         {
           path: 'system/users',
           name: 'UserManage',
           component: () => import('../views/system/UserManage.vue'),
           meta: { title: '用户管理', roles: ['admin'] },
         },
-        // 个人中心
+        {
+          path: 'system/roles',
+          name: 'RoleManage',
+          component: () => import('../views/system/RoleManage.vue'),
+          meta: { title: '角色管理', roles: ['admin'] },
+        },
+        {
+          path: 'system/departments',
+          name: 'DepartmentManage',
+          component: () => import('../views/system/DepartmentManage.vue'),
+          meta: { title: '部门管理', roles: ['admin'] },
+        },
         {
           path: 'profile',
           name: 'Profile',
           component: () => import('../views/profile/Index.vue'),
           meta: { title: '个人中心' },
         },
-        // 报名管理
         {
           path: 'training/:id/enroll',
           name: 'Enroll',
@@ -224,14 +224,12 @@ const router = createRouter({
           component: () => import('../views/training/EnrollManage.vue'),
           meta: { title: '报名审核', roles: ['admin', 'instructor'] },
         },
-        // 成绩管理
         {
           path: 'exam/scores',
           name: 'ExamScores',
           component: () => import('../views/exam/Scores.vue'),
           meta: { title: '成绩管理', roles: ['admin', 'instructor'] },
         },
-        // 结业证书
         {
           path: 'certificate',
           name: 'Certificate',
@@ -240,7 +238,6 @@ const router = createRouter({
         },
       ],
     },
-    // 移动端签到（独立页，无主布局）
     {
       path: '/mobile/checkin/:token/:sessionKey?',
       name: 'MobileCheckin',
@@ -251,7 +248,6 @@ const router = createRouter({
   ],
 })
 
-// 导航守卫：检查 JWT token + 角色权限
 router.beforeEach((to) => {
   const token = localStorage.getItem('token')
   if (to.meta.requiresAuth && !token) {
@@ -260,7 +256,6 @@ router.beforeEach((to) => {
   if (to.path === '/login' && token) {
     return '/'
   }
-  // 角色权限检查
   if (to.meta.roles && token) {
     const userInfo = localStorage.getItem('userInfo')
     if (userInfo) {

@@ -127,8 +127,8 @@ class RoleService:
         if not role:
             return None
         
-        if role.code == "admin" and role_data.is_active is not None:
-            raise ValueError("不能修改管理员角色的状态")
+        if role.code == "admin":
+            raise ValueError("不能修改管理员角色")
         
         # 更新角色信息
         update_data = role_data.model_dump(exclude_unset=True)

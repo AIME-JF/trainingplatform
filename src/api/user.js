@@ -28,18 +28,6 @@ export function deleteUser(id) {
   return request.delete(`/users/${id}`)
 }
 
-export function getRoles() {
-  return request.get('/roles')
-}
-
-export function getDepartments() {
-  return request.get('/departments')
-}
-
-export function createDepartment(name) {
-  return request.post('/departments', { name })
-}
-
 export function updateUserDepartments(id, departmentIds) {
   return request.put(`/users/${id}/departments`, { departmentIds })
 }

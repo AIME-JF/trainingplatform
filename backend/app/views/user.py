@@ -1,15 +1,13 @@
 """
 用户管理路由
 """
-from typing import Optional, List
+from typing import Optional
 from fastapi import APIRouter, Depends, Query, Body, UploadFile, File, Form, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.schemas import StandardResponse, PaginatedResponse, TokenData, UserSimpleResponse, UserCreate, UserUpdate
-from app.schemas.role import RoleSimpleResponse
-from app.schemas.department import DepartmentSimpleResponse
 from app.models import User, Role
 from app.models.department import Department
 from app.models.police_type import PoliceType
@@ -24,6 +22,10 @@ router = APIRouter(prefix="/users", tags=["用户管理"])
 def _require_admin(db: Session, user_id: int):
     if not is_admin_user(db, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅系统管理员可执行该操作")
+
+
+def _is_protected_admin_user(user: User) -> bool:
+    return str(user.username).lower() == "admin"
 
 
 @router.get("", response_model=StandardResponse[PaginatedResponse[UserSimpleResponse]], summary="用户列表")
@@ -187,6 +189,8 @@ def update_user_roles(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         return StandardResponse(code=404, message="用户不存在")
+    if _is_protected_admin_user(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="管理员用户权限不可修改")
 
     roles = db.query(Role).filter(Role.id.in_(role_ids)).all()
     user.roles = roles
@@ -269,56 +273,3 @@ def delete_user(
     db.commit()
     logger.info(f"删除用户: {user.username}")
     return StandardResponse(message="删除成功")
-
-
-roles_router = APIRouter(prefix="/roles", tags=["角色管理"])
-
-
-@roles_router.get("", response_model=StandardResponse[list[RoleSimpleResponse]], summary="角色列表")
-def get_roles(
-    current_user: TokenData = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """获取所有角色"""
-    roles = db.query(Role).filter(Role.is_active == True).all()
-    items = [RoleSimpleResponse.model_validate(r) for r in roles]
-    return StandardResponse(data=items)
-
-
-# 部门列表路由
-departments_router = APIRouter(prefix="/departments", tags=["部门管理"])
-
-
-@departments_router.get("", response_model=StandardResponse[List[DepartmentSimpleResponse]], summary="部门列表")
-def get_departments(
-    current_user: TokenData = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """获取所有激活的部门列表"""
-    depts = db.query(Department).filter(Department.is_active == True).order_by(Department.id).all()
-    items = [DepartmentSimpleResponse.model_validate(d) for d in depts]
-    return StandardResponse(data=items)
-
-
-@departments_router.post("", response_model=StandardResponse[DepartmentSimpleResponse], summary="新建部门")
-def create_department(
-    name: str = Body(..., embed=True),
-    current_user: TokenData = Depends(get_current_user),
-    db: Session = Depends(get_db)
-):
-    """快速创建新部门（名称不能重复）"""
-    name = name.strip()
-    if not name:
-        return StandardResponse(code=400, message="部门名称不能为空")
-    existing = db.query(Department).filter(Department.name == name).first()
-    if existing:
-        return StandardResponse(data=DepartmentSimpleResponse.model_validate(existing))
-    # 生成唯一 code：用名称拼音首字母 + id，这里简单用时间戳
-    import time
-    code = f"dept_{int(time.time() * 1000) % 10**9}"
-    dept = Department(name=name, code=code, is_active=True)
-    db.add(dept)
-    db.commit()
-    db.refresh(dept)
-    logger.info(f"新建部门: {name}")
-    return StandardResponse(data=DepartmentSimpleResponse.model_validate(dept))

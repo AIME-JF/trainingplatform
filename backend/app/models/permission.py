@@ -30,6 +30,7 @@ class Permission(Base):
     id = Column(Integer, primary_key=True, index=True)
     path = Column(String(200), nullable=False, comment='接口路径')
     code = Column(String(100), unique=True, index=True, nullable=False, comment='权限编码')
+    group = Column(String(100), nullable=False, index=True, server_default='SYSTEM', comment='权限分组')
     description = Column(Text, comment='权限描述')
     is_active = Column(Boolean, default=True, comment='是否激活')
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment='创建时间')

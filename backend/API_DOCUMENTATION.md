@@ -937,3 +937,41 @@ curl -X POST "http://127.0.0.1:8001/api/v1/trainings" \
 - 应用版本：`1.0.0`
 - 默认端口：`8001`
 - API 前缀：`/api/v1`
+
+## 19. 系统与权限管理（新增）
+
+以下接口用于系统后台的角色、部门、权限管理页面。
+
+### 19.1 角色管理（`/api/v1/roles`）
+
+- `POST /roles` 或 `POST /roles/create`：创建角色
+- `GET /roles/list`：角色列表（支持 `page`、`size`、`name`、`is_active`、`order`）
+- `GET /roles/{role_id}/detail`：角色详情（含权限）
+- `PUT /roles/{role_id}` 或 `POST /roles/{role_id}/update`：更新角色
+- `DELETE /roles/{role_id}` 或 `POST /roles/{role_id}/delete`：删除角色
+- `POST /roles/{role_id}/permissions`：更新角色权限
+
+### 19.2 部门管理（`/api/v1/departments`）
+
+- `POST /departments` 或 `POST /departments/create`：创建部门
+- `GET /departments/list`：部门列表（支持 `page`、`size`、`parent_id`）
+- `GET /departments/tree`：部门树
+- `GET /departments/{department_id}/detail`：部门详情（含权限）
+- `PUT /departments/{department_id}` 或 `POST /departments/{department_id}/update`：更新部门
+- `DELETE /departments/{department_id}` 或 `POST /departments/{department_id}/delete`：删除部门
+- `POST /departments/{department_id}/permissions`：更新部门权限
+
+### 19.3 权限管理（`/api/v1/permissions`）
+
+- `POST /permissions` 或 `POST /permissions/create`：创建权限
+- `GET /permissions/list`：权限列表（支持 `page`、`size`）
+- `GET /permissions/{permission_id}/detail`：权限详情
+- `PUT /permissions/{permission_id}` 或 `POST /permissions/{permission_id}/update`：更新权限
+- `DELETE /permissions/{permission_id}` 或 `POST /permissions/{permission_id}/delete`：删除权限
+- `POST /permissions/sync`：按路由同步权限
+
+### 19.4 用户管理补充说明
+
+- 用户管理接口仍在 `/api/v1/users/*`。
+- 已移除“通过用户管理输入新部门名自动创建部门”的交互设计。
+- 部门新增请使用“部门管理”页面对应接口。

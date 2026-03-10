@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.services.auth import auth_service
 from app.schemas import TokenData
+from app.utils.permission_group import infer_permission_group
 from logger import logger
 
 # JWT Bearer Token认证
@@ -110,7 +111,8 @@ def extract_permissions_from_routes(app) -> List[dict]:
             permissions.append({
                 'path': path,
                 'code': permission_code,
-                'description': description
+                'description': description,
+                'group': infer_permission_group(path),
             })
     
     return permissions
@@ -126,10 +128,11 @@ def get_function_permission_info(func: Callable) -> dict:
     Returns:
         dict: 包含权限信息的字典
     """
-    if hasattr(func, '_permission_code'):
+    permission_code = getattr(func, '_permission_code', None)
+    if permission_code is not None:
         return {
-            'code': func._permission_code,
-            'description': func._permission_desc
+            'code': permission_code,
+            'description': getattr(func, '_permission_desc', func.__doc__ or f"{func.__name__}接口")
         }
     
     return {
@@ -157,7 +160,8 @@ def extract_route_permissions(app) -> list:
                 permissions.append({
                     'path': route.path,
                     'code': endpoint._permission_code,
-                    'description': endpoint._permission_desc
+                    'description': endpoint._permission_desc,
+                    'group': infer_permission_group(route.path),
                 })
     
     return permissions

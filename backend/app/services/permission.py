@@ -9,6 +9,7 @@ from app.models import Permission
 from app.schemas import (
     PermissionCreate, PermissionUpdate, PermissionResponse, PaginatedResponse
 )
+from app.utils.permission_group import infer_permission_group
 from logger import logger
 
 
@@ -27,6 +28,7 @@ class PermissionService:
         db_permission = Permission(
             path=permission_data.path,
             code=permission_data.code,
+            group=(permission_data.group or "").strip() or infer_permission_group(permission_data.path),
             description=permission_data.description
         )
         
@@ -84,6 +86,11 @@ class PermissionService:
         
         # 更新权限信息
         update_data = permission_data.model_dump(exclude_unset=True)
+
+        if "path" in update_data and "group" not in update_data:
+            update_data["group"] = infer_permission_group(update_data["path"])
+        elif "group" in update_data and not (update_data["group"] or "").strip():
+            update_data["group"] = infer_permission_group(update_data.get("path", permission.path))
         
         for field, value in update_data.items():
             setattr(permission, field, value)
@@ -120,15 +127,22 @@ class PermissionService:
                 # 更新现有权限
                 existing_permission.path = perm_data['path']
                 existing_permission.description = perm_data['description']
+                setattr(
+                    existing_permission,
+                    "group",
+                    (perm_data.get('group') or "").strip() or infer_permission_group(perm_data['path'])
+                )
                 synced_permissions.append(PermissionResponse.model_validate(existing_permission))
             else:
                 # 创建新权限
                 new_permission = Permission(
                     path=perm_data['path'],
                     code=perm_data['code'],
+                    group=(perm_data.get('group') or "").strip() or infer_permission_group(perm_data['path']),
                     description=perm_data['description']
                 )
                 self.db.add(new_permission)
+                self.db.flush()
                 synced_permissions.append(PermissionResponse.model_validate(new_permission))
         
         self.db.commit()
