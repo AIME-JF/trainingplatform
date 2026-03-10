@@ -162,7 +162,8 @@ function setupPlayer() {
     el: videoContainer.value,
     url: currentMedia.value.fileUrl,
     fluid: !isRecommend.value,
-    autoplay: false,
+    autoplay: isRecommend.value,
+    autoplayMuted: isRecommend.value,
     playsinline: true,
     videoInit: true,
     download: false,
@@ -182,6 +183,10 @@ function setupPlayer() {
   player.on('ended', () => {
     emit('complete')
   })
+
+  if (isRecommend.value) {
+    void tryAutoPlay(player)
+  }
 }
 
 function destroyPlayer() {
@@ -224,6 +229,18 @@ function nextMedia() {
   mediaIndex.value = (mediaIndex.value + 1) % mediaList.value.length
 }
 
+async function tryAutoPlay(targetPlayer) {
+  if (!targetPlayer) return
+  try {
+    const playResult = targetPlayer.play?.()
+    if (playResult && typeof playResult.then === 'function') {
+      await playResult
+    }
+  } catch {
+    // Browser may block autoplay until user interaction.
+  }
+}
+
 function downloadCurrentMedia() {
   if (!currentMedia.value?.fileUrl) return
   const url = currentMedia.value.fileUrl
@@ -257,6 +274,11 @@ function onMediaTouchEnd(event) {
     prevMedia()
   }
 }
+
+defineExpose({
+  nextMedia,
+  prevMedia,
+})
 </script>
 
 <style scoped>

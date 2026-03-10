@@ -28,7 +28,6 @@
     <div class="recommend-mobile-actions" v-if="currentResource">
       <div class="recommend-index">{{ currentIndex + 1 }} / {{ feedItems.length }}</div>
       <a-button class="action-detail" @click="goDetail">详情</a-button>
-      <a-button class="action-next" type="primary" @click="nextRecommendation">下一条</a-button>
     </div>
   </div>
 </template>
@@ -150,6 +149,13 @@ async function nextRecommendation() {
   }
 }
 
+function prevRecommendation() {
+  if (!feedItems.value.length) return
+  if (currentIndex.value > 0) {
+    currentIndex.value -= 1
+  }
+}
+
 function maybePreloadNextPage() {
   if (feedFinished.value || loadingFeed.value) return
   if (feedItems.value.length - currentIndex.value <= 3) {
@@ -213,7 +219,7 @@ function onTouchMove(event) {
     gesture.value.axis = absY > absX ? 'y' : 'x'
   }
 
-  if (gesture.value.axis === 'y' && deltaY > 0 && event.cancelable) {
+  if (gesture.value.axis === 'y' && event.cancelable) {
     event.preventDefault()
   }
 }
@@ -227,9 +233,17 @@ function onTouchEnd(event) {
 
   const deltaX = touch.clientX - gesture.value.startX
   const deltaY = touch.clientY - gesture.value.startY
-  if (deltaY > 80 && Math.abs(deltaY) > Math.abs(deltaX)) {
+  if (Math.abs(deltaY) <= Math.abs(deltaX)) return
+
+  if (deltaY < -80) {
     gesture.value.triggered = true
     nextRecommendation()
+    return
+  }
+
+  if (deltaY > 80) {
+    gesture.value.triggered = true
+    prevRecommendation()
   }
 }
 </script>
@@ -286,8 +300,7 @@ function onTouchEnd(event) {
   gap: 10px;
 }
 
-.action-detail,
-.action-next {
+.action-detail {
   flex: 0 0 auto;
 }
 
