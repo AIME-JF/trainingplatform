@@ -19,6 +19,22 @@
         </div>
       </div>
       <div class="week-nav">
+        <a-upload
+          v-if="isAdmin"
+          :before-upload="handleBeforeInstructorImport"
+          :show-upload-list="false"
+          accept=".xlsx"
+        >
+          <a-button :loading="importingInstructor">导入教官</a-button>
+        </a-upload>
+        <a-upload
+          v-if="isAdmin"
+          :before-upload="handleBeforeScheduleImport"
+          :show-upload-list="false"
+          accept=".xlsx"
+        >
+          <a-button :loading="importingSchedule">导入课表</a-button>
+        </a-upload>
         <a-button @click="prevWeek" :disabled="currentWeek <= 0">‹</a-button>
         <span class="week-label">第 {{ currentWeek + 1 }} 周（{{ weekRange }}）</span>
         <a-button @click="nextWeek">›</a-button>
@@ -166,10 +182,16 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { MOCK_WEEK_SCHEDULE } from '@/mock/schedules'
-import { getTrainings, getTraining, updateTraining } from '@/api/training'
+import {
+  getTrainings,
+  getTraining,
+  updateTraining,
+  importTrainingInstructors,
+  importTrainingSchedule,
+} from '@/api/training'
 import { useAuthStore } from '@/stores/auth'
 import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
@@ -177,9 +199,21 @@ import dayjs from 'dayjs'
 const route = useRoute()
 const authStore = useAuthStore()
 
-const canEdit = computed(() => authStore.isAdmin || authStore.isInstructor)
+const isAdmin = computed(() => authStore.isAdmin)
+const canEdit = computed(() => authStore.isAdmin)
+const importingInstructor = ref(false)
+const importingSchedule = ref(false)
 
 const allTrainings = ref([])
+
+async function loadTrainings() {
+  try {
+    const res = await getTrainings({ size: -1 })
+    allTrainings.value = res.items || res || []
+  } catch {
+    allTrainings.value = []
+  }
+}
 
 // 根据角色过滤可见的培训班
 const availableTrainings = computed(() => {
@@ -234,11 +268,51 @@ async function onTrainingChange() {
   await loadTrainingDetail(selectedTrainingId.value)
 }
 
-onMounted(async () => {
+async function refreshCurrentTraining() {
+  await loadTrainings()
+  if (selectedTrainingId.value) {
+    await loadTrainingDetail(selectedTrainingId.value)
+  }
+}
+
+async function handleBeforeInstructorImport(file) {
+  if (!selectedTrainingId.value) {
+    message.warning('请先选择培训班')
+    return false
+  }
+  importingInstructor.value = true
   try {
-    const res = await getTrainings({ size: -1 })
-    allTrainings.value = res.items || res || []
-  } catch { /* ignore */ }
+    const result = await importTrainingInstructors(selectedTrainingId.value, file)
+    await refreshCurrentTraining()
+    message.success(`教官导入完成：成功 ${result.successRows || 0} 行，新增账号 ${result.createdCount || 0} 个`)
+  } catch (e) {
+    message.error(e?.message || '教官导入失败')
+  } finally {
+    importingInstructor.value = false
+  }
+  return false
+}
+
+async function handleBeforeScheduleImport(file) {
+  if (!selectedTrainingId.value) {
+    message.warning('请先选择培训班')
+    return false
+  }
+  importingSchedule.value = true
+  try {
+    const result = await importTrainingSchedule(selectedTrainingId.value, file, true)
+    await refreshCurrentTraining()
+    message.success(`课表导入完成：课程 ${result.courseCount || 0} 门，课次 ${result.scheduleCount || 0} 条`)
+  } catch (e) {
+    message.error(e?.message || '课表导入失败')
+  } finally {
+    importingSchedule.value = false
+  }
+  return false
+}
+
+onMounted(async () => {
+  await loadTrainings()
 
   // 设置初始选中
   const initId = route.params.id

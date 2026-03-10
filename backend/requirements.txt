@@ -19,3 +19,4 @@ python-dotenv
 requests
 httpx
 openai==2.6.1
+openpyxl==3.1.5

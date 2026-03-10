@@ -67,6 +67,24 @@
           <a-button size="small" type="primary" @click="goCheckin(t)" v-if="t.status === 'active' && !authStore.isStudent">
             <template #icon><QrcodeOutlined /></template>开班签到
           </a-button>
+          <a-button
+            size="small"
+            type="primary"
+            ghost
+            @click="handleStartTraining(t)"
+            v-if="t.status === 'upcoming' && (authStore.isAdmin || authStore.isInstructor)"
+          >
+            手动开班
+          </a-button>
+          <a-button
+            size="small"
+            danger
+            ghost
+            @click="handleEndTraining(t)"
+            v-if="t.status === 'active' && (authStore.isAdmin || authStore.isInstructor)"
+          >
+            手动结班
+          </a-button>
 
           <!-- 学员：已报名且进行中才能扫码 -->
           <a-button size="small" type="primary" @click="goCheckin(t)"
@@ -187,6 +205,18 @@
               <a-textarea v-model:value="trainingForm.description" :rows="3" placeholder="请简要描述本次培训的目标和内容..." :maxlength="200" show-count />
             </a-form-item>
           </a-col>
+          <a-col :span="24" v-if="!editingTraining">
+            <a-form-item label="学员Excel导入（可选）">
+              <a-upload
+                :before-upload="handleStudentImportBeforeUpload"
+                :show-upload-list="false"
+                accept=".xlsx"
+              >
+                <a-button>选择学员名单文件</a-button>
+              </a-upload>
+              <div v-if="studentImportFileName" style="margin-top: 8px; color: #666;">已选择：{{ studentImportFileName }}</div>
+            </a-form-item>
+          </a-col>
         </a-row>
       </a-form>
     </a-modal>
@@ -199,7 +229,15 @@ import { useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import { PlusOutlined, CalendarOutlined, TeamOutlined, UserOutlined, EnvironmentOutlined, QrcodeOutlined, EllipsisOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
-import { getTrainings, createTraining as apiCreateTraining, updateTraining as apiUpdateTraining, deleteTraining as apiDeleteTraining } from '@/api/training'
+import {
+  getTrainings,
+  createTraining as apiCreateTraining,
+  updateTraining as apiUpdateTraining,
+  deleteTraining as apiDeleteTraining,
+  startTraining as apiStartTraining,
+  endTraining as apiEndTraining,
+  importTrainingStudents,
+} from '@/api/training'
 import { getUsers } from '@/api/user'
 
 const router = useRouter()
@@ -210,6 +248,8 @@ const searchText = ref('')
 const showCreateModal = ref(false)
 const editingTraining = ref(null)
 const instructorList = ref([])
+const studentImportFile = ref(null)
+const studentImportFileName = ref('')
 
 const statusLabels = { active: '进行中', upcoming: '未开始', ended: '已结束' }
 
@@ -288,9 +328,17 @@ const onInstructorChange = (userId) => {
   if (inst) trainingForm.instructorName = inst.name
 }
 
+const handleStudentImportBeforeUpload = (file) => {
+  studentImportFile.value = file
+  studentImportFileName.value = file.name
+  return false
+}
+
 const resetForm = () => {
   Object.assign(trainingForm, { name: '', type: 'basic', capacity: 30, startDate: '', endDate: '', location: '', instructorId: null, instructorName: '', description: '' })
   trainingFormDates.value = [null, null]
+  studentImportFile.value = null
+  studentImportFileName.value = ''
   editingTraining.value = null
   showCreateModal.value = false
 }
@@ -321,8 +369,15 @@ const handleSubmitTraining = async () => {
       await apiUpdateTraining(editingTraining.value.id, { ...trainingForm })
       message.success('培训班信息已更新')
     } else {
-      await apiCreateTraining({ ...trainingForm })
-      message.success('培训班创建成功')
+      const created = await apiCreateTraining({ ...trainingForm })
+      if (studentImportFile.value) {
+        const importResult = await importTrainingStudents(created.id, studentImportFile.value)
+        message.success(
+          `培训班创建成功，学员导入完成（新增账号 ${importResult.createdCount || 0}，导入学员 ${importResult.enrollmentAdded || 0}）`
+        )
+      } else {
+        message.success('培训班创建成功')
+      }
     }
     resetForm()
     fetchTrainings()
@@ -348,6 +403,26 @@ const handleDelete = (t) => {
       }
     },
   })
+}
+
+const handleStartTraining = async (t) => {
+  try {
+    await apiStartTraining(t.id)
+    message.success('已手动开班')
+    fetchTrainings()
+  } catch (e) {
+    message.error(e.message || '开班失败')
+  }
+}
+
+const handleEndTraining = async (t) => {
+  try {
+    await apiEndTraining(t.id)
+    message.success('已手动结班')
+    fetchTrainings()
+  } catch (e) {
+    message.error(e.message || '结班失败')
+  }
 }
 
 const goDetail = (t) => router.push({ name: 'TrainingDetail', params: { id: t.id } })

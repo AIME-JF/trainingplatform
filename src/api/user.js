@@ -51,3 +51,12 @@ export function getPoliceTypes() {
 export function updateUserPoliceTypes(id, policeTypeIds) {
   return request.put(`/users/${id}/police-types`, { police_type_ids: policeTypeIds })
 }
+
+export function importPoliceBase(file, defaultRole = 'student') {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('default_role', defaultRole)
+  return request.post('/users/import/police-base', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}

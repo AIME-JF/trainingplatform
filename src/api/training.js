@@ -20,6 +20,14 @@ export function deleteTraining(id) {
   return request.delete(`/trainings/${id}`)
 }
 
+export function startTraining(id) {
+  return request.post(`/trainings/${id}/start`)
+}
+
+export function endTraining(id) {
+  return request.post(`/trainings/${id}/end`)
+}
+
 export function getStudents(id, params) {
   return request.get(`/trainings/${id}/students`, { params })
 }
@@ -66,4 +74,29 @@ export function getTrainingResources(trainingId) {
 
 export function unbindTrainingResource(trainingId, resourceId) {
   return request.delete(`/trainings/${trainingId}/resources/${resourceId}`)
+}
+
+export function importTrainingStudents(trainingId, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post(`/trainings/${trainingId}/import/students`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export function importTrainingInstructors(trainingId, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post(`/trainings/${trainingId}/import/instructors`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export function importTrainingSchedule(trainingId, file, replaceExisting = true) {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('replace_existing', String(replaceExisting))
+  return request.post(`/trainings/${trainingId}/import/schedule`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
 }

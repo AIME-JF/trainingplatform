@@ -60,6 +60,18 @@ class TrainingController:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="培训班不存在")
         return True
 
+    def start_training(self, training_id: int):
+        result = self.service.start_training(training_id)
+        if not result:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="培训班不存在")
+        return result
+
+    def end_training(self, training_id: int):
+        result = self.service.end_training(training_id)
+        if not result:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="培训班不存在")
+        return result
+
     def get_training_students(self, training_id: int, page: int = 1, size: int = 10):
         return self.service.get_training_students(training_id, page, size)
 

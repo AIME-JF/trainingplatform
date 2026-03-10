@@ -3,7 +3,7 @@
 """
 from typing import Optional, List
 from datetime import date
-from fastapi import APIRouter, Depends, Query, Body
+from fastapi import APIRouter, Depends, Query, Body, UploadFile, File, Form, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -17,8 +17,19 @@ from app.schemas import (
 )
 from app.controllers import TrainingController
 from app.services.training import TrainingService
+from app.utils.authz import is_admin_user, is_instructor_user
 
 router = APIRouter(prefix="/trainings", tags=["培训管理"])
+
+
+def _require_admin(db: Session, user_id: int):
+    if not is_admin_user(db, user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅系统管理员可执行该操作")
+
+
+def _require_admin_or_instructor(db: Session, user_id: int):
+    if not (is_admin_user(db, user_id) or is_instructor_user(db, user_id)):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅管理员或教官可执行该操作")
 
 
 @router.get("", response_model=StandardResponse[PaginatedResponse[TrainingListResponse]], summary="培训列表")
@@ -69,6 +80,8 @@ def update_training(
     db: Session = Depends(get_db)
 ):
     """更新培训班"""
+    if data.courses is not None and not is_admin_user(db, current_user.user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="调课权限仅限系统管理员")
     controller = TrainingController(db)
     result = controller.update_training(training_id, data)
     return StandardResponse(data=result)
@@ -84,6 +97,30 @@ def delete_training(
     controller = TrainingController(db)
     controller.delete_training(training_id)
     return StandardResponse(message="删除成功")
+
+
+@router.post("/{training_id}/start", response_model=StandardResponse[TrainingResponse], summary="手动开班")
+def start_training(
+    training_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = TrainingController(db)
+    result = controller.start_training(training_id)
+    return StandardResponse(data=result)
+
+
+@router.post("/{training_id}/end", response_model=StandardResponse[TrainingResponse], summary="手动结班")
+def end_training(
+    training_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = TrainingController(db)
+    result = controller.end_training(training_id)
+    return StandardResponse(data=result)
 
 
 @router.get("/{training_id}/students",
@@ -111,6 +148,64 @@ def get_schedule(
     """获取周计划"""
     controller = TrainingController(db)
     data = controller.get_schedule(training_id)
+    return StandardResponse(data=data)
+
+
+@router.post("/{training_id}/import/students", response_model=StandardResponse, summary="批量导入学员并自动开户")
+async def import_students(
+    training_id: int,
+    file: UploadFile = File(...),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="导入文件为空")
+    service = TrainingService(db)
+    try:
+        data = service.import_training_students(training_id, file_bytes)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return StandardResponse(data=data)
+
+
+@router.post("/{training_id}/import/instructors", response_model=StandardResponse, summary="批量导入教官")
+async def import_instructors(
+    training_id: int,
+    file: UploadFile = File(...),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, current_user.user_id)
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="导入文件为空")
+    service = TrainingService(db)
+    try:
+        data = service.import_training_instructors(training_id, file_bytes)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return StandardResponse(data=data)
+
+
+@router.post("/{training_id}/import/schedule", response_model=StandardResponse, summary="批量导入课表")
+async def import_schedule(
+    training_id: int,
+    file: UploadFile = File(...),
+    replace_existing: bool = Form(True),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, current_user.user_id)
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="导入文件为空")
+    service = TrainingService(db)
+    try:
+        data = service.import_training_schedule(training_id, file_bytes, replace_existing=replace_existing)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     return StandardResponse(data=data)
 
 

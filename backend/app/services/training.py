@@ -17,6 +17,7 @@ from app.schemas.training import (
 )
 from app.schemas.resource import TrainingResourceBindRequest, ResourceListItemResponse
 from app.schemas import PaginatedResponse
+from app.services.batch_import import BatchImportService
 from logger import logger
 
 
@@ -49,8 +50,8 @@ class TrainingService:
 
         items: List[TrainingListResponse] = []
         for t in trainings:
-            dynamic_status = self._resolve_training_status(t)
-            if status and dynamic_status != status:
+            current_status = t.status or 'upcoming'
+            if status and current_status != status:
                 continue
 
             student_ids = [e.user_id for e in (t.enrollments or []) if e.status == 'approved']
@@ -60,8 +61,8 @@ class TrainingService:
                 id=t.id,
                 name=t.name,
                 type=t.type,
-                status=dynamic_status,
-                progress_percent=self._calculate_progress_percent(t, dynamic_status),
+                status=current_status,
+                progress_percent=self._calculate_progress_percent(t, current_status),
                 start_date=t.start_date,
                 end_date=t.end_date,
                 location=t.location,
@@ -209,6 +210,40 @@ class TrainingService:
         self.db.commit()
         logger.info(f"删除培训班: {training_id}")
         return True
+
+    def start_training(self, training_id: int) -> Optional[TrainingResponse]:
+        """手动开班"""
+        training = self.db.query(Training).filter(Training.id == training_id).first()
+        if not training:
+            return None
+        training.status = 'active'
+        self.db.commit()
+        self.db.refresh(training)
+        logger.info(f"手动开班: {training_id}")
+        return self._to_response(training)
+
+    def end_training(self, training_id: int) -> Optional[TrainingResponse]:
+        """手动结班"""
+        training = self.db.query(Training).filter(Training.id == training_id).first()
+        if not training:
+            return None
+        training.status = 'ended'
+        self.db.commit()
+        self.db.refresh(training)
+        logger.info(f"手动结班: {training_id}")
+        return self._to_response(training)
+
+    def import_training_students(self, training_id: int, file_bytes: bytes) -> dict:
+        importer = BatchImportService(self.db)
+        return importer.import_training_students(training_id, file_bytes)
+
+    def import_training_instructors(self, training_id: int, file_bytes: bytes) -> dict:
+        importer = BatchImportService(self.db)
+        return importer.import_training_instructors(training_id, file_bytes)
+
+    def import_training_schedule(self, training_id: int, file_bytes: bytes, replace_existing: bool = True) -> dict:
+        importer = BatchImportService(self.db)
+        return importer.import_training_schedule(training_id, file_bytes, replace_existing=replace_existing)
 
     def get_training_students(
         self, training_id: int, page: int = 1, size: int = 10
@@ -512,14 +547,14 @@ class TrainingService:
         if training and training.courses:
             courses = [TrainingCourseResponse.model_validate(c) for c in training.courses]
 
-        dynamic_status = self._resolve_training_status(training)
+        current_status = training.status or 'upcoming'
 
         return TrainingResponse(
             id=training.id,
             name=training.name,
             type=training.type,
-            status=dynamic_status,
-            progress_percent=self._calculate_progress_percent(training, dynamic_status),
+            status=current_status,
+            progress_percent=self._calculate_progress_percent(training, current_status),
             start_date=training.start_date,
             end_date=training.end_date,
             location=training.location,
@@ -552,18 +587,8 @@ class TrainingService:
             enroll_time=enrollment.enroll_time
         )
 
-    def _resolve_training_status(self, training: Training) -> str:
-        today = date.today()
-        if training.start_date and today < training.start_date:
-            return 'upcoming'
-        if training.end_date and today > training.end_date:
-            return 'ended'
-        if training.start_date and training.end_date and training.start_date <= today <= training.end_date:
-            return 'active'
-        return training.status or 'upcoming'
-
     def _calculate_progress_percent(self, training: Training, resolved_status: Optional[str] = None) -> int:
-        status = resolved_status or self._resolve_training_status(training)
+        status = resolved_status or training.status or 'upcoming'
         if status == 'upcoming':
             return 0
         if status == 'ended':

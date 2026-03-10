@@ -2,7 +2,10 @@
   <div class="user-manage-page">
     <div class="page-header">
       <h2>用户管理</h2>
-      <a-button type="primary" @click="openCreateModal"><PlusOutlined /> 新增用户</a-button>
+      <a-space>
+        <a-button @click="openImportModal">用户导入</a-button>
+        <a-button type="primary" @click="openCreateModal"><PlusOutlined /> 新增用户</a-button>
+      </a-space>
     </div>
 
     <a-card :bordered="false" style="margin-bottom: 16px">
@@ -53,6 +56,36 @@
         </template>
       </a-table>
     </a-card>
+
+    <!-- 用户导入弹窗 -->
+    <a-modal
+      v-model:open="importModalVisible"
+      title="用户导入"
+      centered
+      ok-text="开始导入"
+      cancel-text="取消"
+      :confirm-loading="importingPoliceBase"
+      @ok="handleImportSubmit"
+      @cancel="handleImportCancel"
+      :destroy-on-close="true"
+    >
+      <a-upload-dragger
+        v-model:fileList="importFileList"
+        :before-upload="beforeImportUpload"
+        :max-count="1"
+        accept=".xlsx"
+      >
+        <p class="ant-upload-drag-icon">
+          <InboxOutlined style="font-size: 26px; color: #003087;" />
+        </p>
+        <p>拖动到此上传</p>
+        <p class="upload-hint">或点击选择 Excel 文件（仅支持 .xlsx）</p>
+      </a-upload-dragger>
+
+      <div class="import-modal-actions">
+        <a-button type="link" @click="downloadImportTemplate">下载模板</a-button>
+      </div>
+    </a-modal>
 
     <!-- 新增/编辑弹窗 -->
     <a-modal v-model:open="modalVisible" :title="isEdit ? '编辑用户' : '新增用户'" :confirm-loading="submitting" @ok="handleSubmit" @cancel="modalVisible = false">
@@ -129,9 +162,9 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue'
-import { PlusOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, InboxOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
-import { getUsers, createUser, updateUser, updateUserRoles, updateUserDepartments, updateUserPoliceTypes, resetPassword, deleteUser, getRoles, getDepartments, getPoliceTypes, createDepartment } from '@/api/user'
+import { getUsers, createUser, updateUser, updateUserRoles, updateUserDepartments, updateUserPoliceTypes, resetPassword, deleteUser, getRoles, getDepartments, getPoliceTypes, createDepartment, importPoliceBase } from '@/api/user'
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -140,6 +173,9 @@ const filterRole = ref(undefined)
 const userList = ref([])
 const roleList = ref([])
 const departmentList = ref([])
+const importingPoliceBase = ref(false)
+const importModalVisible = ref(false)
+const importFileList = ref([])
 const departmentOptions = computed(() => departmentList.value.map(d => ({ value: d.id, label: d.name })))
 
 const policeTypeList = ref([])
@@ -225,6 +261,54 @@ async function loadPoliceTypes() {
     const res = await getPoliceTypes()
     policeTypeList.value = Array.isArray(res) ? res : (res.items || res?.data?.items || res || [])
   } catch { /* ignore */ }
+}
+
+function openImportModal() {
+  importModalVisible.value = true
+}
+
+function handleImportCancel() {
+  importModalVisible.value = false
+  importFileList.value = []
+}
+
+function beforeImportUpload() {
+  return false
+}
+
+function downloadImportTemplate() {
+  const baseUrl = import.meta.env.BASE_URL || '/'
+  const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`
+  const link = document.createElement('a')
+  link.href = `${normalizedBase}templates/user-import-template.xlsx`
+  link.download = '用户导入模板.xlsx'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+}
+
+async function handleImportSubmit() {
+  const selected = importFileList.value[0]
+  const file = selected?.originFileObj || selected
+  if (!file) {
+    message.warning('请先选择导入文件')
+    return
+  }
+
+  importingPoliceBase.value = true
+  try {
+    const result = await importPoliceBase(file, 'student')
+    message.success(
+      `导入完成：成功 ${result.successRows || 0} 行，新增账号 ${result.createdCount || 0} 个，更新 ${result.updatedCount || 0} 个`
+    )
+    importModalVisible.value = false
+    importFileList.value = []
+    loadUsers()
+  } catch (e) {
+    message.error(e?.message || '用户导入失败')
+  } finally {
+    importingPoliceBase.value = false
+  }
 }
 
 function handleTableChange(pag) {
@@ -392,4 +476,6 @@ async function handleResetPwd() {
 .user-manage-page { padding: 0; }
 .page-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .page-header h2 { margin: 0; font-size: 20px; font-weight: 600; color: var(--police-primary); }
+.upload-hint { font-size: 12px; color: #999; }
+.import-modal-actions { margin-top: 12px; text-align: left; }
 </style>

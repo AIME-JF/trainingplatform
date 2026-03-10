@@ -36,7 +36,7 @@
               <div class="course-schedule">
                 <div class="section-header">
                   <h4>课程安排</h4>
-                  <a-button size="small" type="primary" @click="openCourseModal()" v-if="canEdit">
+                  <a-button size="small" type="primary" @click="openCourseModal()" v-if="canScheduleEdit">
                     <template #icon><PlusOutlined /></template>添加课程
                   </a-button>
                 </div>
@@ -78,7 +78,7 @@
                     <span class="ci-hours">{{ c.hours }}课时</span>
                     <a-tag :color="c.type === 'theory' ? 'blue' : 'green'" size="small">{{ c.type === 'theory' ? '理论' : '实操' }}</a-tag>
                     <span class="ci-hours ci-rate">签到率: {{ c.checkinRate || 100 }}%</span>
-                    <template v-if="canEdit">
+                    <template v-if="canScheduleEdit">
                       <a-button size="small" type="link" @click="openCourseModal(idx)">编辑</a-button>
                       <a-button size="small" type="link" danger @click="removeCourse(idx)">删除</a-button>
                     </template>
@@ -540,6 +540,7 @@ const activeTab = ref('overview')
 const studentSearch = ref('')
 const selectedSchedules = reactive({}) // { courseIdx: scheduleIdx }
 const canEdit = computed(() => authStore.isAdmin || authStore.isInstructor)
+const canScheduleEdit = computed(() => authStore.isAdmin)
 
 const trainingResources = ref([])
 const resourceCandidates = ref([])

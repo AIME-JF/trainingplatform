@@ -2,7 +2,7 @@
 用户管理路由
 """
 from typing import Optional, List
-from fastapi import APIRouter, Depends, Query, Body
+from fastapi import APIRouter, Depends, Query, Body, UploadFile, File, Form, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -14,9 +14,16 @@ from app.models import User, Role
 from app.models.department import Department
 from app.models.police_type import PoliceType
 from app.services.auth import auth_service
+from app.services.batch_import import BatchImportService
+from app.utils.authz import is_admin_user
 from logger import logger
 
 router = APIRouter(prefix="/users", tags=["用户管理"])
+
+
+def _require_admin(db: Session, user_id: int):
+    if not is_admin_user(db, user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅系统管理员可执行该操作")
 
 
 @router.get("", response_model=StandardResponse[PaginatedResponse[UserSimpleResponse]], summary="用户列表")
@@ -58,6 +65,26 @@ def get_users(
         total=total,
         items=items
     ))
+
+
+@router.post("/import/police-base", response_model=StandardResponse, summary="全员底库导入")
+async def import_police_base(
+    file: UploadFile = File(...),
+    default_role: str = Form("student"),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin(db, current_user.user_id)
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="导入文件为空")
+
+    importer = BatchImportService(db)
+    try:
+        data = importer.import_police_base(file_bytes=file_bytes, default_role_code=default_role)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return StandardResponse(data=data)
 
 
 @router.get("/{user_id}", response_model=StandardResponse[UserSimpleResponse], summary="用户详情")
