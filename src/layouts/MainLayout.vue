@@ -386,6 +386,7 @@ function handleLogout() {
 .sidebar {
   background: var(--police-sidebar-bg) !important;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
 }
 
 .sidebar-logo {
@@ -418,6 +419,18 @@ function handleLogout() {
   background: transparent !important;
   border: none !important;
   margin-top: 8px;
+  height: calc(var(--app-vh, 1vh) * 100 - 72px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  padding-bottom: 8px;
+}
+
+.sidebar-menu::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }
 
 :deep(.ant-menu-item),

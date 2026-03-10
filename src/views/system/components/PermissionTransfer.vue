@@ -42,12 +42,45 @@ const props = defineProps({
 
 const emit = defineEmits(['update:targetKeys'])
 
+function compareByCode(a, b) {
+  return String(a?.code || '').localeCompare(
+    String(b?.code || ''),
+    'zh-Hans-CN',
+    { numeric: true, sensitivity: 'base' }
+  )
+}
+
+const sortedPermissions = computed(() =>
+  [...(props.permissions || [])].sort(compareByCode)
+)
+
+const keyOrderMap = computed(() => {
+  const orderMap = new Map()
+  sortedPermissions.value.forEach((permission, index) => {
+    orderMap.set(String(permission?.id), index)
+  })
+  return orderMap
+})
+
+function sortTargetKeys(keys) {
+  return [...(keys || [])]
+    .map((key) => String(key))
+    .sort((a, b) => {
+      const aOrder = keyOrderMap.value.get(a)
+      const bOrder = keyOrderMap.value.get(b)
+      if (aOrder === undefined && bOrder === undefined) return a.localeCompare(b)
+      if (aOrder === undefined) return 1
+      if (bOrder === undefined) return -1
+      return aOrder - bOrder
+    })
+}
+
 const normalizedTargetKeys = computed(() =>
-  (props.targetKeys || []).map((key) => String(key))
+  sortTargetKeys(props.targetKeys)
 )
 
 const transferDataSource = computed(() =>
-  (props.permissions || []).map((permission) => {
+  sortedPermissions.value.map((permission) => {
     const code = permission?.code || '-'
     const name = permission?.name || permission?.description || '-'
     return {
@@ -74,6 +107,6 @@ function filterPermissionOption(inputValue, option) {
 }
 
 function handleTransferChange(nextTargetKeys) {
-  emit('update:targetKeys', nextTargetKeys)
+  emit('update:targetKeys', sortTargetKeys(nextTargetKeys))
 }
 </script>
