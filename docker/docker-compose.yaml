@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: ccr.ccs.tencentyun.com/z5882852/postgres:15-alpine
+    image: postgres:18-alpine
     container_name: police-training-postgres
     restart: unless-stopped
     env_file:
@@ -9,6 +9,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB}
+      PGDATA: /var/lib/postgresql/data/pgdata
       TZ: Asia/Shanghai
     volumes:
       - ./volumes/postgres/data:/var/lib/postgresql/data
@@ -19,12 +20,12 @@ services:
       retries: 20
 
   redis:
-    image: ccr.ccs.tencentyun.com/z5882852/redis
+    image: redis:7-alpine
     container_name: police-training-redis
     restart: unless-stopped
     command: redis-server --appendonly yes
     volumes:
-      - ./volumes/redis/data:/data
+      - ./volumes/redis/data-v2:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

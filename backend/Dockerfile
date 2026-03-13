@@ -1,4 +1,4 @@
-FROM ccr.ccs.tencentyun.com/z5882852/python:3.12-slim
+FROM python:3.12-slim
 
 # 设置工作目录
 WORKDIR /app
@@ -29,7 +29,7 @@ EXPOSE 8001
 
 # 设置启动脚本权限
 COPY docker/entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+RUN sed -i 's/\r$//' /app/entrypoint.sh && chmod +x /app/entrypoint.sh
 
 # 设置启动命令
 ENTRYPOINT ["/app/entrypoint.sh"]

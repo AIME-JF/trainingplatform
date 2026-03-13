@@ -402,11 +402,13 @@ const currentScheduleItems = computed(() => {
             
             items.push({
               id: `${selectedTraining.value.id}-c${cIdx}-s${sIdx}`,
+              courseId: c.id,
               courseIdx: cIdx,
               scheduleIdx: sIdx,
               day: dayMatch.weekday,
               dayName: dayMatch.name,
               fullDate: schDateStr,
+              sourceTimeRange: sch.timeRange || '',
               title: c.name,
               type: c.type === 'practice' ? 'skill' : 'theory',
               timeStart,
@@ -434,6 +436,45 @@ function onDragStart(e, item) {
   e.dataTransfer.effectAllowed = 'move'
 }
 
+function findScheduleReference(item) {
+  const training = selectedTraining.value
+  const courses = training?.courses
+  if (!training || !Array.isArray(courses) || !item) {
+    return null
+  }
+
+  const course =
+    courses.find(c => c?.id === item.courseId) ??
+    courses[item.courseIdx]
+
+  if (!course || !Array.isArray(course.schedules)) {
+    return null
+  }
+
+  let scheduleIdx = Number.isInteger(item.scheduleIdx) ? item.scheduleIdx : -1
+  let scheduleRef = course.schedules[scheduleIdx]
+
+  const matchesOriginal =
+    scheduleRef &&
+    scheduleRef.date === item.fullDate &&
+    (scheduleRef.timeRange || '') === (item.sourceTimeRange || '')
+
+  if (!matchesOriginal) {
+    scheduleIdx = course.schedules.findIndex(s =>
+      s &&
+      s.date === item.fullDate &&
+      (s.timeRange || '') === (item.sourceTimeRange || '')
+    )
+    scheduleRef = scheduleIdx >= 0 ? course.schedules[scheduleIdx] : null
+  }
+
+  if (!scheduleRef) {
+    return null
+  }
+
+  return { course, scheduleRef, scheduleIdx }
+}
+
 async function onDrop(e, targetDay) {
   if (!draggedItem.value) return
   const item = draggedItem.value
@@ -456,9 +497,20 @@ async function onDrop(e, targetDay) {
   const newEndString = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`
   
   // 静默更新训练班的排课数据并触发重渲染
-  const scheduleRef = selectedTraining.value.courses[item.courseIdx].schedules[item.scheduleIdx]
+  const scheduleState = findScheduleReference(item)
+  if (!scheduleState) {
+    draggedItem.value = null
+    message.warning('当前课表数据已更新，请刷新后重试')
+    await refreshCurrentTraining()
+    return
+  }
+
+  const { scheduleRef } = scheduleState
   scheduleRef.date = targetDay.fullDate
   scheduleRef.timeRange = `${newStartString}~${newEndString}`
+  item.fullDate = targetDay.fullDate
+  item.timeStart = newStartString
+  item.sourceTimeRange = scheduleRef.timeRange
 
   triggerUpdate.value++
   draggedItem.value = null
@@ -553,14 +605,20 @@ async function saveEditItem() {
 
   editItemSaving.value = true
   try {
-    // 更新 courses 中对应的 schedule
-    const scheduleRef = selectedTraining.value.courses[item.courseIdx].schedules[item.scheduleIdx]
-    scheduleRef.timeRange = `${newStart}~${newEnd}`
+    const scheduleState = findScheduleReference(item)
+    if (!scheduleState) {
+      message.warning('当前课表数据已更新，请刷新后重试')
+      await refreshCurrentTraining()
+      return
+    }
 
-    // 更新课程名称和类型（写回 course 层）
-    const courseRef = selectedTraining.value.courses[item.courseIdx]
-    courseRef.name = form.title
-    courseRef.type = form.type === 'skill' ? 'practice' : 'theory'
+    const { scheduleRef, course } = scheduleState
+    scheduleRef.timeRange = `${newStart}~${newEnd}`
+    item.timeStart = newStart
+    item.sourceTimeRange = scheduleRef.timeRange
+
+    course.name = form.title
+    course.type = form.type === 'skill' ? 'practice' : 'theory'
 
     // 更新 location（存在 training 层，需要更新 selectedTraining）
     if (form.location && form.location !== selectedTraining.value.location) {

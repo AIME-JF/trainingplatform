@@ -1,4 +1,4 @@
-FROM ccr.ccs.tencentyun.com/z5882852/node:22-alpine3.21 AS builder
+FROM node:22-alpine AS builder
 
 WORKDIR /app
 
@@ -14,7 +14,7 @@ COPY . .
 RUN pnpm build
 
 
-FROM ccr.ccs.tencentyun.com/z5882852/nginx
+FROM nginx:1.27-alpine
 
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist /usr/share/nginx/html/trainingplatform
