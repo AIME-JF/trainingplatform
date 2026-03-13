@@ -118,7 +118,11 @@ redis_client = RedisClient()
 
 
 def init_db():
-    """Create any declared tables that are still missing."""
+    """Create declared tables that are still missing.
+
+    This only fills in absent tables. Existing tables must be evolved through
+    Alembic migrations instead of `create_all()`.
+    """
     try:
         import app.models  # noqa: F401
 

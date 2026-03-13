@@ -16,6 +16,7 @@ from logger import logger
 
 # JWT Bearer Token认证
 security = HTTPBearer()
+optional_security = HTTPBearer(auto_error=False)
 
 
 def get_current_user(
@@ -169,7 +170,7 @@ def extract_route_permissions(app) -> list:
 
 # 可选的用户依赖项（允许未认证用户访问）
 def get_current_user_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(optional_security),
     db: Session = Depends(get_db)
 ) -> Optional[TokenData]:
     """获取当前用户信息（可选）"""

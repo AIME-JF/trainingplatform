@@ -8,8 +8,14 @@ from .department import Department, user_departments
 from .police_type import PoliceType, user_police_types
 from .system import Config, ConfigGroup, ConfigFormat
 from .course import Course, Chapter, CourseNote, CourseProgress, CourseQA
-from .training import Training, TrainingCourse, Enrollment, CheckinRecord, ScheduleItem
-from .exam import Question, Exam, ExamQuestion, ExamRecord
+from .training import (
+    Training, TrainingCourse, Enrollment, CheckinRecord, ScheduleItem, TrainingHistory
+)
+from .exam import (
+    Question, ExamPaper, ExamPaperQuestion,
+    AdmissionExam, AdmissionExamRecord,
+    Exam, ExamQuestion, ExamRecord,
+)
 from .certificate import Certificate
 from .media import MediaFile
 from .notice import Notice
@@ -41,9 +47,11 @@ __all__ = [
     # 课程相关
     "Course", "Chapter", "CourseNote", "CourseProgress", "CourseQA",
     # 培训相关
-    "Training", "TrainingCourse", "Enrollment", "CheckinRecord", "ScheduleItem",
+    "Training", "TrainingCourse", "Enrollment", "CheckinRecord", "ScheduleItem", "TrainingHistory",
     # 考试相关
-    "Question", "Exam", "ExamQuestion", "ExamRecord",
+    "Question", "ExamPaper", "ExamPaperQuestion",
+    "AdmissionExam", "AdmissionExamRecord",
+    "Exam", "ExamQuestion", "ExamRecord",
     # 证书
     "Certificate",
     # 文件

@@ -1,94 +1,76 @@
 <template>
   <div class="enroll-page">
-    <!-- 培训班信息头部 -->
-    <div class="training-header" v-if="training">
-      <div class="header-badge">
-        <a-tag color="green">报名中</a-tag>
-      </div>
-      <h2 class="training-title">{{ training.name }}</h2>
-      <div class="training-meta-row">
+    <div v-if="training" class="training-header">
+      <a-tag :color="training.publishStatus === 'published' ? 'blue' : 'default'">
+        {{ training.publishStatus === 'published' ? '报名开放中' : '未发布' }}
+      </a-tag>
+      <h2>{{ training.name }}</h2>
+      <div class="meta-row">
         <span><CalendarOutlined /> {{ training.startDate }} 至 {{ training.endDate }}</span>
         <span><EnvironmentOutlined /> {{ training.location }}</span>
-        <span><UserOutlined /> 主讲教官：{{ training.instructorName }}</span>
+        <span><UserOutlined /> {{ training.instructorName || '未指定' }}</span>
       </div>
-      <!-- 名额进度 -->
-      <div class="quota-section">
-        <div class="quota-label">
-          <span>名额情况</span>
-          <span class="quota-nums"><b>{{ enrolledCount }}</b> / {{ training.capacity }} 人已录取</span>
-        </div>
-        <a-progress :percent="quotaPercent" :show-info="false" stroke-color="#003087" />
-        <div class="quota-tags">
-          <a-tag color="green">已录取 {{ enrolledCount }}</a-tag>
-          <a-tag color="default">剩余名额 {{ Math.max(0, training.capacity - enrolledCount) }}</a-tag>
-        </div>
+      <div class="rule-panel">
+        <div>报名窗口：{{ formatWindow(training.enrollmentStartAt, training.enrollmentEndAt) }}</div>
+        <div>准入考试：{{ training.admissionExamTitle || '无' }}</div>
+        <div>名单状态：{{ training.isLocked ? '已锁定' : '未锁定' }}</div>
       </div>
     </div>
 
-    <!-- 已提交或已在班级状态 -->
-    <div v-if="submitted || isAlreadyInClass || hasEnrolled" class="submit-success">
-      <a-result
-        :status="isAlreadyInClass ? 'success' : 'info'"
-        :title="isAlreadyInClass ? '您已是该班级成员' : '报名申请已提交或正在审核中！'"
-        :sub-title="isAlreadyInClass ? '您已无需重复报名，快去看看课程日程吧！' : '您的报名申请正在处理中，审核结果将通过系统消息通知您，并且可以在我的培训中查看，请耐心等待。'"
-      >
-        <template #extra>
-          <a-button type="primary" @click="$router.push('/training')">返回培训列表</a-button>
-          <a-button @click="$router.push('/')">回到首页</a-button>
-        </template>
-      </a-result>
-    </div>
+    <a-result
+      v-if="submitted"
+      :status="submitStatus"
+      :title="submitTitle"
+      :sub-title="submitSubtitle"
+    >
+      <template #extra>
+        <a-button type="primary" @click="$router.push('/training')">返回培训列表</a-button>
+      </template>
+    </a-result>
 
-    <!-- 报名表单 -->
     <div v-else class="enroll-form-card">
-      <h3 class="form-title">填写报名信息</h3>
-      <a-form :model="formData" layout="vertical" :label-col="{ span: 24 }">
+      <a-alert v-if="training?.admissionExamTitle" type="info" show-icon style="margin-bottom:16px" :message="`该培训班要求先通过：${training.admissionExamTitle}`" />
+      <a-form :model="formData" layout="vertical">
         <a-row :gutter="16">
-          <a-col :xs="24" :sm="12">
+          <a-col :span="12">
             <a-form-item label="姓名">
               <a-input v-model:value="formData.name" disabled />
             </a-form-item>
           </a-col>
-          <a-col :xs="24" :sm="12">
+          <a-col :span="12">
             <a-form-item label="警号">
               <a-input v-model:value="formData.policeId" disabled />
             </a-form-item>
           </a-col>
-          <a-col :xs="24" :sm="12">
+          <a-col :span="12">
             <a-form-item label="所属单位">
               <a-input v-model:value="formData.unit" disabled />
             </a-form-item>
           </a-col>
-          <a-col :xs="24" :sm="12">
-            <a-form-item label="联系电话">
-              <a-input v-model:value="formData.phone" placeholder="请输入联系电话" />
+          <a-col :span="12">
+            <a-form-item label="联系电话" required>
+              <a-input v-model:value="formData.phone" />
             </a-form-item>
           </a-col>
           <a-col :span="24">
-            <a-form-item label="参训目的（选填）">
-              <a-textarea v-model:value="formData.reason" :rows="3" placeholder="请简要说明参训原因或目标..." :maxlength="200" show-count />
+            <a-form-item label="参训说明">
+              <a-textarea v-model:value="formData.note" :rows="3" />
             </a-form-item>
           </a-col>
           <a-col :span="24">
-            <a-form-item label="是否有住宿需求">
-              <a-radio-group v-model:value="formData.needAccom">
-                <a-radio value="yes">需要住宿</a-radio>
-                <a-radio value="no">不需要（自行解决）</a-radio>
+            <a-form-item label="住宿需求">
+              <a-radio-group v-model:value="formData.needAccommodation">
+                <a-radio :value="true">需要住宿</a-radio>
+                <a-radio :value="false">不需要</a-radio>
               </a-radio-group>
             </a-form-item>
           </a-col>
         </a-row>
 
-        <div class="form-agreement">
-          <a-checkbox v-model:checked="agreed">
-            我已阅读并同意<a>《培训班报名须知》</a>，确认参训期间遵守培训纪律
-          </a-checkbox>
-        </div>
-
-        <div class="form-actions">
+        <div class="actions">
           <a-button @click="$router.back()">返回</a-button>
-          <a-button type="primary" :loading="submitting" :disabled="!agreed || isFull" @click="handleSubmit">
-            {{ isFull ? '名额已满' : '提交报名申请' }}
+          <a-button type="primary" :loading="submitting" :disabled="!canSubmit" @click="handleSubmit">
+            {{ disabledReason || '提交报名申请' }}
           </a-button>
         </div>
       </a-form>
@@ -97,109 +79,98 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { CalendarOutlined, EnvironmentOutlined, UserOutlined } from '@ant-design/icons-vue'
-import { getTraining, getEnrollments, enroll as apiEnroll } from '@/api/training'
+import { enroll, getEnrollments, getTraining } from '@/api/training'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const authStore = useAuthStore()
-
 const trainingId = route.params.id
-const training = ref(null)
 
+const training = ref(null)
 const submitted = ref(false)
 const submitting = ref(false)
-const agreed = ref(false)
-const hasPendingEnrollment = ref(false)
+const submitStatus = ref('info')
+const submitTitle = ref('')
+const submitSubtitle = ref('')
 
-const u = authStore.currentUser || {}
-
-onMounted(async () => {
-  try {
-    const [tData, enrollmentData] = await Promise.all([
-      getTraining(trainingId),
-      getEnrollments(trainingId, { size: -1 })
-    ])
-    training.value = tData
-
-    const myEnrollment = (enrollmentData.items || enrollmentData || []).find((item) => String(item.userId) === String(u.id))
-    hasPendingEnrollment.value = myEnrollment?.status === 'pending'
-
-    if (isAlreadyInClass.value || hasPendingEnrollment.value) {
-      submitted.value = true
-    }
-  } catch { /* ignore */ }
-})
-
-const studentIds = computed(() => training.value?.studentIds || training.value?.students || [])
-const enrolledCount = computed(() => training.value?.enrolledCount ?? training.value?.enrolled ?? studentIds.value.length)
-const isAlreadyInClass = computed(() => studentIds.value.includes(u.id))
-const hasEnrolled = computed(() => hasPendingEnrollment.value)
-const isFull = computed(() => enrolledCount.value >= (training.value?.capacity || 0))
-const quotaPercent = computed(() => {
-  const capacity = training.value?.capacity || 0
-  if (capacity <= 0) return 0
-  return Math.round((enrolledCount.value / capacity) * 100)
-})
 const formData = ref({
-  name: u.name || '',
-  policeId: u.username || '',
-  unit: u.unit || '',
-  phone: u.phone || '',
-  reason: '',
-  needAccom: 'no',
+  name: authStore.currentUser?.name || '',
+  policeId: authStore.currentUser?.username || '',
+  unit: authStore.currentUser?.unit || '',
+  phone: authStore.currentUser?.phone || '',
+  note: '',
+  needAccommodation: false,
 })
+
+const canSubmit = computed(() => !disabledReason.value)
+const disabledReason = computed(() => {
+  if (!training.value) return '加载中'
+  if (training.value.publishStatus !== 'published') return '未发布'
+  if (training.value.isLocked) return '名单已锁定'
+  return ''
+})
+
+function formatWindow(start, end) {
+  if (!start && !end) return '未设置'
+  return `${start ? String(start).replace('T', ' ').slice(0, 16) : '即时'} ~ ${end ? String(end).replace('T', ' ').slice(0, 16) : '长期'}`
+}
+
+async function loadData() {
+  try {
+    const [trainingDetail, enrollmentResult] = await Promise.all([
+      getTraining(trainingId),
+      getEnrollments(trainingId, { size: -1 }),
+    ])
+    training.value = trainingDetail
+    const rows = enrollmentResult.items || []
+    const current = rows.find(item => String(item.userId) === String(authStore.currentUser?.id))
+    if (current) {
+      submitted.value = true
+      submitStatus.value = current.status === 'approved' ? 'success' : 'info'
+      submitTitle.value = current.status === 'approved' ? '您已被录取到该培训班' : '报名申请已提交'
+      submitSubtitle.value = current.status === 'approved' ? '可直接进入培训班完成签到、签退和评课。' : '审核结果请在报名管理或培训列表中查看。'
+    }
+  } catch (error) {
+    message.error(error.message || '加载报名信息失败')
+  }
+}
 
 async function handleSubmit() {
-  if (!agreed.value) { message.warning('请先同意报名须知'); return }
-  if (isFull.value) { message.error('该班级名额已满，无法申请'); return }
-  
+  if (!formData.value.phone) {
+    message.warning('请填写联系电话')
+    return
+  }
   submitting.value = true
   try {
-    await apiEnroll(trainingId, {
-      note: formData.value.reason,
+    await enroll(trainingId, {
+      note: formData.value.note || undefined,
       phone: formData.value.phone,
-      needAccom: formData.value.needAccom,
+      needAccommodation: formData.value.needAccommodation,
     })
-    hasPendingEnrollment.value = true
     submitted.value = true
-    message.success('报名申请已提交，等待审核')
-  } catch (e) {
-    message.error(e.message || '报名失败')
+    submitStatus.value = 'success'
+    submitTitle.value = '报名申请已提交'
+    submitSubtitle.value = '等待管理员审核后即可加入培训班。'
+  } catch (error) {
+    message.error(error.message || '报名失败')
   } finally {
     submitting.value = false
   }
 }
+
+onMounted(loadData)
 </script>
 
 <style scoped>
-.enroll-page { max-width: 760px; margin: 0 auto; }
-.training-header {
-  background: white;
-  border-radius: 10px;
-  padding: 24px;
-  margin-bottom: 16px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-}
-.header-badge { margin-bottom: 10px; }
-.training-title { font-size: 18px; font-weight: 700; color: #001234; margin-bottom: 12px; }
-.training-meta-row {
-  display: flex; flex-wrap: wrap; gap: 16px;
-  font-size: 13px; color: #595959; margin-bottom: 16px;
-}
-.quota-section { margin-top: 16px; padding-top: 16px; border-top: 1px solid #f0f0f0; }
-.quota-label { display: flex; justify-content: space-between; margin-bottom: 8px; font-size: 13px; color: #595959; }
-.quota-nums b { color: #003087; font-size: 16px; }
-.quota-tags { display: flex; gap: 8px; margin-top: 8px; }
-.enroll-form-card {
-  background: white; border-radius: 10px; padding: 24px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-}
-.form-title { font-size: 16px; font-weight: 700; margin-bottom: 20px; color: #001234; }
-.form-agreement { margin-bottom: 20px; }
-.form-actions { display: flex; justify-content: flex-end; gap: 12px; padding-top: 16px; border-top: 1px solid #f0f0f0; }
-.submit-success { background: white; border-radius: 10px; padding: 40px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.enroll-page { max-width: 780px; margin: 0 auto; }
+.training-header { background: #fff; border-radius: 10px; padding: 24px; margin-bottom: 16px; box-shadow: 0 4px 18px rgba(0, 32, 96, 0.06); }
+.training-header h2 { margin: 12px 0; color: #001234; }
+.meta-row { display: flex; flex-wrap: wrap; gap: 16px; color: #666; font-size: 13px; }
+.rule-panel { margin-top: 16px; padding: 14px 16px; background: #f7f9fc; border-radius: 8px; color: #555; display: flex; flex-direction: column; gap: 6px; }
+.enroll-form-card { background: #fff; border-radius: 10px; padding: 24px; box-shadow: 0 4px 18px rgba(0, 32, 96, 0.06); }
+.actions { display: flex; justify-content: flex-end; gap: 12px; margin-top: 8px; }
 </style>

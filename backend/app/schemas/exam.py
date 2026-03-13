@@ -1,15 +1,15 @@
 """
 考试管理相关的数据验证模型
 """
-from typing import Optional, List, Any, Dict
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict
+from typing import Any, Dict, List, Optional
 
+from pydantic import BaseModel, ConfigDict, Field
 
-# ========== Question ==========
 
 class QuestionCreate(BaseModel):
     """创建题目"""
+
     type: str = Field(..., description="题目类型: single/multi/judge")
     content: str = Field(..., description="题干")
     options: Optional[List[dict]] = Field(None, description="选项 [{key, text}]")
@@ -22,6 +22,7 @@ class QuestionCreate(BaseModel):
 
 class QuestionUpdate(BaseModel):
     """更新题目"""
+
     type: Optional[str] = None
     content: Optional[str] = None
     options: Optional[List[dict]] = None
@@ -34,6 +35,7 @@ class QuestionUpdate(BaseModel):
 
 class QuestionResponse(BaseModel):
     """题目响应"""
+
     id: int
     type: str
     content: str
@@ -52,29 +54,57 @@ class QuestionResponse(BaseModel):
 
 class QuestionBatchCreate(BaseModel):
     """批量导入题目"""
+
     questions: List[QuestionCreate] = Field(..., description="题目列表")
 
 
-# ========== Exam ==========
+class ExamQuestionSnapshotResponse(BaseModel):
+    """试卷题目快照响应"""
 
-class ExamCreate(BaseModel):
-    """创建考试"""
+    id: int = Field(..., description="来源题目ID")
+    type: str
+    content: str
+    options: Optional[List[dict]] = None
+    explanation: Optional[str] = None
+    score: int = 1
+    knowledge_point: Optional[str] = None
+
+
+class ExamWrongQuestionResponse(BaseModel):
+    """错题详情"""
+
+    question_id: int
+    type: str
+    content: str
+    my_answer: Any = None
+    answer: Any = None
+    explanation: Optional[str] = None
+    score: int = 0
+
+
+class AdmissionExamCreate(BaseModel):
+    """创建独立准入考试"""
+
     title: str = Field(..., max_length=200, description="考试标题")
+    paper_title: Optional[str] = Field(None, max_length=200, description="试卷标题")
     description: Optional[str] = None
     duration: int = Field(60, description="考试时长(分钟)")
-    total_score: int = Field(100, description="总分")
+    total_score: Optional[int] = Field(None, description="总分，默认按题目自动汇总")
     passing_score: int = Field(60, description="及格分")
     status: str = Field("upcoming", description="状态")
-    type: str = Field("formal", description="类型: formal/quiz")
+    type: str = Field("formal", description="展示类型: formal/quiz")
     scope: Optional[str] = None
+    max_attempts: int = Field(1, ge=1, le=10, description="最大作答次数")
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
-    question_ids: Optional[List[int]] = Field(None, description="题目ID列表")
+    question_ids: List[int] = Field(default_factory=list, description="题目ID列表")
 
 
-class ExamUpdate(BaseModel):
-    """更新考试"""
+class AdmissionExamUpdate(BaseModel):
+    """更新独立准入考试"""
+
     title: Optional[str] = Field(None, max_length=200)
+    paper_title: Optional[str] = Field(None, max_length=200)
     description: Optional[str] = None
     duration: Optional[int] = None
     total_score: Optional[int] = None
@@ -82,24 +112,19 @@ class ExamUpdate(BaseModel):
     status: Optional[str] = None
     type: Optional[str] = None
     scope: Optional[str] = None
+    max_attempts: Optional[int] = Field(None, ge=1, le=10)
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     question_ids: Optional[List[int]] = None
 
 
-class ExamQuestionResponse(BaseModel):
-    """考试题目响应"""
-    exam_id: int
-    question_id: int
-    sort_order: int = 0
-    question: Optional[QuestionResponse] = None
+class AdmissionExamResponse(BaseModel):
+    """独立准入考试响应"""
 
-    model_config = ConfigDict(from_attributes=True)
-
-
-class ExamResponse(BaseModel):
-    """考试响应"""
     id: int
+    kind: str = "admission"
+    paper_id: Optional[int] = None
+    paper_title: Optional[str] = None
     title: str
     description: Optional[str] = None
     duration: int = 60
@@ -108,10 +133,93 @@ class ExamResponse(BaseModel):
     status: str = "upcoming"
     type: str = "formal"
     scope: Optional[str] = None
+    max_attempts: int = 1
+    linked_training_count: int = 0
+    attempt_count: int = 0
+    latest_result: Optional[str] = None
+    can_join: Optional[bool] = None
+    created_by: Optional[int] = None
+    question_count: int = 0
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdmissionExamDetailResponse(AdmissionExamResponse):
+    """独立准入考试详情响应"""
+
+    questions: List[ExamQuestionSnapshotResponse] = Field(default_factory=list)
+
+
+class ExamCreate(BaseModel):
+    """创建培训班内考试"""
+
+    title: str = Field(..., max_length=200, description="场次标题")
+    paper_title: Optional[str] = Field(None, max_length=200, description="试卷标题")
+    description: Optional[str] = None
+    duration: int = Field(60, description="考试时长(分钟)")
+    total_score: Optional[int] = Field(None, description="总分，默认按题目自动汇总")
+    passing_score: int = Field(60, description="及格分")
+    status: str = Field("upcoming", description="状态")
+    type: str = Field("formal", description="展示类型: formal/quiz")
+    purpose: str = Field("class_assessment", description="用途")
+    training_id: int = Field(..., description="关联培训班ID")
+    max_attempts: int = Field(1, ge=1, le=10, description="最大作答次数")
+    allow_makeup: bool = Field(False, description="是否允许补考")
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    question_ids: List[int] = Field(default_factory=list, description="题目ID列表")
+
+
+class ExamUpdate(BaseModel):
+    """更新培训班内考试"""
+
+    title: Optional[str] = Field(None, max_length=200)
+    paper_title: Optional[str] = Field(None, max_length=200)
+    description: Optional[str] = None
+    duration: Optional[int] = None
+    total_score: Optional[int] = None
+    passing_score: Optional[int] = None
+    status: Optional[str] = None
+    type: Optional[str] = None
+    purpose: Optional[str] = None
+    training_id: Optional[int] = None
+    max_attempts: Optional[int] = Field(None, ge=1, le=10)
+    allow_makeup: Optional[bool] = None
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    question_ids: Optional[List[int]] = None
+
+
+class ExamResponse(BaseModel):
+    """培训班内考试响应"""
+
+    id: int
+    kind: str = "training"
+    paper_id: Optional[int] = None
+    paper_title: Optional[str] = None
+    title: str
+    description: Optional[str] = None
+    duration: int = 60
+    total_score: int = 100
+    passing_score: int = 60
+    status: str = "upcoming"
+    type: str = "formal"
+    purpose: str = "class_assessment"
+    training_id: Optional[int] = None
+    training_name: Optional[str] = None
+    max_attempts: int = 1
+    allow_makeup: bool = False
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     created_by: Optional[int] = None
-    question_count: Optional[int] = 0
+    question_count: int = 0
+    attempt_count: int = 0
+    latest_result: Optional[str] = None
+    can_join: Optional[bool] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -119,35 +227,71 @@ class ExamResponse(BaseModel):
 
 
 class ExamDetailResponse(ExamResponse):
-    """考试详情响应（含题目）"""
-    questions: List[QuestionResponse] = []
+    """培训班内考试详情响应"""
 
+    questions: List[ExamQuestionSnapshotResponse] = Field(default_factory=list)
 
-# ========== ExamRecord ==========
 
 class ExamSubmit(BaseModel):
     """提交考试"""
-    answers: Dict[str, Any] = Field(..., description="答案 {questionId: answer}")
+
+    answers: Dict[str, Any] = Field(default_factory=dict, description="答案 {questionId: answer}")
     start_time: Optional[datetime] = None
 
 
-class ExamRecordResponse(BaseModel):
-    """考试记录响应"""
+class AdmissionExamRecordResponse(BaseModel):
+    """准入考试记录响应"""
+
     id: int
     exam_id: int
+    kind: str = "admission"
+    paper_id: Optional[int] = None
     exam_title: Optional[str] = None
     user_id: int
     user_name: Optional[str] = None
     user_nickname: Optional[str] = None
+    attempt_no: int = 1
+    status: str = "submitted"
     score: int = 0
     result: Optional[str] = None
     grade: Optional[str] = None
+    passing_score: Optional[int] = None
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     duration: int = 0
     correct_count: int = 0
     wrong_count: int = 0
-    wrong_questions: Optional[List[int]] = None
-    dimension_scores: Optional[Dict[str, Any]] = None
+    wrong_questions: List[int] = Field(default_factory=list)
+    wrong_question_details: List[ExamWrongQuestionResponse] = Field(default_factory=list)
+    dimension_scores: Dict[str, Any] = Field(default_factory=dict)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ExamRecordResponse(BaseModel):
+    """培训班考试记录响应"""
+
+    id: int
+    exam_id: int
+    kind: str = "training"
+    paper_id: Optional[int] = None
+    exam_title: Optional[str] = None
+    user_id: int
+    user_name: Optional[str] = None
+    user_nickname: Optional[str] = None
+    attempt_no: int = 1
+    status: str = "submitted"
+    score: int = 0
+    result: Optional[str] = None
+    grade: Optional[str] = None
+    passing_score: Optional[int] = None
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    duration: int = 0
+    correct_count: int = 0
+    wrong_count: int = 0
+    wrong_questions: List[int] = Field(default_factory=list)
+    wrong_question_details: List[ExamWrongQuestionResponse] = Field(default_factory=list)
+    dimension_scores: Dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(from_attributes=True)

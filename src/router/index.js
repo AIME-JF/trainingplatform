@@ -105,6 +105,18 @@ const router = createRouter({
           meta: { title: '扫码签到' },
         },
         {
+          path: 'training/:id/checkout/:sessionKey?',
+          name: 'Checkout',
+          component: () => import('../views/training/Checkout.vue'),
+          meta: { title: '签退评课' },
+        },
+        {
+          path: 'training/:id/history',
+          name: 'TrainingHistory',
+          component: () => import('../views/training/History.vue'),
+          meta: { title: '培训训历' },
+        },
+        {
           path: 'resource/library',
           name: 'ResourceLibrary',
           component: () => import('../views/resource/Library.vue'),

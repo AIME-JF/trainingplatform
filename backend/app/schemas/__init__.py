@@ -39,15 +39,24 @@ from .course import (
 from .training import (
     TrainingCreate, TrainingUpdate, TrainingResponse, TrainingListResponse,
     TrainingCourseCreate, TrainingCourseResponse,
+    TrainingScheduleItem, TrainingSessionActionPermissions, TrainingCurrentSessionResponse,
+    TrainingWorkflowStepResponse, TrainingSkipCourseRequest,
     EnrollmentCreate, EnrollmentResponse,
-    CheckinCreate, CheckinResponse,
-    ScheduleItemCreate, ScheduleItemResponse
+    TrainingRosterAssignment,
+    CheckinCreate, CheckoutCreate, TrainingEvaluationCreate, CheckinResponse,
+    TrainingAttendanceSummaryResponse,
+    TrainingCheckinQrResponse,
+    ScheduleItemCreate, ScheduleItemResponse,
+    TrainingExamSummary, TrainingHistoryResponse
 )
 # 考试相关
 from .exam import (
     QuestionCreate, QuestionUpdate, QuestionResponse, QuestionBatchCreate,
-    ExamCreate, ExamUpdate, ExamResponse, ExamDetailResponse, ExamQuestionResponse,
-    ExamSubmit, ExamRecordResponse
+    AdmissionExamCreate, AdmissionExamUpdate, AdmissionExamResponse,
+    AdmissionExamDetailResponse, AdmissionExamRecordResponse,
+    ExamCreate, ExamUpdate, ExamResponse, ExamDetailResponse,
+    ExamSubmit, ExamRecordResponse, ExamQuestionSnapshotResponse,
+    ExamWrongQuestionResponse
 )
 # 证书相关
 from .certificate import CertificateCreate, CertificateResponse
@@ -118,13 +127,21 @@ __all__ = [
     # 培训相关
     "TrainingCreate", "TrainingUpdate", "TrainingResponse", "TrainingListResponse",
     "TrainingCourseCreate", "TrainingCourseResponse",
+    "TrainingScheduleItem", "TrainingSessionActionPermissions", "TrainingCurrentSessionResponse",
+    "TrainingWorkflowStepResponse", "TrainingSkipCourseRequest",
     "EnrollmentCreate", "EnrollmentResponse",
-    "CheckinCreate", "CheckinResponse",
+    "TrainingRosterAssignment",
+    "CheckinCreate", "CheckoutCreate", "TrainingEvaluationCreate", "CheckinResponse",
+    "TrainingAttendanceSummaryResponse", "TrainingCheckinQrResponse",
     "ScheduleItemCreate", "ScheduleItemResponse",
+    "TrainingExamSummary", "TrainingHistoryResponse",
     # 考试相关
     "QuestionCreate", "QuestionUpdate", "QuestionResponse", "QuestionBatchCreate",
-    "ExamCreate", "ExamUpdate", "ExamResponse", "ExamDetailResponse", "ExamQuestionResponse",
-    "ExamSubmit", "ExamRecordResponse",
+    "AdmissionExamCreate", "AdmissionExamUpdate", "AdmissionExamResponse",
+    "AdmissionExamDetailResponse", "AdmissionExamRecordResponse",
+    "ExamCreate", "ExamUpdate", "ExamResponse", "ExamDetailResponse",
+    "ExamSubmit", "ExamRecordResponse", "ExamQuestionSnapshotResponse",
+    "ExamWrongQuestionResponse",
     # 证书相关
     "CertificateCreate", "CertificateResponse",
     # 个人中心

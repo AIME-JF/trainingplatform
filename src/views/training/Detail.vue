@@ -5,6 +5,12 @@
       <a-breadcrumb-item>{{ trainingData.name }}</a-breadcrumb-item>
     </a-breadcrumb>
 
+    <a-card :bordered="false" class="workflow-card" style="margin-bottom:16px">
+      <div class="workflow-header">
+        <a-steps :current="workflowCurrentIndex" :items="workflowStepItems" size="small" />
+      </div>
+    </a-card>
+
     <a-row :gutter="20">
       <a-col :xs="24" :md="16">
         <a-card :bordered="false" class="main-card">
@@ -35,54 +41,152 @@
               <a-divider />
               <div class="course-schedule">
                 <div class="section-header">
-                  <h4>课程安排</h4>
-                  <a-button size="small" type="primary" @click="openCourseModal()" v-if="canScheduleEdit">
-                    <template #icon><PlusOutlined /></template>添加课程
-                  </a-button>
+                  <h4>当前课程</h4>
                 </div>
+                <a-empty v-if="!currentSession" description="当前没有可操作课次" />
+                <div v-else class="course-item current-course-card">
+                  <div class="ci-left">
+                    <div class="ci-name">{{ currentSession.courseName }}</div>
+                    <div class="ci-instructor">
+                      主讲：{{ currentSession.primaryInstructorName || '未指定' }}
+                      <template v-if="currentSession.assistantInstructorNames?.length">
+                        / 带教：{{ currentSession.assistantInstructorNames.join('、') }}
+                      </template>
+                    </div>
+                    <div class="ci-time">{{ currentSession.date }} {{ currentSession.timeRange }}</div>
+                    <div class="ci-time">地点：{{ currentSession.location || '未设置' }} · 状态：{{ currentSessionStatusLabel }}</div>
+                  </div>
+                  <div class="ci-right">
+                    <a-space wrap>
+                      <a-button v-if="currentSession.actionPermissions?.canStartCheckin" size="small" type="primary" @click="handleStartSessionCheckin">开始签到</a-button>
+                      <a-button v-if="currentSession.actionPermissions?.canEndCheckin" size="small" @click="handleEndSessionCheckin">结束签到</a-button>
+                      <a-button v-if="currentSession.actionPermissions?.canStartCheckout" size="small" type="primary" ghost @click="handleStartSessionCheckout">开始签退</a-button>
+                      <a-button v-if="currentSession.actionPermissions?.canEndCheckout" size="small" @click="handleEndSessionCheckout">结束签退</a-button>
+                      <a-button
+                        v-if="isEnrolled && currentSession.status === 'checkinOpen'"
+                        size="small"
+                        type="primary"
+                        ghost
+                        @click="goCurrentSessionCheckin"
+                      >
+                        学员签到
+                      </a-button>
+                      <a-button
+                        v-if="isEnrolled && currentSession.status === 'checkoutOpen'"
+                        size="small"
+                        @click="$router.push({ name: 'Checkout', params: { id: trainingData.id, sessionKey: currentSession.sessionId } })"
+                      >
+                        学员签退
+                      </a-button>
+                      <a-button v-if="currentSession.actionPermissions?.canSkip" size="small" danger ghost @click="handleSkipCurrentSession">跳过课程</a-button>
+                    </a-space>
+                  </div>
+                </div>
+              </div>
+            </a-tab-pane>
+
+            <a-tab-pane key="schedule" tab="课程安排">
+              <div class="section-header" style="margin-bottom:16px">
+                <a-space>
+                  <h4 style="margin:0">课程安排</h4>
+                  <a-radio-group v-model:value="scheduleViewMode" size="small">
+                    <a-radio-button value="course">按课程展示</a-radio-button>
+                    <a-radio-button value="timetable">按课表展示</a-radio-button>
+                  </a-radio-group>
+                </a-space>
+                <a-button size="small" type="primary" @click="openCourseModal()" v-if="canScheduleEdit">
+                  <template #icon><PlusOutlined /></template>添加课程
+                </a-button>
+              </div>
+
+              <template v-if="scheduleViewMode === 'course'">
                 <a-empty v-if="!trainingData.courses || trainingData.courses.length === 0" description="暂无课程安排，请点击添加" />
                 <div class="course-item" v-for="(c, idx) in trainingData.courses" :key="idx">
                   <div class="ci-left">
                     <div class="ci-name">{{ c.name }}</div>
-                    <div class="ci-instructor">{{ c.instructor }}</div>
-                    <div class="ci-time" v-if="c.schedules && c.schedules.length">
-                      <a-space size="small">
-                        <a-select
-                          v-model:value="selectedSchedules[idx]"
-                          placeholder="选择排课课次"
-                          size="small"
-                          class="course-schedule-select"
-                          @click.stop
-                        >
-                          <a-select-option v-for="(sch, i) in c.schedules" :key="i" :value="i">
-                            {{ sch.date }} {{ sch.timeRange }}
-                          </a-select-option>
-                        </a-select>
-                        <a-button 
-                          size="small" 
-                          type="primary" 
-                          ghost
-                          v-if="!authStore.isStudent || (authStore.isStudent && isEnrolled)"
-                          @click.stop="$router.push(`/training/${trainingData.id}/checkin/course-${idx}-${selectedSchedules[idx] ?? 0}`)"
-                        >
-                          签到
-                        </a-button>
-                      </a-space>
+                    <div class="ci-instructor">
+                      {{ c.primaryInstructorName || c.instructor || '未指定教官' }}
+                      <template v-if="c.assistantInstructorNames?.length">
+                        / 带教：{{ c.assistantInstructorNames.join('、') }}
+                      </template>
                     </div>
-                    <div class="ci-time" v-else-if="c.dates && c.dates.length && c.timeRange">{{ c.dates.join(', ') }} {{ c.timeRange }}</div>
-                    <div class="ci-time" v-else-if="c.date && c.timeRange">{{ c.date }} {{ c.timeRange }}</div>
-                    <div class="ci-time" v-else-if="c.startTime && c.endTime">{{ c.startTime }} ~ {{ c.endTime }}</div>
-                    <div class="ci-time" v-else-if="c.date">{{ c.date }}</div>
+                    <div class="ci-time" v-if="c.schedules?.length">{{ c.schedules.length }} 个课次 · {{ c.hours }} 课时</div>
                   </div>
                   <div class="ci-right">
-                    <span class="ci-hours">{{ c.hours }}课时</span>
                     <a-tag :color="c.type === 'theory' ? 'blue' : 'green'" size="small">{{ c.type === 'theory' ? '理论' : '实操' }}</a-tag>
-                    <span class="ci-hours ci-rate">签到率: {{ c.checkinRate || 100 }}%</span>
                     <template v-if="canScheduleEdit">
                       <a-button size="small" type="link" @click="openCourseModal(idx)">编辑</a-button>
                       <a-button size="small" type="link" danger @click="removeCourse(idx)">删除</a-button>
                     </template>
                   </div>
+                </div>
+              </template>
+
+              <a-table
+                v-else
+                :data-source="scheduleRows"
+                :pagination="false"
+                row-key="sessionId"
+                size="small"
+              >
+                <a-table-column title="日期" data-index="date" key="date" width="120" />
+                <a-table-column title="时间" data-index="timeRange" key="timeRange" width="140" />
+                <a-table-column title="课程" data-index="courseName" key="courseName" />
+                <a-table-column title="教官" data-index="instructorText" key="instructorText" width="220" />
+                <a-table-column title="状态" key="status" width="140">
+                  <template #default="{ record }">
+                    <a-tag :color="scheduleStatusColorMap[record.status] || 'default'">{{ scheduleStatusLabelMap[record.status] || record.status }}</a-tag>
+                  </template>
+                </a-table-column>
+                <a-table-column title="操作" key="action" width="200">
+                  <template #default="{ record }">
+                    <a-space v-if="currentSession && currentSession.sessionId === record.sessionId">
+                      <a-button v-if="currentSession.actionPermissions?.canStartCheckin" size="small" type="link" @click="handleStartSessionCheckin">开始签到</a-button>
+                      <a-button v-if="currentSession.actionPermissions?.canEndCheckin" size="small" type="link" @click="handleEndSessionCheckin">结束签到</a-button>
+                      <a-button v-if="currentSession.actionPermissions?.canStartCheckout" size="small" type="link" @click="handleStartSessionCheckout">开始签退</a-button>
+                      <a-button v-if="currentSession.actionPermissions?.canEndCheckout" size="small" type="link" @click="handleEndSessionCheckout">结束签退</a-button>
+                      <a-button v-if="currentSession.actionPermissions?.canSkip" size="small" type="link" danger @click="handleSkipCurrentSession">跳过</a-button>
+                    </a-space>
+                    <span v-else style="color:#999">仅当前课次可操作</span>
+                  </template>
+                </a-table-column>
+              </a-table>
+            </a-tab-pane>
+
+            <a-tab-pane key="exams" tab="考试安排">
+              <div class="section-header" style="margin-bottom:16px">
+                <h4>考试安排</h4>
+                <a-space v-if="canEdit">
+                  <a-button size="small" type="primary" @click="quickCreateTrainingExam">
+                    快捷添加考试
+                  </a-button>
+                  <a-button size="small" @click="goTrainingExamManage">
+                    前往考试管理
+                  </a-button>
+                </a-space>
+              </div>
+
+              <a-empty v-if="!trainingExamSessions.length" description="当前培训班暂无考试安排" />
+              <div v-else class="exam-plan-list">
+                <div class="exam-plan-card" v-for="exam in trainingExamSessions" :key="exam.id">
+                  <div class="exam-plan-main">
+                    <div class="exam-plan-name">{{ exam.title }}</div>
+                    <div class="exam-plan-meta">
+                      <span>用途：{{ examPurposeLabelMap[exam.purpose] || exam.purpose }}</span>
+                      <span>题目数：{{ exam.questionCount || 0 }}</span>
+                      <span>及格分：{{ exam.passingScore || 60 }}</span>
+                      <span>开始：{{ formatDateTime(exam.startTime) }}</span>
+                      <span>结束：{{ formatDateTime(exam.endTime) }}</span>
+                    </div>
+                  </div>
+                  <a-space wrap>
+                    <a-tag :color="examStatusColorMap[exam.status] || 'default'">
+                      {{ examStatusLabelMap[exam.status] || exam.status }}
+                    </a-tag>
+                    <a-button size="small" type="link" @click="goTrainingExamManage">
+                      前往管理
+                    </a-button>
+                  </a-space>
                 </div>
               </div>
             </a-tab-pane>
@@ -182,6 +286,15 @@
       </a-col>
 
       <a-col :xs="24" :md="8">
+        <a-card title="流程操作" :bordered="false" style="margin-bottom:16px" v-if="showWorkflowActionCard">
+          <a-space direction="vertical" size="small" class="workflow-action-list">
+            <a-button v-if="canPublishWorkflowAction" block type="primary" ghost @click="handlePublish">发布</a-button>
+            <a-button v-if="canLockWorkflowAction" block danger ghost @click="handleLock">锁定名单</a-button>
+            <a-button v-if="canStartWorkflowAction" block type="primary" @click="handleStart">开班</a-button>
+            <a-button v-if="canEndWorkflowAction" block danger @click="handleEnd">结班</a-button>
+          </a-space>
+        </a-card>
+
         <a-card title="快捷操作" :bordered="false" style="margin-bottom:16px">
           <div class="quick-ops">
             <a-button block style="margin-bottom:8px" @click="handleGlobalCheckin" type="primary" v-if="trainingData.status === 'active' && !authStore.isStudent">
@@ -238,6 +351,27 @@
                 option-filter-prop="label"
                 style="width:100%"
                 @change="onInstructorChange"
+              >
+                <a-select-option
+                  v-for="inst in instructorList"
+                  :key="inst.userId"
+                  :value="inst.userId"
+                  :label="inst.name"
+                >
+                  {{ inst.name }} · {{ inst.title }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="带教教官">
+              <a-select
+                v-model:value="courseForm.assistantInstructorIds"
+                mode="multiple"
+                placeholder="可多选带教教官"
+                show-search
+                option-filter-prop="label"
+                style="width:100%"
               >
                 <a-select-option
                   v-for="inst in instructorList"
@@ -451,6 +585,15 @@ import {
   getTraining,
   updateTraining as apiUpdateTraining,
   getCheckinRecords as apiGetCheckinRecords,
+  publishTraining,
+  lockTraining,
+  startTraining,
+  endTraining,
+  startTrainingSessionCheckin,
+  endTrainingSessionCheckin,
+  startTrainingSessionCheckout,
+  endTrainingSessionCheckout,
+  skipTrainingSession,
   getTrainingResources,
   bindTrainingResource,
   unbindTrainingResource,
@@ -471,6 +614,8 @@ const trainingData = reactive({
   id: trainingId,
   name: '',
   status: 'upcoming',
+  publishStatus: 'draft',
+  isLocked: false,
   progressPercent: 0,
   startDate: '',
   endDate: '',
@@ -484,7 +629,17 @@ const trainingData = reactive({
   capacity: 0,
   enrolledCount: 0,
   enrolled: 0,
-  checkinRecords: []
+  checkinRecords: [],
+  examSessions: [],
+  admissionExamId: null,
+  admissionExamTitle: '',
+  workflowSteps: [],
+  currentStepKey: 'draft',
+  currentSession: null,
+  canManageAll: false,
+  canEditTraining: false,
+  canEditCourses: false,
+  canReviewEnrollments: false,
 })
 
 const allUserList = ref([])
@@ -494,7 +649,7 @@ const userMap = computed(() => {
   return map
 })
 
-onMounted(async () => {
+async function loadTrainingDetail() {
   try {
     const [data, instRes, checkinRes, usersRes] = await Promise.all([
       getTraining(trainingId),
@@ -515,13 +670,36 @@ onMounted(async () => {
     Object.assign(trainingData, data, {
       progressPercent: data.progressPercent || 0,
       instructorId: data.instructorId || null,
-      courses: data.courses || [],
+      publishStatus: data.publishStatus || 'draft',
+      isLocked: !!data.isLocked,
+      courses: (data.courses || []).map((course) => ({
+        ...course,
+        schedules: (course.schedules || []).map((schedule) => ({
+          ...schedule,
+          timeRange: schedule.timeRange || schedule.time_range || '',
+          sessionId: schedule.sessionId || schedule.session_id,
+        })),
+      })),
       studentIds: normalizedStudentIds,
       students: normalizedStudentIds,
       enrolledCount: data.enrolledCount ?? normalizedStudentIds.length,
       enrolled: data.enrolledCount ?? normalizedStudentIds.length,
-      checkinRecords: normalizedCheckinRecords
+      checkinRecords: normalizedCheckinRecords,
+      workflowSteps: data.workflowSteps || [],
+      currentStepKey: data.currentStepKey || 'draft',
+      currentSession: data.currentSession
+        ? {
+            ...data.currentSession,
+            timeRange: data.currentSession.timeRange || data.currentSession.time_range || '',
+            sessionId: data.currentSession.sessionId || data.currentSession.session_id,
+          }
+        : null,
+      canManageAll: !!data.canManageAll,
+      canEditTraining: !!data.canEditTraining,
+      canEditCourses: !!data.canEditCourses,
+      canReviewEnrollments: !!data.canReviewEnrollments,
     })
+    syncEditFormFromTraining()
 
     instructorList.value = (instRes.items || []).map((it) => ({
       ...it,
@@ -534,13 +712,84 @@ onMounted(async () => {
   } catch (e) {
     message.error('加载培训班详情失败')
   }
+}
+
+onMounted(() => {
+  loadTrainingDetail()
 })
 
 const activeTab = ref('overview')
 const studentSearch = ref('')
 const selectedSchedules = reactive({}) // { courseIdx: scheduleIdx }
-const canEdit = computed(() => authStore.isAdmin || authStore.isInstructor)
-const canScheduleEdit = computed(() => authStore.isAdmin)
+const scheduleViewMode = ref('course')
+const canEdit = computed(() => !!trainingData.canManageAll)
+const canScheduleEdit = computed(() => !!trainingData.canEditCourses)
+const currentSession = computed(() => trainingData.currentSession)
+const canPublishWorkflowAction = computed(() => canEdit.value && trainingData.publishStatus !== 'published')
+const canLockWorkflowAction = computed(() => canEdit.value && !trainingData.isLocked)
+const canStartWorkflowAction = computed(() => canEdit.value && trainingData.status === 'upcoming')
+const canEndWorkflowAction = computed(() => canEdit.value && trainingData.status === 'active')
+const showWorkflowActionCard = computed(() => (
+  canPublishWorkflowAction.value ||
+  canLockWorkflowAction.value ||
+  canStartWorkflowAction.value ||
+  canEndWorkflowAction.value
+))
+const examStatusLabelMap = { upcoming: '即将开始', active: '进行中', ended: '已结束' }
+const examStatusColorMap = { upcoming: 'orange', active: 'green', ended: 'default' }
+const examPurposeLabelMap = {
+  class_assessment: '班内考核',
+  final_assessment: '结业考核',
+  quiz: '随堂测验',
+}
+const trainingExamSessions = computed(() => trainingData.examSessions || [])
+const workflowStepItems = computed(() => (trainingData.workflowSteps || []).map((step) => ({
+  title: step.title,
+  description: step.description,
+  status: step.status,
+})))
+const workflowCurrentIndex = computed(() => {
+  const steps = trainingData.workflowSteps || []
+  const processIndex = steps.findIndex((step) => step.status === 'process')
+  if (processIndex >= 0) return processIndex
+  const lastFinishIndex = [...steps].reverse().findIndex((step) => step.status === 'finish')
+  return lastFinishIndex >= 0 ? steps.length - lastFinishIndex - 1 : 0
+})
+const scheduleStatusLabelMap = {
+  pending: '未开始',
+  checkinOpen: '签到中',
+  checkinClosed: '签到已结束',
+  checkoutOpen: '签退中',
+  completed: '已完成',
+  skipped: '已跳过',
+  missed: '已错过',
+}
+const scheduleStatusColorMap = {
+  pending: 'default',
+  checkinOpen: 'blue',
+  checkinClosed: 'gold',
+  checkoutOpen: 'purple',
+  completed: 'green',
+  skipped: 'red',
+  missed: 'volcano',
+}
+const currentSessionStatusLabel = computed(() => {
+  if (!currentSession.value) return '无'
+  return scheduleStatusLabelMap[currentSession.value.status] || currentSession.value.status
+})
+const scheduleRows = computed(() => (trainingData.courses || []).flatMap((course) =>
+  (course.schedules || []).map((schedule) => ({
+    sessionId: schedule.sessionId,
+    date: schedule.date,
+    timeRange: schedule.timeRange,
+    status: schedule.status,
+    courseName: course.name,
+    instructorText: [
+      course.primaryInstructorName || course.instructor || '未指定',
+      course.assistantInstructorNames?.length ? `带教：${course.assistantInstructorNames.join('、')}` : '',
+    ].filter(Boolean).join(' / '),
+  }))
+))
 
 const trainingResources = ref([])
 const resourceCandidates = ref([])
@@ -623,52 +872,140 @@ const filteredStudents = computed(() =>
 )
 
 function handleGlobalCheckin() {
-  const now = dayjs()
-  let closestSessionKey = 'start'
-  let minDiff = Infinity
-  let lastSessionKey = 'start'
-  let maxPastTime = -Infinity
-
-  trainingData.courses.forEach((c, cIdx) => {
-    if (c.schedules) {
-      c.schedules.forEach((sch, sIdx) => {
-        if (!sch.timeRange) return
-        const [startT, endT] = sch.timeRange.split('~')
-        if (!startT || !endT) return
-        
-        const sessionStart = dayjs(`${sch.date} ${startT}`)
-        const sessionEnd = dayjs(`${sch.date} ${endT}`)
-        
-        // 1. 正在上课 (提前30分钟 ~ 结束前)
-        if (now.isAfter(sessionStart.subtract(30, 'minute')) && now.isBefore(sessionEnd)) {
-          closestSessionKey = `course-${cIdx}-${sIdx}`
-          minDiff = -1 
-        } 
-        // 2. 还没开始，找未来最近的
-        else if (sessionStart.isAfter(now) && minDiff !== -1) {
-          const diff = sessionStart.diff(now)
-          if (diff < minDiff) {
-            minDiff = diff
-            closestSessionKey = `course-${cIdx}-${sIdx}`
-          }
-        }
-        // 3. 记录最晚的一个过去时间，作为兜底
-        if (sessionStart.isBefore(now)) {
-          if (sessionStart.valueOf() > maxPastTime) {
-            maxPastTime = sessionStart.valueOf()
-            lastSessionKey = `course-${cIdx}-${sIdx}`
-          }
-        }
-      })
-    }
-  })
-
-  // 如果没有未来或当前的课，且培训已开始，则跳到最后一个结束的课，或者默认 start
-  if (closestSessionKey === 'start' && trainingData.status === 'active' && lastSessionKey !== 'start') {
-    closestSessionKey = lastSessionKey
+  if (!currentSession.value?.sessionId) {
+    message.warning('当前没有可签到的课次')
+    return
   }
+  router.push(`/training/${trainingData.id}/checkin/${currentSession.value.sessionId}`)
+}
 
-  router.push(`/training/${trainingData.id}/checkin/${closestSessionKey}`)
+function goCurrentSessionCheckin() {
+  handleGlobalCheckin()
+}
+
+function goTrainingExamManage() {
+  router.push({
+    name: 'ExamManage',
+    query: {
+      kind: 'training',
+      trainingId: String(trainingData.id),
+    },
+  })
+}
+
+function quickCreateTrainingExam() {
+  router.push({
+    name: 'ExamManage',
+    query: {
+      kind: 'training',
+      trainingId: String(trainingData.id),
+      quickCreate: '1',
+    },
+  })
+}
+
+async function handlePublish() {
+  try {
+    await publishTraining(trainingId)
+    message.success('培训班已发布')
+    await loadTrainingDetail()
+  } catch (error) {
+    message.error(error.message || '发布失败')
+  }
+}
+
+async function handleLock() {
+  try {
+    await lockTraining(trainingId)
+    message.success('名单已锁定')
+    await loadTrainingDetail()
+  } catch (error) {
+    message.error(error.message || '锁定失败')
+  }
+}
+
+async function handleStart() {
+  try {
+    await startTraining(trainingId)
+    message.success('培训班已开班')
+    await loadTrainingDetail()
+  } catch (error) {
+    message.error(error.message || '开班失败')
+  }
+}
+
+async function handleEnd() {
+  try {
+    await endTraining(trainingId)
+    message.success('培训班已结班')
+    await loadTrainingDetail()
+  } catch (error) {
+    message.error(error.message || '结班失败')
+  }
+}
+
+async function handleStartSessionCheckin() {
+  if (!currentSession.value?.sessionId) return
+  try {
+    await startTrainingSessionCheckin(trainingId, currentSession.value.sessionId)
+    message.success('已开始签到')
+    await loadTrainingDetail()
+  } catch (error) {
+    message.error(error.message || '开始签到失败')
+  }
+}
+
+async function handleEndSessionCheckin() {
+  if (!currentSession.value?.sessionId) return
+  try {
+    await endTrainingSessionCheckin(trainingId, currentSession.value.sessionId)
+    message.success('已结束签到')
+    await loadTrainingDetail()
+  } catch (error) {
+    message.error(error.message || '结束签到失败')
+  }
+}
+
+async function handleStartSessionCheckout() {
+  if (!currentSession.value?.sessionId) return
+  try {
+    await startTrainingSessionCheckout(trainingId, currentSession.value.sessionId)
+    message.success('已开始签退')
+    await loadTrainingDetail()
+  } catch (error) {
+    message.error(error.message || '开始签退失败')
+  }
+}
+
+async function handleEndSessionCheckout() {
+  if (!currentSession.value?.sessionId) return
+  try {
+    await endTrainingSessionCheckout(trainingId, currentSession.value.sessionId)
+    message.success('已结束签退')
+    await loadTrainingDetail()
+  } catch (error) {
+    message.error(error.message || '结束签退失败')
+  }
+}
+
+function handleSkipCurrentSession() {
+  if (!currentSession.value?.sessionId) return
+  Modal.confirm({
+    title: '跳过当前课程',
+    content: `确定跳过当前课程「${currentSession.value.courseName}」吗？`,
+    okText: '跳过',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      try {
+        await skipTrainingSession(trainingId, currentSession.value.sessionId, {})
+        message.success('已跳过当前课程')
+        await loadTrainingDetail()
+      } catch (error) {
+        message.error(error.message || '跳过课程失败')
+      }
+    },
+  })
 }
 
 const baseStudentColumns = [
@@ -748,7 +1085,15 @@ const tempDateRange = ref([])
 const tempTimeRange = ref([])
 
 // 'schedules' will store objects like { date: 'YYYY-MM-DD', timeRange: 'HH:mm~HH:mm', hours: 2 }
-const courseForm = reactive({ name: '', instructor: '', instructorId: null, hours: 0, type: 'theory', schedules: [] })
+const courseForm = reactive({
+  name: '',
+  instructor: '',
+  instructorId: null,
+  assistantInstructorIds: [],
+  hours: 0,
+  type: 'theory',
+  schedules: [],
+})
 
 function onInstructorChange(userId) {
   const inst = instructorList.value.find(i => i.userId == userId)
@@ -835,8 +1180,16 @@ function openCourseModal(idx = null) {
   
   if (idx !== null && trainingData.courses[idx]) {
     const c = JSON.parse(JSON.stringify(trainingData.courses[idx]))
-    const inst = instructorList.value.find(i => i.name === c.instructor)
-    Object.assign(courseForm, { name: c.name, instructor: c.instructor, instructorId: inst?.userId ?? null, hours: c.hours, type: c.type, schedules: c.schedules || [] })
+    const inst = instructorList.value.find(i => i.userId === c.primaryInstructorId || i.name === c.instructor)
+    Object.assign(courseForm, {
+      name: c.name,
+      instructor: c.instructor,
+      instructorId: (c.primaryInstructorId || inst?.userId) ?? null,
+      assistantInstructorIds: c.assistantInstructorIds || [],
+      hours: c.hours,
+      type: c.type,
+      schedules: c.schedules || [],
+    })
 
     // Migrate old legacy formats into 'schedules' array (if course has dates but no schedules)
     if (courseForm.schedules.length === 0) {
@@ -861,36 +1214,49 @@ function openCourseModal(idx = null) {
       }
     }
   } else {
-    Object.assign(courseForm, { name: '', instructor: '', instructorId: null, hours: 0, type: 'theory', schedules: [] })
+    Object.assign(courseForm, { name: '', instructor: '', instructorId: null, assistantInstructorIds: [], hours: 0, type: 'theory', schedules: [] })
   }
   showCourseModal.value = true
 }
 
-function saveCourse() {
+async function saveCourse() {
   if (!courseForm.name || !courseForm.instructor || courseForm.schedules.length === 0) { 
     message.warning('请填写课程名称、教官，并至少添加一节排课')
     return 
   }
   const courseData = { ...courseForm }
+  courseData.primaryInstructorId = courseForm.instructorId
+  delete courseData.instructorId
+  const nextCourses = [...trainingData.courses]
   if (editingCourseIdx.value !== null) {
-    trainingData.courses.splice(editingCourseIdx.value, 1, courseData)
-    message.success('课程已更新')
+    nextCourses.splice(editingCourseIdx.value, 1, courseData)
   } else {
-    trainingData.courses.push(courseData)
-    message.success('课程已添加')
+    nextCourses.push(courseData)
   }
-  apiUpdateTraining(trainingId, { courses: trainingData.courses }).catch(() => {})
-  showCourseModal.value = false
+  try {
+    await apiUpdateTraining(trainingId, { courses: nextCourses })
+    message.success(editingCourseIdx.value !== null ? '课程已更新' : '课程已添加')
+    showCourseModal.value = false
+    await loadTrainingDetail()
+  } catch {
+    message.error('课程保存失败')
+  }
 }
 
 function removeCourse(idx) {
   Modal.confirm({
     title: '确认删除', content: `确定删除课程「${trainingData.courses[idx]?.name}」吗？`,
     okText: '删除', okType: 'danger', cancelText: '取消',
-    onOk: () => {
-      trainingData.courses.splice(idx, 1)
-      apiUpdateTraining(trainingId, { courses: trainingData.courses }).catch(() => {})
-      message.success('课程已删除')
+    onOk: async () => {
+      const nextCourses = [...trainingData.courses]
+      nextCourses.splice(idx, 1)
+      try {
+        await apiUpdateTraining(trainingId, { courses: nextCourses })
+        message.success('课程已删除')
+        await loadTrainingDetail()
+      } catch {
+        message.error('课程删除失败')
+      }
     }
   })
 }
@@ -903,6 +1269,22 @@ const editForm = reactive({
   location: trainingData.location, instructorId: trainingData.instructorId || null, instructorName: trainingData.instructorName,
   capacity: trainingData.capacity, status: trainingData.status, description: trainingData.description || '',
 })
+
+function syncEditFormFromTraining() {
+  editForm.name = trainingData.name
+  editForm.startDate = trainingData.startDate
+  editForm.endDate = trainingData.endDate
+  editForm.location = trainingData.location
+  editForm.instructorId = trainingData.instructorId || null
+  editForm.instructorName = trainingData.instructorName
+  editForm.capacity = trainingData.capacity
+  editForm.status = trainingData.status
+  editForm.description = trainingData.description || ''
+  editFormDates.value = [
+    trainingData.startDate ? dayjs(trainingData.startDate) : null,
+    trainingData.endDate ? dayjs(trainingData.endDate) : null,
+  ]
+}
 
 function onEditInstructorChange(userId) {
   const inst = instructorList.value.find(i => i.userId == userId)
@@ -918,6 +1300,7 @@ function saveClassInfo() {
   })
   apiUpdateTraining(trainingId, { ...editForm }).catch(() => {})
   message.success('班级信息已更新')
+  syncEditFormFromTraining()
   showEditModal.value = false
 }
 
@@ -1068,6 +1451,17 @@ function exportMsg() {
 
 <style scoped>
 .training-detail-page { padding: 0; }
+.workflow-header { margin-bottom: 16px; }
+.workflow-header :deep(.ant-steps) { width: 100%; }
+.workflow-action-list { width: 100%; }
+.exam-plan-section { display: flex; flex-direction: column; gap: 12px; }
+.exam-plan-title { font-size: 14px; font-weight: 600; color: #1f2937; }
+.exam-plan-list { display: flex; flex-direction: column; gap: 12px; }
+.exam-plan-card { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; padding: 16px; border: 1px solid #eef2f7; border-radius: 10px; background: #fafcff; }
+.admission-plan-card { background: #f5f9ff; border-color: #dbeafe; }
+.exam-plan-main { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.exam-plan-name { font-size: 15px; font-weight: 600; color: #111827; }
+.exam-plan-meta { display: flex; flex-wrap: wrap; gap: 8px 16px; color: #6b7280; font-size: 13px; }
 .training-banner { padding: 24px; border-radius: 8px; margin-bottom: 4px; }
 .training-banner.status-active { background: linear-gradient(135deg, #001a50, #003087); }
 .training-banner.status-upcoming { background: linear-gradient(135deg, #78350f, #b45309); }
@@ -1082,6 +1476,7 @@ function exportMsg() {
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .section-header h4 { margin: 0; color: #333; }
 .course-item { display: flex; justify-content: space-between; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+.current-course-card { background: #f8fbff; border: 1px solid #dbeafe; border-radius: 8px; padding: 16px; }
 .ci-name { font-size: 14px; font-weight: 500; }
 .ci-instructor { font-size: 12px; color: #888; }
 .ci-time { margin-top: 6px; display: flex; flex-direction: column; gap: 4px; }
@@ -1143,6 +1538,9 @@ function exportMsg() {
 }
 
 @media (max-width: 768px) {
+  .workflow-header {
+    margin-bottom: 12px;
+  }
   .overview-stats { grid-template-columns: 1fr 1fr !important; }
   .training-banner { padding: 16px !important; }
   .training-title { font-size: 18px !important; }
@@ -1154,6 +1552,9 @@ function exportMsg() {
   .course-item {
     flex-direction: column;
     gap: 8px;
+  }
+  .exam-plan-card {
+    flex-direction: column;
   }
   .ci-right {
     width: 100%;

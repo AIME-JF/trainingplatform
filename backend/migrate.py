@@ -107,9 +107,9 @@ def show_migration_heads():
 
 
 def stamp_database(revision: str):
-    """标记数据库版本（不执行迁移）"""
+    """标记数据库版本（不执行迁移，仅限结构已完全一致时使用）"""
     cmd = ["alembic", "stamp", revision]
-    description = f"标记数据库版本为: {revision}"
+    description = f"标记数据库版本为: {revision}（仅在已确认数据库结构与该版本完全一致时使用）"
     run_command(cmd, description)
 
 
@@ -161,7 +161,7 @@ def main():
   python migrate.py current                 # 显示当前版本
   python migrate.py history                 # 显示迁移历史
   python migrate.py status                  # 检查迁移状态
-  python migrate.py stamp head              # 标记为最新版本（不执行迁移）
+  python migrate.py stamp head              # 仅在已确认库结构与最新版本完全一致时才使用
         """
     )
     

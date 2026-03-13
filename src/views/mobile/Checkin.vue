@@ -7,8 +7,17 @@
       <div class="header-sub">扫码签到确认</div>
     </div>
 
+    <div class="training-info-card" v-if="loading">
+      <div class="training-name">加载签到信息中...</div>
+    </div>
+
+    <div class="training-info-card" v-else-if="errorMessage">
+      <div class="training-name">无法完成扫码签到</div>
+      <div class="checkin-note">{{ errorMessage }}</div>
+    </div>
+
     <!-- 培训信息卡 -->
-    <div class="training-info-card" v-if="!checkedIn">
+    <div class="training-info-card" v-else-if="!checkedIn">
       <div class="training-name">{{ trainingName }}</div>
       <div class="training-meta">
         <div class="meta-item">
@@ -17,11 +26,11 @@
         </div>
         <div class="meta-item">
           <span class="meta-icon">⏰</span>
-          <span>{{ checkinTime }}</span>
+          <span>{{ sessionLabel }}</span>
         </div>
         <div class="meta-item">
           <span class="meta-icon">📍</span>
-          <span>南宁市公安局培训基地</span>
+          <span>{{ checkinTime }}</span>
         </div>
       </div>
 
@@ -56,32 +65,90 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { message } from 'ant-design-vue'
+import { getCheckinQrToken, submitCheckinByQr } from '@/api/training'
 
 const route = useRoute()
+const token = route.params.token
 
-// 从 URL params 或 localStorage 获取用户信息（Demo 用 mock）
-const userName = ref('张伟')
-const userPoliceId = ref('GX-NN-2056')
-const trainingName = ref('2025年南宁市基层民警执法规范化培训（第3期）')
-
-const now = new Date()
-const checkinDate = now.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' })
-const checkinTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
+const userName = ref('未登录用户')
+const userPoliceId = ref('')
+const trainingName = ref('')
+const sessionLabel = ref('')
+const checkinDate = ref('')
+const checkinTime = ref('')
 
 const signing = ref(false)
 const checkedIn = ref(false)
 const successTime = ref('')
+const loading = ref(true)
+const errorMessage = ref('')
+
+function formatDateLabel(value) {
+  if (!value) return '未设置'
+  const target = new Date(value)
+  if (Number.isNaN(target.getTime())) return String(value)
+  return target.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+    weekday: 'long',
+  })
+}
+
+function formatDateTime(value) {
+  if (!value) return '未设置'
+  const target = new Date(value)
+  if (Number.isNaN(target.getTime())) return String(value)
+  return target.toLocaleString('zh-CN', { hour12: false })
+}
+
+function hydrateUserInfo() {
+  try {
+    const saved = JSON.parse(localStorage.getItem('userInfo') || '{}')
+    userName.value = saved.name || saved.nickname || saved.username || '未登录用户'
+    userPoliceId.value = saved.policeId || saved.police_id || ''
+  } catch {
+    userName.value = '未登录用户'
+    userPoliceId.value = ''
+  }
+}
+
+async function loadQrPayload() {
+  loading.value = true
+  errorMessage.value = ''
+  try {
+    hydrateUserInfo()
+    const payload = await getCheckinQrToken(token)
+    trainingName.value = payload.trainingName
+    sessionLabel.value = payload.sessionLabel
+    checkinDate.value = formatDateLabel(payload.date)
+    checkinTime.value = `二维码有效至 ${formatDateTime(payload.expireAt)}`
+  } catch (error) {
+    errorMessage.value = error.message || '签到二维码不存在、已失效，或当前账号未登录。'
+  } finally {
+    loading.value = false
+  }
+}
 
 async function handleCheckin() {
   signing.value = true
-  await new Promise(r => setTimeout(r, 1200))
-  signing.value = false
-  checkedIn.value = true
-  const t = new Date()
-  successTime.value = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')} ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')}:${String(t.getSeconds()).padStart(2,'0')}`
+  try {
+    await submitCheckinByQr(token)
+    checkedIn.value = true
+    successTime.value = formatDateTime(new Date().toISOString())
+    message.success('签到成功')
+  } catch (error) {
+    errorMessage.value = error.message || '签到失败，请确认已登录且二维码仍有效。'
+    message.error(errorMessage.value)
+  } finally {
+    signing.value = false
+  }
 }
+
+onMounted(loadQrPayload)
 </script>
 
 <style scoped>

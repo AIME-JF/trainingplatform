@@ -1,47 +1,282 @@
-# 警务训练平台后端（FastAPI）
+# 警务训练平台后端
 
-> 当前文档基于 `backend/` 实际代码结构与已注册路由整理（统一在 `app/views/*.py`，无 admin/app 拆分）。
+本文档面向后端开发与运维，描述 `backend/` 服务的真实结构、启动流程、环境变量和维护方式。
 
----
+## 服务定位
 
-## 1. 项目简介
+后端服务基于 FastAPI，负责以下能力：
 
-本项目是“警务训练平台”的后端服务，提供：
+- JWT 登录鉴权与权限解析
+- 用户、角色、部门、权限、警种管理
+- 课程、考试、培训、证书、公告、个人中心
+- 资源上传、资源库、推荐流、审核工作流
+- 报表导出、人才库、AI 组卷与 AI 教案生成
+- PostgreSQL、Redis、MinIO、Celery 的集成
 
-- 认证与用户信息获取
-- 课程与学习进度管理
-- 题库与考试管理（出卷、交卷、成绩）
-- 培训班管理（报名、审批、签到、二维码）
-- 教官信息（基于用户角色）与证书管理
-- 个人中心、数据看板、人才库
-- AI 能力（智能组卷、教案生成）
+## 技术栈
 
-后端采用 FastAPI + SQLAlchemy + PostgreSQL，支持 Alembic 迁移与 Redis。
+| 类别 | 技术 |
+| --- | --- |
+| Web 框架 | FastAPI |
+| ORM | SQLAlchemy 2 |
+| 配置 | pydantic-settings + python-dotenv |
+| 数据库 | PostgreSQL |
+| 迁移 | Alembic |
+| 缓存 / 队列 | Redis、Celery |
+| 文件存储 | MinIO |
+| 鉴权 | python-jose JWT |
+| 密码加密 | passlib[bcrypt] |
+| 日志 | Loguru |
+| Excel 导入导出 | openpyxl |
+| AI | OpenAI 兼容客户端 |
 
----
+## 目录结构
 
-## 2. 技术栈
+```text
+backend/
+├── app/
+│   ├── __init__.py              # FastAPI 应用实例、startup/shutdown
+│   ├── views/                   # 路由层
+│   ├── controllers/             # 控制器层
+│   ├── services/                # 业务层
+│   ├── models/                  # SQLAlchemy 模型
+│   ├── schemas/                 # Pydantic 模型
+│   ├── middleware/              # 鉴权、日志、异常处理
+│   ├── database/                # 数据库、Redis、自动迁移
+│   ├── tasks/                   # Celery 任务
+│   ├── utils/                   # 工具函数与权限分组
+│   └── runtime_sync.py          # 运行时兼容修复与额外权限同步
+├── alembic/                     # 数据库迁移版本
+├── data/                        # 本地数据目录
+├── docker/                      # 容器启动脚本
+├── tests/                       # 现有测试脚本
+├── main.py                      # uvicorn 启动入口
+├── config.py                    # Settings 定义
+├── migrate.py                   # 迁移管理脚本
+├── init_data.py                 # 种子数据初始化
+└── celery_app.py                # Celery 实例
+```
 
-- **Web 框架**: FastAPI
-- **ORM**: SQLAlchemy 2.x
-- **数据库**: PostgreSQL
-- **迁移**: Alembic
-- **缓存**: Redis
-- **鉴权**: JWT（python-jose）
-- **密码哈希**: passlib[bcrypt]
-- **配置管理**: pydantic-settings + dotenv
-- **日志**: Loguru
-- **AI SDK**: OpenAI 兼容客户端（用于 DeepSeek 接口）
+## 路由组成
 
-依赖见：`backend/requirements.txt`
+已注册业务路由来自 `app/views/*.py`，当前包括：
 
----
+- `auth`
+- `dashboard`
+- `courses`
+- `exams`
+- `questions`
+- `trainings`
+- `certificates`
+- `profile`
+- `report`
+- `ai`
+- `talent`
+- `police-types`
+- `media`
+- `users`
+- `notices`
+- `roles`
+- `departments`
+- `permissions`
+- `resources`
+- `reviews`
+- `resources/recommendations`
 
-## 3. 核心特性
+统一前缀为 `settings.API_V1_STR`，默认 `/api/v1`。
 
-### 3.1 统一响应结构
+## 启动流程
 
-系统采用统一响应体：
+### `python main.py` 做了什么
+
+`main.py` 只负责启动 uvicorn：
+
+```python
+uvicorn.run("app:app", host="0.0.0.0", port=8001)
+```
+
+真正的应用初始化逻辑在 `app/__init__.py`。
+
+### FastAPI startup 事件做了什么
+
+应用启动时会依次执行：
+
+1. 如果 `AUTO_MIGRATE_ON_STARTUP=True`，调用 `app.database.auto_migrate.run_auto_migration()`
+2. 调用 `init_db()`，用 `Base.metadata.create_all()` 补齐仍缺失的表
+3. 调用 `sync_runtime_state()`，同步额外权限和兼容性修复
+4. 测试 Redis 连接
+
+注意：
+
+- 这些步骤不会执行 `init_data.py`
+- 首次初始化种子数据仍需手动运行 `python init_data.py`
+
+## 环境变量
+
+推荐从 `backend/.env.example` 复制为 `backend/.env` 后再修改。
+
+### 核心配置
+
+| 变量 | 说明 | 默认值 |
+| --- | --- | --- |
+| `PROJECT_NAME` | 项目名称 | `警务训练平台` |
+| `VERSION` | 应用版本 | `1.0.0` |
+| `DEBUG` | 调试模式 | `true` |
+| `API_V1_STR` | API 前缀 | `/api/v1` |
+| `AUTO_MIGRATE_ON_STARTUP` | 启动时自动检查迁移 | `true` |
+
+### 数据库配置
+
+| 变量 | 说明 |
+| --- | --- |
+| `DATABASE_URL` | PostgreSQL 连接串 |
+| `DATABASE_ECHO` | 是否打印 SQL |
+
+### Redis 配置
+
+| 变量 | 说明 |
+| --- | --- |
+| `REDIS_HOST` | Redis 主机 |
+| `REDIS_PORT` | Redis 端口 |
+| `REDIS_PASSWORD` | Redis 密码，可为空 |
+| `REDIS_DB` | Redis DB 编号 |
+
+### MinIO 配置
+
+| 变量 | 说明 |
+| --- | --- |
+| `MINIO_PUBLIC_URL` | 对外访问文件的基础地址 |
+| `MINIO_ENDPOINT` | MinIO 内部连接地址 |
+| `MINIO_ACCESS_KEY` | MinIO 账号 |
+| `MINIO_SECRET_KEY` | MinIO 密码 |
+| `MINIO_SECURE` | 是否启用 HTTPS |
+| `MINIO_BUCKET` | 存储桶名称 |
+
+### Celery 配置
+
+| 变量 | 说明 |
+| --- | --- |
+| `CELERY_BROKER_URL` | Broker 地址 |
+| `CELERY_RESULT_BACKEND` | 结果存储地址 |
+
+### 鉴权与 AI 配置
+
+| 变量 | 说明 |
+| --- | --- |
+| `SECRET_KEY` | JWT 签名密钥 |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Token 过期时间，默认 30 天 |
+| `LLM_BASE_URL` | 大模型服务地址 |
+| `LLM_API_KEY` | 大模型密钥 |
+| `LLM_MODEL` | 使用的大模型名称 |
+
+## 本地启动
+
+以下命令以 PowerShell 7 为例。
+
+### 1. 安装依赖
+
+```powershell
+Set-Location backend
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+```
+
+### 2. 初始化环境变量
+
+```powershell
+Copy-Item .env.example .env
+```
+
+然后根据本机环境修改：
+
+- `DATABASE_URL`
+- `REDIS_*`
+- `MINIO_*`
+- `SECRET_KEY`
+- `LLM_*`
+
+### 3. 迁移数据库
+
+```powershell
+python migrate.py upgrade
+```
+
+### 4. 初始化种子数据
+
+```powershell
+python init_data.py
+```
+
+### 5. 启动 API
+
+```powershell
+python main.py
+```
+
+默认地址：
+
+- API：`http://127.0.0.1:8001`
+- Swagger：`http://127.0.0.1:8001/api/v1/docs`
+- ReDoc：`http://127.0.0.1:8001/api/v1/redoc`
+- OpenAPI：`http://127.0.0.1:8001/api/v1/openapi.json`
+
+## Celery 与后台任务
+
+### 启动 Worker
+
+```powershell
+Set-Location backend
+.\.venv\Scripts\Activate.ps1
+celery -A celery_app worker --loglevel=info --pool=gevent --concurrency=10
+```
+
+### 启动 Beat
+
+```powershell
+Set-Location backend
+.\.venv\Scripts\Activate.ps1
+celery -A celery_app beat --loglevel=info
+```
+
+说明：
+
+- Docker 镜像统一通过 `backend/docker/entrypoint.sh` 接收 `api`、`worker`、`beat` 三种模式
+- 当前代码仓库内已有 `app/tasks/recommendation.py`，但大部分业务仍以同步 API 为主
+
+## 数据迁移
+
+使用 `migrate.py` 管理 Alembic：
+
+```powershell
+python migrate.py upgrade
+python migrate.py downgrade -1
+python migrate.py current
+python migrate.py history
+python migrate.py status
+python migrate.py generate "your message"
+```
+
+当前已提交迁移包括：
+
+- 培训主模型
+- 用户与警种/单位拆分
+- 媒体文件与章节文件关联
+- 课程笔记、课程答疑
+- 资源库、审核流、推荐流
+- 权限 `group` 字段
+
+## 认证与权限
+
+### 认证方式
+
+- 登录接口：`POST /api/v1/auth/login`
+- 手机登录接口：`POST /api/v1/auth/login/phone`
+- 受保护接口统一使用 `Authorization: Bearer <token>`
+
+### 统一响应
+
+除下载流和文件直链外，接口通常返回：
 
 ```json
 {
@@ -51,374 +286,101 @@
 }
 ```
 
-> 注意：全局异常处理会将异常也返回为 HTTP 200，但 `code` 为业务错误码（如 400/401/404/500）。
+分页数据结构：
 
-### 3.2 统一鉴权方式
-
-- 认证接口：`/api/v1/auth/login`
-- 受保护接口：`Authorization: Bearer <token>`
-- token 过期配置：`ACCESS_TOKEN_EXPIRE_MINUTES`（默认 30 天）
-
-### 3.3 自动迁移与初始化
-
-启动时支持自动检查并执行迁移（`AUTO_MIGRATE_ON_STARTUP=True`）。
-
-`main.py` 会执行：
-
-1. `init_data.main()`（初始化种子数据）
-2. 启动 uvicorn（默认 `0.0.0.0:8001`）
-
-### 3.4 权限分组（Permission Group）
-
-- `permissions` 表新增 `group` 字段（`NOT NULL`，默认 `SYSTEM`，并建立索引 `ix_permissions_group`）。
-- 迁移版本：`d4e5f6a7b8c9`（文件：`alembic/versions/2026_03_10_1030-d4e5f6a7b8c9_add_permission_group_field.py`）。
-- 创建/更新/同步权限时，若未传或传空 `group`，后端会按 `path` 自动推断，未命中规则时回退到 `SYSTEM`。
-
----
-
-## 4. 目录结构
-
-```text
-backend/
-├── app/
-│   ├── __init__.py                 # FastAPI 应用创建、路由注册、startup/shutdown
-│   ├── controllers/                # 控制器层（异常转换）
-│   ├── services/                   # 业务层
-│   ├── models/                     # SQLAlchemy 模型
-│   ├── schemas/                    # Pydantic 请求/响应模型
-│   ├── views/                      # 路由层（统一入口）
-│   ├── database/                   # DB/Redis 初始化、会话依赖、自动迁移
-│   ├── middleware/                 # 认证、日志、异常处理
-│   └── utils/
-├── alembic/                        # 迁移配置与版本
-├── tests/
-│   ├── test_api_integration.py     # 集成测试（覆盖 12 业务域）
-│   └── ...
-├── config.py                       # 项目配置
-├── init_data.py                    # 初始权限/角色/用户（含教官扩展字段）
-├── migrate.py                      # 迁移管理脚本
-└── main.py                         # 启动入口
+```json
+{
+  "page": 1,
+  "size": 10,
+  "total": 100,
+  "items": []
+}
 ```
 
----
+### 权限模型
 
-## 5. 分层架构说明
+- 用户权限由角色权限与部门权限共同决定
+- `admin` 角色会在运行时自动补齐所有激活权限
+- 权限表带有 `group` 字段，缺失时会根据路由自动推断
+- 运行时额外补充的权限定义位于 `app/runtime_sync.py`
 
-### Models (`app/models`)
+### 受保护对象
 
-- RBAC 与系统：`User`, `Role`, `Permission`, `Department`, `Config`, `ConfigGroup`, `SystemMeta`
-- 业务域：
-  - 课程：`Course`, `Chapter`, `CourseProgress`
-  - 培训：`Training`, `TrainingCourse`, `Enrollment`, `CheckinRecord`, `ScheduleItem`
-  - 考试：`Question`, `Exam`, `ExamQuestion`, `ExamRecord`
-  - 证书：`Certificate`（教官扩展信息已并入 `User`）
+后端已明确保护以下对象：
 
-### Schemas (`app/schemas`)
+- `admin` 角色不可编辑、不可删除、不可重分配权限
+- `admin` 用户不可修改角色
+- 用户删除采用软删除：`is_active=False`
 
-按业务域定义 Create/Update/Response 模型，统一响应模型为：
-- `StandardResponse[T]`
-- `PaginatedResponse[T]`
+## 文件上传与对象存储
 
-### Services (`app/services`)
+资源和媒体相关能力依赖 MinIO：
 
-封装业务逻辑与数据库操作，例如：
-- `CourseService`, `QuestionService`, `ExamService`, `TrainingService`
-- `CertificateService`, `ProfileService`
-- `DashboardService`, `ReportService`, `TalentService`, `AIService`
+- 上传接口：`POST /api/v1/media/upload`
+- 取文件接口：`GET /api/v1/media/files/{file_id}`
 
-### Controllers (`app/controllers`)
+实现特性：
 
-封装 service 调用并转换异常为 `HTTPException`。
+- 上传时按 SHA-256 秒传去重
+- 文件写入 MinIO
+- 数据库保留文件元数据
+- 历史本地文件仍支持兼容读取
+- `GET /media/files/{id}` 可能直接返回文件，也可能 307 跳转到 MinIO 直链
 
-### Views (`app/views`)
+## 批量导入
 
-定义 API 路由与依赖注入，统一通过 `app/views/__init__.py` 汇总注册。
+后端提供三类 Excel 导入：
 
----
+- 全员底库导入：`POST /api/v1/users/import/police-base`
+- 培训学员导入：`POST /api/v1/trainings/{training_id}/import/students`
+- 培训教官导入：`POST /api/v1/trainings/{training_id}/import/instructors`
+- 培训课表导入：`POST /api/v1/trainings/{training_id}/import/schedule`
 
-## 6. 配置项（`config.py`）
+导入特点：
 
-关键配置如下（可通过 `.env` / `.env.dev` 覆盖）：
+- 基于 `openpyxl` 解析 `.xlsx`
+- 自动识别中英文表头别名
+- 缺失部门与警种会自动创建
+- 新建账号默认密码为 `Police@123456`
 
-- 基础：
-  - `PROJECT_NAME`, `VERSION`, `DEBUG`
-  - `API_V1_STR`（默认 `/api/v1`）
-- 数据库：
-  - `DATABASE_URL`
-  - `DATABASE_ECHO`
-- Redis：
-  - `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB`
-- JWT：
-  - `SECRET_KEY`
-  - `ACCESS_TOKEN_EXPIRE_MINUTES`
-- 迁移：
-  - `AUTO_MIGRATE_ON_STARTUP`
-- AI：
-  - `LLM_BASE_URL`
-  - `LLM_API_KEY`
-  - `LLM_MODEL`
+## Docker 运行说明
 
----
+`backend/Dockerfile` 会构建 API 与 Worker 共用镜像。
 
-## 7. 本地启动
+容器内启动入口：
 
-### 7.1 安装依赖
+- `api`：`python main.py`
+- `worker`：`celery -A celery_app worker --loglevel=info --pool=gevent ...`
+- `beat`：`celery -A celery_app beat --loglevel=info`
 
-```bash
-pip install -r requirements.txt
-```
+完整部署建议从仓库根目录下的 `docker/` 目录操作，而不是单独运行后端镜像。
 
-### 7.2 启动服务
+## 种子数据
 
-```bash
-python main.py
-```
+`python init_data.py` 会初始化：
 
-默认端口：`8001`
+- 权限
+- 根部门 `ROOT`
+- 基础警种
+- `admin` / `instructor` / `student` 三个默认角色
+- 三个示例用户
 
-### 7.3 文档与健康检查
+默认账号：
 
-- Swagger: `http://127.0.0.1:8001/api/v1/docs`
-- ReDoc: `http://127.0.0.1:8001/api/v1/redoc`
-- 健康检查: `http://127.0.0.1:8001/health`
+| 角色 | 用户名 | 密码 |
+| --- | --- | --- |
+| 管理员 | `admin` | `police2025` |
+| 教官 | `instructor` | `teach2025` |
+| 学员 | `student` | `learn2025` |
 
----
+## 已知行为与注意事项
 
-## 8. 初始化数据（`init_data.py`）
+- `POST /api/v1/auth/login/phone` 目前尚未校验验证码内容，只根据手机号查用户并发 token。
+- 后端启动不会自动执行 `init_data.py`，首次建库必须手动运行。
+- 当前同时保留了 Alembic 迁移与 `Base.metadata.create_all()` 补表逻辑，后者主要用于兼容旧库或开发环境缺表。
+- 某些系统管理接口同时提供 REST 风格和兼容旧前端的 `/create`、`/update`、`/delete` 别名。
 
-首次初始化会创建权限、部门、角色、用户（含教官扩展字段）。
-- 初始化权限时会调用 `infer_permission_group(path)` 自动写入权限分组。
+## 进一步阅读
 
-### 默认账号
-
-- 管理员：`admin / police2025`
-- 教官：`instructor / teach2025`
-- 学员：`student / learn2025`
-
-### 默认角色
-
-- `admin`：全权限
-- `instructor`：教学/培训/题库/考试/证书等管理权限
-- `student`：学习/考试/报名/签到/个人中心权限
-- `admin` 角色后端受保护：禁止更新角色信息、禁止删除角色、禁止修改角色权限。
-
----
-
-## 9. API 总览（当前实际路由）
-
-统一前缀：`/api/v1`
-
-### 9.1 认证（`/auth`）
-
-- `POST /auth/login` 账号密码登录
-- `POST /auth/login/phone` 手机验证码登录
-- `GET /auth/me` 获取当前用户信息
-
-### 9.2 工作台（`/dashboard`）
-
-- `GET /dashboard` 根据 `role` 返回工作台数据
-
-### 9.3 课程管理（`/courses`）
-
-- `GET /courses` 课程列表（分页/搜索/分类/排序）
-- `POST /courses` 创建课程
-- `GET /courses/progress` 当前用户学习进度
-- `GET /courses/{course_id}` 课程详情
-- `PUT /courses/{course_id}` 更新课程
-- `PUT /courses/{course_id}/chapters/{chapter_id}/progress` 更新章节进度
-
-### 9.4 题库管理（`/questions`）
-
-- `GET /questions` 题目列表（分页/筛选）
-- `POST /questions` 创建题目
-- `PUT /questions/{question_id}` 更新题目
-- `DELETE /questions/{question_id}` 删除题目
-- `POST /questions/batch` 批量导入题目
-
-### 9.5 考试管理（`/exams`）
-
-- `GET /exams` 考试列表
-- `POST /exams` 创建考试
-- `GET /exams/{exam_id}` 考试详情（含题目）
-- `POST /exams/{exam_id}/submit` 提交考试
-- `GET /exams/{exam_id}/result` 获取考试结果
-- `GET /exams/{exam_id}/scores` 成绩管理
-
-### 9.6 培训管理（`/trainings`）
-
-- `GET /trainings` 培训列表
-- `POST /trainings` 创建培训班
-- `GET /trainings/{training_id}` 培训详情
-- `PUT /trainings/{training_id}` 更新培训班
-- `DELETE /trainings/{training_id}` 删除培训班
-- `GET /trainings/{training_id}/students` 学员列表
-- `GET /trainings/{training_id}/schedule` 周计划
-- `POST /trainings/{training_id}/enroll` 学员报名
-- `GET /trainings/{training_id}/enrollments` 报名列表
-- `PUT /trainings/{training_id}/enrollments/{eid}/approve` 审批通过
-- `PUT /trainings/{training_id}/enrollments/{eid}/reject` 审批拒绝
-- `GET /trainings/{training_id}/checkin/records` 签到记录
-- `POST /trainings/{training_id}/checkin` 签到
-- `GET /trainings/{training_id}/checkin/qr` 生成签到二维码
-
-### 9.7 资源中心（`/resources` + 审核/推荐扩展）
-
-- `GET /resources` 资源列表（分页/搜索/状态/内容类型/my_only）
-- `POST /resources` 创建资源（`content_type`: video/image/document；兼容传入 `image_text`，后端会归一化为 `image`）
-- `GET /resources/{resource_id}` 资源详情
-- `PUT /resources/{resource_id}` 更新资源
-- `DELETE /resources/{resource_id}` 删除资源
-- `POST /resources/{resource_id}/publish` 发布资源
-- `POST /resources/{resource_id}/offline` 下线资源
-
-### 9.8 资源审核（`/resources` + `/reviews` + `/review-policies`）
-
-- `POST /resources/{resource_id}/submit` 提交审核
-- `GET /reviews/tasks` 我的审核任务（status）
-- `POST /reviews/tasks/{task_id}/approve` 审核通过
-- `POST /reviews/tasks/{task_id}/reject` 审核驳回
-- `GET /reviews/workflows/{resource_id}` 资源审核轨迹
-- `GET /review-policies` 审核策略列表
-- `POST /review-policies` 创建审核策略
-- `PUT /review-policies/{policy_id}` 更新审核策略
-
-### 9.9 资源推荐（`/resources/recommendations/*`）
-
-- `GET /resources/recommendations/feed` 推荐资源流（视频使用播放器、图片直接展示、文档提供下载）
-- `POST /resources/{resource_id}/events` 记录资源行为事件（impression/click/play/complete）
-
-### 9.10 资源绑定（课程/培训）
-
-- `POST /courses/{course_id}/resources` 课程绑定资源
-- `GET /courses/{course_id}/resources` 课程资源列表
-- `DELETE /courses/{course_id}/resources/{resource_id}` 课程解绑资源
-- `POST /trainings/{training_id}/resources` 培训绑定资源
-- `GET /trainings/{training_id}/resources` 培训资源列表
-- `DELETE /trainings/{training_id}/resources/{resource_id}` 培训解绑资源
-
-### 9.11 教官信息（通过用户接口）
-
-- `GET /users?role=instructor` 教官用户列表
-- `GET /users/{user_id}` 教官用户详情
-- `POST /users` / `PUT /users/{user_id}` 支持教官扩展字段：
-  - `instructor_title`
-  - `instructor_level`
-  - `instructor_specialties`
-  - `instructor_qualification`
-  - `instructor_certificates`
-  - `instructor_intro`
-  - `instructor_rating`
-  - `instructor_course_count`
-  - `instructor_student_count`
-  - `instructor_review_count`
-
-> `/instructors` 专用接口已下线。
-
-### 9.12 证书管理（`/certificates`）
-
-- `GET /certificates` 证书列表
-- `POST /certificates` 签发证书
-
-### 9.13 个人中心（`/profile`）
-
-- `GET /profile` 个人信息
-- `PUT /profile` 更新个人信息
-- `GET /profile/study-stats` 学习统计
-- `GET /profile/exam-history` 考试历史
-
-### 9.14 数据看板（`/report`）
-
-- `GET /report/kpi` KPI 数据
-- `GET /report/trend` 月度趋势
-- `GET /report/police-type-distribution` 警种分布
-- `GET /report/city-ranking` 城市/单位排名
-
-### 9.15 AI 功能（`/ai`）
-
-- `POST /ai/generate-questions` AI 智能组卷
-- `POST /ai/generate-lesson-plan` AI 教案生成
-
-> 若外部大模型鉴权失败，服务会记录错误日志并返回降级结果（空题目/空教案），接口本身仍可返回成功结构。
-
-### 9.16 人才库（`/talent`）
-
-- `GET /talent` 人才列表（search/tier/unit）
-- `GET /talent/stats` 统计概览
-
----
-
-## 10. 迁移与数据库管理
-
-使用 `migrate.py`：
-
-```bash
-# 初始化数据库（首次）
-python migrate.py init
-
-# 生成迁移（自动）
-python migrate.py generate "add police training models"
-
-# 升级到最新
-python migrate.py upgrade
-
-# 回滚一个版本
-python migrate.py downgrade -1
-
-# 查看状态
-python migrate.py status
-```
-
----
-
-## 11. 测试
-
-已提供集成测试脚本：
-
-- `tests/test_api_integration.py`
-
-执行方式：
-
-```bash
-python tests/test_api_integration.py
-```
-
-说明：
-- 脚本会自动登录三角色并覆盖主要业务流程。
-- 已内置 `session.trust_env = False`，避免本机代理导致 `127.0.0.1` 请求异常。
-
----
-
-## 12. 常见问题
-
-### Q1：为什么 HTTP 状态码是 200，但业务失败？
-
-因为项目统一异常响应格式，业务错误通过 `code` 字段体现（如 `code=500`）。
-
-### Q2：AI 接口日志报 `Authentication Fails` 是否会影响主流程？
-
-不会影响其他业务模块。AI 模块失败时会降级返回默认结果。
-
-### Q3：删除培训班时外键冲突怎么办？
-
-当前实现已处理证书外键：删除培训班前会先清空 `certificates.training_id` 的关联。
-
----
-
-## 13. 开发约定
-
-- 所有新业务建议遵循分层：`views -> controllers -> services -> models/schemas`
-- 新增模型后同步更新：
-  - `app/models/__init__.py`
-  - `app/database/__init__.py`（`init_db` 导入）
-  - `alembic/env.py`（metadata 导入）
-- 新增路由后同步更新：
-  - `app/views/__init__.py`
-  - `app/__init__.py`（统一注册）
-
----
-
-## 14. 版本信息
-
-- 应用版本：`1.0.0`
-- 默认 API 前缀：`/api/v1`
-- 默认服务端口：`8001`
+- 接口明细：`backend/API_DOCUMENTATION.md`
+- 前后端整体说明：仓库根目录 `README.md`

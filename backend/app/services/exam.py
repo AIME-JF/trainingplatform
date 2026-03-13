@@ -1,18 +1,50 @@
 """
 考试管理服务
 """
-from typing import Optional, List, Dict, Any
 from datetime import datetime
-from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from typing import Any, Dict, List, Optional
 
-from app.models import Exam, ExamQuestion, ExamRecord, Question, User
-from app.schemas.exam import (
-    ExamCreate, ExamUpdate, ExamResponse, ExamDetailResponse,
-    ExamSubmit, ExamRecordResponse, QuestionResponse
+from sqlalchemy.orm import Session, joinedload
+
+from app.models import (
+    AdmissionExam,
+    AdmissionExamRecord,
+    Enrollment,
+    Exam,
+    ExamPaper,
+    ExamPaperQuestion,
+    ExamRecord,
+    Question,
+    Training,
+    User,
 )
 from app.schemas import PaginatedResponse
+from app.schemas.exam import (
+    AdmissionExamCreate,
+    AdmissionExamDetailResponse,
+    AdmissionExamRecordResponse,
+    AdmissionExamResponse,
+    AdmissionExamUpdate,
+    ExamCreate,
+    ExamDetailResponse,
+    ExamQuestionSnapshotResponse,
+    ExamRecordResponse,
+    ExamResponse,
+    ExamSubmit,
+    ExamUpdate,
+    ExamWrongQuestionResponse,
+)
 from logger import logger
+
+
+DIMENSION_KEYS = ("law", "enforce", "evidence", "physical", "ethic")
+DIMENSION_RULES = {
+    "law": ("法律", "法规", "条例", "法"),
+    "enforce": ("执法", "程序", "处置", "侦查"),
+    "evidence": ("证据", "取证", "笔录"),
+    "physical": ("体能", "技能", "警械"),
+    "ethic": ("道德", "纪律", "作风", "廉政"),
+}
 
 
 class ExamService:
@@ -26,288 +58,907 @@ class ExamService:
         page: int = 1,
         size: int = 10,
         status: Optional[str] = None,
-        type: Optional[str] = None,
+        exam_type: Optional[str] = None,
         search: Optional[str] = None,
+        training_id: Optional[int] = None,
+        purpose: Optional[str] = None,
+        current_user_id: Optional[int] = None,
     ) -> PaginatedResponse[ExamResponse]:
-        """获取考试列表"""
-        query = self.db.query(Exam)
+        """获取培训班内考试列表"""
+        query = self.db.query(Exam).options(
+            joinedload(Exam.paper).joinedload(ExamPaper.paper_questions),
+            joinedload(Exam.training),
+            joinedload(Exam.records),
+        ).filter(Exam.training_id.isnot(None))
 
-        if status:
-            query = query.filter(Exam.status == status)
-        if type:
-            query = query.filter(Exam.type == type)
+        if exam_type:
+            query = query.filter(Exam.type == exam_type)
         if search:
             query = query.filter(Exam.title.contains(search))
+        if training_id:
+            query = query.filter(Exam.training_id == training_id)
+        if purpose:
+            query = query.filter(Exam.purpose == purpose)
 
-        query = query.order_by(Exam.created_at.desc())
-        total = query.count()
+        exams = query.order_by(Exam.created_at.desc(), Exam.id.desc()).all()
+        changed = False
+        items: List[ExamResponse] = []
+        for exam in exams:
+            if self._refresh_exam_status(exam):
+                changed = True
+            if status and (exam.status or "upcoming") != status:
+                continue
+            items.append(self._to_training_exam_response(exam, current_user_id))
 
-        if size == -1:
-            exams = query.all()
-        else:
-            skip = (page - 1) * size
-            exams = query.offset(skip).limit(size).all()
+        if changed:
+            self.db.commit()
 
-        items = []
-        for e in exams:
-            q_count = self.db.query(ExamQuestion).filter(ExamQuestion.exam_id == e.id).count()
-            items.append(ExamResponse(
-                id=e.id, title=e.title, description=e.description,
-                duration=e.duration, total_score=e.total_score,
-                passing_score=e.passing_score, status=e.status,
-                type=e.type, scope=e.scope,
-                start_time=e.start_time, end_time=e.end_time,
-                created_by=e.created_by, question_count=q_count,
-                created_at=e.created_at, updated_at=e.updated_at
-            ))
+        return self._paginate(items, page, size)
 
-        return PaginatedResponse(
-            page=page, size=size if size != -1 else total,
-            total=total, items=items
+    def get_admission_exams(
+        self,
+        page: int = 1,
+        size: int = 10,
+        status: Optional[str] = None,
+        exam_type: Optional[str] = None,
+        search: Optional[str] = None,
+        current_user_id: Optional[int] = None,
+    ) -> PaginatedResponse[AdmissionExamResponse]:
+        """获取独立准入考试列表"""
+        query = self.db.query(AdmissionExam).options(
+            joinedload(AdmissionExam.paper).joinedload(ExamPaper.paper_questions),
+            joinedload(AdmissionExam.linked_trainings),
+            joinedload(AdmissionExam.records),
         )
+
+        if exam_type:
+            query = query.filter(AdmissionExam.type == exam_type)
+        if search:
+            query = query.filter(AdmissionExam.title.contains(search))
+
+        exams = query.order_by(AdmissionExam.created_at.desc(), AdmissionExam.id.desc()).all()
+        changed = False
+        items: List[AdmissionExamResponse] = []
+        for exam in exams:
+            if self._refresh_exam_status(exam):
+                changed = True
+            if status and (exam.status or "upcoming") != status:
+                continue
+            items.append(self._to_admission_exam_response(exam, current_user_id))
+
+        if changed:
+            self.db.commit()
+
+        return self._paginate(items, page, size)
 
     def create_exam(self, data: ExamCreate, user_id: int) -> ExamResponse:
-        """创建考试"""
+        """创建培训班内考试"""
+        training = self.db.query(Training).filter(Training.id == data.training_id).first()
+        if not training:
+            raise ValueError("关联培训班不存在")
+
+        questions = self._load_questions(data.question_ids or [])
+        paper, total_score = self._build_paper(
+            title=data.paper_title or data.title,
+            description=data.description,
+            duration=data.duration,
+            total_score=data.total_score,
+            passing_score=data.passing_score,
+            exam_type=data.type,
+            question_ids=data.question_ids or [],
+            questions=questions,
+            user_id=user_id,
+        )
+
         exam = Exam(
-            title=data.title, description=data.description,
-            duration=data.duration, total_score=data.total_score,
-            passing_score=data.passing_score, status=data.status,
-            type=data.type, scope=data.scope,
-            start_time=data.start_time, end_time=data.end_time,
-            created_by=user_id
+            paper_id=paper.id,
+            title=data.title,
+            description=data.description,
+            duration=data.duration,
+            total_score=total_score,
+            passing_score=data.passing_score,
+            status=data.status,
+            type=data.type,
+            purpose=data.purpose,
+            training_id=data.training_id,
+            max_attempts=data.max_attempts,
+            allow_makeup=data.allow_makeup,
+            start_time=data.start_time,
+            end_time=data.end_time,
+            published_at=datetime.now() if data.status in {"active", "ended"} else None,
+            created_by=user_id,
         )
         self.db.add(exam)
-        self.db.flush()
-
-        # 关联题目
-        if data.question_ids:
-            for idx, qid in enumerate(data.question_ids):
-                eq = ExamQuestion(exam_id=exam.id, question_id=qid, sort_order=idx)
-                self.db.add(eq)
-
         self.db.commit()
         self.db.refresh(exam)
-        logger.info(f"创建考试: {exam.title}")
 
-        q_count = len(data.question_ids) if data.question_ids else 0
-        return ExamResponse(
-            id=exam.id, title=exam.title, description=exam.description,
-            duration=exam.duration, total_score=exam.total_score,
-            passing_score=exam.passing_score, status=exam.status,
-            type=exam.type, scope=exam.scope,
-            start_time=exam.start_time, end_time=exam.end_time,
-            created_by=exam.created_by, question_count=q_count,
-            created_at=exam.created_at, updated_at=exam.updated_at
+        logger.info("创建培训班内考试: %s", exam.title)
+        detail = self.get_exam_detail(exam.id)
+        if not detail:
+            raise ValueError("创建考试后读取详情失败")
+        return detail
+
+    def create_admission_exam(self, data: AdmissionExamCreate, user_id: int) -> AdmissionExamResponse:
+        """创建独立准入考试"""
+        questions = self._load_questions(data.question_ids or [])
+        paper, total_score = self._build_paper(
+            title=data.paper_title or data.title,
+            description=data.description,
+            duration=data.duration,
+            total_score=data.total_score,
+            passing_score=data.passing_score,
+            exam_type=data.type,
+            question_ids=data.question_ids or [],
+            questions=questions,
+            user_id=user_id,
         )
 
-    def get_exam_detail(self, exam_id: int) -> Optional[ExamDetailResponse]:
-        """获取考试详情（含题目）"""
-        exam = self.db.query(Exam).filter(Exam.id == exam_id).first()
-        if not exam:
-            return None
-
-        eq_list = self.db.query(ExamQuestion).options(
-            joinedload(ExamQuestion.question)
-        ).filter(ExamQuestion.exam_id == exam_id).order_by(ExamQuestion.sort_order).all()
-
-        questions = [QuestionResponse.model_validate(eq.question) for eq in eq_list if eq.question]
-
-        return ExamDetailResponse(
-            id=exam.id, title=exam.title, description=exam.description,
-            duration=exam.duration, total_score=exam.total_score,
-            passing_score=exam.passing_score, status=exam.status,
-            type=exam.type, scope=exam.scope,
-            start_time=exam.start_time, end_time=exam.end_time,
-            created_by=exam.created_by, question_count=len(questions),
-            created_at=exam.created_at, updated_at=exam.updated_at,
-            questions=questions
+        exam = AdmissionExam(
+            paper_id=paper.id,
+            title=data.title,
+            description=data.description,
+            duration=data.duration,
+            total_score=total_score,
+            passing_score=data.passing_score,
+            status=data.status,
+            type=data.type,
+            scope=data.scope,
+            max_attempts=data.max_attempts,
+            start_time=data.start_time,
+            end_time=data.end_time,
+            published_at=datetime.now() if data.status in {"active", "ended"} else None,
+            created_by=user_id,
         )
+        self.db.add(exam)
+        self.db.commit()
+        self.db.refresh(exam)
 
-    def submit_exam(self, exam_id: int, user_id: int, data: ExamSubmit) -> ExamRecordResponse:
-        """提交考试"""
-        exam = self.db.query(Exam).filter(Exam.id == exam_id).first()
+        logger.info("创建准入考试: %s", exam.title)
+        detail = self.get_admission_exam_detail(exam.id)
+        if not detail:
+            raise ValueError("创建准入考试后读取详情失败")
+        return detail
+
+    def update_exam(self, exam_id: int, data: ExamUpdate) -> ExamResponse:
+        """更新培训班内考试"""
+        exam = self.db.query(Exam).options(
+            joinedload(Exam.paper).joinedload(ExamPaper.paper_questions),
+        ).filter(Exam.id == exam_id).first()
         if not exam:
             raise ValueError("考试不存在")
 
-        # 获取考试题目
-        eq_list = self.db.query(ExamQuestion).options(
-            joinedload(ExamQuestion.question)
-        ).filter(ExamQuestion.exam_id == exam_id).all()
+        if data.training_id is not None:
+            training = self.db.query(Training).filter(Training.id == data.training_id).first()
+            if not training:
+                raise ValueError("关联培训班不存在")
 
-        # 批改
+        self._update_training_exam(exam, data)
+        self.db.commit()
+        self.db.refresh(exam)
+
+        detail = self.get_exam_detail(exam.id)
+        if not detail:
+            raise ValueError("考试不存在")
+        return detail
+
+    def update_admission_exam(self, exam_id: int, data: AdmissionExamUpdate) -> AdmissionExamResponse:
+        """更新独立准入考试"""
+        exam = self.db.query(AdmissionExam).options(
+            joinedload(AdmissionExam.paper).joinedload(ExamPaper.paper_questions),
+        ).filter(AdmissionExam.id == exam_id).first()
+        if not exam:
+            raise ValueError("准入考试不存在")
+
+        self._update_admission_exam_entity(exam, data)
+        self.db.commit()
+        self.db.refresh(exam)
+
+        detail = self.get_admission_exam_detail(exam.id)
+        if not detail:
+            raise ValueError("准入考试不存在")
+        return detail
+
+    def get_exam_detail(self, exam_id: int) -> Optional[ExamDetailResponse]:
+        """获取培训班内考试详情"""
+        exam = self.db.query(Exam).options(
+            joinedload(Exam.paper).joinedload(ExamPaper.paper_questions),
+            joinedload(Exam.training),
+            joinedload(Exam.records),
+        ).filter(Exam.id == exam_id).first()
+        if not exam:
+            return None
+
+        if self._refresh_exam_status(exam):
+            self.db.commit()
+
+        return ExamDetailResponse(
+            **self._to_training_exam_response(exam).model_dump(),
+            questions=self._build_snapshot_responses(exam.paper),
+        )
+
+    def get_admission_exam_detail(self, exam_id: int) -> Optional[AdmissionExamDetailResponse]:
+        """获取准入考试详情"""
+        exam = self.db.query(AdmissionExam).options(
+            joinedload(AdmissionExam.paper).joinedload(ExamPaper.paper_questions),
+            joinedload(AdmissionExam.linked_trainings),
+            joinedload(AdmissionExam.records),
+        ).filter(AdmissionExam.id == exam_id).first()
+        if not exam:
+            return None
+
+        if self._refresh_exam_status(exam):
+            self.db.commit()
+
+        return AdmissionExamDetailResponse(
+            **self._to_admission_exam_response(exam).model_dump(),
+            questions=self._build_snapshot_responses(exam.paper),
+        )
+
+    def submit_exam(self, exam_id: int, user_id: int, data: ExamSubmit) -> ExamRecordResponse:
+        """提交培训班内考试"""
+        exam = self.db.query(Exam).options(
+            joinedload(Exam.paper).joinedload(ExamPaper.paper_questions),
+            joinedload(Exam.training),
+        ).filter(Exam.id == exam_id).first()
+        if not exam:
+            raise ValueError("考试不存在")
+
+        if self._refresh_exam_status(exam):
+            self.db.commit()
+        if exam.status != "active":
+            raise ValueError("当前考试未开放作答")
+
+        attempt_count = self._count_submitted_attempts(ExamRecord, ExamRecord.exam_id, exam.id, user_id)
+        if not self._can_join_training_exam(exam, user_id, attempt_count):
+            raise ValueError("当前用户无权参加该考试")
+
+        record = self._build_exam_record(
+            exam=exam,
+            user_id=user_id,
+            data=data,
+            record_class=ExamRecord,
+            exam_field_name="exam_id",
+            attempt_count=attempt_count,
+        )
+        self.db.add(record)
+        self._update_user_exam_stats(user_id, record.score or 0)
+        self.db.commit()
+
+        saved = self.db.query(ExamRecord).options(
+            joinedload(ExamRecord.user),
+            joinedload(ExamRecord.exam),
+        ).filter(ExamRecord.id == record.id).first()
+        logger.info("用户%s提交培训班考试%s，得分=%s", user_id, exam_id, saved.score if saved else 0)
+        return self._to_training_record_response(saved or record, exam)
+
+    def submit_admission_exam(self, exam_id: int, user_id: int, data: ExamSubmit) -> AdmissionExamRecordResponse:
+        """提交准入考试"""
+        exam = self.db.query(AdmissionExam).options(
+            joinedload(AdmissionExam.paper).joinedload(ExamPaper.paper_questions),
+        ).filter(AdmissionExam.id == exam_id).first()
+        if not exam:
+            raise ValueError("准入考试不存在")
+
+        if self._refresh_exam_status(exam):
+            self.db.commit()
+        if exam.status != "active":
+            raise ValueError("当前准入考试未开放作答")
+
+        attempt_count = self._count_submitted_attempts(
+            AdmissionExamRecord,
+            AdmissionExamRecord.admission_exam_id,
+            exam.id,
+            user_id,
+        )
+        if not self._can_join_admission_exam(exam, attempt_count):
+            raise ValueError("已达到最大作答次数或考试未开放")
+
+        record = self._build_exam_record(
+            exam=exam,
+            user_id=user_id,
+            data=data,
+            record_class=AdmissionExamRecord,
+            exam_field_name="admission_exam_id",
+            attempt_count=attempt_count,
+        )
+        self.db.add(record)
+        self._update_user_exam_stats(user_id, record.score or 0)
+        self.db.commit()
+
+        saved = self.db.query(AdmissionExamRecord).options(
+            joinedload(AdmissionExamRecord.user),
+            joinedload(AdmissionExamRecord.admission_exam),
+        ).filter(AdmissionExamRecord.id == record.id).first()
+        logger.info("用户%s提交准入考试%s，得分=%s", user_id, exam_id, saved.score if saved else 0)
+        return self._to_admission_record_response(saved or record, exam)
+
+    def get_exam_result(self, exam_id: int, user_id: int) -> Optional[ExamRecordResponse]:
+        """获取培训班内考试结果"""
+        record = self.db.query(ExamRecord).options(
+            joinedload(ExamRecord.user),
+            joinedload(ExamRecord.exam),
+        ).filter(
+            ExamRecord.exam_id == exam_id,
+            ExamRecord.user_id == user_id,
+        ).order_by(ExamRecord.end_time.desc(), ExamRecord.id.desc()).first()
+        if not record:
+            return None
+        return self._to_training_record_response(record, record.exam)
+
+    def get_admission_exam_result(self, exam_id: int, user_id: int) -> Optional[AdmissionExamRecordResponse]:
+        """获取准入考试结果"""
+        record = self.db.query(AdmissionExamRecord).options(
+            joinedload(AdmissionExamRecord.user),
+            joinedload(AdmissionExamRecord.admission_exam),
+        ).filter(
+            AdmissionExamRecord.admission_exam_id == exam_id,
+            AdmissionExamRecord.user_id == user_id,
+        ).order_by(AdmissionExamRecord.end_time.desc(), AdmissionExamRecord.id.desc()).first()
+        if not record:
+            return None
+        return self._to_admission_record_response(record, record.admission_exam)
+
+    def get_exam_scores(self, exam_id: int, page: int = 1, size: int = 10) -> PaginatedResponse[ExamRecordResponse]:
+        """获取培训班内考试成绩列表"""
+        query = self.db.query(ExamRecord).options(
+            joinedload(ExamRecord.user),
+            joinedload(ExamRecord.exam),
+        ).filter(
+            ExamRecord.exam_id == exam_id,
+        ).order_by(ExamRecord.score.desc(), ExamRecord.id.asc())
+        total = query.count()
+        rows = query.all() if size == -1 else query.offset((page - 1) * size).limit(size).all()
+        return PaginatedResponse(
+            page=page,
+            size=size if size != -1 else total,
+            total=total,
+            items=[self._to_training_record_response(row, row.exam) for row in rows],
+        )
+
+    def get_admission_exam_scores(
+        self,
+        exam_id: int,
+        page: int = 1,
+        size: int = 10,
+    ) -> PaginatedResponse[AdmissionExamRecordResponse]:
+        """获取准入考试成绩列表"""
+        query = self.db.query(AdmissionExamRecord).options(
+            joinedload(AdmissionExamRecord.user),
+            joinedload(AdmissionExamRecord.admission_exam),
+        ).filter(
+            AdmissionExamRecord.admission_exam_id == exam_id,
+        ).order_by(AdmissionExamRecord.score.desc(), AdmissionExamRecord.id.asc())
+        total = query.count()
+        rows = query.all() if size == -1 else query.offset((page - 1) * size).limit(size).all()
+        return PaginatedResponse(
+            page=page,
+            size=size if size != -1 else total,
+            total=total,
+            items=[self._to_admission_record_response(row, row.admission_exam) for row in rows],
+        )
+
+    def get_exam_analysis(self, exam_id: int) -> Dict[str, Any]:
+        """获取培训班内考试分析"""
+        exam = self.db.query(Exam).filter(Exam.id == exam_id).first()
+        if not exam:
+            raise ValueError("考试不存在")
+        return self._build_analysis(
+            self.db.query(ExamRecord).options(
+                joinedload(ExamRecord.user).joinedload(User.departments),
+            ).filter(
+                ExamRecord.exam_id == exam_id,
+                ExamRecord.status == "submitted",
+            ).order_by(ExamRecord.score.desc()).all(),
+            exam.passing_score or 60,
+        )
+
+    def get_admission_exam_analysis(self, exam_id: int) -> Dict[str, Any]:
+        """获取准入考试分析"""
+        exam = self.db.query(AdmissionExam).filter(AdmissionExam.id == exam_id).first()
+        if not exam:
+            raise ValueError("准入考试不存在")
+        return self._build_analysis(
+            self.db.query(AdmissionExamRecord).options(
+                joinedload(AdmissionExamRecord.user).joinedload(User.departments),
+            ).filter(
+                AdmissionExamRecord.admission_exam_id == exam_id,
+                AdmissionExamRecord.status == "submitted",
+            ).order_by(AdmissionExamRecord.score.desc()).all(),
+            exam.passing_score or 60,
+        )
+
+    def _build_analysis(self, records: List[Any], passing_score: int) -> Dict[str, Any]:
+        students = []
+        for record in records:
+            user = record.user
+            department_name = "未知单位"
+            if user and user.departments:
+                department_name = user.departments[0].name
+            dimensions = record.dimension_scores or {}
+            students.append({
+                "id": record.id,
+                "name": user.nickname if user and user.nickname else (user.username if user else "未知"),
+                "policeId": user.police_id if user else "",
+                "unit": department_name,
+                "score": record.score or 0,
+                "law": dimensions.get("law", 0),
+                "enforce": dimensions.get("enforce", 0),
+                "evidence": dimensions.get("evidence", 0),
+                "physical": dimensions.get("physical", 0),
+                "ethic": dimensions.get("ethic", 0),
+                "time": f"{record.duration or 0}分钟",
+                "pass": (record.score or 0) >= passing_score,
+            })
+        return {
+            "students": students,
+            "passing_score": passing_score,
+        }
+
+    def _load_questions(self, question_ids: List[int]) -> List[Question]:
+        if not question_ids:
+            raise ValueError("请至少选择一道题目")
+        questions = self.db.query(Question).filter(Question.id.in_(question_ids)).all()
+        question_map = {question.id: question for question in questions}
+        ordered_questions = [question_map.get(question_id) for question_id in question_ids]
+        if not all(ordered_questions):
+            raise ValueError("存在无效题目，无法创建考试")
+        return ordered_questions
+
+    def _build_paper(
+        self,
+        title: str,
+        description: Optional[str],
+        duration: int,
+        total_score: Optional[int],
+        passing_score: int,
+        exam_type: str,
+        question_ids: List[int],
+        questions: List[Question],
+        user_id: int,
+    ) -> tuple[ExamPaper, int]:
+        resolved_total_score = total_score or sum(int(question.score or 0) for question in questions)
+        paper = ExamPaper(
+            title=title,
+            description=description,
+            duration=duration,
+            total_score=resolved_total_score,
+            passing_score=passing_score,
+            type=exam_type,
+            created_by=user_id,
+        )
+        self.db.add(paper)
+        self.db.flush()
+        self._replace_paper_questions(paper.id, question_ids, questions)
+        return paper, resolved_total_score
+
+    def _update_training_exam(self, exam: Exam, data: ExamUpdate) -> None:
+        update_data = data.model_dump(exclude_unset=True)
+        question_ids = update_data.pop("question_ids", None)
+        paper_title = update_data.pop("paper_title", None)
+        if question_ids is not None and self.db.query(ExamRecord.id).filter(ExamRecord.exam_id == exam.id).first():
+            raise ValueError("该考试已有作答记录，不能再修改题目")
+
+        for field, value in update_data.items():
+            setattr(exam, field, value)
+
+        if paper_title is not None:
+            exam.paper.title = paper_title
+
+        for attr in ("description", "duration", "passing_score", "type"):
+            setattr(exam.paper, attr, getattr(exam, attr))
+
+        if question_ids is not None:
+            questions = self._load_questions(question_ids)
+            resolved_total_score = data.total_score or sum(int(question.score or 0) for question in questions)
+            exam.total_score = resolved_total_score
+            exam.paper.total_score = resolved_total_score
+            self._replace_paper_questions(exam.paper_id, question_ids, questions)
+        else:
+            exam.paper.total_score = exam.total_score or exam.paper.total_score
+
+        if exam.status in {"active", "ended"} and not exam.published_at:
+            exam.published_at = datetime.now()
+
+    def _update_admission_exam_entity(self, exam: AdmissionExam, data: AdmissionExamUpdate) -> None:
+        update_data = data.model_dump(exclude_unset=True)
+        question_ids = update_data.pop("question_ids", None)
+        paper_title = update_data.pop("paper_title", None)
+        if question_ids is not None and self.db.query(AdmissionExamRecord.id).filter(
+            AdmissionExamRecord.admission_exam_id == exam.id
+        ).first():
+            raise ValueError("该准入考试已有作答记录，不能再修改题目")
+
+        for field, value in update_data.items():
+            setattr(exam, field, value)
+
+        if paper_title is not None:
+            exam.paper.title = paper_title
+
+        for attr in ("description", "duration", "passing_score", "type"):
+            setattr(exam.paper, attr, getattr(exam, attr))
+
+        if question_ids is not None:
+            questions = self._load_questions(question_ids)
+            resolved_total_score = data.total_score or sum(int(question.score or 0) for question in questions)
+            exam.total_score = resolved_total_score
+            exam.paper.total_score = resolved_total_score
+            self._replace_paper_questions(exam.paper_id, question_ids, questions)
+        else:
+            exam.paper.total_score = exam.total_score or exam.paper.total_score
+
+        if exam.status in {"active", "ended"} and not exam.published_at:
+            exam.published_at = datetime.now()
+
+    def _replace_paper_questions(self, paper_id: int, question_ids: List[int], questions: List[Question]) -> None:
+        question_map = {question.id: question for question in questions}
+        self.db.query(ExamPaperQuestion).filter(
+            ExamPaperQuestion.paper_id == paper_id,
+        ).delete(synchronize_session=False)
+        for index, question_id in enumerate(question_ids):
+            question = question_map[question_id]
+            self.db.add(ExamPaperQuestion(
+                paper_id=paper_id,
+                question_id=question_id,
+                sort_order=index,
+                question_type=question.type,
+                content=question.content,
+                options=question.options,
+                answer=question.answer,
+                explanation=question.explanation,
+                score=question.score or 0,
+                knowledge_point=question.knowledge_point,
+            ))
+
+    def _build_snapshot_responses(self, paper: Optional[ExamPaper]) -> List[ExamQuestionSnapshotResponse]:
+        if not paper:
+            return []
+        return [
+            ExamQuestionSnapshotResponse(
+                id=item.question_id,
+                type=item.question_type or (item.question.type if item.question else "single"),
+                content=item.content or (item.question.content if item.question else ""),
+                options=item.options if item.options is not None else (item.question.options if item.question else None),
+                explanation=item.explanation if item.explanation is not None else (item.question.explanation if item.question else None),
+                score=int(item.score or (item.question.score if item.question else 0) or 0),
+                knowledge_point=item.knowledge_point or (item.question.knowledge_point if item.question else None),
+            )
+            for item in sorted(paper.paper_questions or [], key=lambda row: row.sort_order or 0)
+        ]
+
+    def _build_exam_record(
+        self,
+        exam: Any,
+        user_id: int,
+        data: ExamSubmit,
+        record_class: Any,
+        exam_field_name: str,
+        attempt_count: int,
+    ) -> Any:
+        snapshots = self._build_snapshot_responses(exam.paper)
+        if not snapshots:
+            raise ValueError("考试未配置题目")
+
+        score = 0
         correct_count = 0
         wrong_count = 0
-        wrong_questions = []
-        total_score = 0
+        wrong_questions: List[int] = []
+        wrong_details: List[ExamWrongQuestionResponse] = []
+        dimension_totals = {key: 0 for key in DIMENSION_KEYS}
+        dimension_gains = {key: 0 for key in DIMENSION_KEYS}
 
-        for eq in eq_list:
-            q = eq.question
-            if not q:
-                continue
-            q_id_str = str(q.id)
-            user_answer = data.answers.get(q_id_str)
-            correct_answer = q.answer
+        for snapshot in snapshots:
+            question_score = int(snapshot.score or 0)
+            dimension = self._resolve_dimension(snapshot.knowledge_point)
+            dimension_totals[dimension] += question_score
 
-            is_correct = False
-            if q.type == 'multi':
-                if isinstance(user_answer, list) and isinstance(correct_answer, list):
-                    is_correct = sorted(user_answer) == sorted(correct_answer)
-            else:
-                is_correct = str(user_answer) == str(correct_answer)
-
-            if is_correct:
+            user_answer = data.answers.get(str(snapshot.id))
+            correct_answer = self._resolve_correct_answer(exam.paper, snapshot.id)
+            if self._is_correct_answer(snapshot.type, user_answer, correct_answer):
+                score += question_score
                 correct_count += 1
-                total_score += q.score
-            else:
-                wrong_count += 1
-                wrong_questions.append(q.id)
+                dimension_gains[dimension] += question_score
+                continue
 
-        # 判定结果
-        result = "pass" if total_score >= exam.passing_score else "fail"
-        if total_score >= 90:
-            grade = "A"
-        elif total_score >= 80:
-            grade = "B"
-        elif total_score >= 60:
-            grade = "C"
-        else:
-            grade = "D"
+            wrong_count += 1
+            wrong_questions.append(snapshot.id)
+            wrong_details.append(ExamWrongQuestionResponse(
+                question_id=snapshot.id,
+                type=snapshot.type,
+                content=snapshot.content,
+                my_answer=user_answer,
+                answer=correct_answer,
+                explanation=snapshot.explanation,
+                score=question_score,
+            ))
 
         now = datetime.now()
         duration = 0
         if data.start_time:
-            duration = int((now - data.start_time).total_seconds() / 60)
-
-        record = ExamRecord(
-            exam_id=exam_id, user_id=user_id,
-            score=total_score, result=result, grade=grade,
-            start_time=data.start_time, end_time=now,
-            duration=duration, answers=data.answers,
-            correct_count=correct_count, wrong_count=wrong_count,
-            wrong_questions=wrong_questions
-        )
-        self.db.add(record)
-
-        # 更新用户统计
-        user = self.db.query(User).filter(User.id == user_id).first()
-        if user:
-            user.exam_count = (user.exam_count or 0) + 1
-            old_total = (user.avg_score or 0) * ((user.exam_count or 1) - 1)
-            user.avg_score = (old_total + total_score) / user.exam_count
-
-        self.db.commit()
-        self.db.refresh(record)
-        logger.info(f"用户{user_id}提交考试{exam_id}, 得分{total_score}")
-
-        return ExamRecordResponse(
-            id=record.id, exam_id=record.exam_id,
-            exam_title=exam.title,
-            user_id=record.user_id, score=record.score,
-            result=record.result, grade=record.grade,
-            start_time=record.start_time, end_time=record.end_time,
-            duration=record.duration, correct_count=record.correct_count,
-            wrong_count=record.wrong_count,
-            wrong_questions=record.wrong_questions,
-            dimension_scores=record.dimension_scores
-        )
-
-    def get_exam_result(self, exam_id: int, user_id: int) -> Optional[ExamRecordResponse]:
-        """获取考试结果"""
-        record = self.db.query(ExamRecord).filter(
-            ExamRecord.exam_id == exam_id,
-            ExamRecord.user_id == user_id
-        ).order_by(ExamRecord.end_time.desc()).first()
-
-        if not record:
-            return None
-
-        exam = self.db.query(Exam).filter(Exam.id == exam_id).first()
-        return ExamRecordResponse(
-            id=record.id, exam_id=record.exam_id,
-            exam_title=exam.title if exam else None,
-            user_id=record.user_id, score=record.score,
-            result=record.result, grade=record.grade,
-            start_time=record.start_time, end_time=record.end_time,
-            duration=record.duration, correct_count=record.correct_count,
-            wrong_count=record.wrong_count,
-            wrong_questions=record.wrong_questions,
-            dimension_scores=record.dimension_scores
-        )
-
-    def get_exam_scores(
-        self, exam_id: int, page: int = 1, size: int = 10
-    ) -> PaginatedResponse[ExamRecordResponse]:
-        """获取考试成绩列表（教官/管理员）"""
-        query = self.db.query(ExamRecord).options(
-            joinedload(ExamRecord.user)
-        ).filter(ExamRecord.exam_id == exam_id)
-
-        total = query.count()
-        query = query.order_by(ExamRecord.score.desc())
-
-        if size == -1:
-            records = query.all()
-        else:
-            skip = (page - 1) * size
-            records = query.offset(skip).limit(size).all()
-
-        exam = self.db.query(Exam).filter(Exam.id == exam_id).first()
-
-        items = []
-        for r in records:
-            items.append(ExamRecordResponse(
-                id=r.id, exam_id=r.exam_id,
-                exam_title=exam.title if exam else None,
-                user_id=r.user_id,
-                user_name=r.user.username if r.user else None,
-                user_nickname=r.user.nickname if r.user else None,
-                score=r.score, result=r.result, grade=r.grade,
-                start_time=r.start_time, end_time=r.end_time,
-                duration=r.duration, correct_count=r.correct_count,
-                wrong_count=r.wrong_count,
-                wrong_questions=r.wrong_questions,
-                dimension_scores=r.dimension_scores
-            ))
-
-        return PaginatedResponse(
-            page=page, size=size if size != -1 else total,
-            total=total, items=items
-        )
-
-    def get_exam_analysis(self, exam_id: int) -> Dict[str, Any]:
-        """获取考试成绩分析数据"""
-        records = self.db.query(ExamRecord).options(
-            joinedload(ExamRecord.user).joinedload(User.departments)
-        ).filter(ExamRecord.exam_id == exam_id).order_by(ExamRecord.score.desc()).all()
-
-        exam = self.db.query(Exam).filter(Exam.id == exam_id).first()
-
-        students = []
-        for r in records:
-            u = r.user
-            unit_name = "未知单位"
-            if u and u.departments:
-                unit_name = u.departments[0].name
-            
-            dims = r.dimension_scores or {}
-            
-            students.append({
-                "id": r.id,
-                "name": u.nickname if u and u.nickname else (u.username if u else "未知"),
-                "policeId": u.police_id if u else "",
-                "unit": unit_name,
-                "score": r.score,
-                "law": dims.get("law", 0),
-                "enforce": dims.get("enforce", 0),
-                "evidence": dims.get("evidence", 0),
-                "physical": dims.get("physical", 0),
-                "ethic": dims.get("ethic", 0),
-                "time": f"{r.duration}分钟",
-                "pass": r.score >= (exam.passing_score if exam else 60)
-            })
-
-        return {
-            "students": students,
-            "passing_score": exam.passing_score if exam else 60
+            duration = max(0, int((now - data.start_time).total_seconds() / 60))
+        dimension_scores = {
+            key: int(round((dimension_gains[key] / dimension_totals[key]) * 100))
+            if dimension_totals[key] > 0 else 0
+            for key in DIMENSION_KEYS
         }
+        payload = {
+            exam_field_name: exam.id,
+            "paper_id": exam.paper_id,
+            "user_id": user_id,
+            "attempt_no": attempt_count + 1,
+            "status": "submitted",
+            "score": score,
+            "result": "pass" if score >= int(exam.passing_score or 60) else "fail",
+            "grade": self._resolve_grade(score),
+            "start_time": data.start_time,
+            "end_time": now,
+            "duration": duration,
+            "answers": data.answers,
+            "correct_count": correct_count,
+            "wrong_count": wrong_count,
+            "wrong_questions": wrong_questions,
+            "wrong_question_details": [row.model_dump() for row in wrong_details],
+            "dimension_scores": dimension_scores,
+        }
+        return record_class(**payload)
 
+    def _resolve_correct_answer(self, paper: Optional[ExamPaper], question_id: int) -> Any:
+        if not paper:
+            return None
+        for row in paper.paper_questions or []:
+            if row.question_id != question_id:
+                continue
+            if row.answer is not None:
+                return row.answer
+            if row.question:
+                return row.question.answer
+        return None
+
+    def _count_submitted_attempts(self, model: Any, field: Any, exam_id: int, user_id: int) -> int:
+        return self.db.query(model).filter(
+            field == exam_id,
+            model.user_id == user_id,
+            model.status == "submitted",
+        ).count()
+
+    def _to_training_exam_response(self, exam: Exam, current_user_id: Optional[int] = None) -> ExamResponse:
+        attempt_count = 0
+        latest_result = None
+        can_join = None
+        if current_user_id:
+            latest_record = self.db.query(ExamRecord).filter(
+                ExamRecord.exam_id == exam.id,
+                ExamRecord.user_id == current_user_id,
+            ).order_by(ExamRecord.end_time.desc(), ExamRecord.id.desc()).first()
+            if latest_record:
+                attempt_count = self._count_submitted_attempts(ExamRecord, ExamRecord.exam_id, exam.id, current_user_id)
+                latest_result = latest_record.result
+            can_join = self._can_join_training_exam(exam, current_user_id, attempt_count)
+
+        return ExamResponse(
+            id=exam.id,
+            paper_id=exam.paper_id,
+            paper_title=exam.paper.title if exam.paper else None,
+            title=exam.title,
+            description=exam.description,
+            duration=exam.duration or 60,
+            total_score=exam.total_score or 0,
+            passing_score=exam.passing_score or 60,
+            status=exam.status or "upcoming",
+            type=exam.type or "formal",
+            purpose=exam.purpose or "class_assessment",
+            training_id=exam.training_id,
+            training_name=exam.training.name if exam.training else None,
+            max_attempts=exam.max_attempts or 1,
+            allow_makeup=bool(exam.allow_makeup),
+            start_time=exam.start_time,
+            end_time=exam.end_time,
+            created_by=exam.created_by,
+            question_count=len(exam.paper.paper_questions or []) if exam.paper else 0,
+            attempt_count=attempt_count,
+            latest_result=latest_result,
+            can_join=can_join,
+            created_at=exam.created_at,
+            updated_at=exam.updated_at,
+        )
+
+    def _to_admission_exam_response(
+        self,
+        exam: AdmissionExam,
+        current_user_id: Optional[int] = None,
+    ) -> AdmissionExamResponse:
+        attempt_count = 0
+        latest_result = None
+        can_join = None
+        if current_user_id:
+            latest_record = self.db.query(AdmissionExamRecord).filter(
+                AdmissionExamRecord.admission_exam_id == exam.id,
+                AdmissionExamRecord.user_id == current_user_id,
+            ).order_by(AdmissionExamRecord.end_time.desc(), AdmissionExamRecord.id.desc()).first()
+            if latest_record:
+                attempt_count = self._count_submitted_attempts(
+                    AdmissionExamRecord,
+                    AdmissionExamRecord.admission_exam_id,
+                    exam.id,
+                    current_user_id,
+                )
+                latest_result = latest_record.result
+            can_join = self._can_join_admission_exam(exam, attempt_count)
+
+        return AdmissionExamResponse(
+            id=exam.id,
+            paper_id=exam.paper_id,
+            paper_title=exam.paper.title if exam.paper else None,
+            title=exam.title,
+            description=exam.description,
+            duration=exam.duration or 60,
+            total_score=exam.total_score or 0,
+            passing_score=exam.passing_score or 60,
+            status=exam.status or "upcoming",
+            type=exam.type or "formal",
+            scope=exam.scope,
+            max_attempts=exam.max_attempts or 1,
+            linked_training_count=len(exam.linked_trainings or []),
+            attempt_count=attempt_count,
+            latest_result=latest_result,
+            can_join=can_join,
+            created_by=exam.created_by,
+            question_count=len(exam.paper.paper_questions or []) if exam.paper else 0,
+            start_time=exam.start_time,
+            end_time=exam.end_time,
+            created_at=exam.created_at,
+            updated_at=exam.updated_at,
+        )
+
+    def _to_training_record_response(self, record: ExamRecord, exam: Optional[Exam]) -> ExamRecordResponse:
+        details = [
+            ExamWrongQuestionResponse.model_validate(item)
+            for item in (record.wrong_question_details or [])
+        ]
+        user = record.user if getattr(record, "user", None) else None
+        return ExamRecordResponse(
+            id=record.id,
+            exam_id=record.exam_id,
+            paper_id=record.paper_id,
+            exam_title=exam.title if exam else None,
+            user_id=record.user_id,
+            user_name=user.username if user else None,
+            user_nickname=user.nickname if user else None,
+            attempt_no=record.attempt_no or 1,
+            status=record.status or "submitted",
+            score=record.score or 0,
+            result=record.result,
+            grade=record.grade,
+            passing_score=exam.passing_score if exam else None,
+            start_time=record.start_time,
+            end_time=record.end_time,
+            duration=record.duration or 0,
+            correct_count=record.correct_count or 0,
+            wrong_count=record.wrong_count or 0,
+            wrong_questions=record.wrong_questions or [],
+            wrong_question_details=details,
+            dimension_scores=record.dimension_scores or {},
+        )
+
+    def _to_admission_record_response(
+        self,
+        record: AdmissionExamRecord,
+        exam: Optional[AdmissionExam],
+    ) -> AdmissionExamRecordResponse:
+        details = [
+            ExamWrongQuestionResponse.model_validate(item)
+            for item in (record.wrong_question_details or [])
+        ]
+        user = record.user if getattr(record, "user", None) else None
+        return AdmissionExamRecordResponse(
+            id=record.id,
+            exam_id=record.admission_exam_id,
+            paper_id=record.paper_id,
+            exam_title=exam.title if exam else None,
+            user_id=record.user_id,
+            user_name=user.username if user else None,
+            user_nickname=user.nickname if user else None,
+            attempt_no=record.attempt_no or 1,
+            status=record.status or "submitted",
+            score=record.score or 0,
+            result=record.result,
+            grade=record.grade,
+            passing_score=exam.passing_score if exam else None,
+            start_time=record.start_time,
+            end_time=record.end_time,
+            duration=record.duration or 0,
+            correct_count=record.correct_count or 0,
+            wrong_count=record.wrong_count or 0,
+            wrong_questions=record.wrong_questions or [],
+            wrong_question_details=details,
+            dimension_scores=record.dimension_scores or {},
+        )
+
+    def _refresh_exam_status(self, exam: Any) -> bool:
+        now = datetime.now()
+        next_status = exam.status or "upcoming"
+        if exam.start_time and exam.end_time:
+            if now < exam.start_time:
+                next_status = "upcoming"
+            elif exam.start_time <= now <= exam.end_time:
+                next_status = "active"
+            else:
+                next_status = "ended"
+        elif exam.end_time and now > exam.end_time:
+            next_status = "ended"
+        elif exam.start_time and now >= exam.start_time:
+            next_status = "active"
+        if next_status != exam.status:
+            exam.status = next_status
+            return True
+        return False
+
+    def _can_join_training_exam(self, exam: Exam, user_id: int, attempt_count: int) -> bool:
+        if exam.status != "active":
+            return False
+        if attempt_count >= int(exam.max_attempts or 1):
+            return False
+        enrollment = self.db.query(Enrollment.id).filter(
+            Enrollment.training_id == exam.training_id,
+            Enrollment.user_id == user_id,
+            Enrollment.status == "approved",
+        ).first()
+        return enrollment is not None
+
+    def _can_join_admission_exam(self, exam: AdmissionExam, attempt_count: int) -> bool:
+        return exam.status == "active" and attempt_count < int(exam.max_attempts or 1)
+
+    def _is_correct_answer(self, question_type: str, user_answer: Any, correct_answer: Any) -> bool:
+        if question_type == "multi":
+            if not isinstance(user_answer, list) or not isinstance(correct_answer, list):
+                return False
+            return sorted(str(item) for item in user_answer) == sorted(str(item) for item in correct_answer)
+        return self._normalize_scalar_answer(user_answer) == self._normalize_scalar_answer(correct_answer)
+
+    def _normalize_scalar_answer(self, value: Any) -> str:
+        if value is None:
+            return ""
+        text = str(value).strip().upper()
+        if text in {"TRUE", "T", "A", "YES", "Y"}:
+            return "T"
+        if text in {"FALSE", "F", "B", "NO", "N"}:
+            return "F"
+        return text
+
+    def _resolve_dimension(self, knowledge_point: Optional[str]) -> str:
+        if not knowledge_point:
+            return "law"
+        for dimension, keywords in DIMENSION_RULES.items():
+            if any(keyword in knowledge_point for keyword in keywords):
+                return dimension
+        return "law"
+
+    def _resolve_grade(self, score: int) -> str:
+        if score >= 90:
+            return "A"
+        if score >= 80:
+            return "B"
+        if score >= 60:
+            return "C"
+        return "D"
+
+    def _update_user_exam_stats(self, user_id: int, score: int) -> None:
+        user = self.db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return
+        previous_count = user.exam_count or 0
+        previous_total = float(user.avg_score or 0) * previous_count
+        user.exam_count = previous_count + 1
+        user.avg_score = (previous_total + score) / user.exam_count
+
+    def _paginate(self, items: List[Any], page: int, size: int) -> PaginatedResponse[Any]:
+        total = len(items)
+        page_items = items
+        if size != -1:
+            start = (page - 1) * size
+            page_items = items[start:start + size]
+        return PaginatedResponse(
+            page=page,
+            size=size if size != -1 else total,
+            total=total,
+            items=page_items,
+        )

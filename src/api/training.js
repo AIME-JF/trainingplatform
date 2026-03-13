@@ -16,6 +16,14 @@ export function updateTraining(id, data) {
   return request.put(`/trainings/${id}`, data)
 }
 
+export function publishTraining(id) {
+  return request.post(`/trainings/${id}/publish`)
+}
+
+export function lockTraining(id) {
+  return request.post(`/trainings/${id}/lock`)
+}
+
 export function deleteTraining(id) {
   return request.delete(`/trainings/${id}`)
 }
@@ -52,16 +60,68 @@ export function rejectEnrollment(trainingId, enrollmentId, note) {
   return request.put(`/trainings/${trainingId}/enrollments/${enrollmentId}/reject`, { note })
 }
 
-export function getCheckinRecords(id, date) {
-  return request.get(`/trainings/${id}/checkin/records`, { params: { date } })
+export function getCheckinRecords(id, params) {
+  return request.get(`/trainings/${id}/checkin/records`, { params })
 }
 
 export function checkin(id, data) {
   return request.post(`/trainings/${id}/checkin`, data)
 }
 
-export function getCheckinQR(id) {
-  return request.get(`/trainings/${id}/checkin/qr`)
+export function checkout(id, data) {
+  return request.post(`/trainings/${id}/checkout`, data)
+}
+
+export function submitTrainingEvaluation(id, data) {
+  return request.post(`/trainings/${id}/evaluation`, data)
+}
+
+export function getAttendanceSummary(id, params) {
+  return request.get(`/trainings/${id}/attendance/summary`, { params })
+}
+
+export function getCheckinQR(id, params) {
+  return request.get(`/trainings/${id}/checkin/qr`, { params })
+}
+
+export function startTrainingSessionCheckin(trainingId, sessionKey) {
+  return request.post(`/trainings/${trainingId}/sessions/${sessionKey}/checkin/start`)
+}
+
+export function endTrainingSessionCheckin(trainingId, sessionKey) {
+  return request.post(`/trainings/${trainingId}/sessions/${sessionKey}/checkin/end`)
+}
+
+export function startTrainingSessionCheckout(trainingId, sessionKey) {
+  return request.post(`/trainings/${trainingId}/sessions/${sessionKey}/checkout/start`)
+}
+
+export function endTrainingSessionCheckout(trainingId, sessionKey) {
+  return request.post(`/trainings/${trainingId}/sessions/${sessionKey}/checkout/end`)
+}
+
+export function skipTrainingSession(trainingId, sessionKey, data) {
+  return request.post(`/trainings/${trainingId}/sessions/${sessionKey}/skip`, data)
+}
+
+export function getCheckinQrToken(token) {
+  return request.get(`/trainings/checkin/qr/${token}`)
+}
+
+export function submitCheckinByQr(token) {
+  return request.post(`/trainings/checkin/qr/${token}`)
+}
+
+export function updateTrainingRoster(trainingId, assignments) {
+  return request.put(`/trainings/${trainingId}/roster`, assignments)
+}
+
+export function getTrainingHistories(trainingId, params) {
+  return request.get(`/trainings/${trainingId}/histories`, { params })
+}
+
+export function getMyTrainingHistories() {
+  return request.get('/trainings/histories/me')
 }
 
 export function bindTrainingResource(trainingId, data) {

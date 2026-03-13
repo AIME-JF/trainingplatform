@@ -223,7 +223,7 @@ async function loadExamData() {
   const msg = message.loading('加载成绩数据...', 0)
   try {
     const res = await getExamRecordsAnalysis(selectedExam.value)
-    students.value = res.data?.students || []
+    students.value = res.students || []
     updateCharts()
   } catch (e) {
     message.error('加载成绩失败')

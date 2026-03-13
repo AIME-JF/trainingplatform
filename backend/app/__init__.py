@@ -72,12 +72,22 @@ def startup_event():
             if migration_success:
                 logger.info("Automatic database migration finished")
             else:
-                logger.warning("Automatic database migration failed, continuing startup")
+                logger.warning("Automatic database migration failed; schema compatibility will be validated before serving requests")
         except Exception as e:
             logger.error(f"Automatic database migration error: {e}")
-            logger.warning("Continuing startup after migration error")
+            logger.warning("Schema compatibility will be validated before serving requests")
     else:
         logger.info("Automatic database migration is disabled")
+
+    if settings.AUTO_MIGRATE_ON_STARTUP:
+        try:
+            from app.database.auto_migrate import ensure_schema_compatibility
+
+            logger.info("Validating critical database schema compatibility before table initialization...")
+            ensure_schema_compatibility()
+        except Exception as e:
+            logger.error(f"Database schema compatibility check failed before table initialization: {e}")
+            raise
 
     try:
         logger.info("Ensuring declared tables exist...")
@@ -85,6 +95,16 @@ def startup_event():
     except Exception as e:
         logger.error(f"Database initialization failed during startup: {e}")
         raise
+
+    if not settings.AUTO_MIGRATE_ON_STARTUP:
+        try:
+            from app.database.auto_migrate import ensure_schema_compatibility
+
+            logger.info("Validating critical database schema compatibility after table initialization...")
+            ensure_schema_compatibility()
+        except Exception as e:
+            logger.error(f"Database schema compatibility check failed after table initialization: {e}")
+            raise
 
     try:
         logger.info("Syncing runtime permissions and schema compatibility...")
