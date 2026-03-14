@@ -60,10 +60,11 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { getExamResult } from '@/api/exam'
+import { getAdmissionExamResult, getExamResult } from '@/api/exam'
 
 const route = useRoute()
 const result = ref(null)
+const resolvedKind = ref(route.query.kind === 'admission' ? 'admission' : 'training')
 
 const dimensionList = computed(() => {
   const dimensions = result.value?.dimensionScores || {}
@@ -83,7 +84,21 @@ function displayAnswer(value) {
 
 async function loadResult() {
   try {
-    result.value = await getExamResult(route.params.id)
+    if (resolvedKind.value === 'admission') {
+      try {
+        result.value = await getAdmissionExamResult(route.params.id)
+      } catch {
+        result.value = await getExamResult(route.params.id)
+        resolvedKind.value = 'training'
+      }
+      return
+    }
+    try {
+      result.value = await getExamResult(route.params.id)
+    } catch {
+      result.value = await getAdmissionExamResult(route.params.id)
+      resolvedKind.value = 'admission'
+    }
   } catch (error) {
     message.error(error.message || '加载考试结果失败')
   }

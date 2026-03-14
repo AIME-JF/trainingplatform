@@ -175,8 +175,8 @@ class ExamController:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="考试不存在")
         return result
 
-    def get_admission_exam_detail(self, exam_id: int):
-        result = self.service.get_admission_exam_detail(exam_id)
+    def get_admission_exam_detail(self, exam_id: int, current_user_id: Optional[int] = None):
+        result = self.service.get_admission_exam_detail(exam_id, current_user_id)
         if not result:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="准入考试不存在")
         return result

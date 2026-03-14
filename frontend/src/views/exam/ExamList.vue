@@ -12,11 +12,11 @@
     </div>
 
     <a-row :gutter="[20, 20]">
-      <a-col :span="12" v-for="exam in examList" :key="exam.id">
+      <a-col :span="12" v-for="exam in examList" :key="`${exam.kind}-${exam.id}`">
         <div class="exam-card">
           <div class="exam-card-header">
             <a-tag :color="statusColors[exam.status]">{{ statusLabels[exam.status] }}</a-tag>
-            <a-tag>{{ purposeLabels[exam.purpose] || exam.purpose }}</a-tag>
+            <a-tag>{{ exam.kind === 'admission' ? '准入考试' : (purposeLabels[exam.purpose] || exam.purpose) }}</a-tag>
             <a-tag>{{ exam.type === 'formal' ? '正式考核' : '测验' }}</a-tag>
           </div>
 
@@ -31,7 +31,7 @@
           </div>
 
           <div class="exam-meta">
-            <div>培训班：{{ exam.trainingName || '独立场次' }}</div>
+            <div>{{ exam.kind === 'admission' ? `适用范围：${exam.scope || '全体学员'}` : `培训班：${exam.trainingName || '独立场次'}` }}</div>
             <div>次数：{{ exam.attemptCount || 0 }}/{{ exam.maxAttempts || 1 }}</div>
             <div>时间：{{ formatDate(exam.startTime) }} ~ {{ formatDate(exam.endTime) }}</div>
           </div>
@@ -68,7 +68,7 @@ import {
   FileTextOutlined,
   TrophyOutlined,
 } from '@ant-design/icons-vue'
-import { getExams } from '@/api/exam'
+import { getAdmissionExams, getExams } from '@/api/exam'
 
 const router = useRouter()
 const examList = ref([])
@@ -87,13 +87,24 @@ const upcomingExams = computed(() => examList.value.filter(item => item.status =
 
 async function fetchExams() {
   try {
-    const [active, upcoming] = await Promise.all([
+    const [activeTraining, upcomingTraining, activeAdmission, upcomingAdmission] = await Promise.all([
       getExams({ size: 100, status: 'active' }),
       getExams({ size: 100, status: 'upcoming' }),
+      getAdmissionExams({ size: 100, status: 'active' }),
+      getAdmissionExams({ size: 100, status: 'upcoming' }),
     ])
-    const items = [...(active.items || []), ...(upcoming.items || [])]
-    const unique = new Map(items.map(item => [item.id, item]))
-    examList.value = [...unique.values()]
+    const items = [
+      ...(activeTraining.items || []),
+      ...(upcomingTraining.items || []),
+      ...(activeAdmission.items || []),
+      ...(upcomingAdmission.items || []),
+    ]
+    const unique = new Map(items.map(item => [`${item.kind}-${item.id}`, item]))
+    examList.value = [...unique.values()].sort((left, right) => {
+      const leftTime = left.startTime ? new Date(left.startTime).getTime() : 0
+      const rightTime = right.startTime ? new Date(right.startTime).getTime() : 0
+      return leftTime - rightTime
+    })
   } catch (error) {
     message.error(error.message || '获取考试列表失败')
   }
@@ -115,7 +126,7 @@ function startExam(exam) {
     title: '确认开始考试',
     content: `即将进入【${exam.title}】，共 ${exam.questionCount || 0} 题。`,
     onOk() {
-      router.push({ name: 'DoExam', params: { id: exam.id } })
+      router.push({ name: 'DoExam', params: { id: exam.id }, query: { kind: exam.kind || 'training' } })
     },
   })
 }

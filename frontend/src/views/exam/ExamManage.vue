@@ -158,7 +158,10 @@
           </a-col>
           <a-col :span="12" v-if="editingKind === 'admission'">
             <a-form-item label="适用范围">
-              <a-input v-model:value="form.scope" />
+              <AdmissionScopeSelector
+                v-model:scope-type="form.scopeType"
+                v-model:scope-target-ids="form.scopeTargetIds"
+              />
             </a-form-item>
           </a-col>
           <a-col :span="12">
@@ -250,12 +253,14 @@ import {
   getAdmissionExamDetail,
   getAdmissionExams,
   getExamDetail,
+  getExamPaperDetail,
   getExamPapers,
   getExams,
   updateAdmissionExam,
   updateExam,
 } from '@/api/exam'
 import { getTrainings } from '@/api/training'
+import AdmissionScopeSelector from './components/AdmissionScopeSelector.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -308,7 +313,8 @@ const form = reactive({
   trainingId: undefined,
   type: 'formal',
   status: 'upcoming',
-  scope: '全体人员',
+  scopeType: 'all',
+  scopeTargetIds: [],
   duration: 60,
   passingScore: 60,
   maxAttempts: 1,
@@ -349,7 +355,8 @@ function resetForm() {
     trainingId: undefined,
     type: 'formal',
     status: 'upcoming',
-    scope: '全体人员',
+    scopeType: 'all',
+    scopeTargetIds: [],
     duration: 60,
     passingScore: 60,
     maxAttempts: 1,
@@ -482,7 +489,8 @@ async function openEditDrawer(record) {
     form.trainingId = detail.trainingId
     form.type = detail.type || 'formal'
     form.status = detail.status || 'upcoming'
-    form.scope = editingKind.value === 'admission' ? (detail.scope || '全体人员') : '全体人员'
+    form.scopeType = editingKind.value === 'admission' ? (detail.scopeType || 'all') : 'all'
+    form.scopeTargetIds = editingKind.value === 'admission' ? [...(detail.scopeTargetIds || [])] : []
     form.duration = detail.duration || 60
     form.passingScore = detail.passingScore || 60
     form.maxAttempts = detail.maxAttempts || 1
@@ -521,6 +529,10 @@ async function handleSave() {
     message.warning('请选择关联培训班')
     return
   }
+  if (editingKind.value === 'admission' && form.scopeType !== 'all' && !form.scopeTargetIds.length) {
+    message.warning('请选择适用范围')
+    return
+  }
 
   const payload = {
     title: form.title,
@@ -539,7 +551,8 @@ async function handleSave() {
     payload.maxAttempts = form.maxAttempts
     payload.allowMakeup = form.allowMakeup
   } else {
-    payload.scope = form.scope || undefined
+    payload.scopeType = form.scopeType
+    payload.scopeTargetIds = form.scopeTargetIds
     payload.maxAttempts = form.maxAttempts
   }
 

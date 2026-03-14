@@ -175,7 +175,7 @@ def get_admission_exam(
     db: Session = Depends(get_db),
 ):
     controller = ExamController(db)
-    data = controller.get_admission_exam_detail(exam_id)
+    data = controller.get_admission_exam_detail(exam_id, current_user.user_id)
     return StandardResponse(data=data)
 
 

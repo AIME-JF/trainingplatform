@@ -4,7 +4,46 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+
+ADMISSION_SCOPE_ALL = "all"
+ADMISSION_SCOPE_USER = "user"
+ADMISSION_SCOPE_DEPARTMENT = "department"
+ADMISSION_SCOPE_ROLE = "role"
+ADMISSION_SCOPE_CHOICES = {
+    ADMISSION_SCOPE_ALL,
+    ADMISSION_SCOPE_USER,
+    ADMISSION_SCOPE_DEPARTMENT,
+    ADMISSION_SCOPE_ROLE,
+}
+
+
+def _normalize_admission_scope_type(value: Optional[str], allow_none: bool = False) -> Optional[str]:
+    if value is None:
+        return None if allow_none else ADMISSION_SCOPE_ALL
+    normalized = str(value).strip() or ADMISSION_SCOPE_ALL
+    if normalized not in ADMISSION_SCOPE_CHOICES:
+        raise ValueError(f"不支持的适用范围类型: {normalized}")
+    return normalized
+
+
+def _normalize_admission_scope_target_ids(value: Any, allow_none: bool = False) -> Optional[List[int]]:
+    if value is None:
+        return None if allow_none else []
+
+    normalized: List[int] = []
+    seen = set()
+    for raw_item in value or []:
+        try:
+            item = int(raw_item)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("适用范围目标ID必须为整数") from exc
+        if item <= 0 or item in seen:
+            continue
+        seen.add(item)
+        normalized.append(item)
+    return normalized
 
 
 class QuestionCreate(BaseModel):
@@ -150,9 +189,21 @@ class AdmissionExamCreate(BaseModel):
     status: str = Field("upcoming", description="状态")
     type: Optional[str] = Field(None, description="展示类型: formal/quiz")
     scope: Optional[str] = None
+    scope_type: str = Field(ADMISSION_SCOPE_ALL, description="适用范围类型: all/user/department/role")
+    scope_target_ids: List[int] = Field(default_factory=list, description="适用范围目标ID列表")
     max_attempts: int = Field(1, ge=1, le=10, description="最大作答次数")
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
+
+    @field_validator("scope_type", mode="before")
+    @classmethod
+    def validate_scope_type(cls, value: Optional[str]) -> str:
+        return _normalize_admission_scope_type(value) or ADMISSION_SCOPE_ALL
+
+    @field_validator("scope_target_ids", mode="before")
+    @classmethod
+    def validate_scope_target_ids(cls, value: Any) -> List[int]:
+        return _normalize_admission_scope_target_ids(value) or []
 
 
 class AdmissionExamUpdate(BaseModel):
@@ -166,9 +217,21 @@ class AdmissionExamUpdate(BaseModel):
     status: Optional[str] = None
     type: Optional[str] = None
     scope: Optional[str] = None
+    scope_type: Optional[str] = Field(None, description="适用范围类型: all/user/department/role")
+    scope_target_ids: Optional[List[int]] = Field(None, description="适用范围目标ID列表")
     max_attempts: Optional[int] = Field(None, ge=1, le=10)
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
+
+    @field_validator("scope_type", mode="before")
+    @classmethod
+    def validate_scope_type(cls, value: Optional[str]) -> Optional[str]:
+        return _normalize_admission_scope_type(value, allow_none=True)
+
+    @field_validator("scope_target_ids", mode="before")
+    @classmethod
+    def validate_scope_target_ids(cls, value: Any) -> Optional[List[int]]:
+        return _normalize_admission_scope_target_ids(value, allow_none=True)
 
 
 class AdmissionExamResponse(BaseModel):
@@ -187,6 +250,8 @@ class AdmissionExamResponse(BaseModel):
     status: str = "upcoming"
     type: str = "formal"
     scope: Optional[str] = None
+    scope_type: str = ADMISSION_SCOPE_ALL
+    scope_target_ids: List[int] = Field(default_factory=list)
     max_attempts: int = 1
     linked_training_count: int = 0
     attempt_count: int = 0

@@ -9,17 +9,23 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from app.models import (
     AdmissionExam,
     AdmissionExamRecord,
+    Department,
     Enrollment,
     Exam,
     ExamPaper,
     ExamPaperQuestion,
     ExamRecord,
     Question,
+    Role,
     Training,
     User,
 )
 from app.schemas import PaginatedResponse
 from app.schemas.exam import (
+    ADMISSION_SCOPE_ALL,
+    ADMISSION_SCOPE_DEPARTMENT,
+    ADMISSION_SCOPE_ROLE,
+    ADMISSION_SCOPE_USER,
     AdmissionExamCreate,
     AdmissionExamDetailResponse,
     AdmissionExamRecordResponse,
@@ -38,6 +44,7 @@ from app.schemas.exam import (
     ExamUpdate,
     ExamWrongQuestionResponse,
 )
+from app.utils.authz import is_admin_user, is_instructor_user
 from logger import logger
 
 
@@ -241,6 +248,8 @@ class ExamService:
         current_user_id: Optional[int] = None,
     ) -> PaginatedResponse[AdmissionExamResponse]:
         """获取独立准入考试列表"""
+        current_user = self._get_admission_scope_user(current_user_id)
+        can_manage_all = bool(current_user_id and self._can_manage_admission_exam(current_user_id))
         query = self.db.query(AdmissionExam).options(
             joinedload(AdmissionExam.paper).joinedload(ExamPaper.paper_questions),
             joinedload(AdmissionExam.linked_trainings),
@@ -260,7 +269,10 @@ class ExamService:
                 changed = True
             if status and (exam.status or "upcoming") != status:
                 continue
-            items.append(self._to_admission_exam_response(exam, current_user_id))
+            if current_user_id and not can_manage_all:
+                if not current_user or not self._can_view_admission_exam(exam, current_user):
+                    continue
+            items.append(self._to_admission_exam_response(exam, current_user_id, current_user))
 
         if changed:
             self.db.commit()
@@ -305,6 +317,10 @@ class ExamService:
     def create_admission_exam(self, data: AdmissionExamCreate, user_id: int) -> AdmissionExamResponse:
         """创建独立准入考试"""
         paper = self._get_selectable_paper(data.paper_id)
+        scope_type, scope_target_ids, scope_summary = self._prepare_admission_scope(
+            data.scope_type,
+            data.scope_target_ids,
+        )
         exam = AdmissionExam(
             paper_id=paper.id,
             title=data.title,
@@ -314,7 +330,9 @@ class ExamService:
             passing_score=data.passing_score or paper.passing_score or 60,
             status=data.status,
             type=data.type or paper.type or "formal",
-            scope=data.scope,
+            scope=scope_summary,
+            scope_type=scope_type,
+            scope_target_ids=scope_target_ids,
             max_attempts=data.max_attempts,
             start_time=data.start_time,
             end_time=data.end_time,
@@ -326,7 +344,7 @@ class ExamService:
         self.db.refresh(exam)
 
         logger.info("创建准入考试: %s", exam.title)
-        detail = self.get_admission_exam_detail(exam.id)
+        detail = self.get_admission_exam_detail(exam.id, user_id)
         if not detail:
             raise ValueError("创建准入考试后读取详情失败")
         return detail
@@ -388,7 +406,11 @@ class ExamService:
             questions=self._build_snapshot_responses(exam.paper),
         )
 
-    def get_admission_exam_detail(self, exam_id: int) -> Optional[AdmissionExamDetailResponse]:
+    def get_admission_exam_detail(
+        self,
+        exam_id: int,
+        current_user_id: Optional[int] = None,
+    ) -> Optional[AdmissionExamDetailResponse]:
         """获取准入考试详情"""
         exam = self.db.query(AdmissionExam).options(
             joinedload(AdmissionExam.paper).joinedload(ExamPaper.paper_questions),
@@ -401,8 +423,14 @@ class ExamService:
         if self._refresh_exam_status(exam):
             self.db.commit()
 
+        current_user = self._get_admission_scope_user(current_user_id)
+        can_manage_all = bool(current_user_id and self._can_manage_admission_exam(current_user_id))
+        if current_user_id and not can_manage_all:
+            if not current_user or not self._can_view_admission_exam(exam, current_user):
+                return None
+
         return AdmissionExamDetailResponse(
-            **self._to_admission_exam_response(exam).model_dump(),
+            **self._to_admission_exam_response(exam, current_user_id, current_user).model_dump(),
             questions=self._build_snapshot_responses(exam.paper),
         )
 
@@ -462,8 +490,9 @@ class ExamService:
             exam.id,
             user_id,
         )
-        if not self._can_join_admission_exam(exam, attempt_count):
-            raise ValueError("已达到最大作答次数或考试未开放")
+        current_user = self._get_admission_scope_user(user_id)
+        if not self._can_join_admission_exam(exam, user_id, attempt_count, current_user):
+            raise ValueError("当前用户不在准入考试适用范围内或已达到最大作答次数")
 
         record = self._build_exam_record(
             exam=exam,
@@ -661,12 +690,152 @@ class ExamService:
         if paper_id is not None and paper_id != exam.paper_id:
             raise ValueError("准入考试已发布，不能更换试卷")
 
+        next_scope_type = update_data.pop("scope_type", exam.scope_type or ADMISSION_SCOPE_ALL)
+        next_scope_target_ids = update_data.pop("scope_target_ids", exam.scope_target_ids or [])
+        update_data.pop("scope", None)
+
         for field, value in update_data.items():
             setattr(exam, field, value)
 
+        scope_type, scope_target_ids, scope_summary = self._prepare_admission_scope(
+            next_scope_type,
+            next_scope_target_ids,
+        )
+        exam.scope_type = scope_type
+        exam.scope_target_ids = scope_target_ids
+        exam.scope = scope_summary
         exam.total_score = exam.paper.total_score or exam.total_score or 0
         if exam.status in {"active", "ended"} and not exam.published_at:
             exam.published_at = datetime.now()
+
+    def _can_manage_admission_exam(self, user_id: int) -> bool:
+        return is_admin_user(self.db, user_id) or is_instructor_user(self.db, user_id)
+
+    def _get_admission_scope_user(self, user_id: Optional[int]) -> Optional[User]:
+        if not user_id:
+            return None
+        return self.db.query(User).options(
+            joinedload(User.roles),
+            joinedload(User.departments),
+        ).filter(
+            User.id == user_id,
+            User.is_active == True,
+        ).first()
+
+    def _normalize_scope_target_ids(self, values: Any) -> List[int]:
+        normalized: List[int] = []
+        seen = set()
+        for raw_item in values or []:
+            try:
+                item = int(raw_item)
+            except (TypeError, ValueError):
+                continue
+            if item <= 0 or item in seen:
+                continue
+            seen.add(item)
+            normalized.append(item)
+        return normalized
+
+    def _prepare_admission_scope(
+        self,
+        scope_type: Optional[str],
+        scope_target_ids: Any,
+    ) -> tuple[str, List[int], str]:
+        resolved_scope_type = str(scope_type or ADMISSION_SCOPE_ALL).strip() or ADMISSION_SCOPE_ALL
+        target_ids = self._normalize_scope_target_ids(scope_target_ids)
+
+        if resolved_scope_type == ADMISSION_SCOPE_ALL:
+            return ADMISSION_SCOPE_ALL, [], "全体学员"
+
+        if not target_ids:
+            raise ValueError("请至少选择一个适用范围目标")
+
+        if resolved_scope_type == ADMISSION_SCOPE_USER:
+            users = self.db.query(User).options(joinedload(User.roles)).filter(
+                User.id.in_(target_ids),
+                User.is_active == True,
+            ).all()
+            user_map = {
+                user.id: user
+                for user in users
+                if self._is_student_user(user)
+            }
+            ordered_users = [user_map.get(item_id) for item_id in target_ids]
+            if not all(ordered_users):
+                raise ValueError("指定用户中包含无效学员")
+            return (
+                resolved_scope_type,
+                target_ids,
+                self._build_scope_summary("指定用户", [self._display_user_name(user) for user in ordered_users]),
+            )
+
+        if resolved_scope_type == ADMISSION_SCOPE_DEPARTMENT:
+            departments = self.db.query(Department).filter(
+                Department.id.in_(target_ids),
+                Department.is_active == True,
+            ).all()
+            department_map = {department.id: department for department in departments}
+            ordered_departments = [department_map.get(item_id) for item_id in target_ids]
+            if not all(ordered_departments):
+                raise ValueError("指定部门中包含无效部门")
+            return (
+                resolved_scope_type,
+                target_ids,
+                self._build_scope_summary("指定部门", [department.name for department in ordered_departments]),
+            )
+
+        if resolved_scope_type == ADMISSION_SCOPE_ROLE:
+            roles = self.db.query(Role).filter(
+                Role.id.in_(target_ids),
+                Role.is_active == True,
+            ).all()
+            role_map = {role.id: role for role in roles}
+            ordered_roles = [role_map.get(item_id) for item_id in target_ids]
+            if not all(ordered_roles):
+                raise ValueError("指定角色中包含无效角色")
+            return (
+                resolved_scope_type,
+                target_ids,
+                self._build_scope_summary("指定角色", [role.name for role in ordered_roles]),
+            )
+
+        raise ValueError("不支持的适用范围类型")
+
+    def _build_scope_summary(self, label: str, names: List[str]) -> str:
+        cleaned_names = [str(name).strip() for name in names if str(name or "").strip()]
+        if not cleaned_names:
+            return label
+        if len(cleaned_names) <= 3:
+            return f"{label}：{'、'.join(cleaned_names)}"
+        return f"{label}：{'、'.join(cleaned_names[:3])} 等{len(cleaned_names)}项"
+
+    def _display_user_name(self, user: Optional[User]) -> str:
+        if not user:
+            return ""
+        return str(user.nickname or user.username or user.id)
+
+    def _is_student_user(self, user: Optional[User]) -> bool:
+        if not user:
+            return False
+        return any(str(role.code or "").strip() == "student" for role in (user.roles or []))
+
+    def _can_view_admission_exam(self, exam: AdmissionExam, user: Optional[User]) -> bool:
+        if not user or not user.is_active or not self._is_student_user(user):
+            return False
+
+        scope_type = exam.scope_type or ADMISSION_SCOPE_ALL
+        target_ids = set(self._normalize_scope_target_ids(exam.scope_target_ids))
+        if scope_type == ADMISSION_SCOPE_ALL:
+            return True
+        if not target_ids:
+            return False
+        if scope_type == ADMISSION_SCOPE_USER:
+            return user.id in target_ids
+        if scope_type == ADMISSION_SCOPE_DEPARTMENT:
+            return any(department.id in target_ids for department in (user.departments or []))
+        if scope_type == ADMISSION_SCOPE_ROLE:
+            return any(role.id in target_ids for role in (user.roles or []))
+        return False
 
     def _replace_paper_questions(self, paper_id: int, question_ids: List[int], questions: List[Question]) -> None:
         question_map = {question.id: question for question in questions}
@@ -873,6 +1042,7 @@ class ExamService:
         self,
         exam: AdmissionExam,
         current_user_id: Optional[int] = None,
+        current_user: Optional[User] = None,
     ) -> AdmissionExamResponse:
         attempt_count = 0
         latest_result = None
@@ -890,7 +1060,7 @@ class ExamService:
                     current_user_id,
                 )
                 latest_result = latest_record.result
-            can_join = self._can_join_admission_exam(exam, attempt_count)
+            can_join = self._can_join_admission_exam(exam, current_user_id, attempt_count, current_user)
 
         return AdmissionExamResponse(
             id=exam.id,
@@ -904,7 +1074,9 @@ class ExamService:
             passing_score=exam.passing_score or 60,
             status=exam.status or "upcoming",
             type=exam.type or "formal",
-            scope=exam.scope,
+            scope=exam.scope or "全体学员",
+            scope_type=exam.scope_type or ADMISSION_SCOPE_ALL,
+            scope_target_ids=self._normalize_scope_target_ids(exam.scope_target_ids),
             max_attempts=exam.max_attempts or 1,
             linked_training_count=len(exam.linked_trainings or []),
             attempt_count=attempt_count,
@@ -1013,8 +1185,19 @@ class ExamService:
         ).first()
         return enrollment is not None
 
-    def _can_join_admission_exam(self, exam: AdmissionExam, attempt_count: int) -> bool:
-        return exam.status == "active" and attempt_count < int(exam.max_attempts or 1)
+    def _can_join_admission_exam(
+        self,
+        exam: AdmissionExam,
+        user_id: int,
+        attempt_count: int,
+        current_user: Optional[User] = None,
+    ) -> bool:
+        if exam.status != "active":
+            return False
+        if attempt_count >= int(exam.max_attempts or 1):
+            return False
+        user = current_user or self._get_admission_scope_user(user_id)
+        return self._can_view_admission_exam(exam, user)
 
     def _is_correct_answer(self, question_type: str, user_answer: Any, correct_answer: Any) -> bool:
         if question_type == "multi":

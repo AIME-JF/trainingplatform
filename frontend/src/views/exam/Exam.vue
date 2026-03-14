@@ -95,11 +95,17 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Modal, message } from 'ant-design-vue'
-import { getExamDetail, submitExam } from '@/api/exam'
+import {
+  getAdmissionExamDetail,
+  getExamDetail,
+  submitAdmissionExam,
+  submitExam,
+} from '@/api/exam'
 
 const route = useRoute()
 const router = useRouter()
 const examId = route.params.id
+const resolvedKind = ref(route.query.kind === 'admission' ? 'admission' : 'training')
 
 const loading = ref(true)
 const submitting = ref(false)
@@ -139,7 +145,22 @@ function formatTime(seconds) {
 
 async function loadExam() {
   try {
-    const detail = await getExamDetail(examId)
+    let detail
+    if (resolvedKind.value === 'admission') {
+      try {
+        detail = await getAdmissionExamDetail(examId)
+      } catch {
+        detail = await getExamDetail(examId)
+        resolvedKind.value = 'training'
+      }
+    } else {
+      try {
+        detail = await getExamDetail(examId)
+      } catch {
+        detail = await getAdmissionExamDetail(examId)
+        resolvedKind.value = 'admission'
+      }
+    }
     exam.value = detail
     questions.value = detail.questions || []
     answers.value = questions.value.map(question => question.type === 'multi' ? [] : null)
@@ -168,9 +189,13 @@ async function handleSubmit() {
     questions.value.forEach((question, index) => {
       payload.answers[question.id] = answers.value[index]
     })
-    await submitExam(examId, payload)
+    if (resolvedKind.value === 'admission') {
+      await submitAdmissionExam(examId, payload)
+    } else {
+      await submitExam(examId, payload)
+    }
     message.success('交卷成功')
-    router.replace({ name: 'ExamResult', params: { id: examId } })
+    router.replace({ name: 'ExamResult', params: { id: examId }, query: { kind: resolvedKind.value } })
   } catch (error) {
     message.error(error.message || '交卷失败')
   } finally {
