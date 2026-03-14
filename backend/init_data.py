@@ -421,16 +421,23 @@ def init_users():
         raise
 
 
-def check_db_init():
+def is_db_initialized():
     """检查数据库是否已初始化"""
     with Session(engine) as db:
         meta = db.query(SystemMeta).filter(SystemMeta.key == "init").first()
+        return meta is not None
+
+
+def mark_db_initialized():
+    """在种子数据全部写入成功后标记数据库已初始化"""
+    with Session(engine) as db:
+        meta = db.query(SystemMeta).filter(SystemMeta.key == "init").first()
         if meta:
-            return True
+            return
+
         meta = SystemMeta(key="init", value=datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
         db.add(meta)
         db.commit()
-        return False
 
 
 def main():
@@ -440,12 +447,16 @@ def main():
 
         init_db()
 
-        if not check_db_init():
-            init_permissions()
-            init_departments()
-            init_police_types()
-            init_roles()
-            init_users()
+        if is_db_initialized():
+            logger.info("数据库已初始化，跳过种子数据初始化")
+            return
+
+        init_permissions()
+        init_departments()
+        init_police_types()
+        init_roles()
+        init_users()
+        mark_db_initialized()
 
         logger.info("数据库初始化完成！")
 

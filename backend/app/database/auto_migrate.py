@@ -286,7 +286,41 @@ class AutoMigrate:
                 return [row[0] for row in result]
         except Exception as exc:
             logger.error(f"获取业务表列表失败: {exc}")
-            return []
+            raise
+
+    def is_database_empty(self) -> bool:
+        """检查数据库是否为空库。"""
+        return len(self.get_application_tables()) == 0
+
+    def is_seed_data_initialized(self) -> bool:
+        """检查种子数据是否已初始化。"""
+        try:
+            with engine.connect() as connection:
+                inspector = inspect(connection)
+                if not inspector.has_table("system_meta"):
+                    return False
+
+                result = connection.execute(
+                    text(
+                        """
+                        SELECT 1
+                        FROM system_meta
+                        WHERE key = 'init'
+                        LIMIT 1;
+                        """
+                    )
+                )
+                return result.scalar() == 1
+        except Exception as exc:
+            logger.error(f"检查数据库初始化状态失败: {exc}")
+            raise
+
+    def is_database_uninitialized(self) -> bool:
+        """检查数据库是否仍需执行 init_data 初始化。"""
+        if self.is_database_empty():
+            return True
+
+        return not self.is_seed_data_initialized()
 
     def get_schema_drift_issues(self) -> list[str]:
         """检查关键表结构是否与当前代码兼容。"""
@@ -414,8 +448,22 @@ def get_schema_compatibility_issues() -> list[str]:
     return auto_migrate.get_schema_drift_issues()
 
 
+def is_database_empty() -> bool:
+    """检查数据库是否为空库。"""
+    return auto_migrate.is_database_empty()
+
+
+def is_database_uninitialized() -> bool:
+    """检查数据库是否仍需执行 init_data 初始化。"""
+    return auto_migrate.is_database_uninitialized()
+
+
 def ensure_schema_compatibility() -> None:
     """在应用启动前校验关键结构，发现漂移就直接阻断启动。"""
+    if auto_migrate.is_database_empty():
+        logger.info("数据库为空，跳过关键结构兼容性校验，等待初始化流程建表")
+        return
+
     issues = get_schema_compatibility_issues()
     if not issues:
         return

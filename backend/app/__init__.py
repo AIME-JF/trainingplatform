@@ -81,10 +81,16 @@ def startup_event():
 
     if settings.AUTO_MIGRATE_ON_STARTUP:
         try:
-            from app.database.auto_migrate import ensure_schema_compatibility
+            from app.database.auto_migrate import (
+                ensure_schema_compatibility,
+                is_database_empty,
+            )
 
-            logger.info("Validating critical database schema compatibility before table initialization...")
-            ensure_schema_compatibility()
+            if is_database_empty():
+                logger.info("Database is empty; skipping pre-init schema compatibility check and allowing bootstrap")
+            else:
+                logger.info("Validating critical database schema compatibility before table initialization...")
+                ensure_schema_compatibility()
         except Exception as e:
             logger.error(f"Database schema compatibility check failed before table initialization: {e}")
             raise
