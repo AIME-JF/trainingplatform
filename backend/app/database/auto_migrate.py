@@ -379,7 +379,8 @@ class AutoMigrate:
                     )
                     return False
 
-                logger.info("数据库为空，将执行完整迁移")
+                logger.info("数据库为空，跳过 Alembic 历史迁移链，等待初始化流程建表并执行 stamp")
+                return False
 
             command.upgrade(self.alembic_cfg, "head")
 

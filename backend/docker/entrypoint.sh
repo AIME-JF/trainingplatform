@@ -12,9 +12,9 @@ if [ "$1" = "api" ]; then
     set -e
 
     if [ "$status" -eq 20 ]; then
-        echo "database is empty, running alembic upgrade before init_data.py"
-        python migrate.py upgrade
+        echo "database is empty, bootstrapping schema with init_data.py and stamping alembic head"
         python init_data.py
+        python migrate.py stamp head
     elif [ "$status" -eq 30 ]; then
         echo "database schema exists but seed data is missing, running init_data.py"
         python init_data.py
