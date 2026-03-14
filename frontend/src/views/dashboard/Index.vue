@@ -10,13 +10,13 @@
         <a-button type="primary" @click="$router.push('/courses')">
           <PlayCircleOutlined /> 继续学习
         </a-button>
-        <a-button @click="$router.push('/exam/bank')">
+        <a-button @click="$router.push('/exam/list')">
           <FormOutlined /> 参加考试
         </a-button>
       </div>
       <div class="welcome-actions" v-else-if="isInstructor">
-        <a-button type="primary" @click="$router.push('/ai/question-gen')">
-          <RobotOutlined /> AI 智能组卷
+        <a-button type="primary" @click="$router.push('/paper/ai-assemble')">
+          <RobotOutlined /> AI 自动组卷
         </a-button>
         <a-button @click="$router.push('/training')">
           <TeamOutlined /> 我的培训班
@@ -240,9 +240,9 @@
                 <div class="qa-icon" style="background:#003087">📋</div>
                 <span>新建培训班</span>
               </div>
-              <div class="qa-item" @click="$router.push('/ai/question-gen')">
+              <div class="qa-item" @click="$router.push('/paper/ai-assemble')">
                 <div class="qa-icon" style="background:#1a7a3e">🤖</div>
-                <span>AI智能组卷</span>
+                <span>AI自动组卷</span>
               </div>
               <div class="qa-item" @click="$router.push('/instructor')">
                 <div class="qa-icon" style="background:#8b1a1a">👮</div>

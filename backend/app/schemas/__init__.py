@@ -73,8 +73,12 @@ from .report import (
 )
 # AI功能
 from .ai import (
-    AIGenerateQuestionsRequest, AIGenerateQuestionsResponse,
-    AIGenerateLessonPlanRequest, AIGenerateLessonPlanResponse
+    AIQuestionTaskCreateRequest, AIQuestionTaskUpdateRequest,
+    AIPaperAssemblyTaskCreateRequest, AIPaperAssemblyTypeConfig,
+    AIPaperGenerationTaskCreateRequest, AIPaperTaskUpdateRequest,
+    AITaskQuestionDraft, AITaskPaperDraft, AITaskSummaryResponse,
+    AIQuestionTaskDetailResponse, AIPaperAssemblyTaskDetailResponse,
+    AIPaperGenerationTaskDetailResponse
 )
 # 人才库
 from .talent import TalentResponse, TalentStatsResponse
@@ -156,8 +160,12 @@ __all__ = [
     "KpiResponse", "TrendItem", "PoliceTypeDistribution", "CityRanking",
     "TrainingTrendItem", "CityAttendanceItem", "CityCompletionItem",
     # AI功能
-    "AIGenerateQuestionsRequest", "AIGenerateQuestionsResponse",
-    "AIGenerateLessonPlanRequest", "AIGenerateLessonPlanResponse",
+    "AIQuestionTaskCreateRequest", "AIQuestionTaskUpdateRequest",
+    "AIPaperAssemblyTaskCreateRequest", "AIPaperAssemblyTypeConfig",
+    "AIPaperGenerationTaskCreateRequest", "AIPaperTaskUpdateRequest",
+    "AITaskQuestionDraft", "AITaskPaperDraft", "AITaskSummaryResponse",
+    "AIQuestionTaskDetailResponse", "AIPaperAssemblyTaskDetailResponse",
+    "AIPaperGenerationTaskDetailResponse",
     # 人才库
     "TalentResponse", "TalentStatsResponse",
     # 文件管理

@@ -33,24 +33,29 @@
           课程学习
         </a-menu-item>
 
-        <a-sub-menu key="exam" v-if="!isStudent">
+        <a-sub-menu key="examCenter" v-if="!isStudent">
           <template #icon><FormOutlined /></template>
-          <template #title>考试系统</template>
-          <a-menu-item key="/exam/papers">试卷管理</a-menu-item>
-          <a-menu-item key="/exam/manage">考试场次</a-menu-item>
-          <a-menu-item key="/exam/bank">题库管理</a-menu-item>
-          <a-menu-item key="/exam/scores">成绩统计</a-menu-item>
+          <template #title>考试中心</template>
+          <a-menu-item key="/exam/manage">考试管理</a-menu-item>
         </a-sub-menu>
         <a-menu-item key="/exam/list" v-else>
           <template #icon><FormOutlined /></template>
           参加考试
         </a-menu-item>
 
-        <a-sub-menu key="ai" v-if="!isStudent">
-          <template #icon><RobotOutlined /></template>
-          <template #title>AI 功能</template>
-          <a-menu-item key="/ai/question-gen">智能组卷</a-menu-item>
-          <a-menu-item key="/ai/lesson-plan" v-if="isInstructor">教案生成</a-menu-item>
+        <a-sub-menu key="questionCenter" v-if="!isStudent">
+          <template #icon><DatabaseOutlined /></template>
+          <template #title>题库管理</template>
+          <a-menu-item key="/question/repository">试题仓库</a-menu-item>
+          <a-menu-item key="/question/ai">AI 智能出题</a-menu-item>
+        </a-sub-menu>
+
+        <a-sub-menu key="paperCenter" v-if="!isStudent">
+          <template #icon><FileTextOutlined /></template>
+          <template #title>卷库管理</template>
+          <a-menu-item key="/paper/repository">试卷仓库</a-menu-item>
+          <a-menu-item key="/paper/ai-assemble">AI 自动组卷</a-menu-item>
+          <a-menu-item key="/paper/ai-generate">AI 自动生成试卷</a-menu-item>
         </a-sub-menu>
 
         <a-sub-menu key="training">
@@ -126,23 +131,27 @@
           <template #icon><PlayCircleOutlined /></template>
           课程学习
         </a-menu-item>
-        <a-sub-menu key="exam" v-if="!isStudent">
+        <a-sub-menu key="examCenter" v-if="!isStudent">
           <template #icon><FormOutlined /></template>
-          <template #title>考试系统</template>
-          <a-menu-item key="/exam/papers">试卷管理</a-menu-item>
-          <a-menu-item key="/exam/manage">考试场次</a-menu-item>
-          <a-menu-item key="/exam/bank">题库管理</a-menu-item>
-          <a-menu-item key="/exam/scores">成绩统计</a-menu-item>
+          <template #title>考试中心</template>
+          <a-menu-item key="/exam/manage">考试管理</a-menu-item>
         </a-sub-menu>
         <a-menu-item key="/exam/list" v-else>
           <template #icon><FormOutlined /></template>
           参加考试
         </a-menu-item>
-        <a-sub-menu key="ai" v-if="!isStudent">
-          <template #icon><RobotOutlined /></template>
-          <template #title>AI 功能</template>
-          <a-menu-item key="/ai/question-gen">智能组卷</a-menu-item>
-          <a-menu-item key="/ai/lesson-plan" v-if="isInstructor">教案生成</a-menu-item>
+        <a-sub-menu key="questionCenter" v-if="!isStudent">
+          <template #icon><DatabaseOutlined /></template>
+          <template #title>题库管理</template>
+          <a-menu-item key="/question/repository">试题仓库</a-menu-item>
+          <a-menu-item key="/question/ai">AI 智能出题</a-menu-item>
+        </a-sub-menu>
+        <a-sub-menu key="paperCenter" v-if="!isStudent">
+          <template #icon><FileTextOutlined /></template>
+          <template #title>卷库管理</template>
+          <a-menu-item key="/paper/repository">试卷仓库</a-menu-item>
+          <a-menu-item key="/paper/ai-assemble">AI 自动组卷</a-menu-item>
+          <a-menu-item key="/paper/ai-generate">AI 自动生成试卷</a-menu-item>
         </a-sub-menu>
         <a-sub-menu key="training">
           <template #icon><TeamOutlined /></template>
@@ -265,7 +274,7 @@
         <span class="nav-icon"><TeamOutlined /></span>
         <span class="nav-label">培训</span>
       </a>
-      <a class="mobile-nav-item" :class="{ active: $route.path.startsWith('/exam') }" @click="$router.push(isStudent ? '/exam/list' : '/exam/bank')">
+      <a class="mobile-nav-item" :class="{ active: $route.path.startsWith('/exam') || $route.path.startsWith('/question') || $route.path.startsWith('/paper') }" @click="$router.push(isStudent ? '/exam/list' : '/exam/manage')">
         <span class="nav-icon"><FormOutlined /></span>
         <span class="nav-label">考试</span>
       </a>
@@ -282,10 +291,11 @@ import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
 import {
-  HomeOutlined, PlayCircleOutlined, FormOutlined, RobotOutlined,
+  HomeOutlined, PlayCircleOutlined, FormOutlined,
   TeamOutlined, UserOutlined, BarChartOutlined, BookOutlined,
   MenuUnfoldOutlined, MenuFoldOutlined, DownOutlined, LogoutOutlined,
   SettingOutlined,
+  DatabaseOutlined, FileTextOutlined,
 } from '@ant-design/icons-vue'
 
 const router = useRouter()
@@ -340,12 +350,13 @@ function getSelectedMenuKeyByPath(path) {
   if (path === '/') return '/'
   if (path.startsWith('/courses')) return '/courses'
   if (path.startsWith('/exam/list')) return '/exam/list'
-  if (path.startsWith('/exam/papers')) return '/exam/papers'
   if (path.startsWith('/exam/manage')) return '/exam/manage'
-  if (path.startsWith('/exam/bank')) return '/exam/bank'
   if (path.startsWith('/exam/scores')) return '/exam/scores'
-  if (path.startsWith('/ai/question-gen')) return '/ai/question-gen'
-  if (path.startsWith('/ai/lesson-plan')) return '/ai/lesson-plan'
+  if (path.startsWith('/question/repository')) return '/question/repository'
+  if (path.startsWith('/question/ai')) return '/question/ai'
+  if (path.startsWith('/paper/repository')) return '/paper/repository'
+  if (path.startsWith('/paper/ai-assemble')) return '/paper/ai-assemble'
+  if (path.startsWith('/paper/ai-generate')) return '/paper/ai-generate'
   if (path.startsWith('/training/base')) return '/training/base'
   if (path.startsWith('/training/schedule')) return '/training/schedule'
   if (path.startsWith('/training/board')) return '/training/board'
@@ -370,8 +381,9 @@ function getSelectedMenuKeyByPath(path) {
 }
 
 function getOpenKeysByPath(path) {
-  if (path.startsWith('/exam/')) return ['exam']
-  if (path.startsWith('/ai/')) return ['ai']
+  if (path.startsWith('/exam/')) return ['examCenter']
+  if (path.startsWith('/question/')) return ['questionCenter']
+  if (path.startsWith('/paper/')) return ['paperCenter']
   if (path.startsWith('/training')) return ['training']
   if (path.startsWith('/resource/')) return ['resource']
   if (

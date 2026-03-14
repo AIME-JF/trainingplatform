@@ -16,6 +16,7 @@ from .exam import (
     AdmissionExam, AdmissionExamRecord,
     Exam, ExamQuestion, ExamRecord,
 )
+from .ai_task import AITask
 from .certificate import Certificate
 from .media import MediaFile
 from .notice import Notice
@@ -52,6 +53,7 @@ __all__ = [
     "Question", "ExamPaper", "ExamPaperQuestion",
     "AdmissionExam", "AdmissionExamRecord",
     "Exam", "ExamQuestion", "ExamRecord",
+    "AITask",
     # 证书
     "Certificate",
     # 文件

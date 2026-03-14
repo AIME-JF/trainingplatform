@@ -120,9 +120,19 @@ def init_permissions():
                 {"path": "/api/v1/report/police-type-distribution", "code": "GET_POLICE_TYPE_DIST", "description": "获取警种分布"},
                 {"path": "/api/v1/report/city-ranking", "code": "GET_CITY_RANKING", "description": "获取城市排名"},
 
-                # AI功能
-                {"path": "/api/v1/ai/generate-questions", "code": "AI_GENERATE_QUESTIONS", "description": "AI智能组卷"},
-                {"path": "/api/v1/ai/generate-lesson-plan", "code": "AI_GENERATE_LESSON_PLAN", "description": "AI教案生成"},
+                # AI任务
+                {"path": "/api/v1/ai/question-tasks", "code": "GET_AI_QUESTION_TASKS", "description": "获取 AI 智能出题任务"},
+                {"path": "/api/v1/ai/question-tasks", "code": "CREATE_AI_QUESTION_TASK", "description": "创建 AI 智能出题任务"},
+                {"path": "/api/v1/ai/question-tasks/{task_id}/result", "code": "UPDATE_AI_QUESTION_TASK", "description": "更新 AI 智能出题任务"},
+                {"path": "/api/v1/ai/question-tasks/{task_id}/confirm", "code": "CONFIRM_AI_QUESTION_TASK", "description": "确认 AI 智能出题任务"},
+                {"path": "/api/v1/ai/paper-assembly-tasks", "code": "GET_AI_PAPER_ASSEMBLY_TASKS", "description": "获取 AI 自动组卷任务"},
+                {"path": "/api/v1/ai/paper-assembly-tasks", "code": "CREATE_AI_PAPER_ASSEMBLY_TASK", "description": "创建 AI 自动组卷任务"},
+                {"path": "/api/v1/ai/paper-assembly-tasks/{task_id}/result", "code": "UPDATE_AI_PAPER_ASSEMBLY_TASK", "description": "更新 AI 自动组卷任务"},
+                {"path": "/api/v1/ai/paper-assembly-tasks/{task_id}/confirm", "code": "CONFIRM_AI_PAPER_ASSEMBLY_TASK", "description": "确认 AI 自动组卷任务"},
+                {"path": "/api/v1/ai/paper-generation-tasks", "code": "GET_AI_PAPER_GENERATION_TASKS", "description": "获取 AI 自动生成试卷任务"},
+                {"path": "/api/v1/ai/paper-generation-tasks", "code": "CREATE_AI_PAPER_GENERATION_TASK", "description": "创建 AI 自动生成试卷任务"},
+                {"path": "/api/v1/ai/paper-generation-tasks/{task_id}/result", "code": "UPDATE_AI_PAPER_GENERATION_TASK", "description": "更新 AI 自动生成试卷任务"},
+                {"path": "/api/v1/ai/paper-generation-tasks/{task_id}/confirm", "code": "CONFIRM_AI_PAPER_GENERATION_TASK", "description": "确认 AI 自动生成试卷任务"},
 
                 # 人才库
                 {"path": "/api/v1/talent", "code": "GET_TALENTS", "description": "获取人才列表"},
@@ -268,7 +278,9 @@ def init_roles():
                 "GET_CHECKIN_RECORDS", "GET_CHECKIN_QR",
                 "GET_CERTIFICATES", "CREATE_CERTIFICATE",
                 "GET_PROFILE", "UPDATE_PROFILE", "GET_STUDY_STATS", "GET_EXAM_HISTORY",
-                "AI_GENERATE_QUESTIONS", "AI_GENERATE_LESSON_PLAN",
+                "GET_AI_QUESTION_TASKS", "CREATE_AI_QUESTION_TASK", "UPDATE_AI_QUESTION_TASK", "CONFIRM_AI_QUESTION_TASK",
+                "GET_AI_PAPER_ASSEMBLY_TASKS", "CREATE_AI_PAPER_ASSEMBLY_TASK", "UPDATE_AI_PAPER_ASSEMBLY_TASK", "CONFIRM_AI_PAPER_ASSEMBLY_TASK",
+                "GET_AI_PAPER_GENERATION_TASKS", "CREATE_AI_PAPER_GENERATION_TASK", "UPDATE_AI_PAPER_GENERATION_TASK", "CONFIRM_AI_PAPER_GENERATION_TASK",
                 "CREATE_RESOURCE", "UPDATE_RESOURCE", "VIEW_RESOURCE_DEPARTMENT",
                 "MANAGE_RESOURCE_VISIBILITY", "SUBMIT_RESOURCE_REVIEW",
                 "REVIEW_RESOURCE_STAGE1", "REVIEW_RESOURCE_STAGE2",

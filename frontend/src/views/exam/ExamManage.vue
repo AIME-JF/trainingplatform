@@ -505,7 +505,7 @@ async function openEditDrawer(record) {
 }
 
 function goToPaperManage() {
-  router.push({ path: '/exam/papers', query: { quickCreate: '1' } })
+  router.push({ path: '/paper/repository', query: { quickCreate: '1' } })
 }
 
 async function handleSave() {

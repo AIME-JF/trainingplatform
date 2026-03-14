@@ -12,6 +12,66 @@ from logger import logger
 
 EXTRA_PERMISSION_DEFINITIONS = [
     {
+        "path": "/api/v1/ai/question-tasks",
+        "code": "GET_AI_QUESTION_TASKS",
+        "description": "获取 AI 智能出题任务",
+    },
+    {
+        "path": "/api/v1/ai/question-tasks",
+        "code": "CREATE_AI_QUESTION_TASK",
+        "description": "创建 AI 智能出题任务",
+    },
+    {
+        "path": "/api/v1/ai/question-tasks/{task_id}/result",
+        "code": "UPDATE_AI_QUESTION_TASK",
+        "description": "更新 AI 智能出题任务",
+    },
+    {
+        "path": "/api/v1/ai/question-tasks/{task_id}/confirm",
+        "code": "CONFIRM_AI_QUESTION_TASK",
+        "description": "确认 AI 智能出题任务",
+    },
+    {
+        "path": "/api/v1/ai/paper-assembly-tasks",
+        "code": "GET_AI_PAPER_ASSEMBLY_TASKS",
+        "description": "获取 AI 自动组卷任务",
+    },
+    {
+        "path": "/api/v1/ai/paper-assembly-tasks",
+        "code": "CREATE_AI_PAPER_ASSEMBLY_TASK",
+        "description": "创建 AI 自动组卷任务",
+    },
+    {
+        "path": "/api/v1/ai/paper-assembly-tasks/{task_id}/result",
+        "code": "UPDATE_AI_PAPER_ASSEMBLY_TASK",
+        "description": "更新 AI 自动组卷任务",
+    },
+    {
+        "path": "/api/v1/ai/paper-assembly-tasks/{task_id}/confirm",
+        "code": "CONFIRM_AI_PAPER_ASSEMBLY_TASK",
+        "description": "确认 AI 自动组卷任务",
+    },
+    {
+        "path": "/api/v1/ai/paper-generation-tasks",
+        "code": "GET_AI_PAPER_GENERATION_TASKS",
+        "description": "获取 AI 自动生成试卷任务",
+    },
+    {
+        "path": "/api/v1/ai/paper-generation-tasks",
+        "code": "CREATE_AI_PAPER_GENERATION_TASK",
+        "description": "创建 AI 自动生成试卷任务",
+    },
+    {
+        "path": "/api/v1/ai/paper-generation-tasks/{task_id}/result",
+        "code": "UPDATE_AI_PAPER_GENERATION_TASK",
+        "description": "更新 AI 自动生成试卷任务",
+    },
+    {
+        "path": "/api/v1/ai/paper-generation-tasks/{task_id}/confirm",
+        "code": "CONFIRM_AI_PAPER_GENERATION_TASK",
+        "description": "确认 AI 自动生成试卷任务",
+    },
+    {
         "path": "/api/v1/resources/list",
         "code": "VIEW_RESOURCE_ALL",
         "description": "全局查看资源",

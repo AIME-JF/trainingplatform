@@ -1,0 +1,61 @@
+import request from './request'
+
+export function getAiQuestionTasks(params) {
+  return request.get('/ai/question-tasks', { params })
+}
+
+export function createAiQuestionTask(data) {
+  return request.post('/ai/question-tasks', data)
+}
+
+export function getAiQuestionTaskDetail(taskId) {
+  return request.get(`/ai/question-tasks/${taskId}`)
+}
+
+export function updateAiQuestionTaskResult(taskId, data) {
+  return request.put(`/ai/question-tasks/${taskId}/result`, data)
+}
+
+export function confirmAiQuestionTask(taskId) {
+  return request.post(`/ai/question-tasks/${taskId}/confirm`)
+}
+
+export function getAiPaperAssemblyTasks(params) {
+  return request.get('/ai/paper-assembly-tasks', { params })
+}
+
+export function createAiPaperAssemblyTask(data) {
+  return request.post('/ai/paper-assembly-tasks', data)
+}
+
+export function getAiPaperAssemblyTaskDetail(taskId) {
+  return request.get(`/ai/paper-assembly-tasks/${taskId}`)
+}
+
+export function updateAiPaperAssemblyTaskResult(taskId, data) {
+  return request.put(`/ai/paper-assembly-tasks/${taskId}/result`, data)
+}
+
+export function confirmAiPaperAssemblyTask(taskId) {
+  return request.post(`/ai/paper-assembly-tasks/${taskId}/confirm`)
+}
+
+export function getAiPaperGenerationTasks(params) {
+  return request.get('/ai/paper-generation-tasks', { params })
+}
+
+export function createAiPaperGenerationTask(data) {
+  return request.post('/ai/paper-generation-tasks', data)
+}
+
+export function getAiPaperGenerationTaskDetail(taskId) {
+  return request.get(`/ai/paper-generation-tasks/${taskId}`)
+}
+
+export function updateAiPaperGenerationTaskResult(taskId, data) {
+  return request.put(`/ai/paper-generation-tasks/${taskId}/result`, data)
+}
+
+export function confirmAiPaperGenerationTask(taskId) {
+  return request.post(`/ai/paper-generation-tasks/${taskId}/confirm`)
+}
