@@ -16,7 +16,7 @@ RUN pnpm build
 
 FROM ccr.ccs.tencentyun.com/z5882852/nginx
 
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+COPY ../docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --from=builder /app/dist /usr/share/nginx/html/trainingplatform
 
 EXPOSE 80
