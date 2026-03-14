@@ -1,6 +1,6 @@
 # 警务训练平台后端
 
-本文档面向后端开发与运维，描述 `backend/` 服务的真实结构、启动流程、环境变量和维护方式。
+本文档面向后端开发与运维，描述 `backend/` 服务的真实结构、启动流程、环境变量、迁移策略和当前业务边界。
 
 ## 服务定位
 
@@ -8,10 +8,37 @@
 
 - JWT 登录鉴权与权限解析
 - 用户、角色、部门、权限、警种管理
-- 课程、考试、培训、证书、公告、个人中心
+- 课程、培训、考试、证书、公告、个人中心
 - 资源上传、资源库、推荐流、审核工作流
 - 报表导出、人才库、AI 组卷与 AI 教案生成
 - PostgreSQL、Redis、MinIO、Celery 的集成
+
+## 当前核心业务模型
+
+### 考试域
+
+当前考试域已经拆成四层：
+
+- `Question`：统一题库
+- `ExamPaper`：试卷与题目快照
+- `AdmissionExam`：独立准入考试，不直接隶属培训班
+- `Exam`：培训班内考试，必须关联 `training_id`
+
+对应业务规则：
+
+- 培训班通过 `admission_exam_id` 绑定准入考试
+- 学员报名该培训班时，如果配置了准入考试，必须先有该考试的通过记录
+- 培训班内考试的参试范围由 `training_id` 决定，不再使用 `scope`
+
+### 培训域
+
+当前培训域已经具备以下主链路：
+
+- 培训班流程：草稿 -> 发布招生 -> 锁定名单 -> 开班进行中 -> 结班归档
+- 培训班详情：步骤条、当前课次、课程安排、考试安排、资源绑定
+- 课程安排：主讲教官 1 人 + 带教教官多人
+- 课次状态流：未开始 -> 签到中 -> 签到已结束 -> 签退中 -> 已完成 / 已跳过 / 已错过
+- 培训训历：根据报名、签到、考试记录汇总归档
 
 ## 技术栈
 
@@ -35,7 +62,7 @@
 ```text
 backend/
 ├── app/
-│   ├── __init__.py              # FastAPI 应用实例、startup/shutdown
+│   ├── __init__.py              # FastAPI 应用实例、startup / shutdown
 │   ├── views/                   # 路由层
 │   ├── controllers/             # 控制器层
 │   ├── services/                # 业务层
@@ -44,7 +71,7 @@ backend/
 │   ├── middleware/              # 鉴权、日志、异常处理
 │   ├── database/                # 数据库、Redis、自动迁移
 │   ├── tasks/                   # Celery 任务
-│   ├── utils/                   # 工具函数与权限分组
+│   ├── utils/                   # 工具函数与授权判断
 │   └── runtime_sync.py          # 运行时兼容修复与额外权限同步
 ├── alembic/                     # 数据库迁移版本
 ├── data/                        # 本地数据目录
@@ -101,15 +128,17 @@ uvicorn.run("app:app", host="0.0.0.0", port=8001)
 
 应用启动时会依次执行：
 
-1. 如果 `AUTO_MIGRATE_ON_STARTUP=True`，调用 `app.database.auto_migrate.run_auto_migration()`
-2. 调用 `init_db()`，用 `Base.metadata.create_all()` 补齐仍缺失的表
-3. 调用 `sync_runtime_state()`，同步额外权限和兼容性修复
-4. 测试 Redis 连接
+1. 如果 `AUTO_MIGRATE_ON_STARTUP=True`，先尝试执行 Alembic 自动迁移
+2. 对关键表结构做兼容性校验；发现“版本号已是 head，但列缺失”的坏状态会直接阻断启动
+3. 调用 `init_db()`，仅补齐仍缺失的表，不负责已有表的字段升级
+4. 调用 `sync_runtime_state()`，同步额外权限和兼容性修复
+5. 测试 Redis 连接
 
 注意：
 
 - 这些步骤不会执行 `init_data.py`
 - 首次初始化种子数据仍需手动运行 `python init_data.py`
+- 自动迁移不会再对“已有业务表但无版本记录”的旧库直接 `stamp head`
 
 ## 环境变量
 
@@ -202,6 +231,8 @@ Copy-Item .env.example .env
 python migrate.py upgrade
 ```
 
+如果数据库曾被历史版本错误 `stamp head`，先拉取最新兼容迁移后再执行本命令。
+
 ### 4. 初始化种子数据
 
 ```powershell
@@ -242,7 +273,7 @@ celery -A celery_app beat --loglevel=info
 说明：
 
 - Docker 镜像统一通过 `backend/docker/entrypoint.sh` 接收 `api`、`worker`、`beat` 三种模式
-- 当前代码仓库内已有 `app/tasks/recommendation.py`，但大部分业务仍以同步 API 为主
+- 当前仓库内已有推荐流相关任务，但大部分业务仍以同步 API 为主
 
 ## 数据迁移
 
@@ -257,14 +288,11 @@ python migrate.py status
 python migrate.py generate "your message"
 ```
 
-当前已提交迁移包括：
+额外说明：
 
-- 培训主模型
-- 用户与警种/单位拆分
-- 媒体文件与章节文件关联
-- 课程笔记、课程答疑
-- 资源库、审核流、推荐流
-- 权限 `group` 字段
+- `python migrate.py stamp head` 只允许在“你已经确认数据库结构和最新迁移完全一致”时使用
+- `Base.metadata.create_all()` 只负责补缺表，不能替代 Alembic 字段迁移
+- 当前迁移已经覆盖考试重构、培训 P0 重构以及培训班考试去除 `scope`
 
 ## 认证与权限
 
@@ -301,12 +329,14 @@ python migrate.py generate "your message"
 
 - 用户权限由角色权限与部门权限共同决定
 - `admin` 角色会在运行时自动补齐所有激活权限
-- 权限表带有 `group` 字段，缺失时会根据路由自动推断
+- 培训域的对象级权限以当前代码为准：
+  - 管理员：全部可操作
+  - 班主任：`training.instructor_id`
+  - 主讲 / 带教教官：仅可操作自己课次
+  - 学员：只能查看和操作自己的报名、签到、训历等数据
 - 运行时额外补充的权限定义位于 `app/runtime_sync.py`
 
 ### 受保护对象
-
-后端已明确保护以下对象：
 
 - `admin` 角色不可编辑、不可删除、不可重分配权限
 - `admin` 用户不可修改角色
@@ -329,7 +359,7 @@ python migrate.py generate "your message"
 
 ## 批量导入
 
-后端提供三类 Excel 导入：
+后端提供三类培训导入和一类全员底库导入：
 
 - 全员底库导入：`POST /api/v1/users/import/police-base`
 - 培训学员导入：`POST /api/v1/trainings/{training_id}/import/students`
@@ -376,8 +406,8 @@ python migrate.py generate "your message"
 ## 已知行为与注意事项
 
 - `POST /api/v1/auth/login/phone` 目前尚未校验验证码内容，只根据手机号查用户并发 token。
-- 后端启动不会自动执行 `init_data.py`，首次建库必须手动运行。
-- 当前同时保留了 Alembic 迁移与 `Base.metadata.create_all()` 补表逻辑，后者主要用于兼容旧库或开发环境缺表。
+- 培训二维码签到依赖 Redis；Redis 不可用时，扫码签到链路不可用。
+- 培训课次一旦过了系统判定截止时间，会自动转为 `missed`，无法再开始签到或跳过。
 - 某些系统管理接口同时提供 REST 风格和兼容旧前端的 `/create`、`/update`、`/delete` 别名。
 
 ## 进一步阅读

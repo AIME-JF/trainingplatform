@@ -38,7 +38,7 @@
 约定：
 
 - `size=-1` 表示返回全部数据，适用于支持该约定的列表接口
-- 业务失败时，项目内有一部分异常会通过响应体 `code` 表示，而不是完全依赖 HTTP 状态码
+- 业务失败时，部分异常会通过响应体 `code` 或 `detail` 表示，而不是完全依赖 HTTP 状态码
 
 ### 1.2 认证方式
 
@@ -152,21 +152,60 @@ Authorization: Bearer <access_token>
 
 ## 7. 考试模块
 
-### 7.1 考试主接口
+### 7.1 业务说明
+
+当前考试域使用统一题库和试卷快照，分成两类业务对象：
+
+- `准入考试`
+  - 独立维护
+  - 不直接绑定培训班
+  - 培训班通过 `admission_exam_id` 引用
+  - 保留 `scope`
+- `培训班内考试`
+  - 必须关联 `training_id`
+  - 用于随堂测、班内考核、结业考核、补考
+  - 不再使用 `scope`
+
+### 7.2 准入考试接口
 
 | Method | Path | 说明 | 请求要点 |
 | --- | --- | --- | --- |
-| `GET` | `/api/v1/exams` | 考试列表 | Query：`page` `size` `status` `type` `search` |
-| `POST` | `/api/v1/exams` | 创建考试 | JSON：`title` `description` `duration` `total_score` `passing_score` `status` `type` `scope` `start_time` `end_time` `question_ids[]` |
-| `GET` | `/api/v1/exams/{exam_id}` | 考试详情 | 返回考试基本信息和题目 |
-| `POST` | `/api/v1/exams/{exam_id}/submit` | 提交考试 | JSON：`answers` `start_time` |
-| `GET` | `/api/v1/exams/{exam_id}/result` | 获取当前用户考试结果 | 无 |
-| `GET` | `/api/v1/exams/{exam_id}/scores` | 成绩列表 | Query：`page` `size` |
-| `GET` | `/api/v1/exams/{exam_id}/records/analysis` | 获取考试分析报表 | 返回平铺成绩明细 |
+| `GET` | `/api/v1/exams/admission` | 准入考试列表 | Query：`page` `size` `status` `type` `search` |
+| `POST` | `/api/v1/exams/admission` | 创建准入考试 | JSON：`title` `paper_title` `description` `duration` `total_score` `passing_score` `status` `type` `scope` `max_attempts` `start_time` `end_time` `question_ids[]` |
+| `PUT` | `/api/v1/exams/admission/{exam_id}` | 更新准入考试 | 字段同创建接口，均可选 |
+| `GET` | `/api/v1/exams/admission/{exam_id}` | 准入考试详情 | 返回考试基础信息和题目快照 |
+| `POST` | `/api/v1/exams/admission/{exam_id}/submit` | 提交准入考试 | JSON：`answers` `start_time` |
+| `GET` | `/api/v1/exams/admission/{exam_id}/result` | 获取当前用户准入考试结果 | 无 |
+| `GET` | `/api/v1/exams/admission/{exam_id}/scores` | 准入考试成绩列表 | Query：`page` `size` |
+| `GET` | `/api/v1/exams/admission/{exam_id}/records/analysis` | 准入考试分析报表 | 返回平铺成绩明细 |
 
 说明：
 
-- 当前后端未暴露更新考试接口，前端代码中的 `updateExam` 不是已落地能力
+- 创建、更新、成绩管理、分析接口要求管理员或教官
+- `scope` 仅存在于准入考试
+- 准入考试结果里的 `result` 常见值为 `pass` / `fail`
+
+### 7.3 培训班内考试接口
+
+| Method | Path | 说明 | 请求要点 |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/exams` | 培训班内考试列表 | Query：`page` `size` `status` `type` `search` `training_id` `purpose` |
+| `POST` | `/api/v1/exams` | 创建培训班内考试 | JSON：`title` `paper_title` `description` `duration` `total_score` `passing_score` `status` `type` `purpose` `training_id` `max_attempts` `allow_makeup` `start_time` `end_time` `question_ids[]` |
+| `PUT` | `/api/v1/exams/{exam_id}` | 更新培训班内考试 | 字段同创建接口，均可选 |
+| `GET` | `/api/v1/exams/{exam_id}` | 培训班内考试详情 | 返回考试基础信息和题目快照 |
+| `POST` | `/api/v1/exams/{exam_id}/submit` | 提交培训班内考试 | JSON：`answers` `start_time` |
+| `GET` | `/api/v1/exams/{exam_id}/result` | 获取当前用户培训班考试结果 | 无 |
+| `GET` | `/api/v1/exams/{exam_id}/scores` | 培训班考试成绩列表 | Query：`page` `size` |
+| `GET` | `/api/v1/exams/{exam_id}/records/analysis` | 培训班考试分析报表 | 返回平铺成绩明细 |
+
+说明：
+
+- 培训班考试的参试范围由 `training_id` 决定，不存在 `scope`
+- `purpose` 常见值：
+  - `class_assessment`
+  - `final_assessment`
+  - `quiz`
+- 创建、更新、成绩管理、分析接口要求管理员或教官
 
 ## 8. 培训模块
 
@@ -175,28 +214,113 @@ Authorization: Bearer <access_token>
 | Method | Path | 说明 | 请求要点 |
 | --- | --- | --- | --- |
 | `GET` | `/api/v1/trainings` | 培训列表 | Query：`page` `size` `status` `type` `search` |
-| `POST` | `/api/v1/trainings` | 创建培训班 | JSON：`name` `type` `status` `start_date` `end_date` `location` `instructor_id` `capacity` `description` `subjects[]` `courses[]` |
-| `GET` | `/api/v1/trainings/{training_id}` | 培训详情 | 返回课程安排、已报名人数等 |
-| `PUT` | `/api/v1/trainings/{training_id}` | 更新培训班 | `courses` 调课仅管理员可改 |
-| `DELETE` | `/api/v1/trainings/{training_id}` | 删除培训班 | 无 |
-| `POST` | `/api/v1/trainings/{training_id}/start` | 手动开班 | 管理员或教官 |
-| `POST` | `/api/v1/trainings/{training_id}/end` | 手动结班 | 管理员或教官 |
+| `POST` | `/api/v1/trainings` | 创建培训班 | JSON：`name` `type` `status` `publish_status` `start_date` `end_date` `location` `class_code` `instructor_id` `capacity` `description` `subjects[]` `enrollment_start_at` `enrollment_end_at` `admission_exam_id` `courses[]` |
+| `GET` | `/api/v1/trainings/{training_id}` | 培训详情 | 返回课程、考试摘要、流程步骤、当前课次、权限标记 |
+| `PUT` | `/api/v1/trainings/{training_id}` | 更新培训班 | 字段同创建接口，均可选；支持更新 `student_ids`、`roster_assignments` |
+| `DELETE` | `/api/v1/trainings/{training_id}` | 删除培训班 | 仅管理员 |
+| `POST` | `/api/v1/trainings/{training_id}/publish` | 发布培训班 | 管理员或班主任 |
+| `POST` | `/api/v1/trainings/{training_id}/lock` | 锁定名单 | 管理员或班主任 |
+| `POST` | `/api/v1/trainings/{training_id}/start` | 手动开班 | 管理员或班主任 |
+| `POST` | `/api/v1/trainings/{training_id}/end` | 手动结班 | 管理员或班主任 |
 
-### 8.2 学员、计划、报名、签到
+培训详情常见返回摘要：
+
+- `workflow_steps`
+- `current_step_key`
+- `current_session`
+- `exam_sessions`
+- `admission_exam_id`
+- `admission_exam_title`
+- `can_manage_all`
+- `can_edit_training`
+- `can_edit_courses`
+- `can_review_enrollments`
+
+### 8.2 培训课程与排课字段
+
+`courses[]` 中每项常见字段：
+
+```json
+{
+  "name": "课程名称",
+  "instructor": "主讲教官名称（兼容旧字段）",
+  "primary_instructor_id": 2,
+  "assistant_instructor_ids": [3, 4],
+  "hours": 4,
+  "type": "theory",
+  "schedules": [
+    {
+      "session_id": "course-1-2026-03-13-1",
+      "date": "2026-03-13",
+      "time_range": "09:00-10:40",
+      "location": "教室 A",
+      "status": "pending"
+    }
+  ]
+}
+```
+
+课次状态常见值：
+
+- `pending`
+- `checkin_open`
+- `checkin_closed`
+- `checkout_open`
+- `completed`
+- `skipped`
+- `missed`
+
+### 8.3 学员、报名、编组
 
 | Method | Path | 说明 | 请求要点 |
 | --- | --- | --- | --- |
-| `GET` | `/api/v1/trainings/{training_id}/students` | 培训学员列表 | Query：`page` `size` |
-| `GET` | `/api/v1/trainings/{training_id}/schedule` | 周计划 | 无 |
-| `POST` | `/api/v1/trainings/{training_id}/enroll` | 学员报名 | JSON：`note` |
-| `GET` | `/api/v1/trainings/{training_id}/enrollments` | 报名列表 | Query：`page` `size` |
-| `PUT` | `/api/v1/trainings/{training_id}/enrollments/{eid}/approve` | 审批通过 | 无 |
+| `GET` | `/api/v1/trainings/{training_id}/students` | 学员列表 | Query：`page` `size`；仅管理员或班主任 |
+| `POST` | `/api/v1/trainings/{training_id}/enroll` | 学员报名 | JSON：`note` `phone` `need_accommodation` |
+| `GET` | `/api/v1/trainings/{training_id}/enrollments` | 报名列表 | Query：`page` `size`；管理员 / 班主任看全量，学员只看自己 |
+| `PUT` | `/api/v1/trainings/{training_id}/enrollments/{eid}/approve` | 审批通过 | 管理员或班主任 |
 | `PUT` | `/api/v1/trainings/{training_id}/enrollments/{eid}/reject` | 审批拒绝 | JSON：`note` |
-| `GET` | `/api/v1/trainings/{training_id}/checkin/records` | 签到记录 | Query：`date` |
-| `POST` | `/api/v1/trainings/{training_id}/checkin` | 签到 | JSON：`date` `time` `session_key` `user_id` |
-| `GET` | `/api/v1/trainings/{training_id}/checkin/qr` | 生成签到二维码 | 返回二维码 token、签到 URL、过期时间 |
+| `PUT` | `/api/v1/trainings/{training_id}/roster` | 更新编组与班干部 | Body：`[{ enrollment_id, group_name, cadre_role }]` |
 
-### 8.3 培训导入接口
+报名约束：
+
+- 培训班必须已发布
+- 名单未锁定
+- 当前时间位于报名窗口内
+- 如果培训班配置了 `admission_exam_id`，报名人必须先通过该准入考试
+
+### 8.4 课次签到、签退、评课
+
+| Method | Path | 说明 | 请求要点 |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/trainings/{training_id}/checkin/records` | 签到记录 | Query：`date` `session_key`；管理员 / 班主任或当前课次授课教官看全量，其他学员只看自己 |
+| `GET` | `/api/v1/trainings/{training_id}/attendance/summary` | 课次签到统计 | Query：`session_key` `date` |
+| `POST` | `/api/v1/trainings/{training_id}/sessions/{session_key}/checkin/start` | 开始课次签到 | 管理员 / 班主任 / 当前课次主讲或带教教官 |
+| `POST` | `/api/v1/trainings/{training_id}/sessions/{session_key}/checkin/end` | 结束课次签到 | 同上 |
+| `POST` | `/api/v1/trainings/{training_id}/sessions/{session_key}/checkout/start` | 开始课次签退 | 同上 |
+| `POST` | `/api/v1/trainings/{training_id}/sessions/{session_key}/checkout/end` | 结束课次签退 | 同上 |
+| `POST` | `/api/v1/trainings/{training_id}/sessions/{session_key}/skip` | 跳过课次 | JSON：`reason` |
+| `POST` | `/api/v1/trainings/{training_id}/checkin` | 签到 | JSON：`date` `time` `session_key` `user_id` `status` |
+| `POST` | `/api/v1/trainings/{training_id}/checkout` | 签退 | JSON：`date` `time` `session_key` `user_id` |
+| `POST` | `/api/v1/trainings/{training_id}/evaluation` | 评课 | JSON：`date` `session_key` `user_id` `score` `comment` |
+
+说明：
+
+- 系统会对已过截止时间但未完成的课次自动转为 `missed`
+- 已 `missed` 的课次不能再开始签到，也不能再跳过
+- `skip` 是跳过整个课次，不是跳过单个学员
+
+### 8.5 二维码签到与训历
+
+| Method | Path | 说明 | 请求要点 |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/trainings/{training_id}/checkin/qr` | 生成签到二维码 | Query：`session_key` `date` |
+| `GET` | `/api/v1/trainings/checkin/qr/{token}` | 扫码签到信息 | 可匿名访问，返回二维码负载 |
+| `POST` | `/api/v1/trainings/checkin/qr/{token}` | 扫码签到 | 需要登录 |
+| `GET` | `/api/v1/trainings/{training_id}/histories` | 培训训历 | Query：`user_id`；管理员 / 班主任可查全量，学员只可查自己 |
+| `GET` | `/api/v1/trainings/histories/me` | 我的训历 | 当前用户 |
+| `GET` | `/api/v1/trainings/{training_id}/schedule` | 周计划 | 返回 `ScheduleItemResponse[]` |
+
+### 8.6 培训导入接口
 
 | Method | Path | 说明 | 请求要点 |
 | --- | --- | --- | --- |
@@ -216,11 +340,10 @@ Authorization: Bearer <access_token>
 
 说明：
 
-- 学员导入：管理员或教官可用
-- 教官导入、课表导入：仅管理员可用
+- 学员导入、教官导入、课表导入当前都要求管理员或班主任
 - 新建账号默认密码为 `Police@123456`
 
-### 8.4 培训与资源绑定
+### 8.7 培训与资源绑定
 
 | Method | Path | 说明 | 请求要点 |
 | --- | --- | --- | --- |
@@ -241,11 +364,6 @@ Authorization: Bearer <access_token>
 | `POST` | `/api/v1/resources/{resource_id}/publish` | 发布资源 | 无 |
 | `POST` | `/api/v1/resources/{resource_id}/offline` | 下线资源 | 无 |
 | `DELETE` | `/api/v1/resources/{resource_id}` | 删除资源 | 返回删除结果对象 |
-
-权限说明：
-
-- 创建资源需要 `CREATE_RESOURCE` 或 `VIEW_RESOURCE_ALL`
-- 详情、更新、发布、下线、删除会结合当前用户权限和资源归属做判断
 
 ### 9.2 `ResourceCreate` 摘要
 
@@ -270,12 +388,6 @@ Authorization: Bearer <access_token>
 }
 ```
 
-取值说明：
-
-- `content_type`：`video` `image` `document`
-- `source_type`：当前默认 `ugc`
-- `visibility_type`：`public`、按部门或按警种等可见域
-
 ## 10. 资源审核与推荐
 
 ### 10.1 审核工作流
@@ -291,29 +403,6 @@ Authorization: Bearer <access_token>
 | `POST` | `/api/v1/review-policies` | 创建审核策略 | JSON：见下方摘要 |
 | `PUT` | `/api/v1/review-policies/{policy_id}` | 更新审核策略 | 字段均可选 |
 
-`ReviewPolicyCreate` 摘要：
-
-```json
-{
-  "name": "默认资源审核策略",
-  "enabled": true,
-  "scope_type": "global",
-  "scope_department_id": null,
-  "uploader_constraint": "all",
-  "constraint_ref_id": null,
-  "priority": 100,
-  "stages": [
-    {
-      "stage_order": 1,
-      "reviewer_type": "role",
-      "reviewer_ref_id": 2,
-      "min_approvals": 1,
-      "allow_self_review": false
-    }
-  ]
-}
-```
-
 ### 10.2 推荐流与行为埋点
 
 | Method | Path | 说明 | 请求要点 |
@@ -321,55 +410,12 @@ Authorization: Bearer <access_token>
 | `POST` | `/api/v1/resources/{resource_id}/events` | 记录资源行为事件 | JSON：`event_type` `watch_seconds` `context_json` |
 | `GET` | `/api/v1/resources/recommendations/feed` | 推荐资源流 | Query：`page` `size`，`size` 范围 `1-100` |
 
-行为事件常见值：
-
-- `impression`
-- `click`
-- `play`
-- `complete`
-- `like`
-- `favorite`
-
-推荐流返回核心结构：
-
-```json
-{
-  "items": [
-    {
-      "resource_id": 123,
-      "score": 0.91
-    }
-  ],
-  "page": 1,
-  "size": 10,
-  "total": 50
-}
-```
-
 ## 11. 媒体文件模块
 
 | Method | Path | 说明 | 请求要点 |
 | --- | --- | --- | --- |
 | `POST` | `/api/v1/media/upload` | 上传文件 | `multipart/form-data`：`file` |
 | `GET` | `/api/v1/media/files/{file_id}` | 获取文件直链或下载 | 无鉴权 |
-
-上传返回：
-
-```json
-{
-  "id": 1,
-  "filename": "demo.mp4",
-  "mime_type": "video/mp4",
-  "size": 1024,
-  "url": "http://..."
-}
-```
-
-说明：
-
-- 上传接口要求登录
-- 单文件最大体积受 `MAX_UPLOAD_SIZE` 控制，默认 500MB
-- 相同文件会按哈希秒传复用
 
 ## 12. 公告模块
 
@@ -379,11 +425,6 @@ Authorization: Bearer <access_token>
 | `POST` | `/api/v1/notices` | 创建公告 | JSON：`title` `content` `type` `training_id` |
 | `PUT` | `/api/v1/notices/{notice_id}` | 更新公告 | JSON：`title` `content` |
 | `DELETE` | `/api/v1/notices/{notice_id}` | 删除公告 | 无 |
-
-`type` 取值：
-
-- `system`
-- `training`
 
 ## 13. 证书模块
 
@@ -421,15 +462,6 @@ Authorization: Bearer <access_token>
 | `POST` | `/api/v1/ai/generate-questions` | AI 智能组卷 | JSON：`topic` `count` `difficulty` `types[]` |
 | `POST` | `/api/v1/ai/generate-lesson-plan` | AI 教案生成 | JSON：`title` `subject` `duration` `objectives[]` `level` |
 
-返回摘要：
-
-- 组卷：`questions[]` `total`
-- 教案：`title` `content` `outline[]`
-
-说明：
-
-- AI 调用失败时，系统会记录日志并返回降级结果，不影响其他业务接口
-
 ## 17. 人才库模块
 
 | Method | Path | 说明 | 请求要点 |
@@ -446,7 +478,7 @@ Authorization: Bearer <access_token>
 | `GET` | `/api/v1/users` | 用户列表 | Query：`page` `size` `role` `search` |
 | `POST` | `/api/v1/users/import/police-base` | 全员底库导入 | `multipart/form-data`：`file` `default_role` |
 | `GET` | `/api/v1/users/{user_id}` | 用户详情 | 无 |
-| `POST` | `/api/v1/users` | 创建用户 | JSON：见下方摘要 |
+| `POST` | `/api/v1/users` | 创建用户 | JSON：见对应 schema |
 | `PUT` | `/api/v1/users/{user_id}` | 更新用户 | 字段均可选 |
 | `PUT` | `/api/v1/users/{user_id}/roles` | 更新用户角色 | JSON：`role_ids[]` |
 | `PUT` | `/api/v1/users/{user_id}/departments` | 更新用户所属单位 | JSON：`department_ids[]` |
@@ -454,121 +486,14 @@ Authorization: Bearer <access_token>
 | `PUT` | `/api/v1/users/{user_id}/password` | 重置密码 | JSON：`password` |
 | `DELETE` | `/api/v1/users/{user_id}` | 删除用户 | 软删除，设置 `is_active=false` |
 
-`UserCreate` 摘要：
+### 18.2 角色、部门、权限、警种
 
-```json
-{
-  "username": "newuser",
-  "password": "123456",
-  "nickname": "张三",
-  "gender": "男",
-  "email": "a@example.com",
-  "phone": "13800000000",
-  "police_id": "GX-001",
-  "avatar": "",
-  "join_date": "2025-01-01",
-  "level": "中级",
-  "instructor_title": null,
-  "instructor_level": null,
-  "instructor_specialties": [],
-  "instructor_qualification": [],
-  "instructor_certificates": [],
-  "instructor_intro": null,
-  "instructor_rating": 0,
-  "instructor_course_count": 0,
-  "instructor_student_count": 0,
-  "instructor_review_count": 0,
-  "role_ids": [1],
-  "department_ids": [1],
-  "police_type_ids": [1]
-}
-```
+系统管理接口保留 REST 风格和兼容旧前端的别名接口，建议以 Swagger 为准。当前主要能力包括：
 
-说明：
-
-- `admin` 用户的角色不可修改
-- 底库导入会自动创建缺失的部门和警种，并为新账号设置默认密码 `Police@123456`
-
-### 18.2 角色管理
-
-同一能力同时保留 REST 风格接口和兼容旧前端的别名接口。
-
-| Method | Path | 说明 |
-| --- | --- | --- |
-| `POST` | `/api/v1/roles` | 创建角色 |
-| `POST` | `/api/v1/roles/create` | 创建角色别名 |
-| `GET` | `/api/v1/roles/list` | 角色列表，支持 `page` `size` `name` `is_active` `order` |
-| `GET` | `/api/v1/roles/{role_id}/detail` | 角色详情 |
-| `PUT` | `/api/v1/roles/{role_id}` | 更新角色 |
-| `POST` | `/api/v1/roles/{role_id}/update` | 更新角色别名 |
-| `DELETE` | `/api/v1/roles/{role_id}` | 删除角色 |
-| `POST` | `/api/v1/roles/{role_id}/delete` | 删除角色别名 |
-| `POST` | `/api/v1/roles/{role_id}/permissions` | 更新角色权限 |
-
-请求摘要：
-
-- 创建角色：`code` `name` `description` `permission_ids[]`
-- 更新角色：`name` `description` `is_active`
-- 更新角色权限：`permission_ids[]`
-
-约束：
-
-- `admin` 角色不可编辑、不可删除、不可改权限
-
-### 18.3 部门管理
-
-| Method | Path | 说明 |
-| --- | --- | --- |
-| `POST` | `/api/v1/departments` | 创建部门 |
-| `POST` | `/api/v1/departments/create` | 创建部门别名 |
-| `GET` | `/api/v1/departments/list` | 部门列表，支持 `page` `size` `parent_id` |
-| `GET` | `/api/v1/departments/tree` | 部门树 |
-| `GET` | `/api/v1/departments/{department_id}/detail` | 部门详情 |
-| `PUT` | `/api/v1/departments/{department_id}` | 更新部门 |
-| `POST` | `/api/v1/departments/{department_id}/update` | 更新部门别名 |
-| `DELETE` | `/api/v1/departments/{department_id}` | 删除部门 |
-| `POST` | `/api/v1/departments/{department_id}/delete` | 删除部门别名 |
-| `POST` | `/api/v1/departments/{department_id}/permissions` | 更新部门权限 |
-
-请求摘要：
-
-- 创建部门：`name` `code` `parent_id` `inherit_sub_permissions` `description` `permission_ids[]`
-- 更新部门：`name` `parent_id` `inherit_sub_permissions` `description` `is_active`
-- 更新部门权限：`permission_ids[]`
-
-### 18.4 权限管理
-
-| Method | Path | 说明 |
-| --- | --- | --- |
-| `POST` | `/api/v1/permissions` | 创建权限 |
-| `POST` | `/api/v1/permissions/create` | 创建权限别名 |
-| `GET` | `/api/v1/permissions/list` | 权限列表，支持 `page` `size` |
-| `GET` | `/api/v1/permissions/{permission_id}/detail` | 权限详情 |
-| `PUT` | `/api/v1/permissions/{permission_id}` | 更新权限 |
-| `POST` | `/api/v1/permissions/{permission_id}/update` | 更新权限别名 |
-| `DELETE` | `/api/v1/permissions/{permission_id}` | 删除权限 |
-| `POST` | `/api/v1/permissions/{permission_id}/delete` | 删除权限别名 |
-| `POST` | `/api/v1/permissions/sync` | 从当前 FastAPI 路由同步权限 |
-
-请求摘要：
-
-- 创建权限：`path` `code` `group` `description`
-- 更新权限：`path` `group` `description` `is_active`
-
-权限分组说明：
-
-- `group` 为空时会根据路由路径自动推断
-- 未命中规则时默认归到 `SYSTEM`
-
-### 18.5 警种管理
-
-| Method | Path | 说明 | 请求要点 |
-| --- | --- | --- | --- |
-| `GET` | `/api/v1/police-types` | 警种列表 | Query：`page` `size` `name` `is_active` |
-| `POST` | `/api/v1/police-types` | 创建警种 | JSON：`name` `code` `description` |
-| `GET` | `/api/v1/police-types/{police_type_id}` | 警种详情 | 无 |
-| `PUT` | `/api/v1/police-types/{police_type_id}` | 更新警种 | JSON：`name` `description` `is_active` |
-| `DELETE` | `/api/v1/police-types/{police_type_id}` | 删除警种 | 无 |
+- 角色：创建、更新、删除、权限分配
+- 部门：树结构、权限分配
+- 权限：创建、更新、同步
+- 警种：创建、更新、删除
 
 ## 19. 默认账号与初始化数据
 
@@ -580,15 +505,10 @@ Authorization: Bearer <access_token>
 | 教官 | `instructor` | `teach2025` |
 | 学员 | `student` | `learn2025` |
 
-同时会初始化：
-
-- 根部门 `ROOT`
-- 多个基础警种
-- 默认角色与权限
-
 ## 20. 当前实现注意事项
 
 - 手机验证码登录接口尚未真正校验验证码。
-- `GET /api/v1/media/files/{file_id}` 和 `GET /api/v1/report/export` 是本项目最主要的两个非标准响应接口。
+- 准入考试和培训班考试已拆分为两套接口，不要再把培训班考试当成独立准入考试使用。
+- 培训班考试不再有 `scope`，参试范围由 `training_id` 决定。
+- 培训二维码签到依赖 Redis。
 - 系统管理中的角色、部门、权限接口保留了双写法，是为了兼容已有前端实现。
-- 资源、审核、推荐、权限分组的细节较多，若要调试具体字段，建议直接查看 Swagger 或对应 `app/schemas/*.py`。
