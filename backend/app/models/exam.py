@@ -52,6 +52,8 @@ class ExamPaper(Base):
     total_score = Column(Integer, default=100, comment="总分")
     passing_score = Column(Integer, default=60, comment="及格分")
     type = Column(String(50), default="formal", comment="试卷类型: formal/quiz")
+    status = Column(String(20), default="draft", comment="试卷状态: draft/published/archived")
+    published_at = Column(DateTime(timezone=True), nullable=True, comment="发布时间")
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True, comment="创建人ID")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), comment="更新时间")

@@ -17,6 +17,10 @@ from app.schemas import (
     AdmissionExamUpdate,
     ExamCreate,
     ExamDetailResponse,
+    ExamPaperCreate,
+    ExamPaperDetailResponse,
+    ExamPaperResponse,
+    ExamPaperUpdate,
     ExamRecordResponse,
     ExamResponse,
     ExamSubmit,
@@ -33,6 +37,95 @@ router = APIRouter(prefix="/exams", tags=["考试管理"])
 def _require_admin_or_instructor(db: Session, user_id: int):
     if not (is_admin_user(db, user_id) or is_instructor_user(db, user_id)):
         raise HTTPException(status_code=403, detail="仅管理员或教官可执行该操作")
+
+
+@router.get("/papers", response_model=StandardResponse[PaginatedResponse[ExamPaperResponse]], summary="试卷列表")
+def get_exam_papers(
+    page: int = Query(1, ge=1),
+    size: int = Query(10, ge=-1),
+    status: Optional[str] = None,
+    type: Optional[str] = None,
+    search: Optional[str] = None,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = ExamController(db)
+    data = controller.get_exam_papers(page, size, status, type, search)
+    return StandardResponse(data=data)
+
+
+@router.post("/papers", response_model=StandardResponse[ExamPaperDetailResponse], summary="创建试卷")
+def create_exam_paper(
+    data: ExamPaperCreate,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = ExamController(db)
+    result = controller.create_exam_paper(data, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.get("/papers/{paper_id}", response_model=StandardResponse[ExamPaperDetailResponse], summary="试卷详情")
+def get_exam_paper(
+    paper_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = ExamController(db)
+    data = controller.get_exam_paper_detail(paper_id)
+    return StandardResponse(data=data)
+
+
+@router.put("/papers/{paper_id}", response_model=StandardResponse[ExamPaperDetailResponse], summary="更新试卷")
+def update_exam_paper(
+    paper_id: int,
+    data: ExamPaperUpdate,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = ExamController(db)
+    result = controller.update_exam_paper(paper_id, data)
+    return StandardResponse(data=result)
+
+
+@router.post("/papers/{paper_id}/publish", response_model=StandardResponse[ExamPaperDetailResponse], summary="发布试卷")
+def publish_exam_paper(
+    paper_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = ExamController(db)
+    result = controller.publish_exam_paper(paper_id)
+    return StandardResponse(data=result)
+
+
+@router.post("/papers/{paper_id}/archive", response_model=StandardResponse[ExamPaperDetailResponse], summary="归档试卷")
+def archive_exam_paper(
+    paper_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = ExamController(db)
+    result = controller.archive_exam_paper(paper_id)
+    return StandardResponse(data=result)
+
+
+@router.delete("/papers/{paper_id}", response_model=StandardResponse[dict], summary="删除试卷")
+def delete_exam_paper(
+    paper_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = ExamController(db)
+    result = controller.delete_exam_paper(paper_id)
+    return StandardResponse(data=result)
 
 
 @router.get("/admission", response_model=StandardResponse[PaginatedResponse[AdmissionExamResponse]], summary="准入考试列表")

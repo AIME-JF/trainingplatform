@@ -36,6 +36,7 @@
         <a-sub-menu key="exam" v-if="!isStudent">
           <template #icon><FormOutlined /></template>
           <template #title>考试系统</template>
+          <a-menu-item key="/exam/papers">试卷管理</a-menu-item>
           <a-menu-item key="/exam/manage">考试场次</a-menu-item>
           <a-menu-item key="/exam/bank">题库管理</a-menu-item>
           <a-menu-item key="/exam/scores">成绩统计</a-menu-item>
@@ -128,6 +129,7 @@
         <a-sub-menu key="exam" v-if="!isStudent">
           <template #icon><FormOutlined /></template>
           <template #title>考试系统</template>
+          <a-menu-item key="/exam/papers">试卷管理</a-menu-item>
           <a-menu-item key="/exam/manage">考试场次</a-menu-item>
           <a-menu-item key="/exam/bank">题库管理</a-menu-item>
           <a-menu-item key="/exam/scores">成绩统计</a-menu-item>
@@ -338,6 +340,7 @@ function getSelectedMenuKeyByPath(path) {
   if (path === '/') return '/'
   if (path.startsWith('/courses')) return '/courses'
   if (path.startsWith('/exam/list')) return '/exam/list'
+  if (path.startsWith('/exam/papers')) return '/exam/papers'
   if (path.startsWith('/exam/manage')) return '/exam/manage'
   if (path.startsWith('/exam/bank')) return '/exam/bank'
   if (path.startsWith('/exam/scores')) return '/exam/scores'

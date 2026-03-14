@@ -6,7 +6,15 @@ from typing import Optional
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.schemas import AdmissionExamCreate, AdmissionExamUpdate, ExamCreate, ExamSubmit, ExamUpdate
+from app.schemas import (
+    AdmissionExamCreate,
+    AdmissionExamUpdate,
+    ExamCreate,
+    ExamPaperCreate,
+    ExamPaperUpdate,
+    ExamSubmit,
+    ExamUpdate,
+)
 from app.services import ExamService
 from logger import logger
 
@@ -17,6 +25,72 @@ class ExamController:
     def __init__(self, db: Session):
         self.db = db
         self.service = ExamService(db)
+
+    def get_exam_papers(
+        self,
+        page: int = 1,
+        size: int = 10,
+        paper_status: Optional[str] = None,
+        paper_type: Optional[str] = None,
+        search: Optional[str] = None,
+    ):
+        try:
+            return self.service.get_exam_papers(page, size, paper_status, paper_type, search)
+        except Exception as exc:
+            logger.error("获取试卷列表异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取试卷列表失败")
+
+    def get_exam_paper_detail(self, paper_id: int):
+        result = self.service.get_exam_paper_detail(paper_id)
+        if not result:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="试卷不存在")
+        return result
+
+    def create_exam_paper(self, data: ExamPaperCreate, user_id: int):
+        try:
+            return self.service.create_exam_paper(data, user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("创建试卷异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建试卷失败")
+
+    def update_exam_paper(self, paper_id: int, data: ExamPaperUpdate):
+        try:
+            return self.service.update_exam_paper(paper_id, data)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("更新试卷异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新试卷失败")
+
+    def publish_exam_paper(self, paper_id: int):
+        try:
+            return self.service.publish_exam_paper(paper_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("发布试卷异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="发布试卷失败")
+
+    def archive_exam_paper(self, paper_id: int):
+        try:
+            return self.service.archive_exam_paper(paper_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("归档试卷异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="归档试卷失败")
+
+    def delete_exam_paper(self, paper_id: int):
+        try:
+            self.service.delete_exam_paper(paper_id)
+            return {"deleted": True}
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("删除试卷异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="删除试卷失败")
 
     def get_exams(
         self,

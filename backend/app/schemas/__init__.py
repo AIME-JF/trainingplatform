@@ -53,6 +53,7 @@ from .training import (
 # 考试相关
 from .exam import (
     QuestionCreate, QuestionUpdate, QuestionResponse, QuestionBatchCreate,
+    ExamPaperCreate, ExamPaperUpdate, ExamPaperResponse, ExamPaperDetailResponse,
     AdmissionExamCreate, AdmissionExamUpdate, AdmissionExamResponse,
     AdmissionExamDetailResponse, AdmissionExamRecordResponse,
     ExamCreate, ExamUpdate, ExamResponse, ExamDetailResponse,
@@ -139,6 +140,7 @@ __all__ = [
     "TrainingExamSummary", "TrainingHistoryResponse",
     # 考试相关
     "QuestionCreate", "QuestionUpdate", "QuestionResponse", "QuestionBatchCreate",
+    "ExamPaperCreate", "ExamPaperUpdate", "ExamPaperResponse", "ExamPaperDetailResponse",
     "AdmissionExamCreate", "AdmissionExamUpdate", "AdmissionExamResponse",
     "AdmissionExamDetailResponse", "AdmissionExamRecordResponse",
     "ExamCreate", "ExamUpdate", "ExamResponse", "ExamDetailResponse",

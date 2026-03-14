@@ -86,40 +86,89 @@ class ExamWrongQuestionResponse(BaseModel):
     score: int = 0
 
 
+class ExamPaperCreate(BaseModel):
+    """创建试卷"""
+
+    title: str = Field(..., max_length=200, description="试卷标题")
+    description: Optional[str] = None
+    duration: Optional[int] = Field(None, ge=10, le=300, description="考试时长(分钟)")
+    total_score: Optional[int] = Field(None, ge=1, description="总分，默认按题目自动汇总")
+    passing_score: Optional[int] = Field(None, ge=1, description="及格分")
+    type: str = Field("formal", description="试卷类型: formal/quiz")
+    question_ids: List[int] = Field(default_factory=list, description="题目ID列表")
+
+
+class ExamPaperUpdate(BaseModel):
+    """更新试卷"""
+
+    title: Optional[str] = Field(None, max_length=200)
+    description: Optional[str] = None
+    duration: Optional[int] = Field(None, ge=10, le=300)
+    total_score: Optional[int] = Field(None, ge=1)
+    passing_score: Optional[int] = Field(None, ge=1)
+    type: Optional[str] = None
+    question_ids: Optional[List[int]] = None
+
+
+class ExamPaperResponse(BaseModel):
+    """试卷响应"""
+
+    id: int
+    title: str
+    description: Optional[str] = None
+    duration: int = 60
+    total_score: int = 100
+    passing_score: int = 60
+    type: str = "formal"
+    status: str = "draft"
+    published_at: Optional[datetime] = None
+    created_by: Optional[int] = None
+    question_count: int = 0
+    usage_count: int = 0
+    linked_exam_count: int = 0
+    linked_admission_exam_count: int = 0
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ExamPaperDetailResponse(ExamPaperResponse):
+    """试卷详情响应"""
+
+    questions: List[ExamQuestionSnapshotResponse] = Field(default_factory=list)
+
+
 class AdmissionExamCreate(BaseModel):
     """创建独立准入考试"""
 
     title: str = Field(..., max_length=200, description="考试标题")
-    paper_title: Optional[str] = Field(None, max_length=200, description="试卷标题")
+    paper_id: int = Field(..., description="关联试卷ID")
     description: Optional[str] = None
-    duration: int = Field(60, description="考试时长(分钟)")
-    total_score: Optional[int] = Field(None, description="总分，默认按题目自动汇总")
-    passing_score: int = Field(60, description="及格分")
+    duration: Optional[int] = Field(None, ge=10, le=300, description="考试时长(分钟)")
+    passing_score: Optional[int] = Field(None, ge=1, description="及格分")
     status: str = Field("upcoming", description="状态")
-    type: str = Field("formal", description="展示类型: formal/quiz")
+    type: Optional[str] = Field(None, description="展示类型: formal/quiz")
     scope: Optional[str] = None
     max_attempts: int = Field(1, ge=1, le=10, description="最大作答次数")
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
-    question_ids: List[int] = Field(default_factory=list, description="题目ID列表")
 
 
 class AdmissionExamUpdate(BaseModel):
     """更新独立准入考试"""
 
     title: Optional[str] = Field(None, max_length=200)
-    paper_title: Optional[str] = Field(None, max_length=200)
+    paper_id: Optional[int] = Field(None, description="关联试卷ID")
     description: Optional[str] = None
-    duration: Optional[int] = None
-    total_score: Optional[int] = None
-    passing_score: Optional[int] = None
+    duration: Optional[int] = Field(None, ge=10, le=300)
+    passing_score: Optional[int] = Field(None, ge=1)
     status: Optional[str] = None
     type: Optional[str] = None
     scope: Optional[str] = None
     max_attempts: Optional[int] = Field(None, ge=1, le=10)
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
-    question_ids: Optional[List[int]] = None
 
 
 class AdmissionExamResponse(BaseModel):
@@ -129,6 +178,7 @@ class AdmissionExamResponse(BaseModel):
     kind: str = "admission"
     paper_id: Optional[int] = None
     paper_title: Optional[str] = None
+    paper_status: Optional[str] = None
     title: str
     description: Optional[str] = None
     duration: int = 60
@@ -162,31 +212,28 @@ class ExamCreate(BaseModel):
     """创建培训班内考试"""
 
     title: str = Field(..., max_length=200, description="场次标题")
-    paper_title: Optional[str] = Field(None, max_length=200, description="试卷标题")
+    paper_id: int = Field(..., description="关联试卷ID")
     description: Optional[str] = None
-    duration: int = Field(60, description="考试时长(分钟)")
-    total_score: Optional[int] = Field(None, description="总分，默认按题目自动汇总")
-    passing_score: int = Field(60, description="及格分")
+    duration: Optional[int] = Field(None, ge=10, le=300, description="考试时长(分钟)")
+    passing_score: Optional[int] = Field(None, ge=1, description="及格分")
     status: str = Field("upcoming", description="状态")
-    type: str = Field("formal", description="展示类型: formal/quiz")
+    type: Optional[str] = Field(None, description="展示类型: formal/quiz")
     purpose: str = Field("class_assessment", description="用途")
     training_id: int = Field(..., description="关联培训班ID")
     max_attempts: int = Field(1, ge=1, le=10, description="最大作答次数")
     allow_makeup: bool = Field(False, description="是否允许补考")
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
-    question_ids: List[int] = Field(default_factory=list, description="题目ID列表")
 
 
 class ExamUpdate(BaseModel):
     """更新培训班内考试"""
 
     title: Optional[str] = Field(None, max_length=200)
-    paper_title: Optional[str] = Field(None, max_length=200)
+    paper_id: Optional[int] = Field(None, description="关联试卷ID")
     description: Optional[str] = None
-    duration: Optional[int] = None
-    total_score: Optional[int] = None
-    passing_score: Optional[int] = None
+    duration: Optional[int] = Field(None, ge=10, le=300)
+    passing_score: Optional[int] = Field(None, ge=1)
     status: Optional[str] = None
     type: Optional[str] = None
     purpose: Optional[str] = None
@@ -195,7 +242,6 @@ class ExamUpdate(BaseModel):
     allow_makeup: Optional[bool] = None
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
-    question_ids: Optional[List[int]] = None
 
 
 class ExamResponse(BaseModel):
@@ -205,6 +251,7 @@ class ExamResponse(BaseModel):
     kind: str = "training"
     paper_id: Optional[int] = None
     paper_title: Optional[str] = None
+    paper_status: Optional[str] = None
     title: str
     description: Optional[str] = None
     duration: int = 60

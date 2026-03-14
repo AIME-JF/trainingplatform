@@ -1,5 +1,33 @@
 import request from './request'
 
+export function getExamPapers(params) {
+    return request.get('/exams/papers', { params })
+}
+
+export function createExamPaper(data) {
+    return request.post('/exams/papers', data)
+}
+
+export function updateExamPaper(id, data) {
+    return request.put(`/exams/papers/${id}`, data)
+}
+
+export function getExamPaperDetail(id) {
+    return request.get(`/exams/papers/${id}`)
+}
+
+export function publishExamPaper(id) {
+    return request.post(`/exams/papers/${id}/publish`)
+}
+
+export function archiveExamPaper(id) {
+    return request.post(`/exams/papers/${id}/archive`)
+}
+
+export function deleteExamPaper(id) {
+    return request.delete(`/exams/papers/${id}`)
+}
+
 export function getExams(params) {
     return request.get('/exams', { params })
 }

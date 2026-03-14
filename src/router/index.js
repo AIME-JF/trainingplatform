@@ -45,6 +45,12 @@ const router = createRouter({
           meta: { title: '考试场次管理', roles: ['admin', 'instructor'] },
         },
         {
+          path: 'exam/papers',
+          name: 'PaperManage',
+          component: () => import('../views/exam/PaperManage.vue'),
+          meta: { title: '试卷管理', roles: ['admin', 'instructor'] },
+        },
+        {
           path: 'exam/bank',
           name: 'QuestionBank',
           component: () => import('../views/exam/QuestionBank.vue'),

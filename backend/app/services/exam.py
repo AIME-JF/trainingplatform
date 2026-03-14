@@ -4,7 +4,7 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models import (
     AdmissionExam,
@@ -27,6 +27,10 @@ from app.schemas.exam import (
     AdmissionExamUpdate,
     ExamCreate,
     ExamDetailResponse,
+    ExamPaperCreate,
+    ExamPaperDetailResponse,
+    ExamPaperResponse,
+    ExamPaperUpdate,
     ExamQuestionSnapshotResponse,
     ExamRecordResponse,
     ExamResponse,
@@ -52,6 +56,138 @@ class ExamService:
 
     def __init__(self, db: Session):
         self.db = db
+
+    def get_exam_papers(
+        self,
+        page: int = 1,
+        size: int = 10,
+        status: Optional[str] = None,
+        paper_type: Optional[str] = None,
+        search: Optional[str] = None,
+    ) -> PaginatedResponse[ExamPaperResponse]:
+        """获取试卷列表"""
+        query = self.db.query(ExamPaper).options(*self._paper_load_options())
+
+        if status:
+            query = query.filter(ExamPaper.status == status)
+        if paper_type:
+            query = query.filter(ExamPaper.type == paper_type)
+        if search:
+            query = query.filter(ExamPaper.title.contains(search))
+
+        papers = query.order_by(ExamPaper.created_at.desc(), ExamPaper.id.desc()).all()
+        return self._paginate([self._to_paper_response(paper) for paper in papers], page, size)
+
+    def get_exam_paper_detail(self, paper_id: int) -> Optional[ExamPaperDetailResponse]:
+        """获取试卷详情"""
+        paper = self._get_paper_detail_entity(paper_id)
+        if not paper:
+            return None
+        return self._to_paper_detail_response(paper)
+
+    def create_exam_paper(self, data: ExamPaperCreate, user_id: int) -> ExamPaperDetailResponse:
+        """创建试卷"""
+        questions = self._load_questions(data.question_ids or [])
+        resolved_total_score = data.total_score or self._sum_question_scores(questions)
+        paper = ExamPaper(
+            title=data.title,
+            description=data.description,
+            duration=data.duration or 60,
+            total_score=resolved_total_score,
+            passing_score=data.passing_score or 60,
+            type=data.type,
+            status="draft",
+            created_by=user_id,
+        )
+        self.db.add(paper)
+        self.db.flush()
+        self._replace_paper_questions(paper.id, data.question_ids, questions)
+        self.db.commit()
+
+        logger.info("创建试卷: %s", paper.title)
+        detail = self.get_exam_paper_detail(paper.id)
+        if not detail:
+            raise ValueError("创建试卷后读取详情失败")
+        return detail
+
+    def update_exam_paper(self, paper_id: int, data: ExamPaperUpdate) -> ExamPaperDetailResponse:
+        """更新试卷"""
+        paper = self._get_paper_detail_entity(paper_id)
+        if not paper:
+            raise ValueError("试卷不存在")
+        if paper.status != "draft":
+            raise ValueError("已发布或归档的试卷不能修改")
+
+        update_data = data.model_dump(exclude_unset=True)
+        question_ids = update_data.pop("question_ids", None)
+        for field, value in update_data.items():
+            setattr(paper, field, value)
+
+        if question_ids is not None:
+            questions = self._load_questions(question_ids)
+            paper.total_score = data.total_score or self._sum_question_scores(questions)
+            self._replace_paper_questions(paper.id, question_ids, questions)
+        elif data.total_score is not None:
+            paper.total_score = data.total_score
+
+        self.db.commit()
+
+        detail = self.get_exam_paper_detail(paper.id)
+        if not detail:
+            raise ValueError("试卷不存在")
+        return detail
+
+    def publish_exam_paper(self, paper_id: int) -> ExamPaperDetailResponse:
+        """发布试卷"""
+        paper = self._get_paper_detail_entity(paper_id)
+        if not paper:
+            raise ValueError("试卷不存在")
+        if not (paper.paper_questions or []):
+            raise ValueError("试卷至少需要配置一道题目")
+        if paper.status == "published":
+            detail = self.get_exam_paper_detail(paper.id)
+            if not detail:
+                raise ValueError("试卷不存在")
+            return detail
+
+        paper.status = "published"
+        paper.published_at = paper.published_at or datetime.now()
+        self.db.commit()
+
+        detail = self.get_exam_paper_detail(paper.id)
+        if not detail:
+            raise ValueError("试卷不存在")
+        return detail
+
+    def archive_exam_paper(self, paper_id: int) -> ExamPaperDetailResponse:
+        """归档试卷"""
+        paper = self._get_paper_detail_entity(paper_id)
+        if not paper:
+            raise ValueError("试卷不存在")
+        if paper.status == "archived":
+            detail = self.get_exam_paper_detail(paper.id)
+            if not detail:
+                raise ValueError("试卷不存在")
+            return detail
+
+        paper.status = "archived"
+        self.db.commit()
+
+        detail = self.get_exam_paper_detail(paper.id)
+        if not detail:
+            raise ValueError("试卷不存在")
+        return detail
+
+    def delete_exam_paper(self, paper_id: int) -> None:
+        """删除试卷"""
+        paper = self._get_paper_detail_entity(paper_id)
+        if not paper:
+            raise ValueError("试卷不存在")
+        if self._paper_usage_count(paper) > 0:
+            raise ValueError("试卷已被考试引用，不能删除")
+
+        self.db.delete(paper)
+        self.db.commit()
 
     def get_exams(
         self,
@@ -137,35 +273,23 @@ class ExamService:
         if not training:
             raise ValueError("关联培训班不存在")
 
-        questions = self._load_questions(data.question_ids or [])
-        paper, total_score = self._build_paper(
-            title=data.paper_title or data.title,
-            description=data.description,
-            duration=data.duration,
-            total_score=data.total_score,
-            passing_score=data.passing_score,
-            exam_type=data.type,
-            question_ids=data.question_ids or [],
-            questions=questions,
-            user_id=user_id,
-        )
-
+        paper = self._get_selectable_paper(data.paper_id)
         exam = Exam(
             paper_id=paper.id,
             title=data.title,
             description=data.description,
-            duration=data.duration,
-            total_score=total_score,
-            passing_score=data.passing_score,
+            duration=data.duration or paper.duration or 60,
+            total_score=paper.total_score or 0,
+            passing_score=data.passing_score or paper.passing_score or 60,
             status=data.status,
-            type=data.type,
+            type=data.type or paper.type or "formal",
             purpose=data.purpose,
             training_id=data.training_id,
             max_attempts=data.max_attempts,
             allow_makeup=data.allow_makeup,
             start_time=data.start_time,
             end_time=data.end_time,
-            published_at=datetime.now() if data.status in {"active", "ended"} else None,
+            published_at=datetime.now(),
             created_by=user_id,
         )
         self.db.add(exam)
@@ -180,33 +304,21 @@ class ExamService:
 
     def create_admission_exam(self, data: AdmissionExamCreate, user_id: int) -> AdmissionExamResponse:
         """创建独立准入考试"""
-        questions = self._load_questions(data.question_ids or [])
-        paper, total_score = self._build_paper(
-            title=data.paper_title or data.title,
-            description=data.description,
-            duration=data.duration,
-            total_score=data.total_score,
-            passing_score=data.passing_score,
-            exam_type=data.type,
-            question_ids=data.question_ids or [],
-            questions=questions,
-            user_id=user_id,
-        )
-
+        paper = self._get_selectable_paper(data.paper_id)
         exam = AdmissionExam(
             paper_id=paper.id,
             title=data.title,
             description=data.description,
-            duration=data.duration,
-            total_score=total_score,
-            passing_score=data.passing_score,
+            duration=data.duration or paper.duration or 60,
+            total_score=paper.total_score or 0,
+            passing_score=data.passing_score or paper.passing_score or 60,
             status=data.status,
-            type=data.type,
+            type=data.type or paper.type or "formal",
             scope=data.scope,
             max_attempts=data.max_attempts,
             start_time=data.start_time,
             end_time=data.end_time,
-            published_at=datetime.now() if data.status in {"active", "ended"} else None,
+            published_at=datetime.now(),
             created_by=user_id,
         )
         self.db.add(exam)
@@ -494,6 +606,32 @@ class ExamService:
             "passing_score": passing_score,
         }
 
+    def _paper_load_options(self) -> tuple:
+        return (
+            selectinload(ExamPaper.paper_questions).joinedload(ExamPaperQuestion.question),
+            selectinload(ExamPaper.training_exams),
+            selectinload(ExamPaper.admission_exams),
+        )
+
+    def _get_paper_detail_entity(self, paper_id: int) -> Optional[ExamPaper]:
+        return self.db.query(ExamPaper).options(*self._paper_load_options()).filter(ExamPaper.id == paper_id).first()
+
+    def _get_selectable_paper(self, paper_id: int) -> ExamPaper:
+        paper = self._get_paper_detail_entity(paper_id)
+        if not paper:
+            raise ValueError("试卷不存在")
+        if paper.status != "published":
+            raise ValueError("只能选择已发布试卷")
+        if not (paper.paper_questions or []):
+            raise ValueError("试卷未配置题目")
+        return paper
+
+    def _sum_question_scores(self, questions: List[Question]) -> int:
+        return sum(int(question.score or 0) for question in questions)
+
+    def _paper_usage_count(self, paper: ExamPaper) -> int:
+        return len(paper.training_exams or []) + len(paper.admission_exams or [])
+
     def _load_questions(self, question_ids: List[int]) -> List[Question]:
         if not question_ids:
             raise ValueError("请至少选择一道题目")
@@ -501,91 +639,32 @@ class ExamService:
         question_map = {question.id: question for question in questions}
         ordered_questions = [question_map.get(question_id) for question_id in question_ids]
         if not all(ordered_questions):
-            raise ValueError("存在无效题目，无法创建考试")
+            raise ValueError("存在无效题目，无法创建试卷")
         return ordered_questions
-
-    def _build_paper(
-        self,
-        title: str,
-        description: Optional[str],
-        duration: int,
-        total_score: Optional[int],
-        passing_score: int,
-        exam_type: str,
-        question_ids: List[int],
-        questions: List[Question],
-        user_id: int,
-    ) -> tuple[ExamPaper, int]:
-        resolved_total_score = total_score or sum(int(question.score or 0) for question in questions)
-        paper = ExamPaper(
-            title=title,
-            description=description,
-            duration=duration,
-            total_score=resolved_total_score,
-            passing_score=passing_score,
-            type=exam_type,
-            created_by=user_id,
-        )
-        self.db.add(paper)
-        self.db.flush()
-        self._replace_paper_questions(paper.id, question_ids, questions)
-        return paper, resolved_total_score
 
     def _update_training_exam(self, exam: Exam, data: ExamUpdate) -> None:
         update_data = data.model_dump(exclude_unset=True)
-        question_ids = update_data.pop("question_ids", None)
-        paper_title = update_data.pop("paper_title", None)
-        if question_ids is not None and self.db.query(ExamRecord.id).filter(ExamRecord.exam_id == exam.id).first():
-            raise ValueError("该考试已有作答记录，不能再修改题目")
+        paper_id = update_data.pop("paper_id", None)
+        if paper_id is not None and paper_id != exam.paper_id:
+            raise ValueError("考试已发布，不能更换试卷")
 
         for field, value in update_data.items():
             setattr(exam, field, value)
 
-        if paper_title is not None:
-            exam.paper.title = paper_title
-
-        for attr in ("description", "duration", "passing_score", "type"):
-            setattr(exam.paper, attr, getattr(exam, attr))
-
-        if question_ids is not None:
-            questions = self._load_questions(question_ids)
-            resolved_total_score = data.total_score or sum(int(question.score or 0) for question in questions)
-            exam.total_score = resolved_total_score
-            exam.paper.total_score = resolved_total_score
-            self._replace_paper_questions(exam.paper_id, question_ids, questions)
-        else:
-            exam.paper.total_score = exam.total_score or exam.paper.total_score
-
+        exam.total_score = exam.paper.total_score or exam.total_score or 0
         if exam.status in {"active", "ended"} and not exam.published_at:
             exam.published_at = datetime.now()
 
     def _update_admission_exam_entity(self, exam: AdmissionExam, data: AdmissionExamUpdate) -> None:
         update_data = data.model_dump(exclude_unset=True)
-        question_ids = update_data.pop("question_ids", None)
-        paper_title = update_data.pop("paper_title", None)
-        if question_ids is not None and self.db.query(AdmissionExamRecord.id).filter(
-            AdmissionExamRecord.admission_exam_id == exam.id
-        ).first():
-            raise ValueError("该准入考试已有作答记录，不能再修改题目")
+        paper_id = update_data.pop("paper_id", None)
+        if paper_id is not None and paper_id != exam.paper_id:
+            raise ValueError("准入考试已发布，不能更换试卷")
 
         for field, value in update_data.items():
             setattr(exam, field, value)
 
-        if paper_title is not None:
-            exam.paper.title = paper_title
-
-        for attr in ("description", "duration", "passing_score", "type"):
-            setattr(exam.paper, attr, getattr(exam, attr))
-
-        if question_ids is not None:
-            questions = self._load_questions(question_ids)
-            resolved_total_score = data.total_score or sum(int(question.score or 0) for question in questions)
-            exam.total_score = resolved_total_score
-            exam.paper.total_score = resolved_total_score
-            self._replace_paper_questions(exam.paper_id, question_ids, questions)
-        else:
-            exam.paper.total_score = exam.total_score or exam.paper.total_score
-
+        exam.total_score = exam.paper.total_score or exam.total_score or 0
         if exam.status in {"active", "ended"} and not exam.published_at:
             exam.published_at = datetime.now()
 
@@ -624,6 +703,34 @@ class ExamService:
             )
             for item in sorted(paper.paper_questions or [], key=lambda row: row.sort_order or 0)
         ]
+
+    def _to_paper_response(self, paper: ExamPaper) -> ExamPaperResponse:
+        linked_exam_count = len(paper.training_exams or [])
+        linked_admission_exam_count = len(paper.admission_exams or [])
+        return ExamPaperResponse(
+            id=paper.id,
+            title=paper.title,
+            description=paper.description,
+            duration=paper.duration or 60,
+            total_score=paper.total_score or 0,
+            passing_score=paper.passing_score or 60,
+            type=paper.type or "formal",
+            status=paper.status or "draft",
+            published_at=paper.published_at,
+            created_by=paper.created_by,
+            question_count=len(paper.paper_questions or []),
+            usage_count=linked_exam_count + linked_admission_exam_count,
+            linked_exam_count=linked_exam_count,
+            linked_admission_exam_count=linked_admission_exam_count,
+            created_at=paper.created_at,
+            updated_at=paper.updated_at,
+        )
+
+    def _to_paper_detail_response(self, paper: ExamPaper) -> ExamPaperDetailResponse:
+        return ExamPaperDetailResponse(
+            **self._to_paper_response(paper).model_dump(),
+            questions=self._build_snapshot_responses(paper),
+        )
 
     def _build_exam_record(
         self,
@@ -738,6 +845,7 @@ class ExamService:
             id=exam.id,
             paper_id=exam.paper_id,
             paper_title=exam.paper.title if exam.paper else None,
+            paper_status=exam.paper.status if exam.paper else None,
             title=exam.title,
             description=exam.description,
             duration=exam.duration or 60,
@@ -788,6 +896,7 @@ class ExamService:
             id=exam.id,
             paper_id=exam.paper_id,
             paper_title=exam.paper.title if exam.paper else None,
+            paper_status=exam.paper.status if exam.paper else None,
             title=exam.title,
             description=exam.description,
             duration=exam.duration or 60,

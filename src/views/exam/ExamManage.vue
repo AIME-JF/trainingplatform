@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h2>{{ activeKind === 'admission' ? '准入考试管理' : '培训班考试管理' }}</h2>
-        <p class="page-sub">统一题库生成试卷，独立发布准入考试，在培训班内发布随堂测与结课考试</p>
+        <p class="page-sub">考试只关联已发布试卷，题目配置统一收口到试卷管理</p>
       </div>
       <a-button type="primary" @click="openCreateDrawer">
         <template #icon><PlusOutlined /></template>{{ activeKind === 'admission' ? '发布准入考试' : '发布培训班考试' }}
@@ -36,6 +36,7 @@
             <a-select-option value="class_assessment">班内考核</a-select-option>
             <a-select-option value="final_assessment">结业考核</a-select-option>
             <a-select-option value="quiz">随堂测验</a-select-option>
+            <a-select-option value="makeup">补考</a-select-option>
           </a-select>
         </a-col>
       </a-row>
@@ -52,21 +53,27 @@
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'purpose'">
-            {{ purposeLabels[record.purpose] || record.purpose }}
+            {{ purposeLabels[record.purpose] || record.purpose || '-' }}
           </template>
-          <template v-if="column.key === 'trainingName'">
+          <template v-else-if="column.key === 'paperTitle'">
+            <div class="paper-col">
+              <div>{{ record.paperTitle || '-' }}</div>
+              <div class="paper-meta">{{ paperStatusLabels[record.paperStatus] || '' }}</div>
+            </div>
+          </template>
+          <template v-else-if="column.key === 'trainingName'">
             {{ record.trainingName || (record.linkedTrainingCount ? `已关联 ${record.linkedTrainingCount} 个培训班` : '-') }}
           </template>
-          <template v-if="column.key === 'status'">
+          <template v-else-if="column.key === 'status'">
             <a-tag :color="statusColors[record.status]">{{ statusLabels[record.status] }}</a-tag>
           </template>
-          <template v-if="column.key === 'time'">
+          <template v-else-if="column.key === 'time'">
             <div class="time-col">
               <div>{{ formatDateTime(record.startTime) }}</div>
               <div>{{ formatDateTime(record.endTime) }}</div>
             </div>
           </template>
-          <template v-if="column.key === 'action'">
+          <template v-else-if="column.key === 'action'">
             <a-space>
               <a-button type="link" size="small" @click="openEditDrawer(record)">编辑</a-button>
             </a-space>
@@ -77,32 +84,53 @@
 
     <a-drawer
       v-model:open="drawerVisible"
-      :title="isEdit ? (editingKind === 'admission' ? '编辑准入考试' : '编辑培训班考试') : (activeKind === 'admission' ? '发布准入考试' : '发布培训班考试')"
-      width="720"
+      :title="drawerTitle"
+      width="760"
       @close="resetForm"
     >
       <a-form :model="form" layout="vertical">
         <a-row :gutter="16">
           <a-col :span="24">
-            <a-form-item :label="activeKind === 'admission' ? '准入考试名称' : '场次名称'" required>
+            <a-form-item :label="editingKind === 'admission' ? '准入考试名称' : '场次名称'" required>
               <a-input v-model:value="form.title" />
             </a-form-item>
           </a-col>
-          <a-col :span="12">
-            <a-form-item label="试卷名称">
-              <a-input v-model:value="form.paperTitle" placeholder="默认同场次名称" />
+          <a-col :span="18">
+            <a-form-item label="关联试卷" required>
+              <a-select
+                v-model:value="form.paperId"
+                placeholder="请选择已发布试卷"
+                :disabled="isEdit"
+                show-search
+                option-filter-prop="label"
+                @change="handlePaperChange"
+              >
+                <a-select-option
+                  v-for="paper in availablePaperOptions"
+                  :key="paper.id"
+                  :value="paper.id"
+                  :label="paper.title"
+                >
+                  {{ paper.title }}（{{ paper.questionCount || 0 }}题 / {{ paper.totalScore || 0 }}分）
+                </a-select-option>
+              </a-select>
+              <div class="paper-action-row">
+                <span class="paper-action-tip">考试只能选择已发布试卷；考试创建后不能再更换试卷</span>
+                <a-button type="link" @click="goToPaperManage">去试卷管理创建试卷</a-button>
+              </div>
             </a-form-item>
           </a-col>
-          <a-col :span="12" v-if="activeKind === 'training'">
+          <a-col :span="6" v-if="editingKind === 'training'">
             <a-form-item label="用途">
               <a-select v-model:value="form.purpose">
                 <a-select-option value="class_assessment">班内考核</a-select-option>
                 <a-select-option value="final_assessment">结业考核</a-select-option>
                 <a-select-option value="quiz">随堂测验</a-select-option>
+                <a-select-option value="makeup">补考</a-select-option>
               </a-select>
             </a-form-item>
           </a-col>
-          <a-col :span="12" v-if="activeKind === 'training'">
+          <a-col :span="12" v-if="editingKind === 'training'">
             <a-form-item label="关联培训班">
               <a-select v-model:value="form.trainingId" placeholder="培训班内考试必须关联培训班">
                 <a-select-option v-for="training in trainingOptions" :key="training.id" :value="training.id">
@@ -128,7 +156,7 @@
               </a-select>
             </a-form-item>
           </a-col>
-          <a-col :span="12" v-if="activeKind === 'admission'">
+          <a-col :span="12" v-if="editingKind === 'admission'">
             <a-form-item label="适用范围">
               <a-input v-model:value="form.scope" />
             </a-form-item>
@@ -159,33 +187,43 @@
               <a-input-number v-model:value="form.maxAttempts" :min="1" :max="10" style="width:100%" />
             </a-form-item>
           </a-col>
-          <a-col :span="6" v-if="activeKind === 'training'">
+          <a-col :span="6" v-if="editingKind === 'training'">
             <a-form-item label="允许补考">
               <a-switch v-model:checked="form.allowMakeup" />
             </a-form-item>
           </a-col>
           <a-col :span="24">
-            <a-form-item label="场次描述">
+            <a-form-item label="考试说明">
               <a-textarea v-model:value="form.description" :rows="3" />
             </a-form-item>
           </a-col>
           <a-col :span="24">
-            <a-form-item label="试卷题目" required>
-              <div class="selected-questions">
-                <div class="selected-header">
-                  <span>已选 {{ form.questionIds.length }} 题，总分 {{ dynamicTotalScore }} 分</span>
-                  <a-button type="primary" size="small" ghost @click="openQuestionPicker">从题库抽题</a-button>
-                </div>
-                <div v-if="selectedQuestionsCache.length" class="q-cache-list">
-                  <div class="q-cache-item" v-for="(item, index) in selectedQuestionsCache" :key="item.id">
-                    <span>{{ index + 1 }}.</span>
-                    <span>[{{ typeLabels[item.type] || item.type }}]</span>
-                    <span class="q-cached-content">{{ item.content }}</span>
-                    <span>{{ item.score || 0 }}分</span>
-                    <a-button type="link" danger size="small" @click="removeSelectedQ(item.id)">移除</a-button>
+            <a-form-item label="试卷预览">
+              <div class="paper-preview-card">
+                <template v-if="selectedPaperDetail">
+                  <div class="preview-head">
+                    <div>
+                      <div class="preview-title">{{ selectedPaperDetail.title }}</div>
+                      <div class="preview-sub">
+                        {{ paperStatusLabels[selectedPaperDetail.status] || '' }} · {{ selectedPaperDetail.questionCount || 0 }} 题 · {{ selectedPaperDetail.totalScore || 0 }} 分
+                      </div>
+                    </div>
+                    <div class="preview-meta">
+                      <span>时长 {{ selectedPaperDetail.duration || 60 }} 分钟</span>
+                      <span>及格 {{ selectedPaperDetail.passingScore || 60 }} 分</span>
+                    </div>
                   </div>
-                </div>
-                <a-empty v-else description="暂未配置题目" />
+                  <div v-if="selectedPaperDetail.questions?.length" class="preview-list">
+                    <div class="preview-item" v-for="(item, index) in selectedPaperDetail.questions" :key="item.id">
+                      <span>{{ index + 1 }}.</span>
+                      <span>[{{ questionTypeLabels[item.type] || item.type }}]</span>
+                      <span class="preview-content">{{ item.content }}</span>
+                      <span>{{ item.score || 0 }}分</span>
+                    </div>
+                  </div>
+                  <a-empty v-else description="试卷暂无题目快照" />
+                </template>
+                <a-empty v-else description="请选择试卷" />
               </div>
             </a-form-item>
           </a-col>
@@ -198,34 +236,6 @@
         </a-space>
       </template>
     </a-drawer>
-
-    <a-modal
-      v-model:open="pickerVisible"
-      title="从题库抽取题目"
-      width="900px"
-      @ok="confirmQuestionPick"
-      @cancel="pickerVisible = false"
-    >
-      <div class="picker-toolbar">
-        <a-input-search v-model:value="qpSearch" placeholder="搜索题干" style="width:250px" @search="loadPickerQ" />
-        <a-select v-model:value="qpType" style="width:120px" @change="loadPickerQ">
-          <a-select-option value="all">所有题型</a-select-option>
-          <a-select-option value="single">单选</a-select-option>
-          <a-select-option value="multi">多选</a-select-option>
-          <a-select-option value="judge">判断</a-select-option>
-        </a-select>
-      </div>
-      <a-table
-        :columns="qpColumns"
-        :data-source="qpList"
-        row-key="id"
-        :row-selection="qpRowSelection"
-        :pagination="qpPagination"
-        :loading="qpLoading"
-        @change="handleQpTableChange"
-        size="small"
-      />
-    </a-modal>
   </div>
 </template>
 
@@ -233,30 +243,33 @@
 import { computed, reactive, ref, onMounted, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
   createAdmissionExam,
   createExam,
   getAdmissionExamDetail,
   getAdmissionExams,
   getExamDetail,
+  getExamPapers,
   getExams,
   updateAdmissionExam,
   updateExam,
 } from '@/api/exam'
-import { getQuestions } from '@/api/question'
 import { getTrainings } from '@/api/training'
 
 const route = useRoute()
+const router = useRouter()
+
 const statusLabels = { upcoming: '即将开始', active: '进行中', ended: '已结束' }
 const statusColors = { upcoming: 'orange', active: 'green', ended: 'default' }
+const paperStatusLabels = { draft: '草稿', published: '已发布', archived: '已归档' }
 const purposeLabels = {
-  admission: '准入考试',
   class_assessment: '班内考核',
   final_assessment: '结业考核',
   quiz: '随堂测验',
+  makeup: '补考',
 }
-const typeLabels = { single: '单选', multi: '多选', judge: '判断' }
+const questionTypeLabels = { single: '单选', multi: '多选', judge: '判断' }
 
 const searchText = ref('')
 const filterStatus = ref('all')
@@ -266,17 +279,19 @@ const loading = ref(false)
 const submitting = ref(false)
 const examList = ref([])
 const trainingOptions = ref([])
+const paperOptions = ref([])
+const selectedPaperDetail = ref(null)
 const drawerVisible = ref(false)
 const isEdit = ref(false)
 const editingId = ref(null)
-const editingKind = ref('training')
+const editingKind = ref('admission')
 const dateRange = ref(null)
 const handledQuickCreateKey = ref('')
 
 const pagination = reactive({ current: 1, pageSize: 10, total: 0 })
-
 const columns = [
   { title: '场次名称', dataIndex: 'title', key: 'title' },
+  { title: '试卷', key: 'paperTitle', width: 220 },
   { title: '用途', key: 'purpose', width: 100 },
   { title: '培训班', dataIndex: 'trainingName', key: 'trainingName', width: 180 },
   { title: '状态', key: 'status', width: 100 },
@@ -287,7 +302,7 @@ const columns = [
 
 const form = reactive({
   title: '',
-  paperTitle: '',
+  paperId: undefined,
   description: '',
   purpose: 'class_assessment',
   trainingId: undefined,
@@ -298,25 +313,37 @@ const form = reactive({
   passingScore: 60,
   maxAttempts: 1,
   allowMakeup: false,
-  questionIds: [],
 })
 
-const selectedQuestionsCache = ref([])
-const dynamicTotalScore = computed(() => selectedQuestionsCache.value.reduce((sum, item) => sum + (item.score || 0), 0))
+const drawerTitle = computed(() => {
+  if (isEdit.value) {
+    return editingKind.value === 'admission' ? '编辑准入考试' : '编辑培训班考试'
+  }
+  return activeKind.value === 'admission' ? '发布准入考试' : '发布培训班考试'
+})
+
 const routeKind = computed(() => {
   const raw = Array.isArray(route.query.kind) ? route.query.kind[0] : route.query.kind
   return raw === 'training' || raw === 'admission' ? raw : null
 })
+
 const routeTrainingId = computed(() => {
   const raw = Array.isArray(route.query.trainingId) ? route.query.trainingId[0] : route.query.trainingId
   const parsed = Number(raw)
   return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
 })
 
+const availablePaperOptions = computed(() => {
+  if (isEdit.value) {
+    return paperOptions.value
+  }
+  return paperOptions.value.filter(item => item.status === 'published')
+})
+
 function resetForm() {
   Object.assign(form, {
     title: '',
-    paperTitle: '',
+    paperId: undefined,
     description: '',
     purpose: 'class_assessment',
     trainingId: undefined,
@@ -327,14 +354,13 @@ function resetForm() {
     passingScore: 60,
     maxAttempts: 1,
     allowMakeup: false,
-    questionIds: [],
   })
+  selectedPaperDetail.value = null
   drawerVisible.value = false
   isEdit.value = false
   editingId.value = null
   editingKind.value = activeKind.value
   dateRange.value = null
-  selectedQuestionsCache.value = []
 }
 
 function applyRouteKindContext() {
@@ -395,6 +421,15 @@ async function loadTrainingOptions() {
   }
 }
 
+async function loadPaperOptions() {
+  try {
+    const result = await getExamPapers({ size: -1 })
+    paperOptions.value = result.items || []
+  } catch {
+    paperOptions.value = []
+  }
+}
+
 function handleTableChange(pag) {
   pagination.current = pag.current
   pagination.pageSize = pag.pageSize
@@ -408,6 +443,29 @@ function openCreateDrawer() {
   drawerVisible.value = true
 }
 
+async function setPaperPreview(paperId, applyDefaults = false) {
+  if (!paperId) {
+    selectedPaperDetail.value = null
+    return
+  }
+  try {
+    const detail = await getExamPaperDetail(paperId)
+    selectedPaperDetail.value = detail
+    if (applyDefaults) {
+      form.type = detail.type || 'formal'
+      form.duration = detail.duration || 60
+      form.passingScore = detail.passingScore || 60
+    }
+  } catch (error) {
+    selectedPaperDetail.value = null
+    message.error(error.message || '加载试卷详情失败')
+  }
+}
+
+function handlePaperChange(value) {
+  setPaperPreview(value, !isEdit.value)
+}
+
 async function openEditDrawer(record) {
   resetForm()
   isEdit.value = true
@@ -418,7 +476,7 @@ async function openEditDrawer(record) {
       ? await getAdmissionExamDetail(record.id)
       : await getExamDetail(record.id)
     form.title = detail.title
-    form.paperTitle = detail.paperTitle || ''
+    form.paperId = detail.paperId
     form.description = detail.description || ''
     form.purpose = detail.purpose || 'class_assessment'
     form.trainingId = detail.trainingId
@@ -429,18 +487,25 @@ async function openEditDrawer(record) {
     form.passingScore = detail.passingScore || 60
     form.maxAttempts = detail.maxAttempts || 1
     form.allowMakeup = !!detail.allowMakeup
-    form.questionIds = (detail.questions || []).map(item => item.id)
-    selectedQuestionsCache.value = detail.questions || []
     dateRange.value = detail.startTime && detail.endTime ? [detail.startTime, detail.endTime] : null
+    selectedPaperDetail.value = {
+      id: detail.paperId,
+      title: detail.paperTitle || '未命名试卷',
+      status: detail.paperStatus,
+      duration: detail.duration,
+      totalScore: detail.totalScore,
+      passingScore: detail.passingScore,
+      questionCount: detail.questionCount,
+      questions: detail.questions || [],
+    }
     drawerVisible.value = true
   } catch (error) {
     message.error(error.message || '加载考试详情失败')
   }
 }
 
-function removeSelectedQ(id) {
-  form.questionIds = form.questionIds.filter(item => item !== id)
-  selectedQuestionsCache.value = selectedQuestionsCache.value.filter(item => item.id !== id)
+function goToPaperManage() {
+  router.push({ path: '/exam/papers', query: { quickCreate: '1' } })
 }
 
 async function handleSave() {
@@ -448,8 +513,8 @@ async function handleSave() {
     message.warning('请输入场次名称')
     return
   }
-  if (!form.questionIds.length) {
-    message.warning('请至少选择一道题目')
+  if (!form.paperId) {
+    message.warning('请选择试卷')
     return
   }
   if (editingKind.value === 'training' && !form.trainingId) {
@@ -459,16 +524,14 @@ async function handleSave() {
 
   const payload = {
     title: form.title,
-    paperTitle: form.paperTitle || undefined,
+    paperId: form.paperId,
     description: form.description || undefined,
     type: form.type,
     status: form.status,
     duration: form.duration,
     passingScore: form.passingScore,
-    totalScore: dynamicTotalScore.value,
     startTime: dateRange.value?.[0],
     endTime: dateRange.value?.[1],
-    questionIds: form.questionIds,
   }
   if (editingKind.value === 'training') {
     payload.purpose = form.purpose
@@ -508,67 +571,6 @@ async function handleSave() {
   }
 }
 
-const pickerVisible = ref(false)
-const qpSearch = ref('')
-const qpType = ref('all')
-const qpLoading = ref(false)
-const qpList = ref([])
-const qpPagination = reactive({ current: 1, pageSize: 10, total: 0 })
-const tempSelectedRowKeys = ref([])
-const tempSelectedRowsMap = ref(new Map())
-
-const qpColumns = [
-  { title: '题干', dataIndex: 'content', key: 'content' },
-  { title: '题型', dataIndex: 'type', key: 'type', width: 80 },
-  { title: '分值', dataIndex: 'score', key: 'score', width: 80 },
-]
-
-const qpRowSelection = computed(() => ({
-  selectedRowKeys: tempSelectedRowKeys.value,
-  onChange: (keys, rows) => {
-    tempSelectedRowKeys.value = keys
-    rows.forEach(item => tempSelectedRowsMap.value.set(item.id, item))
-  },
-}))
-
-async function loadPickerQ() {
-  qpLoading.value = true
-  try {
-    const result = await getQuestions({
-      page: qpPagination.current,
-      size: qpPagination.pageSize,
-      search: qpSearch.value || undefined,
-      type: qpType.value !== 'all' ? qpType.value : undefined,
-    })
-    qpList.value = result.items || []
-    qpPagination.total = result.total || 0
-  } catch (error) {
-    message.error(error.message || '加载题库失败')
-  } finally {
-    qpLoading.value = false
-  }
-}
-
-function openQuestionPicker() {
-  qpPagination.current = 1
-  tempSelectedRowKeys.value = [...form.questionIds]
-  tempSelectedRowsMap.value = new Map(selectedQuestionsCache.value.map(item => [item.id, item]))
-  pickerVisible.value = true
-  loadPickerQ()
-}
-
-function handleQpTableChange(pag) {
-  qpPagination.current = pag.current
-  qpPagination.pageSize = pag.pageSize
-  loadPickerQ()
-}
-
-function confirmQuestionPick() {
-  form.questionIds = [...tempSelectedRowKeys.value]
-  selectedQuestionsCache.value = form.questionIds.map(id => tempSelectedRowsMap.value.get(id)).filter(Boolean)
-  pickerVisible.value = false
-}
-
 function formatDateTime(value) {
   if (!value) return '未设置'
   return String(value).replace('T', ' ').slice(0, 16)
@@ -583,7 +585,7 @@ function handleKindChange() {
 
 async function initializeFromRoute() {
   applyRouteKindContext()
-  await Promise.all([loadExams(), loadTrainingOptions()])
+  await Promise.all([loadExams(), loadTrainingOptions(), loadPaperOptions()])
   syncQuickCreateFromRoute()
 }
 
@@ -604,10 +606,16 @@ watch(() => route.fullPath, () => {
 .page-header h2 { margin: 0; color: #001234; }
 .page-sub { margin: 6px 0 0; font-size: 13px; color: #8c8c8c; }
 .time-col { font-size: 12px; color: #666; }
-.selected-questions { border: 1px solid #e8e8e8; border-radius: 8px; padding: 12px; background: #fafafa; }
-.selected-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-.q-cache-list { display: flex; flex-direction: column; gap: 8px; max-height: 360px; overflow-y: auto; }
-.q-cache-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #fff; border: 1px solid #f0f0f0; border-radius: 6px; }
-.q-cached-content { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.picker-toolbar { display: flex; gap: 12px; margin-bottom: 16px; }
+.paper-col { display: flex; flex-direction: column; gap: 2px; }
+.paper-meta { font-size: 12px; color: #8c8c8c; }
+.paper-action-row { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+.paper-action-tip { font-size: 12px; color: #8c8c8c; }
+.paper-preview-card { border: 1px solid #e8e8e8; border-radius: 8px; padding: 12px; background: #fafafa; }
+.preview-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 12px; }
+.preview-title { font-size: 15px; font-weight: 600; color: #001234; }
+.preview-sub { margin-top: 4px; font-size: 12px; color: #8c8c8c; }
+.preview-meta { display: flex; gap: 16px; font-size: 12px; color: #666; }
+.preview-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
+.preview-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #fff; border: 1px solid #f0f0f0; border-radius: 6px; }
+.preview-content { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 </style>

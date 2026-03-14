@@ -26,6 +26,8 @@ CRITICAL_SCHEMA_REQUIREMENTS: dict[str, tuple[str, ...]] = {
         "total_score",
         "passing_score",
         "type",
+        "status",
+        "published_at",
         "created_by",
     ),
     "exam_paper_questions": (
