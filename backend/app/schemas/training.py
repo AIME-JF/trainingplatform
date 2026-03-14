@@ -143,6 +143,12 @@ class TrainingWorkflowStepResponse(BaseModel):
     description: Optional[str] = None
 
 
+class TrainingWorkflowActionRequest(BaseModel):
+    """培训班流程动作请求"""
+
+    skip_steps: List[str] = Field(default_factory=list, description="允许跳过的前置流程节点")
+
+
 class TrainingCreate(BaseModel):
     """创建培训班"""
 

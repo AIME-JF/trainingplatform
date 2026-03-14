@@ -16,6 +16,7 @@ from app.schemas import (
     TrainingCheckinQrResponse,
     TrainingEvaluationCreate,
     TrainingUpdate,
+    TrainingWorkflowActionRequest,
 )
 from app.services import TrainingService
 from logger import logger
@@ -77,23 +78,53 @@ class TrainingController:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="培训班不存在")
         return True
 
-    def publish_training(self, training_id: int, user_id: int):
-        result = self.service.publish_training(training_id, user_id)
-        if not result:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="培训班不存在")
-        return result
+    def publish_training(
+        self,
+        training_id: int,
+        user_id: int,
+        data: Optional[TrainingWorkflowActionRequest] = None,
+    ):
+        try:
+            result = self.service.publish_training(training_id, user_id, data.skip_steps if data else None)
+            if not result:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="培训班不存在")
+            return result
+        except HTTPException:
+            raise
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
-    def lock_training(self, training_id: int, user_id: int):
-        result = self.service.lock_training(training_id, user_id)
-        if not result:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="培训班不存在")
-        return result
+    def lock_training(
+        self,
+        training_id: int,
+        user_id: int,
+        data: Optional[TrainingWorkflowActionRequest] = None,
+    ):
+        try:
+            result = self.service.lock_training(training_id, user_id, data.skip_steps if data else None)
+            if not result:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="培训班不存在")
+            return result
+        except HTTPException:
+            raise
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
-    def start_training(self, training_id: int, actor_id: Optional[int] = None):
-        result = self.service.start_training(training_id, actor_id)
-        if not result:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="培训班不存在")
-        return result
+    def start_training(
+        self,
+        training_id: int,
+        actor_id: Optional[int] = None,
+        data: Optional[TrainingWorkflowActionRequest] = None,
+    ):
+        try:
+            result = self.service.start_training(training_id, actor_id, data.skip_steps if data else None)
+            if not result:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="培训班不存在")
+            return result
+        except HTTPException:
+            raise
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     def end_training(self, training_id: int, actor_id: Optional[int] = None):
         result = self.service.end_training(training_id, actor_id)

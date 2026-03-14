@@ -78,6 +78,19 @@ class TrainingService:
     SESSION_COMPLETED = "completed"
     SESSION_SKIPPED = "skipped"
     SESSION_MISSED = "missed"
+    WORKFLOW_STEP_DRAFT = "draft"
+    WORKFLOW_STEP_PUBLISHED = "published"
+    WORKFLOW_STEP_LOCKED = "locked"
+    WORKFLOW_STEP_RUNNING = "running"
+    WORKFLOW_STEP_COMPLETED = "completed"
+    WORKFLOW_SKIP_STEP_ORDER = [WORKFLOW_STEP_PUBLISHED, WORKFLOW_STEP_LOCKED]
+    WORKFLOW_STEP_LABELS = {
+        WORKFLOW_STEP_DRAFT: "草稿",
+        WORKFLOW_STEP_PUBLISHED: "发布招生",
+        WORKFLOW_STEP_LOCKED: "锁定名单",
+        WORKFLOW_STEP_RUNNING: "开班进行中",
+        WORKFLOW_STEP_COMPLETED: "结班归档",
+    }
 
     def __init__(self, db: Session):
         self.db = db
@@ -289,18 +302,28 @@ class TrainingService:
         logger.info("删除培训班: %s", training_id)
         return True
 
-    def publish_training(self, training_id: int, user_id: int) -> Optional[TrainingResponse]:
+    def publish_training(
+        self,
+        training_id: int,
+        user_id: int,
+        skip_steps: Optional[List[str]] = None,
+    ) -> Optional[TrainingResponse]:
         """发布培训班"""
         training = self.db.query(Training).filter(Training.id == training_id).first()
         if not training:
             return None
-        training.publish_status = "published"
-        training.published_at = datetime.now()
-        training.published_by = user_id
+        self._normalize_workflow_skip_steps(skip_steps)
+        self._assert_training_can_publish(training)
+        self._mark_training_published(training, user_id)
         self.db.commit()
         return self.get_training_by_id(training_id, user_id)
 
-    def lock_training(self, training_id: int, user_id: int) -> Optional[TrainingResponse]:
+    def lock_training(
+        self,
+        training_id: int,
+        user_id: int,
+        skip_steps: Optional[List[str]] = None,
+    ) -> Optional[TrainingResponse]:
         """锁定培训班名单"""
         training = self.db.query(Training).options(
             joinedload(Training.enrollments),
@@ -308,24 +331,40 @@ class TrainingService:
         if not training:
             return None
 
-        training.locked_at = datetime.now()
-        training.locked_by = user_id
-        for enrollment in training.enrollments or []:
-            if enrollment.status == "pending":
-                enrollment.status = "rejected"
-                enrollment.note = enrollment.note or "班次名单已锁定"
-                enrollment.reviewed_at = datetime.now()
-                enrollment.reviewed_by = user_id
+        normalized_skip_steps = self._normalize_workflow_skip_steps(skip_steps)
+        self._assert_training_can_lock(training, normalized_skip_steps)
+        if training.publish_status != "published":
+            self._mark_training_published(training, user_id)
+        self._mark_training_locked(training, user_id)
         self._refresh_training_histories(training_id)
         self.db.commit()
         return self.get_training_by_id(training_id, user_id)
 
-    def start_training(self, training_id: int, actor_id: Optional[int] = None) -> Optional[TrainingResponse]:
+    def start_training(
+        self,
+        training_id: int,
+        actor_id: Optional[int] = None,
+        skip_steps: Optional[List[str]] = None,
+    ) -> Optional[TrainingResponse]:
         """手动开班"""
-        training = self.db.query(Training).filter(Training.id == training_id).first()
+        training = self.db.query(Training).options(
+            joinedload(Training.enrollments),
+        ).filter(Training.id == training_id).first()
         if not training:
             return None
+        normalized_skip_steps = self._normalize_workflow_skip_steps(skip_steps)
+        self._assert_training_can_start(training, normalized_skip_steps)
+        action_user_id = actor_id or training.instructor_id or training.created_by
+        if training.publish_status != "published":
+            if action_user_id is None:
+                raise ValueError("缺少流程操作人，无法自动发布培训班")
+            self._mark_training_published(training, action_user_id)
+        if not training.locked_at:
+            if action_user_id is None:
+                raise ValueError("缺少流程操作人，无法自动锁定培训班名单")
+            self._mark_training_locked(training, action_user_id)
         training.status = "active"
+        self._refresh_training_histories(training_id)
         self.db.commit()
         logger.info("手动开班: %s", training_id)
         return self.get_training_by_id(training_id, actor_id)
@@ -338,6 +377,8 @@ class TrainingService:
         ).filter(Training.id == training_id).first()
         if not training:
             return None
+        if training.status != "active":
+            raise ValueError("仅开班进行中的培训班可结班")
 
         training.status = "ended"
         for session in self._build_session_catalog(training):
@@ -347,6 +388,80 @@ class TrainingService:
         self.db.commit()
         logger.info("手动结班: %s", training_id)
         return self.get_training_by_id(training_id, actor_id)
+
+    def _normalize_workflow_skip_steps(self, skip_steps: Optional[List[str]]) -> List[str]:
+        normalized: List[str] = []
+        for item in skip_steps or []:
+            value = str(item or "").strip()
+            if not value:
+                continue
+            if value not in self.WORKFLOW_SKIP_STEP_ORDER:
+                raise ValueError(f"不支持跳过的流程节点: {value}")
+            if value not in normalized:
+                normalized.append(value)
+        return normalized
+
+    def _assert_training_can_publish(self, training: Training) -> None:
+        if training.status == "ended":
+            raise ValueError("已结班的培训班不能发布")
+        if training.status == "active":
+            raise ValueError("开班进行中的培训班不能重新发布")
+        if training.publish_status == "published":
+            raise ValueError("当前培训班已发布")
+
+    def _assert_training_can_lock(self, training: Training, skip_steps: List[str]) -> None:
+        if training.status == "ended":
+            raise ValueError("已结班的培训班不能锁定名单")
+        if training.status == "active":
+            raise ValueError("开班进行中的培训班不能重新锁定名单")
+        if training.locked_at:
+            raise ValueError("当前培训班已锁定名单")
+        missing_steps = self._get_missing_workflow_steps(training, "lock")
+        self._ensure_workflow_skip_confirmed(missing_steps, skip_steps)
+
+    def _assert_training_can_start(self, training: Training, skip_steps: List[str]) -> None:
+        if training.status == "ended":
+            raise ValueError("已结班的培训班不能再次开班")
+        if training.status == "active":
+            raise ValueError("当前培训班已开班")
+        missing_steps = self._get_missing_workflow_steps(training, "start")
+        self._ensure_workflow_skip_confirmed(missing_steps, skip_steps)
+
+    def _get_missing_workflow_steps(self, training: Training, action: str) -> List[str]:
+        missing_steps: List[str] = []
+        if action in {"lock", "start"} and training.publish_status != "published":
+            missing_steps.append(self.WORKFLOW_STEP_PUBLISHED)
+        if action == "start" and not training.locked_at:
+            missing_steps.append(self.WORKFLOW_STEP_LOCKED)
+        return missing_steps
+
+    def _ensure_workflow_skip_confirmed(self, missing_steps: List[str], skip_steps: List[str]) -> None:
+        if not missing_steps:
+            return
+        if all(step in skip_steps for step in missing_steps):
+            return
+        labels = "、".join(self.WORKFLOW_STEP_LABELS[step] for step in missing_steps)
+        suffix = "该环节" if len(missing_steps) == 1 else "这些环节"
+        raise ValueError(f"当前培训班尚未完成“{labels}”环节，如需继续请先确认跳过{suffix}")
+
+    def _mark_training_published(self, training: Training, user_id: int) -> None:
+        if training.publish_status == "published":
+            return
+        training.publish_status = "published"
+        training.published_at = datetime.now()
+        training.published_by = user_id
+
+    def _mark_training_locked(self, training: Training, user_id: int) -> None:
+        if training.locked_at:
+            return
+        training.locked_at = datetime.now()
+        training.locked_by = user_id
+        for enrollment in training.enrollments or []:
+            if enrollment.status == "pending":
+                enrollment.status = "rejected"
+                enrollment.note = enrollment.note or "班次名单已锁定"
+                enrollment.reviewed_at = datetime.now()
+                enrollment.reviewed_by = user_id
 
     def import_training_students(self, training_id: int, file_bytes: bytes) -> dict:
         importer = BatchImportService(self.db)
@@ -1262,8 +1377,8 @@ class TrainingService:
             normalized_schedules = [self._normalize_schedule_item(item) for item in (course.schedules or [])]
             if normalized_schedules != (course.schedules or []):
                 course.schedules = normalized_schedules
-
-            for schedule in normalized_schedules:
+            schedules = course.schedules or []
+            for schedule in schedules:
                 schedule_date = self._parse_schedule_date(schedule)
                 if not schedule_date:
                     continue

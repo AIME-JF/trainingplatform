@@ -36,20 +36,20 @@ export function updateTraining(id, data) {
   return request.put(`/trainings/${id}`, data)
 }
 
-export function publishTraining(id) {
-  return request.post(`/trainings/${id}/publish`)
+export function publishTraining(id, data) {
+  return request.post(`/trainings/${id}/publish`, data)
 }
 
-export function lockTraining(id) {
-  return request.post(`/trainings/${id}/lock`)
+export function lockTraining(id, data) {
+  return request.post(`/trainings/${id}/lock`, data)
 }
 
 export function deleteTraining(id) {
   return request.delete(`/trainings/${id}`)
 }
 
-export function startTraining(id) {
-  return request.post(`/trainings/${id}/start`)
+export function startTraining(id, data) {
+  return request.post(`/trainings/${id}/start`, data)
 }
 
 export function endTraining(id) {

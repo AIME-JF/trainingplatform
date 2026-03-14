@@ -73,25 +73,14 @@
           <a-menu-item key="/resource/policy" v-if="isAdmin">审核策略</a-menu-item>
         </a-sub-menu>
 
-        <a-menu-item key="/instructor" v-if="!isStudent">
+        <a-sub-menu key="archives">
           <template #icon><UserOutlined /></template>
-          教官库
-        </a-menu-item>
-
-        <a-menu-item key="/trainee">
-          <template #icon><IdcardOutlined /></template>
-          学员库
-        </a-menu-item>
-
-        <a-menu-item key="/certificate">
-          <template #icon><SafetyCertificateOutlined /></template>
-          结业证书
-        </a-menu-item>
-
-        <a-menu-item key="/talent" v-if="isAdmin">
-          <template #icon><StarOutlined /></template>
-          人才库
-        </a-menu-item>
+          <template #title>人员档案</template>
+          <a-menu-item key="/trainee">学员库</a-menu-item>
+          <a-menu-item key="/instructor" v-if="!isStudent">教官库</a-menu-item>
+          <a-menu-item key="/talent" v-if="isAdmin">人才库</a-menu-item>
+          <a-menu-item key="/certificate">结业证书</a-menu-item>
+        </a-sub-menu>
 
         <a-menu-item key="/report" v-if="isAdmin">
           <template #icon><BarChartOutlined /></template>
@@ -123,6 +112,7 @@
       </div>
       <a-menu
         v-model:selectedKeys="selectedKeys"
+        v-model:openKeys="openKeys"
         mode="inline"
         class="sidebar-menu"
         @click="handleDrawerMenuClick"
@@ -171,22 +161,14 @@
           <a-menu-item key="/resource/review" v-if="!isStudent">审核工作台</a-menu-item>
           <a-menu-item key="/resource/policy" v-if="isAdmin">审核策略</a-menu-item>
         </a-sub-menu>
-        <a-menu-item key="/instructor" v-if="!isStudent">
+        <a-sub-menu key="archives">
           <template #icon><UserOutlined /></template>
-          教官库
-        </a-menu-item>
-        <a-menu-item key="/trainee">
-          <template #icon><IdcardOutlined /></template>
-          学员库
-        </a-menu-item>
-        <a-menu-item key="/certificate">
-          <template #icon><SafetyCertificateOutlined /></template>
-          结业证书
-        </a-menu-item>
-        <a-menu-item key="/talent" v-if="isAdmin">
-          <template #icon><StarOutlined /></template>
-          人才库
-        </a-menu-item>
+          <template #title>人员档案</template>
+          <a-menu-item key="/trainee">学员库</a-menu-item>
+          <a-menu-item key="/instructor" v-if="!isStudent">教官库</a-menu-item>
+          <a-menu-item key="/talent" v-if="isAdmin">人才库</a-menu-item>
+          <a-menu-item key="/certificate">结业证书</a-menu-item>
+        </a-sub-menu>
         <a-menu-item key="/report" v-if="isAdmin">
           <template #icon><BarChartOutlined /></template>
           数据看板
@@ -299,9 +281,9 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
 import {
   HomeOutlined, PlayCircleOutlined, FormOutlined, RobotOutlined,
-  TeamOutlined, UserOutlined, StarOutlined, BarChartOutlined, BookOutlined,
+  TeamOutlined, UserOutlined, BarChartOutlined, BookOutlined,
   MenuUnfoldOutlined, MenuFoldOutlined, DownOutlined, LogoutOutlined,
-  SafetyCertificateOutlined, IdcardOutlined, SettingOutlined,
+  SettingOutlined,
 } from '@ant-design/icons-vue'
 
 const router = useRouter()
@@ -310,7 +292,7 @@ const authStore = useAuthStore()
 
 const collapsed = ref(false)
 const mobileDrawerOpen = ref(false)
-const selectedKeys = ref([route.path])
+const selectedKeys = ref([])
 const openKeys = ref([])
 
 // 检测是否为移动端
@@ -352,11 +334,62 @@ const currentPageTitle = computed(() => {
   return route.meta?.title || '智慧教育训练平台'
 })
 
+function getSelectedMenuKeyByPath(path) {
+  if (path === '/') return '/'
+  if (path.startsWith('/courses')) return '/courses'
+  if (path.startsWith('/exam/list')) return '/exam/list'
+  if (path.startsWith('/exam/manage')) return '/exam/manage'
+  if (path.startsWith('/exam/bank')) return '/exam/bank'
+  if (path.startsWith('/exam/scores')) return '/exam/scores'
+  if (path.startsWith('/ai/question-gen')) return '/ai/question-gen'
+  if (path.startsWith('/ai/lesson-plan')) return '/ai/lesson-plan'
+  if (path.startsWith('/training/base')) return '/training/base'
+  if (path.startsWith('/training/schedule')) return '/training/schedule'
+  if (path.startsWith('/training/board')) return '/training/board'
+  if (path.startsWith('/training')) return '/training'
+  if (path.startsWith('/resource/library')) return '/resource/library'
+  if (path.startsWith('/resource/recommend')) return '/resource/recommend'
+  if (path.startsWith('/resource/upload')) return '/resource/upload'
+  if (path.startsWith('/resource/my')) return '/resource/my'
+  if (path.startsWith('/resource/manage')) return '/resource/manage'
+  if (path.startsWith('/resource/review')) return '/resource/review'
+  if (path.startsWith('/resource/policy')) return '/resource/policy'
+  if (path.startsWith('/trainee')) return '/trainee'
+  if (path.startsWith('/instructor')) return '/instructor'
+  if (path.startsWith('/talent')) return '/talent'
+  if (path.startsWith('/certificate')) return '/certificate'
+  if (path.startsWith('/report')) return '/report'
+  if (path.startsWith('/system/users')) return '/system/users'
+  if (path.startsWith('/system/roles')) return '/system/roles'
+  if (path.startsWith('/system/departments')) return '/system/departments'
+  if (path.startsWith('/profile')) return '/profile'
+  return path
+}
+
+function getOpenKeysByPath(path) {
+  if (path.startsWith('/exam/')) return ['exam']
+  if (path.startsWith('/ai/')) return ['ai']
+  if (path.startsWith('/training')) return ['training']
+  if (path.startsWith('/resource/')) return ['resource']
+  if (
+    path.startsWith('/trainee')
+    || path.startsWith('/instructor')
+    || path.startsWith('/talent')
+    || path.startsWith('/certificate')
+  ) {
+    return ['archives']
+  }
+  if (path.startsWith('/system/')) return ['system']
+  return []
+}
+
 watch(
   () => route.path,
   (path) => {
-    selectedKeys.value = [path]
-  }
+    selectedKeys.value = [getSelectedMenuKeyByPath(path)]
+    openKeys.value = getOpenKeysByPath(path)
+  },
+  { immediate: true }
 )
 
 function handleMenuClick({ key }) {

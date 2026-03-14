@@ -268,9 +268,9 @@ Authorization: Bearer <access_token>
 | `GET` | `/api/v1/trainings/{training_id}` | 培训详情 | 返回课程、考试摘要、流程步骤、当前课次、权限标记 |
 | `PUT` | `/api/v1/trainings/{training_id}` | 更新培训班 | 字段同创建接口，均可选；支持更新 `student_ids`、`roster_assignments` |
 | `DELETE` | `/api/v1/trainings/{training_id}` | 删除培训班 | 仅管理员 |
-| `POST` | `/api/v1/trainings/{training_id}/publish` | 发布培训班 | 管理员或班主任 |
-| `POST` | `/api/v1/trainings/{training_id}/lock` | 锁定名单 | 管理员或班主任 |
-| `POST` | `/api/v1/trainings/{training_id}/start` | 手动开班 | 管理员或班主任 |
+| `POST` | `/api/v1/trainings/{training_id}/publish` | 发布培训班 | 可选 JSON：`skip_steps[]`；当前一般无需传 |
+| `POST` | `/api/v1/trainings/{training_id}/lock` | 锁定名单 | 可选 JSON：`skip_steps[]`，可传 `["published"]` |
+| `POST` | `/api/v1/trainings/{training_id}/start` | 手动开班 | 可选 JSON：`skip_steps[]`，可传 `["published","locked"]` |
 | `POST` | `/api/v1/trainings/{training_id}/end` | 手动结班 | 管理员或班主任 |
 
 培训详情常见返回摘要：
@@ -291,6 +291,8 @@ Authorization: Bearer <access_token>
 - 培训班当前支持可选 `department_id`、`police_type_id`、`training_base_id`
 - 选择培训基地时，服务层会优先使用基地地点，并在基地配置了部门时默认同步该部门
 - 培训列表和详情已接入数据范围控制；如果角色范围不覆盖培训班归属的部门 / 警种，则不可见
+- 培训班流程按 `发布招生 -> 锁定名单 -> 开班 -> 结班` 严格顺序执行
+- 如果直接调用后续流程接口而未完成前置步骤，后端会拒绝；只有显式传入 `skip_steps[]` 才会自动补齐并锁定被跳过环节
 
 ### 8.3 培训课程与排课字段
 
@@ -318,10 +320,10 @@ Authorization: Bearer <access_token>
 
 课次状态常见值：
 
-- `pending`
-- `checkin_open`
-- `checkin_closed`
-- `checkout_open`
+- `pending`：未开始
+- `checkin_open`：签到中
+- `checkin_closed`：课程进行中，签到窗口已结束
+- `checkout_open`：签退中
 - `completed`
 - `skipped`
 - `missed`
@@ -364,6 +366,7 @@ Authorization: Bearer <access_token>
 - 系统会对已过截止时间但未完成的课次自动转为 `missed`
 - 已 `missed` 的课次不能再开始签到，也不能再跳过
 - `skip` 是跳过整个课次，不是跳过单个学员
+- 结束签到后课次会进入 `checkin_closed`，此时课程仍视为“进行中”，只是签到窗口已结束
 
 ### 8.6 二维码签到与训历
 

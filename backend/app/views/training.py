@@ -33,6 +33,7 @@ from app.schemas import (
     TrainingRosterAssignment,
     TrainingSkipCourseRequest,
     TrainingUpdate,
+    TrainingWorkflowActionRequest,
 )
 from app.services.training import TrainingService
 from app.utils.authz import can_manage_training, can_view_training, is_admin_user, is_instructor_user
@@ -176,36 +177,39 @@ def delete_training(
 @router.post("/{training_id}/publish", response_model=StandardResponse[TrainingResponse], summary="发布培训班")
 def publish_training(
     training_id: int,
+    data: Optional[TrainingWorkflowActionRequest] = Body(default=None),
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     _require_training_manager(db, training_id, current_user.user_id)
     controller = TrainingController(db)
-    result = controller.publish_training(training_id, current_user.user_id)
+    result = controller.publish_training(training_id, current_user.user_id, data)
     return StandardResponse(data=result)
 
 
 @router.post("/{training_id}/lock", response_model=StandardResponse[TrainingResponse], summary="锁定名单")
 def lock_training(
     training_id: int,
+    data: Optional[TrainingWorkflowActionRequest] = Body(default=None),
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     _require_training_manager(db, training_id, current_user.user_id)
     controller = TrainingController(db)
-    result = controller.lock_training(training_id, current_user.user_id)
+    result = controller.lock_training(training_id, current_user.user_id, data)
     return StandardResponse(data=result)
 
 
 @router.post("/{training_id}/start", response_model=StandardResponse[TrainingResponse], summary="手动开班")
 def start_training(
     training_id: int,
+    data: Optional[TrainingWorkflowActionRequest] = Body(default=None),
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     _require_training_manager(db, training_id, current_user.user_id)
     controller = TrainingController(db)
-    result = controller.start_training(training_id, current_user.user_id)
+    result = controller.start_training(training_id, current_user.user_id, data)
     return StandardResponse(data=result)
 
 

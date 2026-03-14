@@ -86,7 +86,7 @@
                       <a-button v-if="currentSession.actionPermissions?.canStartCheckout" size="small" type="primary" ghost @click="handleStartSessionCheckout">开始签退</a-button>
                       <a-button v-if="currentSession.actionPermissions?.canEndCheckout" size="small" @click="handleEndSessionCheckout">结束签退</a-button>
                       <a-button
-                        v-if="isEnrolled && currentSession.status === 'checkinOpen'"
+                        v-if="isEnrolled && currentSession.status === 'checkin_open'"
                         size="small"
                         type="primary"
                         ghost
@@ -95,7 +95,7 @@
                         学员签到
                       </a-button>
                       <a-button
-                        v-if="isEnrolled && currentSession.status === 'checkoutOpen'"
+                        v-if="isEnrolled && currentSession.status === 'checkout_open'"
                         size="small"
                         @click="$router.push({ name: 'Checkout', params: { id: trainingData.id, sessionKey: currentSession.sessionId } })"
                       >
@@ -754,8 +754,8 @@ const scheduleViewMode = ref('course')
 const canEdit = computed(() => !!trainingData.canManageAll)
 const canScheduleEdit = computed(() => !!trainingData.canEditCourses)
 const currentSession = computed(() => trainingData.currentSession)
-const canPublishWorkflowAction = computed(() => canEdit.value && trainingData.publishStatus !== 'published')
-const canLockWorkflowAction = computed(() => canEdit.value && !trainingData.isLocked)
+const canPublishWorkflowAction = computed(() => canEdit.value && trainingData.status === 'upcoming' && trainingData.publishStatus !== 'published')
+const canLockWorkflowAction = computed(() => canEdit.value && trainingData.status === 'upcoming' && !trainingData.isLocked)
 const canStartWorkflowAction = computed(() => canEdit.value && trainingData.status === 'upcoming')
 const canEndWorkflowAction = computed(() => canEdit.value && trainingData.status === 'active')
 const showWorkflowActionCard = computed(() => (
@@ -764,6 +764,10 @@ const showWorkflowActionCard = computed(() => (
   canStartWorkflowAction.value ||
   canEndWorkflowAction.value
 ))
+const workflowSkipLabelMap = {
+  published: '发布招生',
+  locked: '锁定名单',
+}
 const examStatusLabelMap = { upcoming: '即将开始', active: '进行中', ended: '已结束' }
 const examStatusColorMap = { upcoming: 'orange', active: 'green', ended: 'default' }
 const examPurposeLabelMap = {
@@ -786,18 +790,18 @@ const workflowCurrentIndex = computed(() => {
 })
 const scheduleStatusLabelMap = {
   pending: '未开始',
-  checkinOpen: '签到中',
-  checkinClosed: '签到已结束',
-  checkoutOpen: '签退中',
+  checkin_open: '签到中',
+  checkin_closed: '进行中',
+  checkout_open: '签退中',
   completed: '已完成',
   skipped: '已跳过',
   missed: '已错过',
 }
 const scheduleStatusColorMap = {
   pending: 'default',
-  checkinOpen: 'blue',
-  checkinClosed: 'gold',
-  checkoutOpen: 'purple',
+  checkin_open: 'blue',
+  checkin_closed: 'gold',
+  checkout_open: 'purple',
   completed: 'green',
   skipped: 'red',
   missed: 'volcano',
@@ -933,34 +937,62 @@ function quickCreateTrainingExam() {
   })
 }
 
-async function handlePublish() {
+function getWorkflowMissingSteps(action) {
+  const missingSteps = []
+  if ((action === 'lock' || action === 'start') && trainingData.publishStatus !== 'published') {
+    missingSteps.push('published')
+  }
+  if (action === 'start' && !trainingData.isLocked) {
+    missingSteps.push('locked')
+  }
+  return missingSteps
+}
+
+async function executeWorkflowAction(requestFn, successMessage, errorMessage, skipSteps = []) {
   try {
-    await publishTraining(trainingId)
-    message.success('培训班已发布')
+    await requestFn(trainingId, skipSteps.length ? { skipSteps } : undefined)
+    message.success(successMessage)
     await loadTrainingDetail()
   } catch (error) {
-    message.error(error.message || '发布失败')
+    message.error(error.message || errorMessage)
   }
+}
+
+function confirmWorkflowSkip(actionLabel, skipSteps, requestFn, successMessage, errorMessage) {
+  const stepLabels = skipSteps.map((step) => workflowSkipLabelMap[step] || step)
+  const joinedLabels = stepLabels.join('、')
+  const lockTargetText = stepLabels.length > 1 ? '上述环节' : `${joinedLabels}环节`
+  Modal.confirm({
+    title: `是否跳过${joinedLabels}环节`,
+    content: `当前操作将跳过${joinedLabels}环节，跳过后${lockTargetText}将锁定。`,
+    okText: actionLabel,
+    cancelText: '取消',
+    async onOk() {
+      await executeWorkflowAction(requestFn, successMessage, errorMessage, skipSteps)
+    },
+  })
+}
+
+async function handlePublish() {
+  await executeWorkflowAction(publishTraining, '培训班已发布', '发布失败')
 }
 
 async function handleLock() {
-  try {
-    await lockTraining(trainingId)
-    message.success('名单已锁定')
-    await loadTrainingDetail()
-  } catch (error) {
-    message.error(error.message || '锁定失败')
+  const skipSteps = getWorkflowMissingSteps('lock')
+  if (skipSteps.length) {
+    confirmWorkflowSkip('锁定名单', skipSteps, lockTraining, '名单已锁定', '锁定失败')
+    return
   }
+  await executeWorkflowAction(lockTraining, '名单已锁定', '锁定失败')
 }
 
 async function handleStart() {
-  try {
-    await startTraining(trainingId)
-    message.success('培训班已开班')
-    await loadTrainingDetail()
-  } catch (error) {
-    message.error(error.message || '开班失败')
+  const skipSteps = getWorkflowMissingSteps('start')
+  if (skipSteps.length) {
+    confirmWorkflowSkip('开班', skipSteps, startTraining, '培训班已开班', '开班失败')
+    return
   }
+  await executeWorkflowAction(startTraining, '培训班已开班', '开班失败')
 }
 
 async function handleEnd() {
