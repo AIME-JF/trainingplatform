@@ -10,19 +10,20 @@
 - 用户、角色、部门、权限、警种管理
 - 课程、培训、考试、证书、公告、个人中心
 - 资源上传、资源库、推荐流、审核工作流
-- 报表导出、人才库、AI 组卷与 AI 教案生成
+- 报表导出、人才库、AI 任务化出题与组卷
 - PostgreSQL、Redis、MinIO、Celery 的集成
 
 ## 当前核心业务模型
 
 ### 考试域
 
-当前考试域已经拆成四层：
+当前考试域已经拆成五层：
 
 - `Question`：统一题库
 - `ExamPaper`：独立试卷实体，维护题目快照与试卷状态
 - `AdmissionExam`：独立准入考试，不直接隶属培训班
 - `Exam`：培训班内考试，必须关联 `training_id`
+- `AITask`：AI 智能出题、AI 自动组卷、AI 自动生成试卷任务
 
 对应业务规则：
 
@@ -34,6 +35,33 @@
 - 培训班通过 `admission_exam_id` 绑定准入考试
 - 学员报名该培训班时，如果配置了准入考试，必须先有该考试的通过记录
 - 培训班内考试的参试范围由 `training_id` 决定，不再使用 `scope`
+- 准入考试的适用范围由 `scope_type` 与 `scope_target_ids` 决定，`scope` 仅保留展示摘要
+- 准入考试支持 4 种范围类型：`all`、`user`、`department`、`role`
+- 准入考试的列表、详情和交卷接口都会按适用范围做后端校验；范围外学员不可见、不可参加、不可提交
+
+### AI 任务域
+
+当前 AI 能力已统一收敛为任务流，而不是同步生成接口：
+
+- `question_generation`：AI 智能出题
+- `paper_assembly`：AI 自动组卷
+- `paper_generation`：AI 自动生成试卷
+
+统一任务状态：
+
+- `pending`
+- `processing`
+- `completed`
+- `confirmed`
+- `failed`
+
+统一任务流程：
+
+- 创建任务
+- 后端模拟生成结果
+- 查看任务详情
+- 编辑题目 / 试卷草稿
+- 确认写入题库 / 卷库
 
 ### 培训域
 
@@ -330,7 +358,7 @@ python migrate.py generate "your message"
 
 - `python migrate.py stamp head` 只允许在“你已经确认数据库结构和最新迁移完全一致”时使用
 - `Base.metadata.create_all()` 只负责补缺表，不能替代 Alembic 字段迁移
-- 当前迁移已经覆盖考试重构、试卷状态字段、培训 P0 重构以及培训班考试去除 `scope`
+- 当前迁移已经覆盖考试重构、试卷状态字段、培训 P0 重构、培训班考试去除 `scope`、准入考试结构化适用范围字段以及 AI 任务表
 
 ## 认证与权限
 
@@ -452,6 +480,7 @@ python migrate.py generate "your message"
 - 培训课次一旦过了系统判定截止时间，会自动转为 `missed`，无法再开始签到或跳过。
 - `checkin_closed` 的真实语义是“课程仍在进行，但签到窗口已结束”；前端展示应按“进行中”理解，而不是“已结束”。
 - 培训班和培训基地新增了 `created_by`；旧库需要执行最新 Alembic 迁移后才能正常读取这些字段。
+- 准入考试现在新增了 `scope_type`、`scope_target_ids` 两个字段；旧库必须执行最新 Alembic 迁移后才能正常保存结构化适用范围。
 - 内置角色的默认数据范围会在 `init_data.py` 和 `runtime_sync.py` 中被同步到位；如果历史库中的 `instructor` 或 `student` 仍是 `["all"]`，启动时会被自动收敛到新的默认值。
 - 某些系统管理接口同时提供 REST 风格和兼容旧前端的 `/create`、`/update`、`/delete` 别名。
 

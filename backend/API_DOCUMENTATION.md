@@ -198,7 +198,7 @@ Authorization: Bearer <access_token>
   - 独立维护
   - 不直接绑定培训班
   - 培训班通过 `admission_exam_id` 引用
-  - 保留 `scope`
+  - 使用结构化适用范围限制
 - `培训班内考试`
   - 必须关联 `training_id`
   - 用于随堂测、班内考核、结业考核、补考
@@ -211,6 +211,13 @@ Authorization: Bearer <access_token>
 - 只有已发布试卷才能用于创建考试
 - 试卷发布后不能再修改题目
 - 考试创建后不能再更换试卷
+- 准入考试的适用范围由 `scope_type + scope_target_ids` 决定
+- 准入考试范围支持：
+  - `all`：全部学员
+  - `user`：指定学员
+  - `department`：指定部门
+  - `role`：指定角色
+- 准入考试的列表、详情和提交接口都会按适用范围做后端校验
 
 ### 7.2 试卷接口
 
@@ -235,7 +242,7 @@ Authorization: Bearer <access_token>
 | Method | Path | 说明 | 请求要点 |
 | --- | --- | --- | --- |
 | `GET` | `/api/v1/exams/admission` | 准入考试列表 | Query：`page` `size` `status` `type` `search` |
-| `POST` | `/api/v1/exams/admission` | 创建准入考试 | JSON：`title` `paper_id` `description` `duration` `passing_score` `status` `type` `scope` `max_attempts` `start_time` `end_time` |
+| `POST` | `/api/v1/exams/admission` | 创建准入考试 | JSON：`title` `paper_id` `description` `duration` `passing_score` `status` `type` `scope_type` `scope_target_ids[]` `max_attempts` `start_time` `end_time` |
 | `PUT` | `/api/v1/exams/admission/{exam_id}` | 更新准入考试 | 字段同创建接口，均可选 |
 | `GET` | `/api/v1/exams/admission/{exam_id}` | 准入考试详情 | 返回考试基础信息和题目快照 |
 | `POST` | `/api/v1/exams/admission/{exam_id}/submit` | 提交准入考试 | JSON：`answers` `start_time` |
@@ -246,9 +253,16 @@ Authorization: Bearer <access_token>
 说明：
 
 - 创建、更新、成绩管理、分析接口要求管理员或教官
-- `scope` 仅存在于准入考试
+- `scope_type` 常见值：
+  - `all`
+  - `user`
+  - `department`
+  - `role`
+- `scope_target_ids[]` 仅在 `scope_type != all` 时需要传值
+- 响应中的 `scope` 为展示摘要；真实控制字段是 `scope_type` 和 `scope_target_ids`
 - `paper_id` 必须指向已发布试卷
 - 准入考试创建后不能再更换试卷
+- 只有适用范围内的学员才能看到、进入并提交该准入考试
 - 准入考试结果里的 `result` 常见值为 `pass` / `fail`
 
 ### 7.4 培训班内考试接口
@@ -551,10 +565,61 @@ Authorization: Bearer <access_token>
 
 ## 16. AI 模块
 
+当前 AI 能力已经统一改成任务流，不再使用同步生成接口。
+
+统一任务状态：
+
+- `pending`
+- `processing`
+- `completed`
+- `confirmed`
+- `failed`
+
+统一任务流程：
+
+- 填写信息
+- 创建任务
+- 后端模拟生成结果
+- 查看任务
+- 编辑题目 / 试卷草稿
+- 确认写入题库 / 卷库
+
+### 16.1 AI 智能出题任务
+
 | Method | Path | 说明 | 请求要点 |
 | --- | --- | --- | --- |
-| `POST` | `/api/v1/ai/generate-questions` | AI 智能组卷 | JSON：`topic` `count` `difficulty` `types[]` |
-| `POST` | `/api/v1/ai/generate-lesson-plan` | AI 教案生成 | JSON：`title` `subject` `duration` `objectives[]` `level` |
+| `GET` | `/api/v1/ai/question-tasks` | AI 智能出题任务列表 | Query：`page` `size` `status` |
+| `POST` | `/api/v1/ai/question-tasks` | 创建 AI 智能出题任务 | JSON：`task_name` `topic` `source_text` `knowledge_points[]` `question_count` `question_types[]` `difficulty` `police_type_id` `score` `requirements` |
+| `GET` | `/api/v1/ai/question-tasks/{task_id}` | AI 智能出题任务详情 | 无 |
+| `PUT` | `/api/v1/ai/question-tasks/{task_id}/result` | 更新 AI 智能出题任务结果 | JSON：`task_name` `questions[]` |
+| `POST` | `/api/v1/ai/question-tasks/{task_id}/confirm` | 确认 AI 智能出题任务 | 写入题库 |
+
+### 16.2 AI 自动组卷任务
+
+| Method | Path | 说明 | 请求要点 |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/ai/paper-assembly-tasks` | AI 自动组卷任务列表 | Query：`page` `size` `status` |
+| `POST` | `/api/v1/ai/paper-assembly-tasks` | 创建 AI 自动组卷任务 | JSON：`task_name` `paper_title` `paper_type` `description` `duration` `passing_score` `assembly_mode` `police_type_id` `knowledge_points[]` `exclude_question_ids[]` `type_configs[]` `requirements` |
+| `GET` | `/api/v1/ai/paper-assembly-tasks/{task_id}` | AI 自动组卷任务详情 | 无 |
+| `PUT` | `/api/v1/ai/paper-assembly-tasks/{task_id}/result` | 更新 AI 自动组卷任务结果 | JSON：`task_name` `paper_draft` |
+| `POST` | `/api/v1/ai/paper-assembly-tasks/{task_id}/confirm` | 确认 AI 自动组卷任务 | 写入卷库 |
+
+### 16.3 AI 自动生成试卷任务
+
+| Method | Path | 说明 | 请求要点 |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/ai/paper-generation-tasks` | AI 自动生成试卷任务列表 | Query：`page` `size` `status` |
+| `POST` | `/api/v1/ai/paper-generation-tasks` | 创建 AI 自动生成试卷任务 | JSON：`task_name` `paper_title` `paper_type` `description` `duration` `passing_score` `topic` `source_text` `knowledge_points[]` `difficulty` `police_type_id` `type_configs[]` `requirements` |
+| `GET` | `/api/v1/ai/paper-generation-tasks/{task_id}` | AI 自动生成试卷任务详情 | 无 |
+| `PUT` | `/api/v1/ai/paper-generation-tasks/{task_id}/result` | 更新 AI 自动生成试卷任务结果 | JSON：`task_name` `paper_draft` |
+| `POST` | `/api/v1/ai/paper-generation-tasks/{task_id}/confirm` | 确认 AI 自动生成试卷任务 | 写入题库和卷库 |
+
+说明：
+
+- AI 结果当前由后端模拟生成，不接真实模型
+- 任务详情会返回请求快照、题目草稿或试卷草稿
+- 只有 `completed` 状态的任务才允许编辑结果
+- `confirm` 后任务会变成 `confirmed`
 
 ## 17. 人才库模块
 
