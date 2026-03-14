@@ -15,12 +15,15 @@ from app.models import (
     AdmissionExamRecord,
     Certificate,
     CheckinRecord,
+    Department,
     Enrollment,
     Exam,
     ExamPaper,
     ExamRecord,
+    PoliceType,
     ScheduleItem,
     Training,
+    TrainingBase,
     TrainingCourse,
     TrainingHistory,
     User,
@@ -51,8 +54,16 @@ from app.schemas.training import (
     TrainingWorkflowStepResponse,
 )
 from app.services.batch_import import BatchImportService
-from app.utils.authz import can_manage_training, can_operate_training_course
+from app.utils.authz import (
+    can_manage_training,
+    can_operate_training_course,
+    can_view_training,
+    can_view_training_with_context,
+)
+from app.utils.data_scope import build_data_scope_context, can_assign_scoped_values
 from logger import logger
+
+_UNSET = object()
 
 
 class TrainingService:
@@ -82,9 +93,12 @@ class TrainingService:
     ) -> PaginatedResponse[TrainingListResponse]:
         """获取培训列表"""
         query = self.db.query(Training).options(
+            joinedload(Training.department),
             joinedload(Training.instructor),
             joinedload(Training.enrollments),
             joinedload(Training.admission_exam),
+            joinedload(Training.police_type),
+            joinedload(Training.training_base),
         )
 
         if training_type:
@@ -95,10 +109,13 @@ class TrainingService:
         trainings = query.order_by(Training.created_at.desc()).all()
         items: List[TrainingListResponse] = []
         changed = False
+        scope_context = build_data_scope_context(self.db, current_user_id) if current_user_id else None
         for training in trainings:
             if self._refresh_schedule_states(training):
                 changed = True
             if status and (training.status or "upcoming") != status:
+                continue
+            if scope_context and not can_view_training_with_context(scope_context, training):
                 continue
             items.append(self._to_list_response(training, current_user_id))
 
@@ -126,9 +143,9 @@ class TrainingService:
             publish_status=data.publish_status or "draft",
             start_date=data.start_date,
             end_date=data.end_date,
-            location=data.location,
             class_code=data.class_code,
             instructor_id=data.instructor_id or user_id,
+            created_by=user_id,
             capacity=data.capacity,
             description=data.description,
             subjects=data.subjects,
@@ -137,6 +154,14 @@ class TrainingService:
             published_at=datetime.now() if data.publish_status == "published" else None,
             published_by=user_id if data.publish_status == "published" else None,
         )
+        self._apply_training_domain_fields(
+            training,
+            location=data.location,
+            department_id=data.department_id,
+            police_type_id=data.police_type_id,
+            training_base_id=data.training_base_id,
+        )
+        self._ensure_actor_can_assign_training_scope(user_id, training.department_id, training.police_type_id)
         self.db.add(training)
         self.db.flush()
 
@@ -156,13 +181,18 @@ class TrainingService:
     def get_training_by_id(self, training_id: int, current_user_id: Optional[int] = None) -> Optional[TrainingResponse]:
         """获取培训详情"""
         training = self.db.query(Training).options(
+            joinedload(Training.department),
             joinedload(Training.instructor),
+            joinedload(Training.police_type),
+            joinedload(Training.training_base),
             joinedload(Training.courses).joinedload(TrainingCourse.primary_instructor),
             joinedload(Training.enrollments).joinedload(Enrollment.user).joinedload(User.departments),
             joinedload(Training.admission_exam),
             joinedload(Training.exam_sessions).joinedload(Exam.paper).joinedload(ExamPaper.paper_questions),
         ).filter(Training.id == training_id).first()
         if not training:
+            return None
+        if current_user_id and not can_view_training(self.db, training, current_user_id):
             return None
         if self._refresh_schedule_states(training):
             self.db.commit()
@@ -178,6 +208,7 @@ class TrainingService:
         training = self.db.query(Training).options(
             joinedload(Training.enrollments),
             joinedload(Training.courses),
+            joinedload(Training.training_base),
         ).filter(Training.id == training_id).first()
         if not training:
             return None
@@ -196,6 +227,20 @@ class TrainingService:
 
         if student_ids is not None and training.locked_at:
             raise ValueError("班次名单已锁定，不能再调整学员名单")
+
+        if any(
+            key in update_data
+            for key in ("location", "department_id", "police_type_id", "training_base_id")
+        ):
+            self._apply_training_domain_fields(
+                training,
+                location=update_data.pop("location", _UNSET),
+                department_id=update_data.pop("department_id", _UNSET),
+                police_type_id=update_data.pop("police_type_id", _UNSET),
+                training_base_id=update_data.pop("training_base_id", _UNSET),
+            )
+            if actor_id:
+                self._ensure_actor_can_assign_training_scope(actor_id, training.department_id, training.police_type_id)
 
         for field, value in update_data.items():
             setattr(training, field, value)
@@ -1100,6 +1145,77 @@ class TrainingService:
             raise ValueError("准入考试不存在")
         training.admission_exam_id = exam_id
 
+    def _ensure_department(self, department_id: Optional[int]) -> Optional[Department]:
+        if not department_id:
+            return None
+        department = self.db.query(Department).filter(Department.id == department_id).first()
+        if not department:
+            raise ValueError("部门不存在")
+        return department
+
+    def _ensure_police_type(self, police_type_id: Optional[int]) -> Optional[PoliceType]:
+        if not police_type_id:
+            return None
+        police_type = self.db.query(PoliceType).filter(PoliceType.id == police_type_id).first()
+        if not police_type:
+            raise ValueError("警种不存在")
+        return police_type
+
+    def _ensure_training_base(self, training_base_id: Optional[int]) -> Optional[TrainingBase]:
+        if not training_base_id:
+            return None
+        training_base = self.db.query(TrainingBase).filter(TrainingBase.id == training_base_id).first()
+        if not training_base:
+            raise ValueError("培训基地不存在")
+        return training_base
+
+    def _apply_training_domain_fields(
+        self,
+        training: Training,
+        *,
+        location: Any = _UNSET,
+        department_id: Any = _UNSET,
+        police_type_id: Any = _UNSET,
+        training_base_id: Any = _UNSET,
+    ) -> None:
+        base = training.training_base
+        base_changed = training_base_id is not _UNSET
+        if base_changed:
+            base = self._ensure_training_base(training_base_id)
+            training.training_base_id = training_base_id
+            training.training_base = base
+
+        if police_type_id is not _UNSET:
+            self._ensure_police_type(police_type_id)
+            training.police_type_id = police_type_id
+
+        if location is not _UNSET:
+            training.location = location or (base.location if base else None)
+        elif base_changed and base and not training.location:
+            training.location = base.location
+
+        if department_id is not _UNSET:
+            self._ensure_department(department_id)
+            training.department_id = department_id
+        elif base_changed:
+            training.department_id = base.department_id if base and base.department_id else None
+
+    def _ensure_actor_can_assign_training_scope(
+        self,
+        user_id: int,
+        department_id: Optional[int],
+        police_type_id: Optional[int],
+    ) -> None:
+        context = build_data_scope_context(self.db, user_id)
+        if not can_assign_scoped_values(
+            context,
+            department_id=department_id,
+            police_type_id=police_type_id,
+            dimension_mode="all",
+            treat_missing_as_unrestricted=True,
+        ):
+            raise ValueError("超出当前角色可操作的数据范围")
+
     def _ensure_training_member(self, training_id: int, user_id: int) -> None:
         enrollment = self.db.query(Enrollment.id).filter(
             Enrollment.training_id == training_id,
@@ -1583,6 +1699,13 @@ class TrainingService:
             start_date=training.start_date,
             end_date=training.end_date,
             location=training.location,
+            department_id=training.department_id,
+            department_name=training.department.name if training.department else None,
+            police_type_id=training.police_type_id,
+            police_type_name=training.police_type.name if training.police_type else None,
+            training_base_id=training.training_base_id,
+            training_base_name=training.training_base.name if training.training_base else None,
+            created_by=training.created_by,
             class_code=training.class_code,
             instructor_id=training.instructor_id,
             instructor_name=training.instructor.nickname if training.instructor else None,
@@ -1626,6 +1749,13 @@ class TrainingService:
             start_date=training.start_date,
             end_date=training.end_date,
             location=training.location,
+            department_id=training.department_id,
+            department_name=training.department.name if training.department else None,
+            police_type_id=training.police_type_id,
+            police_type_name=training.police_type.name if training.police_type else None,
+            training_base_id=training.training_base_id,
+            training_base_name=training.training_base.name if training.training_base else None,
+            created_by=training.created_by,
             class_code=training.class_code,
             instructor_id=training.instructor_id,
             instructor_name=training.instructor.nickname if training.instructor else None,

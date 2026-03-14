@@ -23,6 +23,11 @@
                 <span><EnvironmentOutlined /> {{ trainingData.location }}</span>
                 <span><UserOutlined /> 主管/班主任：{{ trainingData.instructorName }}</span>
               </div>
+              <div class="training-meta-row secondary-meta">
+                <span>培训基地：{{ trainingData.trainingBaseName || '手动输入地点' }}</span>
+                <span>部门：{{ trainingData.departmentName || '未设置' }}</span>
+                <span>警种：{{ trainingData.policeTypeName || '未设置' }}</span>
+              </div>
               <div class="training-desc" v-if="trainingData.description">
                 {{ trainingData.description }}
               </div>
@@ -36,6 +41,24 @@
                 <div class="ov-stat" v-for="s in overviewStats" :key="s.label">
                   <div class="ov-num" :style="{ color: s.color }">{{ s.value }}</div>
                   <div class="ov-label">{{ s.label }}</div>
+                </div>
+              </div>
+              <div class="training-base-info">
+                <div class="info-row">
+                  <span class="info-label">培训基地</span>
+                  <span class="info-value">{{ trainingData.trainingBaseName || '手动输入地点' }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">部门</span>
+                  <span class="info-value">{{ trainingData.departmentName || '未设置' }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">警种</span>
+                  <span class="info-value">{{ trainingData.policeTypeName || '未设置' }}</span>
+                </div>
+                <div class="info-row">
+                  <span class="info-label">准入考试</span>
+                  <span class="info-value">{{ trainingData.admissionExamTitle || '无' }}</span>
                 </div>
               </div>
               <a-divider />
@@ -620,6 +643,12 @@ const trainingData = reactive({
   startDate: '',
   endDate: '',
   location: '',
+  departmentId: null,
+  departmentName: '',
+  policeTypeId: null,
+  policeTypeName: '',
+  trainingBaseId: null,
+  trainingBaseName: '',
   instructorId: null,
   instructorName: '',
   description: '',
@@ -1425,6 +1454,15 @@ function exportMsg() {
   }
   
   // 构造 CSV 内容
+  const metaRows = [
+    ['培训班名称', trainingData.name || ''],
+    ['培训地点', trainingData.location || ''],
+    ['培训基地', trainingData.trainingBaseName || '手动输入地点'],
+    ['部门', trainingData.departmentName || '未设置'],
+    ['警种', trainingData.policeTypeName || '未设置'],
+    ['准入考试', trainingData.admissionExamTitle || '无'],
+    [],
+  ]
   const headers = ['姓名', '警号/工号', '单位', '学习进度', '总签到率']
   const rows = filteredStudents.value.map(s => [
     s.name, 
@@ -1434,7 +1472,7 @@ function exportMsg() {
     `${s.checkinRate}%`
   ])
   
-  const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n")
+  const csvContent = [...metaRows, headers, ...rows].map(e => e.join(",")).join("\n")
   const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' })
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
@@ -1469,10 +1507,15 @@ function exportMsg() {
 .status-tag { margin-bottom: 8px; }
 .training-title { color: #fff; font-size: 20px; margin: 8px 0; }
 .training-meta-row { display: flex; gap: 20px; color: rgba(255,255,255,0.8); font-size: 13px; flex-wrap: wrap; }
+.secondary-meta { color: rgba(255,255,255,0.92); margin-bottom: 8px; }
 .overview-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 16px; }
 .ov-stat { text-align: center; padding: 16px; background: #f8f9ff; border-radius: 8px; }
 .ov-num { font-size: 28px; font-weight: 700; }
 .ov-label { font-size: 12px; color: #888; margin-top: 4px; }
+.training-base-info { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; margin-bottom: 12px; }
+.info-row { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px; }
+.info-label { font-size: 12px; color: #6b7280; }
+.info-value { font-size: 14px; color: #111827; font-weight: 500; }
 .section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
 .section-header h4 { margin: 0; color: #333; }
 .course-item { display: flex; justify-content: space-between; align-items: flex-start; padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
@@ -1542,6 +1585,7 @@ function exportMsg() {
     margin-bottom: 12px;
   }
   .overview-stats { grid-template-columns: 1fr 1fr !important; }
+  .training-base-info { grid-template-columns: 1fr; }
   .training-banner { padding: 16px !important; }
   .training-title { font-size: 18px !important; }
   .section-header {

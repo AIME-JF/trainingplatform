@@ -11,6 +11,7 @@ from .course import CourseController
 from .exam import ExamController
 from .question import QuestionController
 from .training import TrainingController
+from .training_base import TrainingBaseController
 from .certificate import CertificateController
 from .profile import ProfileController
 from .dashboard import DashboardController
@@ -33,6 +34,7 @@ __all__ = [
     "ExamController",
     "QuestionController",
     "TrainingController",
+    "TrainingBaseController",
     "CertificateController",
     "ProfileController",
     "DashboardController",

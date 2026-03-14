@@ -249,7 +249,8 @@ def init_roles():
             # 管理员角色 - 全部权限
             admin_role = Role(
                 code="admin", name="管理员",
-                description="系统管理员，拥有所有权限", is_active=True
+                description="系统管理员，拥有所有权限", is_active=True,
+                data_scopes=["all"],
             )
             admin_role.permissions = all_permissions
             db.add(admin_role)
@@ -274,7 +275,8 @@ def init_roles():
             ]
             instructor_role = Role(
                 code="instructor", name="教官",
-                description="教官，负责教学和培训管理", is_active=True
+                description="教官，负责教学和培训管理", is_active=True,
+                data_scopes=["department_and_sub", "police_type", "self"],
             )
             instructor_role.permissions = [perm_map[c] for c in instructor_perm_codes if c in perm_map]
             db.add(instructor_role)
@@ -292,7 +294,8 @@ def init_roles():
             ]
             student_role = Role(
                 code="student", name="学员",
-                description="学员，参与学习和考试", is_active=True
+                description="学员，参与学习和考试", is_active=True,
+                data_scopes=["department", "police_type", "self"],
             )
             student_role.permissions = [perm_map[c] for c in student_perm_codes if c in perm_map]
             db.add(student_role)

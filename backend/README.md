@@ -34,11 +34,42 @@
 
 当前培训域已经具备以下主链路：
 
+- 培训基地：独立 `TrainingBase` 模型，培训班可通过 `training_base_id` 关联
 - 培训班流程：草稿 -> 发布招生 -> 锁定名单 -> 开班进行中 -> 结班归档
 - 培训班详情：步骤条、当前课次、课程安排、考试安排、资源绑定
 - 课程安排：主讲教官 1 人 + 带教教官多人
 - 课次状态流：未开始 -> 签到中 -> 签到已结束 -> 签退中 -> 已完成 / 已跳过 / 已错过
 - 培训训历：根据报名、签到、考试记录汇总归档
+- 数据归属字段：`department_id`、`police_type_id`、`training_base_id`、`created_by`
+
+### 数据范围域
+
+当前系统已经把“功能权限”和“数据范围”拆开：
+
+- 功能权限：仍由角色权限码与部门权限决定
+- 数据范围：由角色上的 `data_scopes` 决定
+- 对象级控制：当前已接入 `User`、`Training`、`TrainingBase`、`Question`
+
+支持的数据范围值：
+
+- `all`
+- `department`
+- `department_and_sub`
+- `police_type`
+- `self`
+
+当前内置角色默认范围：
+
+- `admin`：`all`
+- `instructor`：`department_and_sub + police_type + self`
+- `student`：`department + police_type + self`
+
+当前对象级规则：
+
+- 用户：按“部门或警种任一命中即可”控制，且本人永远可见
+- 培训班：如果同时配置了部门和警种，则必须同时满足；`created_by` 和 `instructor_id` 同时计入“本人”
+- 培训基地：按部门范围控制；`created_by` 计入“本人”
+- 题目：按 `police_type_id` 控制；`created_by` 计入“本人”
 
 ## 技术栈
 
@@ -106,6 +137,7 @@ backend/
 - `roles`
 - `departments`
 - `permissions`
+- `training-bases`
 - `resources`
 - `reviews`
 - `resources/recommendations`
@@ -328,12 +360,16 @@ python migrate.py generate "your message"
 ### 权限模型
 
 - 用户权限由角色权限与部门权限共同决定
+- 角色还可配置 `data_scopes`，用于列表过滤、详情访问和对象创建/更新时的归属范围校验
 - `admin` 角色会在运行时自动补齐所有激活权限
 - 培训域的对象级权限以当前代码为准：
   - 管理员：全部可操作
   - 班主任：`training.instructor_id`
   - 主讲 / 带教教官：仅可操作自己课次
   - 学员：只能查看和操作自己的报名、签到、训历等数据
+- 用户管理、培训班、培训基地、题库当前已接入数据范围控制：
+  - 用户：部门或警种命中即可
+  - 培训班 / 培训基地 / 题目：按对象自身的部门、警种归属控制
 - 运行时额外补充的权限定义位于 `app/runtime_sync.py`
 
 ### 受保护对象
@@ -408,6 +444,8 @@ python migrate.py generate "your message"
 - `POST /api/v1/auth/login/phone` 目前尚未校验验证码内容，只根据手机号查用户并发 token。
 - 培训二维码签到依赖 Redis；Redis 不可用时，扫码签到链路不可用。
 - 培训课次一旦过了系统判定截止时间，会自动转为 `missed`，无法再开始签到或跳过。
+- 培训班和培训基地新增了 `created_by`；旧库需要执行最新 Alembic 迁移后才能正常读取这些字段。
+- 内置角色的默认数据范围会在 `init_data.py` 和 `runtime_sync.py` 中被同步到位；如果历史库中的 `instructor` 或 `student` 仍是 `["all"]`，启动时会被自动收敛到新的默认值。
 - 某些系统管理接口同时提供 REST 风格和兼容旧前端的 `/create`、`/update`、`/delete` 别名。
 
 ## 进一步阅读

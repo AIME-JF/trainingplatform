@@ -60,6 +60,35 @@ Authorization: Bearer <access_token>
 
 后端接口字段使用 `snake_case`。前端 `src/api/request.js` 会自动完成 `camelCase <-> snake_case` 转换。
 
+### 1.5 数据范围说明
+
+当前系统的访问控制由两层组成：
+
+- 功能权限：是否拥有某个接口操作权限
+- 数据范围：即使拥有功能权限，列表、详情、创建和更新仍会按对象归属做范围校验
+
+当前已接入数据范围控制的对象：
+
+- 用户
+- 培训班
+- 培训基地
+- 题库题目
+
+角色可配置的数据范围值：
+
+- `all`
+- `department`
+- `department_and_sub`
+- `police_type`
+- `self`
+
+当前规则摘要：
+
+- 用户：按“部门或警种任一命中即可”控制，本人始终可见
+- 培训班：如果同时配置了部门和警种，则必须同时满足；`created_by` 和 `instructor_id` 也计入“本人”
+- 培训基地：按部门范围控制，`created_by` 计入“本人”
+- 题目：按 `police_type_id` 控制，`created_by` 计入“本人”
+
 ## 2. 公共接口
 
 | Method | Path | 说明 |
@@ -139,7 +168,7 @@ Authorization: Bearer <access_token>
 | Method | Path | 说明 | 请求要点 |
 | --- | --- | --- | --- |
 | `GET` | `/api/v1/questions` | 题目列表 | Query：`page` `size` `search` `type` `difficulty` `knowledge_point` |
-| `POST` | `/api/v1/questions` | 创建题目 | JSON：`type` `content` `options` `answer` `explanation` `difficulty` `knowledge_point` `score` |
+| `POST` | `/api/v1/questions` | 创建题目 | JSON：`type` `content` `options` `answer` `explanation` `difficulty` `knowledge_point` `police_type_id` `score` |
 | `PUT` | `/api/v1/questions/{question_id}` | 更新题目 | 字段同创建接口，均可选 |
 | `DELETE` | `/api/v1/questions/{question_id}` | 删除题目 | 无 |
 | `POST` | `/api/v1/questions/batch` | 批量导入题目 | JSON：`questions[]` |
@@ -149,6 +178,11 @@ Authorization: Bearer <access_token>
 - `single`
 - `multi`
 - `judge`
+
+说明：
+
+- 题目当前支持可选 `police_type_id`
+- 题库接口已接入数据范围控制；如果角色数据范围不覆盖题目所属警种，则列表不可见、更新/删除也会被拒绝
 
 ## 7. 考试模块
 
@@ -209,12 +243,28 @@ Authorization: Bearer <access_token>
 
 ## 8. 培训模块
 
-### 8.1 培训班主接口
+### 8.1 培训基地接口
+
+| Method | Path | 说明 | 请求要点 |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/training-bases` | 培训基地列表 | Query：`page` `size` `search` `department_id` |
+| `GET` | `/api/v1/training-bases/{training_base_id}` | 培训基地详情 | 无 |
+| `POST` | `/api/v1/training-bases` | 创建培训基地 | JSON：`name` `location` `department_id` `description` |
+| `PUT` | `/api/v1/training-bases/{training_base_id}` | 更新培训基地 | 字段均可选 |
+| `DELETE` | `/api/v1/training-bases/{training_base_id}` | 删除培训基地 | 仅管理员 |
+
+说明：
+
+- 培训基地当前支持可选 `department_id`
+- 培训基地列表和详情已接入数据范围控制
+- 培训基地被培训班引用时不可删除
+
+### 8.2 培训班主接口
 
 | Method | Path | 说明 | 请求要点 |
 | --- | --- | --- | --- |
 | `GET` | `/api/v1/trainings` | 培训列表 | Query：`page` `size` `status` `type` `search` |
-| `POST` | `/api/v1/trainings` | 创建培训班 | JSON：`name` `type` `status` `publish_status` `start_date` `end_date` `location` `class_code` `instructor_id` `capacity` `description` `subjects[]` `enrollment_start_at` `enrollment_end_at` `admission_exam_id` `courses[]` |
+| `POST` | `/api/v1/trainings` | 创建培训班 | JSON：`name` `type` `status` `publish_status` `start_date` `end_date` `location` `department_id` `police_type_id` `training_base_id` `class_code` `instructor_id` `capacity` `description` `subjects[]` `enrollment_start_at` `enrollment_end_at` `admission_exam_id` `courses[]` |
 | `GET` | `/api/v1/trainings/{training_id}` | 培训详情 | 返回课程、考试摘要、流程步骤、当前课次、权限标记 |
 | `PUT` | `/api/v1/trainings/{training_id}` | 更新培训班 | 字段同创建接口，均可选；支持更新 `student_ids`、`roster_assignments` |
 | `DELETE` | `/api/v1/trainings/{training_id}` | 删除培训班 | 仅管理员 |
@@ -236,7 +286,13 @@ Authorization: Bearer <access_token>
 - `can_edit_courses`
 - `can_review_enrollments`
 
-### 8.2 培训课程与排课字段
+说明：
+
+- 培训班当前支持可选 `department_id`、`police_type_id`、`training_base_id`
+- 选择培训基地时，服务层会优先使用基地地点，并在基地配置了部门时默认同步该部门
+- 培训列表和详情已接入数据范围控制；如果角色范围不覆盖培训班归属的部门 / 警种，则不可见
+
+### 8.3 培训课程与排课字段
 
 `courses[]` 中每项常见字段：
 
@@ -270,7 +326,7 @@ Authorization: Bearer <access_token>
 - `skipped`
 - `missed`
 
-### 8.3 学员、报名、编组
+### 8.4 学员、报名、编组
 
 | Method | Path | 说明 | 请求要点 |
 | --- | --- | --- | --- |
@@ -288,7 +344,7 @@ Authorization: Bearer <access_token>
 - 当前时间位于报名窗口内
 - 如果培训班配置了 `admission_exam_id`，报名人必须先通过该准入考试
 
-### 8.4 课次签到、签退、评课
+### 8.5 课次签到、签退、评课
 
 | Method | Path | 说明 | 请求要点 |
 | --- | --- | --- | --- |
@@ -309,7 +365,7 @@ Authorization: Bearer <access_token>
 - 已 `missed` 的课次不能再开始签到，也不能再跳过
 - `skip` 是跳过整个课次，不是跳过单个学员
 
-### 8.5 二维码签到与训历
+### 8.6 二维码签到与训历
 
 | Method | Path | 说明 | 请求要点 |
 | --- | --- | --- | --- |
@@ -320,7 +376,7 @@ Authorization: Bearer <access_token>
 | `GET` | `/api/v1/trainings/histories/me` | 我的训历 | 当前用户 |
 | `GET` | `/api/v1/trainings/{training_id}/schedule` | 周计划 | 返回 `ScheduleItemResponse[]` |
 
-### 8.6 培训导入接口
+### 8.7 培训导入接口
 
 | Method | Path | 说明 | 请求要点 |
 | --- | --- | --- | --- |
@@ -343,7 +399,7 @@ Authorization: Bearer <access_token>
 - 学员导入、教官导入、课表导入当前都要求管理员或班主任
 - 新建账号默认密码为 `Police@123456`
 
-### 8.7 培训与资源绑定
+### 8.8 培训与资源绑定
 
 | Method | Path | 说明 | 请求要点 |
 | --- | --- | --- | --- |
@@ -486,11 +542,35 @@ Authorization: Bearer <access_token>
 | `PUT` | `/api/v1/users/{user_id}/password` | 重置密码 | JSON：`password` |
 | `DELETE` | `/api/v1/users/{user_id}` | 删除用户 | 软删除，设置 `is_active=false` |
 
-### 18.2 角色、部门、权限、警种
+说明：
+
+- 用户接口当前同时受“功能权限 + 数据范围”控制
+- 数据范围以部门和警种为主；如果目标用户命中了当前操作者的任一部门或警种范围，即可被查看或操作
+- 具有 `police_type` 数据范围的警种管理员，可查看本警种下的所有用户
+
+### 18.2 角色管理
+
+角色管理当前除了权限分配，还支持配置数据范围。常用接口包括：
+
+- `POST /api/v1/roles` / `POST /api/v1/roles/create`
+- `GET /api/v1/roles/list`
+- `GET /api/v1/roles/{role_id}/detail`
+- `PUT /api/v1/roles/{role_id}` / `POST /api/v1/roles/{role_id}/update`
+- `DELETE /api/v1/roles/{role_id}` / `POST /api/v1/roles/{role_id}/delete`
+- `POST /api/v1/roles/{role_id}/permissions`
+
+角色 `data_scopes` 支持：
+
+- `all`
+- `department`
+- `department_and_sub`
+- `police_type`
+- `self`
+
+### 18.3 部门、权限、警种
 
 系统管理接口保留 REST 风格和兼容旧前端的别名接口，建议以 Swagger 为准。当前主要能力包括：
 
-- 角色：创建、更新、删除、权限分配
 - 部门：树结构、权限分配
 - 权限：创建、更新、同步
 - 警种：创建、更新、删除

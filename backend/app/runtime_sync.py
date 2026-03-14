@@ -48,6 +48,12 @@ EXTRA_PERMISSION_DEFINITIONS = [
     },
 ]
 
+BUILTIN_ROLE_DATA_SCOPES = {
+    "admin": ["all"],
+    "instructor": ["department_and_sub", "police_type", "self"],
+    "student": ["department", "police_type", "self"],
+}
+
 
 def sync_runtime_state():
     """Apply small runtime repairs for old databases."""
@@ -56,6 +62,7 @@ def sync_runtime_state():
         changed = _ensure_extra_permissions(db) or changed
         changed = _ensure_chapter_resource_column(db) or changed
         changed = _sync_admin_role_permissions(db) or changed
+        changed = _sync_builtin_role_data_scopes(db) or changed
 
         if changed:
             db.commit()
@@ -119,11 +126,37 @@ def _sync_admin_role_permissions(db: Session) -> bool:
     current_ids = {permission.id for permission in admin_role.permissions}
     desired_ids = {permission.id for permission in all_permissions}
 
-    if current_ids == desired_ids:
-        return False
+    changed = False
+    if current_ids != desired_ids:
+        admin_role.permissions = all_permissions
+        changed = True
 
-    admin_role.permissions = all_permissions
-    return True
+    if admin_role.data_scopes != ["all"]:
+        admin_role.data_scopes = ["all"]
+        changed = True
+
+    return changed
+
+
+def _sync_builtin_role_data_scopes(db: Session) -> bool:
+    roles = (
+        db.query(Role)
+        .filter(Role.code.in_(tuple(BUILTIN_ROLE_DATA_SCOPES.keys())))
+        .all()
+    )
+    changed = False
+
+    for role in roles:
+        expected = BUILTIN_ROLE_DATA_SCOPES.get(role.code)
+        current = list(role.data_scopes or [])
+        if role.code == "admin":
+            continue
+        if not current or current == ["all"]:
+            if current != expected:
+                role.data_scopes = expected
+                changed = True
+
+    return changed
 
 
 def _ensure_chapter_resource_column(db: Session) -> bool:

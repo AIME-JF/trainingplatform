@@ -77,6 +77,9 @@
             <div class="expand-section" v-if="record.knowledgePoint">
               <span class="expand-label">知识点：</span>{{ record.knowledgePoint }}
             </div>
+            <div class="expand-section" v-if="record.policeTypeName">
+              <span class="expand-label">警种：</span>{{ record.policeTypeName }}
+            </div>
           </div>
         </template>
         <template #bodyCell="{ column, record }">
@@ -88,6 +91,9 @@
           </template>
           <template v-if="column.key === 'difficulty'">
             <a-tag :color="diffColors[record.diffLevel]" size="small">{{ diffLabels[record.diffLevel] }}</a-tag>
+          </template>
+          <template v-if="column.key === 'policeTypeName'">
+            {{ record.policeTypeName || '未设置' }}
           </template>
           <template v-if="column.key === 'action'">
             <a-space size="small">
@@ -137,6 +143,15 @@
           <a-col :span="24">
             <a-form-item label="知识点">
               <a-input v-model:value="qForm.knowledgePoint" placeholder="例：刑事诉讼法-强制措施" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="24">
+            <a-form-item label="警种">
+              <a-select v-model:value="qForm.policeTypeId" allow-clear placeholder="可选，仅用于数据域管理">
+                <a-select-option v-for="item in policeTypeOptions" :key="item.id" :value="item.id">
+                  {{ item.name }}
+                </a-select-option>
+              </a-select>
             </a-form-item>
           </a-col>
         </a-row>
@@ -191,6 +206,7 @@ import { useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import { PlusOutlined, RobotOutlined } from '@ant-design/icons-vue'
 import { getQuestions, createQuestion, updateQuestion, deleteQuestion, batchCreateQuestions } from '@/api/question'
+import { getPoliceTypes } from '@/api/user'
 
 const router = useRouter()
 const searchText = ref('')
@@ -218,6 +234,7 @@ function diffToNum(str) {
 
 const loading = ref(false)
 const questionList = ref([])
+const policeTypeOptions = ref([])
 
 const pagination = reactive({
   current: 1,
@@ -279,6 +296,15 @@ async function loadStats() {
   } catch { /* ignore */ }
 }
 
+async function loadPoliceTypes() {
+  try {
+    const result = await getPoliceTypes()
+    policeTypeOptions.value = result.items || []
+  } catch {
+    policeTypeOptions.value = []
+  }
+}
+
 function onSearch() {
   pagination.current = 1
   loadQuestions()
@@ -296,6 +322,7 @@ function handleTableChange(pag) {
 onMounted(() => {
   loadQuestions()
   loadStats()
+  loadPoliceTypes()
 })
 
 const rowSelection = { type: 'checkbox' }
@@ -304,6 +331,7 @@ const columns = [
   { title: '题目内容', key: 'content', ellipsis: true },
   { title: '题型', key: 'type', width: 80 },
   { title: '难度', key: 'difficulty', width: 80 },
+  { title: '警种', dataIndex: 'policeTypeName', key: 'policeTypeName', width: 120 },
   { title: '操作', key: 'action', width: 120, fixed: 'right' },
 ]
 
@@ -313,6 +341,7 @@ const defaultForm = () => ({
   diffLevel: 'medium',
   content: '',
   knowledgePoint: '',
+  policeTypeId: undefined,
   options: [
     { key: 'A', text: '' },
     { key: 'B', text: '' },
@@ -362,6 +391,7 @@ const openEditModal = (record) => {
     diffLevel: record.diffLevel,
     content: record.content,
     knowledgePoint: record.knowledgePoint || '',
+    policeTypeId: record.policeTypeId,
     options: record.options ? record.options.map(o => ({ ...o })) : [],
     answer: Array.isArray(record.answer) ? record.answer[0] : record.answer,
     answerArr: Array.isArray(record.answer) ? [...record.answer] : [],
@@ -387,6 +417,7 @@ const handleSaveQ = async () => {
     type: qForm.type,
     content: qForm.content,
     knowledge_point: qForm.knowledgePoint,
+    policeTypeId: qForm.policeTypeId || undefined,
     options: qForm.type === 'judge'
       ? [{ key: 'A', text: '正确' }, { key: 'B', text: '错误' }]
       : qForm.options.map(o => ({ key: o.key, text: o.text })),

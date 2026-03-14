@@ -22,6 +22,7 @@ from .review import router as review_router
 from .role import router as role_router
 from .talent import router as talent_router
 from .training import router as training_router
+from .training_base import router as training_base_router
 from .user import router as user_router
 
 
@@ -32,6 +33,7 @@ all_routers = [
     exam_router,
     question_router,
     training_router,
+    training_base_router,
     certificate_router,
     profile_router,
     report_router,
@@ -58,6 +60,7 @@ __all__ = [
     "exam_router",
     "question_router",
     "training_router",
+    "training_base_router",
     "certificate_router",
     "profile_router",
     "report_router",

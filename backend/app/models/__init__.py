@@ -9,7 +9,7 @@ from .police_type import PoliceType, user_police_types
 from .system import Config, ConfigGroup, ConfigFormat
 from .course import Course, Chapter, CourseNote, CourseProgress, CourseQA
 from .training import (
-    Training, TrainingCourse, Enrollment, CheckinRecord, ScheduleItem, TrainingHistory
+    Training, TrainingBase, TrainingCourse, Enrollment, CheckinRecord, ScheduleItem, TrainingHistory
 )
 from .exam import (
     Question, ExamPaper, ExamPaperQuestion,
@@ -47,7 +47,7 @@ __all__ = [
     # 课程相关
     "Course", "Chapter", "CourseNote", "CourseProgress", "CourseQA",
     # 培训相关
-    "Training", "TrainingCourse", "Enrollment", "CheckinRecord", "ScheduleItem", "TrainingHistory",
+    "Training", "TrainingBase", "TrainingCourse", "Enrollment", "CheckinRecord", "ScheduleItem", "TrainingHistory",
     # 考试相关
     "Question", "ExamPaper", "ExamPaperQuestion",
     "AdmissionExam", "AdmissionExamRecord",

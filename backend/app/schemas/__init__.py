@@ -38,6 +38,7 @@ from .course import (
 # 培训相关
 from .training import (
     TrainingCreate, TrainingUpdate, TrainingResponse, TrainingListResponse,
+    TrainingBaseCreate, TrainingBaseUpdate, TrainingBaseResponse,
     TrainingCourseCreate, TrainingCourseResponse,
     TrainingScheduleItem, TrainingSessionActionPermissions, TrainingCurrentSessionResponse,
     TrainingWorkflowStepResponse, TrainingSkipCourseRequest,
@@ -126,6 +127,7 @@ __all__ = [
     "CourseQACreate", "CourseQAResponse",
     # 培训相关
     "TrainingCreate", "TrainingUpdate", "TrainingResponse", "TrainingListResponse",
+    "TrainingBaseCreate", "TrainingBaseUpdate", "TrainingBaseResponse",
     "TrainingCourseCreate", "TrainingCourseResponse",
     "TrainingScheduleItem", "TrainingSessionActionPermissions", "TrainingCurrentSessionResponse",
     "TrainingWorkflowStepResponse", "TrainingSkipCourseRequest",

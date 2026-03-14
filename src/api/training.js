@@ -8,6 +8,26 @@ export function getTraining(id) {
   return request.get(`/trainings/${id}`)
 }
 
+export function getTrainingBases(params) {
+  return request.get('/training-bases', { params })
+}
+
+export function getTrainingBase(id) {
+  return request.get(`/training-bases/${id}`)
+}
+
+export function createTrainingBase(data) {
+  return request.post('/training-bases', data)
+}
+
+export function updateTrainingBase(id, data) {
+  return request.put(`/training-bases/${id}`, data)
+}
+
+export function deleteTrainingBase(id) {
+  return request.delete(`/training-bases/${id}`)
+}
+
 export function createTraining(data) {
   return request.post('/trainings', data)
 }

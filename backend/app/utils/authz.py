@@ -5,7 +5,13 @@ from typing import Optional
 
 from sqlalchemy.orm import Session
 
-from app.models import Role, Training, TrainingCourse, User
+from app.models import Question, Role, Training, TrainingBase, TrainingCourse, User
+from app.utils.data_scope import (
+    DataScopeContext,
+    build_data_scope_context,
+    can_access_scoped_object,
+    can_access_user_target,
+)
 
 
 def has_role(db: Session, user_id: int, role_code: str) -> bool:
@@ -55,5 +61,86 @@ def can_operate_training_course(
     return is_course_primary_instructor(course, user_id) or is_course_assistant_instructor(course, user_id)
 
 
+def can_view_training_with_context(context: DataScopeContext, training: Optional[Training]) -> bool:
+    if not training:
+        return False
+    return can_access_scoped_object(
+        context,
+        department_id=training.department_id,
+        police_type_id=training.police_type_id,
+        owner_user_ids=[training.created_by, training.instructor_id],
+        dimension_mode="all",
+        treat_missing_as_unrestricted=True,
+    )
+
+
+def can_view_training(db: Session, training: Optional[Training], user_id: int) -> bool:
+    if not training:
+        return False
+    context = build_data_scope_context(db, user_id)
+    return can_view_training_with_context(context, training)
+
+
 def can_manage_training(db: Session, training: Optional[Training], user_id: int) -> bool:
-    return is_admin_user(db, user_id) or is_training_director(training, user_id)
+    if not can_view_training(db, training, user_id):
+        return False
+    return (
+        is_admin_user(db, user_id)
+        or is_instructor_user(db, user_id)
+        or is_training_director(training, user_id)
+    )
+
+
+def can_view_training_base(db: Session, training_base: Optional[TrainingBase], user_id: int) -> bool:
+    if not training_base:
+        return False
+    context = build_data_scope_context(db, user_id)
+    return can_view_training_base_with_context(context, training_base)
+
+
+def can_view_training_base_with_context(context: DataScopeContext, training_base: Optional[TrainingBase]) -> bool:
+    if not training_base:
+        return False
+    return can_access_scoped_object(
+        context,
+        department_id=training_base.department_id,
+        owner_user_ids=[training_base.created_by],
+        dimension_mode="all",
+        treat_missing_as_unrestricted=True,
+    )
+
+
+def can_manage_training_base(db: Session, training_base: Optional[TrainingBase], user_id: int) -> bool:
+    return can_view_training_base(db, training_base, user_id)
+
+
+def can_view_question(db: Session, question: Optional[Question], user_id: int) -> bool:
+    if not question:
+        return False
+    context = build_data_scope_context(db, user_id)
+    return can_view_question_with_context(context, question)
+
+
+def can_view_question_with_context(context: DataScopeContext, question: Optional[Question]) -> bool:
+    if not question:
+        return False
+    return can_access_scoped_object(
+        context,
+        police_type_id=question.police_type_id,
+        owner_user_ids=[question.created_by],
+        dimension_mode="all",
+        treat_missing_as_unrestricted=True,
+    )
+
+
+def can_access_user_record(db: Session, target_user: Optional[User], user_id: int) -> bool:
+    if not target_user:
+        return False
+    context = build_data_scope_context(db, user_id)
+    return can_access_user_record_with_context(context, target_user)
+
+
+def can_access_user_record_with_context(context: DataScopeContext, target_user: Optional[User]) -> bool:
+    if not target_user:
+        return False
+    return can_access_user_target(context, target_user)

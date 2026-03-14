@@ -35,7 +35,7 @@ from app.schemas import (
     TrainingUpdate,
 )
 from app.services.training import TrainingService
-from app.utils.authz import can_manage_training, is_admin_user, is_instructor_user
+from app.utils.authz import can_manage_training, can_view_training, is_admin_user, is_instructor_user
 
 router = APIRouter(prefix="/trainings", tags=["培训管理"])
 
@@ -60,7 +60,14 @@ def _get_training_or_404(db: Session, training_id: int) -> Training:
 def _require_training_manager(db: Session, training_id: int, user_id: int):
     training = _get_training_or_404(db, training_id)
     if not can_manage_training(db, training, user_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅管理员或班主任可执行该操作")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权操作该培训班")
+    return training
+
+
+def _require_training_viewer(db: Session, training_id: int, user_id: int):
+    training = _get_training_or_404(db, training_id)
+    if not can_view_training(db, training, user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权查看该培训班")
     return training
 
 
@@ -135,6 +142,7 @@ def get_training(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    _require_training_viewer(db, training_id, current_user.user_id)
     controller = TrainingController(db)
     data = controller.get_training_by_id(training_id, current_user.user_id)
     return StandardResponse(data=data)
@@ -233,6 +241,7 @@ def get_schedule(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    _require_training_viewer(db, training_id, current_user.user_id)
     controller = TrainingController(db)
     data = controller.get_schedule(training_id)
     return StandardResponse(data=data)
@@ -303,6 +312,7 @@ def enroll(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    _require_training_viewer(db, training_id, current_user.user_id)
     controller = TrainingController(db)
     result = controller.enroll(training_id, current_user.user_id, data or EnrollmentCreate())
     return StandardResponse(data=result)

@@ -81,6 +81,12 @@ const router = createRouter({
           meta: { title: '培训管理' },
         },
         {
+          path: 'training/base',
+          name: 'TrainingBaseManage',
+          component: () => import('../views/training/Base.vue'),
+          meta: { title: '培训基地', roles: ['admin', 'instructor'] },
+        },
+        {
           path: 'training/schedule/:id?',
           name: 'TrainingSchedule',
           component: () => import('../views/training/Schedule.vue'),

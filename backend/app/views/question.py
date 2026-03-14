@@ -2,18 +2,28 @@
 题库管理路由
 """
 from typing import Optional, List
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.middleware.auth import get_current_user
+from app.models import Question
 from app.schemas import (
     StandardResponse, TokenData, PaginatedResponse,
     QuestionCreate, QuestionUpdate, QuestionResponse, QuestionBatchCreate
 )
 from app.controllers import QuestionController
+from app.utils.authz import can_view_question
 
 router = APIRouter(prefix="/questions", tags=["题库管理"])
+
+
+def _require_permission(current_user: TokenData, permission: str):
+    if permission not in current_user.permissions:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"权限不足，需要权限: {permission}",
+        )
 
 
 @router.get("", response_model=StandardResponse[PaginatedResponse[QuestionResponse]], summary="题目列表")
@@ -28,8 +38,9 @@ def get_questions(
     db: Session = Depends(get_db)
 ):
     """获取题目列表"""
+    _require_permission(current_user, "GET_QUESTIONS")
     controller = QuestionController(db)
-    data = controller.get_questions(page, size, search, type, difficulty, knowledge_point)
+    data = controller.get_questions(page, size, search, type, difficulty, knowledge_point, current_user.user_id)
     return StandardResponse(data=data)
 
 
@@ -40,6 +51,7 @@ def create_question(
     db: Session = Depends(get_db)
 ):
     """创建题目"""
+    _require_permission(current_user, "CREATE_QUESTION")
     controller = QuestionController(db)
     result = controller.create_question(data, current_user.user_id)
     return StandardResponse(data=result)
@@ -53,8 +65,12 @@ def update_question(
     db: Session = Depends(get_db)
 ):
     """更新题目"""
+    _require_permission(current_user, "UPDATE_QUESTION")
+    question = db.query(Question).filter(Question.id == question_id).first()
+    if question and not can_view_question(db, question, current_user.user_id):
+        raise HTTPException(status_code=403, detail="无权操作该题目")
     controller = QuestionController(db)
-    result = controller.update_question(question_id, data)
+    result = controller.update_question(question_id, data, current_user.user_id)
     return StandardResponse(data=result)
 
 
@@ -65,6 +81,10 @@ def delete_question(
     db: Session = Depends(get_db)
 ):
     """删除题目"""
+    _require_permission(current_user, "DELETE_QUESTION")
+    question = db.query(Question).filter(Question.id == question_id).first()
+    if question and not can_view_question(db, question, current_user.user_id):
+        raise HTTPException(status_code=403, detail="无权操作该题目")
     controller = QuestionController(db)
     controller.delete_question(question_id)
     return StandardResponse(message="删除成功")
@@ -77,6 +97,7 @@ def batch_create(
     db: Session = Depends(get_db)
 ):
     """批量导入题目"""
+    _require_permission(current_user, "BATCH_CREATE_QUESTIONS")
     controller = QuestionController(db)
     result = controller.batch_create(data, current_user.user_id)
     return StandardResponse(data=result)

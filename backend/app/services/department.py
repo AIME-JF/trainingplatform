@@ -356,6 +356,20 @@ class DepartmentService:
         get_children_ids(department_id)
         return department_ids
 
+    def get_ancestor_department_ids(self, department_id: int) -> List[int]:
+        """获取指定部门及其所有上级部门ID列表（含自身）"""
+        department_ids: List[int] = []
+        current_department_id: Optional[int] = department_id
+
+        while current_department_id is not None:
+            department_ids.append(current_department_id)
+            current_department = self.db.query(Department).filter(Department.id == current_department_id).first()
+            if not current_department or current_department.parent_id is None:
+                break
+            current_department_id = current_department.parent_id
+
+        return department_ids
+
     def _has_disabled_parent(self, department_id: int) -> bool:
         """检查部门的父级链中是否有禁用的部门"""
         department = self.db.query(Department).filter(Department.id == department_id).first()

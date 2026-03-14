@@ -44,6 +44,14 @@
         row-key="id"
       >
         <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'dataScopes'">
+            <a-space wrap size="small">
+              <a-tag v-for="scope in record.dataScopes || []" :key="scope" color="blue">
+                {{ getDataScopeLabel(scope) }}
+              </a-tag>
+              <span v-if="!record.dataScopes || record.dataScopes.length === 0" style="color: #999;">未设置</span>
+            </a-space>
+          </template>
           <template v-if="column.key === 'isActive'">
             <a-switch
               :checked="record.isActive"
@@ -110,6 +118,14 @@
             placeholder="请输入角色描述"
           />
         </a-form-item>
+        <a-form-item label="数据范围">
+          <a-select
+            v-model:value="editDialog.form.dataScopes"
+            mode="multiple"
+            placeholder="请选择数据范围"
+            :options="dataScopeOptions"
+          />
+        </a-form-item>
       </a-form>
     </a-modal>
 
@@ -167,11 +183,23 @@ const pagination = reactive({
 })
 
 const ADMIN_ROLE_CODE = 'admin'
+const dataScopeOptions = [
+  { value: 'all', label: '全部' },
+  { value: 'department', label: '本部门' },
+  { value: 'department_and_sub', label: '本部门及下属部门' },
+  { value: 'police_type', label: '本警种' },
+  { value: 'self', label: '本人' },
+]
+const dataScopeLabelMap = dataScopeOptions.reduce((acc, item) => {
+  acc[item.value] = item.label
+  return acc
+}, {})
 
 const columns = [
   { title: '角色编码', dataIndex: 'code', key: 'code', width: 150 },
   { title: '角色名称', dataIndex: 'name', key: 'name', width: 180 },
   { title: '角色描述', dataIndex: 'description', key: 'description', ellipsis: true },
+  { title: '数据范围', key: 'dataScopes', width: 260 },
   { title: '状态', dataIndex: 'isActive', key: 'isActive', width: 100 },
   { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 180 },
   { title: '操作', key: 'action', width: 280, fixed: 'right' },
@@ -186,6 +214,7 @@ const editDialog = reactive({
     code: '',
     name: '',
     description: '',
+    dataScopes: [],
   },
 })
 
@@ -209,6 +238,10 @@ function formatDate(value) {
 
 function isAdminRole(role) {
   return role?.code === ADMIN_ROLE_CODE
+}
+
+function getDataScopeLabel(scope) {
+  return dataScopeLabelMap[scope] || scope
 }
 
 function getListParams() {
@@ -262,6 +295,7 @@ function resetEditForm() {
   editDialog.form.code = ''
   editDialog.form.name = ''
   editDialog.form.description = ''
+  editDialog.form.dataScopes = []
 }
 
 function openCreate() {
@@ -282,6 +316,7 @@ function openEdit(record) {
   editDialog.form.code = record.code || ''
   editDialog.form.name = record.name || ''
   editDialog.form.description = record.description || ''
+  editDialog.form.dataScopes = [...(record.dataScopes || [])]
   editDialog.visible = true
 }
 
@@ -302,12 +337,14 @@ async function submitRole() {
         code: editDialog.form.code.trim(),
         name: editDialog.form.name.trim(),
         description: editDialog.form.description?.trim() || undefined,
+        dataScopes: editDialog.form.dataScopes || [],
       })
       message.success('新增角色成功')
     } else {
       await updateRole(editDialog.currentId, {
         name: editDialog.form.name.trim(),
         description: editDialog.form.description?.trim() || undefined,
+        dataScopes: editDialog.form.dataScopes || [],
       })
       message.success('更新角色成功')
     }

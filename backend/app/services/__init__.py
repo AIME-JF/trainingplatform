@@ -12,6 +12,7 @@ from .course import CourseService
 from .exam import ExamService
 from .question import QuestionService
 from .training import TrainingService
+from .training_base import TrainingBaseService
 from .certificate import CertificateService
 from .profile import ProfileService
 from .dashboard import DashboardService
@@ -26,7 +27,7 @@ from .recommendation import RecommendationService
 __all__ = [
     "AuthService", "UserService", "DepartmentService", "RoleService", "PermissionService",
     "PoliceTypeService", "SystemConfigService",
-    "CourseService", "ExamService", "QuestionService", "TrainingService",
+    "CourseService", "ExamService", "QuestionService", "TrainingService", "TrainingBaseService",
     "CertificateService", "ProfileService",
     "DashboardService", "ReportService", "AIService", "TalentService",
     "MediaService",

@@ -30,12 +30,14 @@ class Question(Base):
     explanation = Column(Text, nullable=True, comment="解析")
     difficulty = Column(Integer, default=1, comment="难度1-5")
     knowledge_point = Column(String(200), nullable=True, comment="知识点")
+    police_type_id = Column(Integer, ForeignKey("police_types.id"), nullable=True, comment="警种ID")
     score = Column(Integer, default=1, comment="分值")
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True, comment="创建人ID")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), comment="更新时间")
 
     creator = relationship("User", foreign_keys=[created_by])
+    police_type = relationship("PoliceType", foreign_keys=[police_type_id])
 
 
 class ExamPaper(Base):

@@ -69,6 +69,8 @@
         <div class="extra-info">
           <div>报名窗口：{{ formatWindow(training.enrollmentStartAt, training.enrollmentEndAt) }}</div>
           <div>准入考试：{{ training.admissionExamTitle || '无' }}</div>
+          <div>培训基地：{{ training.trainingBaseName || '手动输入地点' }}</div>
+          <div>数据域：{{ [training.departmentName, training.policeTypeName].filter(Boolean).join(' / ') || '未设置' }}</div>
         </div>
 
         <a-progress :percent="Number.isFinite(training.progressPercent) ? training.progressPercent : 0" size="small" style="margin:12px 0 16px" />
@@ -151,9 +153,60 @@
               />
             </a-form-item>
           </a-col>
+          <a-col :span="12">
+            <a-form-item label="警种">
+              <a-select v-model:value="trainingForm.policeTypeId" allow-clear placeholder="可选，仅用于数据域管理">
+                <a-select-option v-for="item in policeTypeOptions" :key="item.id" :value="item.id">
+                  {{ item.name }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="部门">
+              <a-select v-model:value="trainingForm.departmentId" allow-clear placeholder="可选，可被培训基地自动带出">
+                <a-select-option v-for="item in departmentOptions" :key="item.id" :value="item.id">
+                  {{ item.name }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
           <a-col :span="24">
-            <a-form-item label="培训地点" required>
-              <a-input v-model:value="trainingForm.location" />
+            <a-form-item label="地点来源">
+              <a-space>
+                <a-checkbox :checked="locationSourceMode === 'base'" @change="() => setLocationSourceMode('base')">
+                  培训基地
+                </a-checkbox>
+                <a-checkbox :checked="locationSourceMode === 'manual'" @change="() => setLocationSourceMode('manual')">
+                  手动输入
+                </a-checkbox>
+              </a-space>
+            </a-form-item>
+          </a-col>
+          <a-col :span="24" v-if="locationSourceMode === 'base'">
+            <a-form-item label="培训基地" required>
+              <a-select
+                v-model:value="trainingForm.trainingBaseId"
+                allow-clear
+                show-search
+                option-filter-prop="label"
+                placeholder="选择培训基地"
+                @change="onTrainingBaseChange"
+              >
+                <a-select-option
+                  v-for="item in trainingBaseOptions"
+                  :key="item.id"
+                  :value="item.id"
+                  :label="`${item.name} ${item.location}`"
+                >
+                  {{ item.name }} / {{ item.location }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="24">
+            <a-form-item :label="locationSourceMode === 'base' ? '培训地点（自动带出）' : '培训地点'" required>
+              <a-input v-model:value="trainingForm.location" :disabled="locationSourceMode === 'base'" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
@@ -220,6 +273,7 @@ import {
   createTraining,
   deleteTraining,
   endTraining,
+  getTrainingBases,
   getTrainings,
   importTrainingStudents,
   lockTraining,
@@ -227,7 +281,8 @@ import {
   startTraining,
   updateTraining,
 } from '@/api/training'
-import { getUsers } from '@/api/user'
+import { getDepartmentList } from '@/api/department'
+import { getUsers, getPoliceTypes } from '@/api/user'
 import { getAdmissionExams } from '@/api/exam'
 
 const router = useRouter()
@@ -244,12 +299,16 @@ const searchText = ref('')
 const trainingList = ref([])
 const instructorList = ref([])
 const admissionExamOptions = ref([])
+const trainingBaseOptions = ref([])
+const departmentOptions = ref([])
+const policeTypeOptions = ref([])
 const showCreateModal = ref(false)
 const editingTraining = ref(null)
 const studentImportFile = ref(null)
 const studentImportFileName = ref('')
 const trainingFormDates = ref([null, null])
 const enrollmentWindow = ref([])
+const locationSourceMode = ref('manual')
 
 const trainingForm = reactive({
   name: '',
@@ -259,6 +318,9 @@ const trainingForm = reactive({
   startDate: '',
   endDate: '',
   location: '',
+  departmentId: undefined,
+  policeTypeId: undefined,
+  trainingBaseId: undefined,
   instructorId: null,
   instructorName: '',
   description: '',
@@ -321,6 +383,29 @@ function onInstructorChange(userId) {
   }
 }
 
+function setLocationSourceMode(mode) {
+  locationSourceMode.value = mode
+  if (mode === 'manual') {
+    trainingForm.trainingBaseId = undefined
+    return
+  }
+  if (trainingForm.trainingBaseId) {
+    onTrainingBaseChange(trainingForm.trainingBaseId)
+  } else {
+    trainingForm.location = ''
+  }
+}
+
+function onTrainingBaseChange(baseId) {
+  const base = trainingBaseOptions.value.find(item => item.id === baseId)
+  if (!base) {
+    trainingForm.location = ''
+    return
+  }
+  trainingForm.location = base.location || ''
+  trainingForm.departmentId = base.departmentId || undefined
+}
+
 function handleStudentImportBeforeUpload(file) {
   studentImportFile.value = file
   studentImportFileName.value = file.name
@@ -336,6 +421,9 @@ function resetForm() {
     startDate: '',
     endDate: '',
     location: '',
+    departmentId: undefined,
+    policeTypeId: undefined,
+    trainingBaseId: undefined,
     instructorId: null,
     instructorName: '',
     description: '',
@@ -343,6 +431,7 @@ function resetForm() {
     enrollmentEndAt: '',
     admissionExamId: undefined,
   })
+  locationSourceMode.value = 'manual'
   trainingFormDates.value = [null, null]
   enrollmentWindow.value = []
   editingTraining.value = null
@@ -366,6 +455,9 @@ function openEditModal(training) {
     startDate: training.startDate || '',
     endDate: training.endDate || '',
     location: training.location || '',
+    departmentId: training.departmentId,
+    policeTypeId: training.policeTypeId,
+    trainingBaseId: training.trainingBaseId,
     instructorId: training.instructorId || null,
     instructorName: training.instructorName || '',
     description: training.description || '',
@@ -373,6 +465,7 @@ function openEditModal(training) {
     enrollmentEndAt: training.enrollmentEndAt || '',
     admissionExamId: training.admissionExamId,
   })
+  locationSourceMode.value = training.trainingBaseId ? 'base' : 'manual'
   trainingFormDates.value = [
     training.startDate ? dayjs(training.startDate) : null,
     training.endDate ? dayjs(training.endDate) : null,
@@ -416,8 +509,38 @@ async function fetchAdmissionExams() {
   }
 }
 
+async function fetchDepartments() {
+  try {
+    const result = await getDepartmentList({ size: -1 })
+    departmentOptions.value = result.items || []
+  } catch {
+    departmentOptions.value = []
+  }
+}
+
+async function fetchPoliceTypeOptions() {
+  try {
+    const result = await getPoliceTypes()
+    policeTypeOptions.value = result.items || []
+  } catch {
+    policeTypeOptions.value = []
+  }
+}
+
+async function fetchTrainingBaseOptions() {
+  try {
+    const result = await getTrainingBases({ size: -1 })
+    trainingBaseOptions.value = result.items || []
+  } catch {
+    trainingBaseOptions.value = []
+  }
+}
+
 async function handleSubmitTraining() {
-  if (!trainingForm.name || !trainingForm.startDate || !trainingForm.endDate || !trainingForm.location) {
+  const hasLocation = locationSourceMode.value === 'base'
+    ? Boolean(trainingForm.trainingBaseId && trainingForm.location)
+    : Boolean(trainingForm.location)
+  if (!trainingForm.name || !trainingForm.startDate || !trainingForm.endDate || !hasLocation) {
     message.warning('请填写必填项')
     return
   }
@@ -430,6 +553,9 @@ async function handleSubmitTraining() {
     startDate: trainingForm.startDate,
     endDate: trainingForm.endDate,
     location: trainingForm.location,
+    departmentId: trainingForm.departmentId || undefined,
+    policeTypeId: trainingForm.policeTypeId || undefined,
+    trainingBaseId: locationSourceMode.value === 'base' ? (trainingForm.trainingBaseId || undefined) : undefined,
     instructorId: trainingForm.instructorId || undefined,
     description: trainingForm.description || undefined,
     enrollmentStartAt: trainingForm.enrollmentStartAt || undefined,
@@ -540,8 +666,13 @@ function goHistory(training) {
 
 onMounted(() => {
   fetchTrainings()
-  fetchInstructors()
-  fetchAdmissionExams()
+  if (authStore.isAdmin || authStore.isInstructor) {
+    fetchInstructors()
+    fetchAdmissionExams()
+    fetchDepartments()
+    fetchPoliceTypeOptions()
+    fetchTrainingBaseOptions()
+  }
 })
 </script>
 

@@ -3,7 +3,7 @@
 """
 from typing import Optional
 from fastapi import APIRouter, Depends, Query, Body, UploadFile, File, Form, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.middleware.auth import get_current_user
@@ -13,7 +13,12 @@ from app.models.department import Department
 from app.models.police_type import PoliceType
 from app.services.auth import auth_service
 from app.services.batch_import import BatchImportService
-from app.utils.authz import is_admin_user
+from app.utils.authz import can_access_user_record, can_access_user_record_with_context, is_admin_user
+from app.utils.data_scope import (
+    build_data_scope_context,
+    can_assign_departments,
+    can_assign_police_types,
+)
 from logger import logger
 
 router = APIRouter(prefix="/users", tags=["用户管理"])
@@ -24,8 +29,33 @@ def _require_admin(db: Session, user_id: int):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅系统管理员可执行该操作")
 
 
+def _require_permission(current_user: TokenData, permission: str):
+    if permission not in current_user.permissions:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"权限不足，需要权限: {permission}",
+        )
+
+
 def _is_protected_admin_user(user: User) -> bool:
     return str(user.username).lower() == "admin"
+
+
+def _build_user_query(db: Session):
+    return db.query(User).options(
+        joinedload(User.roles),
+        joinedload(User.departments),
+        joinedload(User.police_types),
+    )
+
+
+def _get_scoped_user_or_403(db: Session, target_user_id: int, actor_user_id: int) -> User:
+    user = _build_user_query(db).filter(User.id == target_user_id).first()
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+    if not can_access_user_record(db, user, actor_user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问该用户")
+    return user
 
 
 @router.get("", response_model=StandardResponse[PaginatedResponse[UserSimpleResponse]], summary="用户列表")
@@ -38,7 +68,8 @@ def get_users(
     db: Session = Depends(get_db)
 ):
     """获取用户列表，支持按角色和关键词筛选"""
-    query = db.query(User).filter(User.is_active == True)
+    _require_permission(current_user, "GET_USERS")
+    query = _build_user_query(db).filter(User.is_active == True)
 
     if role:
         query = query.filter(User.roles.any(Role.code == role))
@@ -50,14 +81,17 @@ def get_users(
             (User.police_id.ilike(f"%{search}%"))
         )
 
-    total = query.count()
-    query = query.order_by(User.id)
-
-    if size == -1:
-        records = query.all()
-    else:
+    records = query.order_by(User.id).all()
+    scope_context = build_data_scope_context(db, current_user.user_id)
+    records = [
+        user
+        for user in records
+        if can_access_user_record_with_context(scope_context, user)
+    ]
+    total = len(records)
+    if size != -1:
         skip = (page - 1) * size
-        records = query.offset(skip).limit(size).all()
+        records = records[skip: skip + size]
 
     items = [UserSimpleResponse.model_validate(u) for u in records]
 
@@ -96,9 +130,8 @@ def get_user(
     db: Session = Depends(get_db)
 ):
     """获取用户详情"""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        return StandardResponse(code=404, message="用户不存在")
+    _require_permission(current_user, "GET_USER")
+    user = _get_scoped_user_or_403(db, user_id, current_user.user_id)
     return StandardResponse(data=UserSimpleResponse.model_validate(user))
 
 
@@ -109,6 +142,12 @@ def create_user(
     db: Session = Depends(get_db)
 ):
     """创建用户"""
+    _require_permission(current_user, "CREATE_USER")
+    scope_context = build_data_scope_context(db, current_user.user_id)
+    if not can_assign_departments(scope_context, data.department_ids or []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="超出当前角色可操作的部门范围")
+    if not can_assign_police_types(scope_context, data.police_type_ids or []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="超出当前角色可操作的警种范围")
     existing = db.query(User).filter(User.username == data.username).first()
     if existing:
         return StandardResponse(code=400, message="用户名已存在")
@@ -164,9 +203,8 @@ def update_user(
     db: Session = Depends(get_db)
 ):
     """更新用户"""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        return StandardResponse(code=404, message="用户不存在")
+    _require_permission(current_user, "UPDATE_USER")
+    user = _get_scoped_user_or_403(db, user_id, current_user.user_id)
 
     update_data = data.model_dump(exclude_unset=True)
     for field, value in update_data.items():
@@ -186,9 +224,8 @@ def update_user_roles(
     db: Session = Depends(get_db)
 ):
     """更新用户角色"""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        return StandardResponse(code=404, message="用户不存在")
+    _require_permission(current_user, "UPDATE_USER_ROLES")
+    user = _get_scoped_user_or_403(db, user_id, current_user.user_id)
     if _is_protected_admin_user(user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="管理员用户权限不可修改")
 
@@ -208,9 +245,11 @@ def update_user_departments(
     db: Session = Depends(get_db)
 ):
     """更新用户所属单位"""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        return StandardResponse(code=404, message="用户不存在")
+    _require_permission(current_user, "UPDATE_USER_DEPARTMENTS")
+    user = _get_scoped_user_or_403(db, user_id, current_user.user_id)
+    scope_context = build_data_scope_context(db, current_user.user_id)
+    if not can_assign_departments(scope_context, department_ids):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="超出当前角色可操作的部门范围")
 
     departments = db.query(Department).filter(Department.id.in_(department_ids)).all()
     user.departments = departments
@@ -228,9 +267,11 @@ def update_user_police_types(
     db: Session = Depends(get_db)
 ):
     """更新用户警种"""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        return StandardResponse(code=404, message="用户不存在")
+    _require_permission(current_user, "UPDATE_USER_POLICE_TYPES")
+    user = _get_scoped_user_or_403(db, user_id, current_user.user_id)
+    scope_context = build_data_scope_context(db, current_user.user_id)
+    if not can_assign_police_types(scope_context, police_type_ids):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="超出当前角色可操作的警种范围")
 
     police_types = db.query(PoliceType).filter(PoliceType.id.in_(police_type_ids)).all()
     user.police_types = police_types
@@ -248,9 +289,8 @@ def reset_password(
     db: Session = Depends(get_db)
 ):
     """重置用户密码"""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        return StandardResponse(code=404, message="用户不存在")
+    _require_permission(current_user, "UPDATE_USER")
+    user = _get_scoped_user_or_403(db, user_id, current_user.user_id)
 
     user.password_hash = auth_service.get_password_hash(password)
     db.commit()
@@ -265,9 +305,8 @@ def delete_user(
     db: Session = Depends(get_db)
 ):
     """删除用户（软删除）"""
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user:
-        return StandardResponse(code=404, message="用户不存在")
+    _require_permission(current_user, "DELETE_USER")
+    user = _get_scoped_user_or_403(db, user_id, current_user.user_id)
 
     user.is_active = False
     db.commit()

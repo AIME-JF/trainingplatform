@@ -99,6 +99,41 @@ class TrainingExamSummary(BaseModel):
     passing_score: int = 60
 
 
+class TrainingBaseCreate(BaseModel):
+    """创建培训基地"""
+
+    name: str = Field(..., max_length=200, description="培训基地名称")
+    location: str = Field(..., max_length=200, description="培训基地地点")
+    department_id: Optional[int] = Field(None, description="部门ID")
+    description: Optional[str] = Field(None, description="备注")
+
+
+class TrainingBaseUpdate(BaseModel):
+    """更新培训基地"""
+
+    name: Optional[str] = Field(None, max_length=200, description="培训基地名称")
+    location: Optional[str] = Field(None, max_length=200, description="培训基地地点")
+    department_id: Optional[int] = Field(None, description="部门ID")
+    description: Optional[str] = Field(None, description="备注")
+
+
+class TrainingBaseResponse(BaseModel):
+    """培训基地响应"""
+
+    id: int
+    name: str
+    location: str
+    department_id: Optional[int] = None
+    department_name: Optional[str] = None
+    created_by: Optional[int] = None
+    description: Optional[str] = None
+    linked_training_count: int = 0
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class TrainingWorkflowStepResponse(BaseModel):
     """培训班步骤条节点"""
 
@@ -118,6 +153,9 @@ class TrainingCreate(BaseModel):
     start_date: Optional[DateType] = None
     end_date: Optional[DateType] = None
     location: Optional[str] = Field(None, max_length=200)
+    department_id: Optional[int] = None
+    police_type_id: Optional[int] = None
+    training_base_id: Optional[int] = None
     class_code: Optional[str] = Field(None, max_length=100)
     instructor_id: Optional[int] = None
     capacity: int = Field(0, description="容量")
@@ -147,6 +185,9 @@ class TrainingUpdate(BaseModel):
     start_date: Optional[DateType] = None
     end_date: Optional[DateType] = None
     location: Optional[str] = None
+    department_id: Optional[int] = None
+    police_type_id: Optional[int] = None
+    training_base_id: Optional[int] = None
     class_code: Optional[str] = None
     instructor_id: Optional[int] = None
     capacity: Optional[int] = None
@@ -172,6 +213,13 @@ class TrainingResponse(BaseModel):
     start_date: Optional[DateType] = None
     end_date: Optional[DateType] = None
     location: Optional[str] = None
+    department_id: Optional[int] = None
+    department_name: Optional[str] = None
+    police_type_id: Optional[int] = None
+    police_type_name: Optional[str] = None
+    training_base_id: Optional[int] = None
+    training_base_name: Optional[str] = None
+    created_by: Optional[int] = None
     class_code: Optional[str] = None
     instructor_id: Optional[int] = None
     instructor_name: Optional[str] = None
@@ -216,6 +264,13 @@ class TrainingListResponse(BaseModel):
     start_date: Optional[DateType] = None
     end_date: Optional[DateType] = None
     location: Optional[str] = None
+    department_id: Optional[int] = None
+    department_name: Optional[str] = None
+    police_type_id: Optional[int] = None
+    police_type_name: Optional[str] = None
+    training_base_id: Optional[int] = None
+    training_base_name: Optional[str] = None
+    created_by: Optional[int] = None
     class_code: Optional[str] = None
     instructor_id: Optional[int] = None
     instructor_name: Optional[str] = None

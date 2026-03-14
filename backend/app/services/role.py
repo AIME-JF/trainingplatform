@@ -30,7 +30,8 @@ class RoleService:
         db_role = Role(
             code=role_data.code,
             name=role_data.name,
-            description=role_data.description
+            description=role_data.description,
+            data_scopes=self._resolve_role_data_scopes(role_data.code, role_data.data_scopes),
         )
         
         # 分配权限
@@ -132,7 +133,9 @@ class RoleService:
         
         # 更新角色信息
         update_data = role_data.model_dump(exclude_unset=True)
-        
+        if "data_scopes" in update_data:
+            update_data["data_scopes"] = self._resolve_role_data_scopes(role.code, update_data["data_scopes"])
+
         for field, value in update_data.items():
             setattr(role, field, value)
         
@@ -176,4 +179,14 @@ class RoleService:
         self.db.refresh(role)
         
         logger.info(f"更新角色权限成功: {role.code}")
-        return RoleResponse.model_validate(role) 
+        return RoleResponse.model_validate(role)
+
+    def _resolve_role_data_scopes(self, role_code: Optional[str], data_scopes: Optional[List[str]]) -> List[str]:
+        if role_code == "admin":
+            return ["all"]
+        normalized: List[str] = []
+        for item in data_scopes or []:
+            value = str(item or "").strip()
+            if value and value not in normalized:
+                normalized.append(value)
+        return normalized

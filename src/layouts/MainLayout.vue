@@ -56,6 +56,7 @@
           <template #icon><TeamOutlined /></template>
           <template #title>培训管理</template>
           <a-menu-item key="/training">培训班列表</a-menu-item>
+          <a-menu-item key="/training/base" v-if="!isStudent">培训基地</a-menu-item>
           <a-menu-item key="/training/schedule">周训练计划</a-menu-item>
           <a-menu-item key="/training/board" v-if="isAdmin">培训看板</a-menu-item>
         </a-sub-menu>
@@ -155,6 +156,7 @@
           <template #icon><TeamOutlined /></template>
           <template #title>培训管理</template>
           <a-menu-item key="/training">培训班列表</a-menu-item>
+          <a-menu-item key="/training/base" v-if="!isStudent">培训基地</a-menu-item>
           <a-menu-item key="/training/schedule">周训练计划</a-menu-item>
           <a-menu-item key="/training/board" v-if="isAdmin">培训看板</a-menu-item>
         </a-sub-menu>

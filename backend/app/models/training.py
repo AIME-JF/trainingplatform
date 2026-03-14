@@ -34,8 +34,12 @@ class Training(Base):
     start_date = Column(Date, nullable=True, comment="开始日期")
     end_date = Column(Date, nullable=True, comment="结束日期")
     location = Column(String(200), nullable=True, comment="培训地点")
+    department_id = Column(Integer, ForeignKey("departments.id"), nullable=True, comment="归属部门ID")
+    police_type_id = Column(Integer, ForeignKey("police_types.id"), nullable=True, comment="警种ID")
+    training_base_id = Column(Integer, ForeignKey("training_bases.id"), nullable=True, comment="培训基地ID")
     class_code = Column(String(100), nullable=True, comment="班次编号")
     instructor_id = Column(Integer, ForeignKey("users.id"), nullable=True, comment="班主任ID")
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True, comment="创建人ID")
     published_by = Column(Integer, ForeignKey("users.id"), nullable=True, comment="发布人ID")
     locked_by = Column(Integer, ForeignKey("users.id"), nullable=True, comment="锁定人ID")
     admission_exam_id = Column(Integer, ForeignKey("admission_exams.id"), nullable=True, comment="准入考试ID")
@@ -50,6 +54,10 @@ class Training(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), comment="更新时间")
 
     instructor = relationship("User", foreign_keys=[instructor_id])
+    creator = relationship("User", foreign_keys=[created_by])
+    department = relationship("Department", foreign_keys=[department_id])
+    police_type = relationship("PoliceType", foreign_keys=[police_type_id])
+    training_base = relationship("TrainingBase", foreign_keys=[training_base_id], back_populates="linked_trainings")
     publisher = relationship("User", foreign_keys=[published_by])
     locker = relationship("User", foreign_keys=[locked_by])
     admission_exam = relationship("AdmissionExam", foreign_keys=[admission_exam_id], back_populates="linked_trainings")
@@ -58,6 +66,25 @@ class Training(Base):
     schedule_items = relationship("ScheduleItem", back_populates="training", cascade="all, delete-orphan")
     exam_sessions = relationship("Exam", back_populates="training", foreign_keys="Exam.training_id")
     histories = relationship("TrainingHistory", back_populates="training", cascade="all, delete-orphan")
+
+
+class TrainingBase(Base):
+    """培训基地表"""
+
+    __tablename__ = "training_bases"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(200), nullable=False, comment="培训基地名称")
+    location = Column(String(200), nullable=False, comment="培训基地地点")
+    department_id = Column(Integer, ForeignKey("departments.id"), nullable=True, comment="关联部门ID")
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True, comment="创建人ID")
+    description = Column(Text, nullable=True, comment="备注")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), comment="更新时间")
+
+    department = relationship("Department", foreign_keys=[department_id])
+    creator = relationship("User", foreign_keys=[created_by])
+    linked_trainings = relationship("Training", back_populates="training_base")
 
 
 class TrainingCourse(Base):

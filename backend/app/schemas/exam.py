@@ -17,6 +17,7 @@ class QuestionCreate(BaseModel):
     explanation: Optional[str] = Field(None, description="解析")
     difficulty: int = Field(1, ge=1, le=5, description="难度1-5")
     knowledge_point: Optional[str] = Field(None, max_length=200)
+    police_type_id: Optional[int] = Field(None, description="警种ID")
     score: int = Field(1, description="分值")
 
 
@@ -30,6 +31,7 @@ class QuestionUpdate(BaseModel):
     explanation: Optional[str] = None
     difficulty: Optional[int] = Field(None, ge=1, le=5)
     knowledge_point: Optional[str] = None
+    police_type_id: Optional[int] = None
     score: Optional[int] = None
 
 
@@ -44,6 +46,8 @@ class QuestionResponse(BaseModel):
     explanation: Optional[str] = None
     difficulty: int = 1
     knowledge_point: Optional[str] = None
+    police_type_id: Optional[int] = None
+    police_type_name: Optional[str] = None
     score: int = 1
     created_by: Optional[int] = None
     created_at: Optional[datetime] = None
