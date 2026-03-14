@@ -58,7 +58,7 @@ Authorization: Bearer <access_token>
 
 ### 1.4 命名说明
 
-后端接口字段使用 `snake_case`。前端 `src/api/request.js` 会自动完成 `camelCase <-> snake_case` 转换。
+后端接口字段使用 `snake_case`。前端 `frontend/src/api/request.js` 会自动完成 `camelCase <-> snake_case` 转换。
 
 ### 1.5 数据范围说明
 
@@ -188,8 +188,12 @@ Authorization: Bearer <access_token>
 
 ### 7.1 业务说明
 
-当前考试域使用统一题库和试卷快照，分成两类业务对象：
+当前考试域使用统一题库和试卷快照，分成三类核心业务对象：
 
+- `试卷`
+  - 独立维护
+  - 题目快照固化在试卷层
+  - 支持 `draft / published / archived`
 - `准入考试`
   - 独立维护
   - 不直接绑定培训班
@@ -200,12 +204,38 @@ Authorization: Bearer <access_token>
   - 用于随堂测、班内考核、结业考核、补考
   - 不再使用 `scope`
 
-### 7.2 准入考试接口
+统一规则：
+
+- 试卷创建和编辑时才允许配置 `question_ids[]`
+- 考试和准入考试创建时只允许传 `paper_id`
+- 只有已发布试卷才能用于创建考试
+- 试卷发布后不能再修改题目
+- 考试创建后不能再更换试卷
+
+### 7.2 试卷接口
+
+| Method | Path | 说明 | 请求要点 |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/exams/papers` | 试卷列表 | Query：`page` `size` `status` `type` `search` |
+| `POST` | `/api/v1/exams/papers` | 创建试卷 | JSON：`title` `description` `duration` `total_score` `passing_score` `type` `question_ids[]` |
+| `GET` | `/api/v1/exams/papers/{paper_id}` | 试卷详情 | 返回试卷基础信息和题目快照 |
+| `PUT` | `/api/v1/exams/papers/{paper_id}` | 更新试卷 | 字段同创建接口，均可选 |
+| `POST` | `/api/v1/exams/papers/{paper_id}/publish` | 发布试卷 | 无 |
+| `POST` | `/api/v1/exams/papers/{paper_id}/archive` | 归档试卷 | 无 |
+| `DELETE` | `/api/v1/exams/papers/{paper_id}` | 删除试卷 | 仅未被考试引用的试卷可删除 |
+
+说明：
+
+- `status` 常见值：`draft`、`published`、`archived`
+- 试卷发布后不能再更新题目
+- 已被准入考试或培训班考试引用的试卷不能删除
+
+### 7.3 准入考试接口
 
 | Method | Path | 说明 | 请求要点 |
 | --- | --- | --- | --- |
 | `GET` | `/api/v1/exams/admission` | 准入考试列表 | Query：`page` `size` `status` `type` `search` |
-| `POST` | `/api/v1/exams/admission` | 创建准入考试 | JSON：`title` `paper_title` `description` `duration` `total_score` `passing_score` `status` `type` `scope` `max_attempts` `start_time` `end_time` `question_ids[]` |
+| `POST` | `/api/v1/exams/admission` | 创建准入考试 | JSON：`title` `paper_id` `description` `duration` `passing_score` `status` `type` `scope` `max_attempts` `start_time` `end_time` |
 | `PUT` | `/api/v1/exams/admission/{exam_id}` | 更新准入考试 | 字段同创建接口，均可选 |
 | `GET` | `/api/v1/exams/admission/{exam_id}` | 准入考试详情 | 返回考试基础信息和题目快照 |
 | `POST` | `/api/v1/exams/admission/{exam_id}/submit` | 提交准入考试 | JSON：`answers` `start_time` |
@@ -217,14 +247,16 @@ Authorization: Bearer <access_token>
 
 - 创建、更新、成绩管理、分析接口要求管理员或教官
 - `scope` 仅存在于准入考试
+- `paper_id` 必须指向已发布试卷
+- 准入考试创建后不能再更换试卷
 - 准入考试结果里的 `result` 常见值为 `pass` / `fail`
 
-### 7.3 培训班内考试接口
+### 7.4 培训班内考试接口
 
 | Method | Path | 说明 | 请求要点 |
 | --- | --- | --- | --- |
 | `GET` | `/api/v1/exams` | 培训班内考试列表 | Query：`page` `size` `status` `type` `search` `training_id` `purpose` |
-| `POST` | `/api/v1/exams` | 创建培训班内考试 | JSON：`title` `paper_title` `description` `duration` `total_score` `passing_score` `status` `type` `purpose` `training_id` `max_attempts` `allow_makeup` `start_time` `end_time` `question_ids[]` |
+| `POST` | `/api/v1/exams` | 创建培训班内考试 | JSON：`title` `paper_id` `description` `duration` `passing_score` `status` `type` `purpose` `training_id` `max_attempts` `allow_makeup` `start_time` `end_time` |
 | `PUT` | `/api/v1/exams/{exam_id}` | 更新培训班内考试 | 字段同创建接口，均可选 |
 | `GET` | `/api/v1/exams/{exam_id}` | 培训班内考试详情 | 返回考试基础信息和题目快照 |
 | `POST` | `/api/v1/exams/{exam_id}/submit` | 提交培训班内考试 | JSON：`answers` `start_time` |
@@ -235,10 +267,13 @@ Authorization: Bearer <access_token>
 说明：
 
 - 培训班考试的参试范围由 `training_id` 决定，不存在 `scope`
+- `paper_id` 必须指向已发布试卷
+- 培训班考试创建后不能再更换试卷
 - `purpose` 常见值：
   - `class_assessment`
   - `final_assessment`
   - `quiz`
+  - `makeup`
 - 创建、更新、成绩管理、分析接口要求管理员或教官
 
 ## 8. 培训模块

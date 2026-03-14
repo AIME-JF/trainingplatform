@@ -4,7 +4,7 @@
 
 本仓库同时包含：
 
-- `src/` 前端应用
+- `frontend/` 前端应用
 - `backend/` FastAPI 后端服务
 - `docker/` Docker Compose 部署编排
 
@@ -14,7 +14,7 @@
 
 - 工作台：按管理员、教官、学员展示不同首页数据
 - 课程学习：课程列表、详情、章节进度、课程笔记、课程答疑
-- 考试系统：统一题库、试卷快照、独立准入考试、培训班内考试、成绩管理、考试分析
+- 考试系统：统一题库、试卷管理、试卷快照、独立准入考试、培训班内考试、成绩管理、考试分析
 - 培训管理：培训班详情、流程步骤条、培训基地、报名审核、名单锁定、当前课程、课次签到 / 签退、培训资源绑定、考试安排
 - 资源中心：资源库、上传、推荐流、审核工作台、审核策略
 - AI 能力：AI 智能组卷、AI 教案生成
@@ -24,8 +24,10 @@
 ### 最近已落地的业务调整
 
 - 考试系统已拆成两条线：
+  - `试卷管理`：独立维护试卷草稿、发布、归档，题目快照固化在试卷层
   - `准入考试`：独立维护，不直接隶属培训班
   - `培训班内考试`：必须关联 `training_id`，用于随堂测、班内考核、结业考试、补考
+- 考试管理页不再直接从题库抽题，而是只允许选择“已发布试卷”创建考试；试卷发布后不可再修改题目，考试创建后不可更换试卷。
 - 培训班可通过 `admission_exam_id` 绑定准入考试；学员报名时如果该培训班配置了准入考试，则必须先通过该考试。
 - 培训基地已独立成表和管理页面；培训班支持维护 `department_id`、`police_type_id`、`training_base_id`，选择培训基地时会自动带出地点，并优先继承基地部门。
 - 题库题目已支持可选 `police_type_id`，为后续按警种做题库隔离和数据域控制提供基础。
@@ -76,14 +78,18 @@
 
 ```text
 police-training-platform/
-├── src/                         # Vue 前端源码
-│   ├── api/                     # 接口封装（自动 camelCase <-> snake_case 转换）
-│   ├── layouts/                 # 主布局与认证布局
-│   ├── router/                  # 前端路由
-│   ├── stores/                  # Pinia 状态
-│   ├── views/                   # 页面模块
-│   └── mock/                    # 历史 mock 数据与兜底逻辑
-├── public/                      # 前端静态资源
+├── frontend/                    # Vue 前端
+│   ├── src/
+│   │   ├── api/                 # 接口封装（自动 camelCase <-> snake_case 转换）
+│   │   ├── layouts/             # 主布局与认证布局
+│   │   ├── router/              # 前端路由
+│   │   ├── stores/              # Pinia 状态
+│   │   ├── views/               # 页面模块
+│   │   └── mock/                # 历史 mock 数据与兜底逻辑
+│   ├── public/                  # 前端静态资源
+│   ├── package.json             # 前端依赖与脚本
+│   ├── vite.config.js           # Vite 配置
+│   └── Dockerfile               # 前端镜像
 ├── backend/                     # FastAPI 后端
 │   ├── app/
 │   │   ├── views/               # 路由层
@@ -98,7 +104,6 @@ police-training-platform/
 │   └── tests/                   # 现有后端测试脚本
 ├── docs/                        # 设计与需求文档
 ├── docker/                      # Docker Compose、Nginx、部署环境变量
-├── Dockerfile                   # 前端镜像
 └── backend/Dockerfile           # 后端 / Worker 镜像
 ```
 
@@ -119,12 +124,12 @@ police-training-platform/
 
 #### 1. 配置前端环境变量
 
-前端请求基地址来自根目录环境文件：
+前端请求基地址来自 `frontend/` 目录下的环境文件：
 
-- `.env.development`：本地开发使用
-- `.env.production`：生产构建使用
+- `frontend/.env.development`：本地开发使用
+- `frontend/.env.production`：生产构建使用
 
-当前仓库中的 `.env.development` 可能指向局域网地址，开始开发前请改成你自己的后端地址，例如：
+当前仓库中的 `frontend/.env.development` 可能指向局域网地址，开始开发前请改成你自己的后端地址，例如：
 
 ```powershell
 VITE_API_BASE_URL=http://127.0.0.1:8001/api/v1
@@ -148,7 +153,7 @@ python main.py
 #### 3. 安装并启动前端
 
 ```powershell
-Set-Location ..
+Set-Location ..\frontend
 pnpm install
 pnpm dev
 ```
@@ -196,6 +201,7 @@ docker compose --env-file .env -f docker-compose.yaml up -d --build
 - Nginx 会把 `/` 重定向到 `/trainingplatform/`
 - 前端生产环境通过相对路径 `/api/v1` 调后端
 - Compose 默认不会把后端 `8001` 端口直接暴露到宿主机
+- 当前前端镜像构建文件位于 `frontend/Dockerfile`；如果你使用 `docker/docker-compose.yaml`，请确认其中 `frontend` 服务的构建路径已经同步到新目录结构
 
 ## 默认账号
 
@@ -216,8 +222,8 @@ docker compose --env-file .env -f docker-compose.yaml up -d --build
 
 | 文件 | 用途 |
 | --- | --- |
-| `.env.development` | 前端开发环境接口地址 |
-| `.env.production` | 前端生产环境接口地址 |
+| `frontend/.env.development` | 前端开发环境接口地址 |
+| `frontend/.env.production` | 前端生产环境接口地址 |
 | `backend/.env.example` | 后端环境变量模板 |
 | `backend/.env` | 本地后端实际配置，不建议提交 |
 | `docker/.env` | Docker Compose 部署配置 |
@@ -225,6 +231,7 @@ docker compose --env-file .env -f docker-compose.yaml up -d --build
 ## 文档索引
 
 - 仓库级说明：`README.md`
+- 前端维护说明：`frontend/README.md`
 - 后端维护说明：`backend/README.md`
 - 后端接口文档：`backend/API_DOCUMENTATION.md`
 
@@ -242,4 +249,4 @@ docker compose --env-file .env -f docker-compose.yaml up -d --build
 - 培训扫码签到依赖 Redis；Redis 不可用时，二维码签到链路不可用。
 - 培训班流程接口现在会校验“发布 -> 锁定名单 -> 开班”的顺序；如果越级调用且未显式确认跳步，后端会直接拒绝。
 - `checkin_closed` 的业务语义是“课程仍在进行中，但签到窗口已结束”，不是“课次已结束”。
-- 仓库中仍保留 `src/mock/` 历史数据和少量兜底逻辑；接口能力请以后端 OpenAPI 与 `backend/API_DOCUMENTATION.md` 为准。
+- 仓库中仍保留 `frontend/src/mock/` 历史数据和少量兜底逻辑；接口能力请以后端 OpenAPI 与 `backend/API_DOCUMENTATION.md` 为准。

@@ -20,12 +20,17 @@
 当前考试域已经拆成四层：
 
 - `Question`：统一题库
-- `ExamPaper`：试卷与题目快照
+- `ExamPaper`：独立试卷实体，维护题目快照与试卷状态
 - `AdmissionExam`：独立准入考试，不直接隶属培训班
 - `Exam`：培训班内考试，必须关联 `training_id`
 
 对应业务规则：
 
+- 试卷有独立状态流：`draft -> published -> archived`
+- 试卷发布后不能再修改题目；已被考试引用的试卷不能删除
+- 考试和准入考试创建时都只关联 `paper_id`
+- 只有已发布试卷才能被准入考试和培训班考试选择
+- 考试一旦创建，即视为已发布，后续不可更换试卷
 - 培训班通过 `admission_exam_id` 绑定准入考试
 - 学员报名该培训班时，如果配置了准入考试，必须先有该考试的通过记录
 - 培训班内考试的参试范围由 `training_id` 决定，不再使用 `scope`
@@ -325,7 +330,7 @@ python migrate.py generate "your message"
 
 - `python migrate.py stamp head` 只允许在“你已经确认数据库结构和最新迁移完全一致”时使用
 - `Base.metadata.create_all()` 只负责补缺表，不能替代 Alembic 字段迁移
-- 当前迁移已经覆盖考试重构、培训 P0 重构以及培训班考试去除 `scope`
+- 当前迁移已经覆盖考试重构、试卷状态字段、培训 P0 重构以及培训班考试去除 `scope`
 
 ## 认证与权限
 
