@@ -108,6 +108,7 @@
 import { computed, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { getQuestions } from '@/api/question'
+import { sortQuestionsByType } from '../utils/questionSort'
 
 const props = defineProps({
   modelValue: { type: Object, required: true },
@@ -115,6 +116,7 @@ const props = defineProps({
   allowQuestionPicker: { type: Boolean, default: true },
   allowManualQuestion: { type: Boolean, default: false },
   allowQuestionEdit: { type: Boolean, default: true },
+  sortByType: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['update:modelValue', 'edit-question', 'create-question'])
@@ -150,6 +152,9 @@ const draft = computed(() => props.modelValue)
 const totalScore = computed(() => (draft.value.questions || []).reduce((sum, item) => sum + Number(item.score || 0), 0))
 
 function emitChange() {
+  if (props.sortByType) {
+    draft.value.questions = sortQuestionsByType(draft.value.questions || [])
+  }
   draft.value.totalScore = totalScore.value
   emit('update:modelValue', JSON.parse(JSON.stringify(draft.value)))
 }

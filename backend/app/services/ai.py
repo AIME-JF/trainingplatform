@@ -33,6 +33,11 @@ class AIService:
     QUESTION_TASK_TYPE = "question_generation"
     PAPER_ASSEMBLY_TASK_TYPE = "paper_assembly"
     PAPER_GENERATION_TASK_TYPE = "paper_generation"
+    QUESTION_TYPE_ORDER = {
+        "single": 0,
+        "multi": 1,
+        "judge": 2,
+    }
 
     DEFAULT_TYPE_CONFIGS = [
         AIPaperAssemblyTypeConfig(type="single", count=5, difficulty=3, score=2),
@@ -150,8 +155,9 @@ class AIService:
         self._ensure_task_editable(task)
         if data.task_name:
             task.task_name = data.task_name
+        sorted_questions = self._sort_question_drafts(data.questions)
         task.result_payload = {
-            "questions": [self._sanitize_question_draft(item).model_dump(mode="python") for item in data.questions],
+            "questions": [self._sanitize_question_draft(item).model_dump(mode="python") for item in sorted_questions],
         }
         self.db.commit()
         return self.get_question_task_detail(task_id, current_user_id)
@@ -363,7 +369,7 @@ class AIService:
         return AIQuestionTaskDetailResponse(
             **self._to_task_summary(task).model_dump(),
             request_payload=AIQuestionTaskCreateRequest.model_validate(task.request_payload or {}),
-            questions=questions,
+            questions=self._sort_question_drafts(questions),
             error_message=task.error_message,
         )
 
@@ -418,7 +424,7 @@ class AIService:
                     requirements=data.requirements,
                 )
             )
-        return questions
+        return self._sort_question_drafts(questions)
 
     def _simulate_paper_assembly_result(self, data: AIPaperAssemblyTaskCreateRequest) -> AITaskPaperDraft:
         type_configs = data.type_configs or list(self.DEFAULT_TYPE_CONFIGS)
@@ -524,7 +530,7 @@ class AIService:
             duration=duration,
             passing_score=passing_score,
             total_score=total_score,
-            questions=sanitized_questions,
+            questions=self._sort_question_drafts(sanitized_questions),
         )
 
     def _load_candidate_questions(
@@ -626,7 +632,7 @@ class AIService:
         )
 
     def _sanitize_paper_draft(self, draft: AITaskPaperDraft) -> AITaskPaperDraft:
-        questions = [self._sanitize_question_draft(item) for item in draft.questions]
+        questions = self._sort_question_drafts([self._sanitize_question_draft(item) for item in draft.questions])
         return AITaskPaperDraft(
             title=draft.title,
             description=draft.description,
@@ -663,6 +669,12 @@ class AIService:
             knowledge_point=(draft.knowledge_point or "").strip() or None,
             police_type_id=draft.police_type_id,
             score=draft.score,
+        )
+
+    def _sort_question_drafts(self, drafts: List[AITaskQuestionDraft]) -> List[AITaskQuestionDraft]:
+        return sorted(
+            drafts,
+            key=lambda item: self.QUESTION_TYPE_ORDER.get(item.type, len(self.QUESTION_TYPE_ORDER)),
         )
 
     def _materialize_paper_questions(self, drafts: List[AITaskQuestionDraft], current_user_id: int) -> List[int]:

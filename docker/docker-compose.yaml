@@ -89,7 +89,7 @@ services:
 
   frontend:
     build:
-      context: ..
+      context: ../frontend
       dockerfile: Dockerfile
     image: police_training_frontend:latest
     container_name: police-training-frontend

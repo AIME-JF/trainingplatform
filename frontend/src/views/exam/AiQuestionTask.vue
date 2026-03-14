@@ -1,164 +1,150 @@
 <template>
-  <div class="ai-task-page">
-    <div class="page-header">
-      <div>
-        <h2>AI 智能出题</h2>
-        <p class="page-sub">填写信息后创建任务，后端完成模拟出题，你可调整题目后确认入库</p>
-      </div>
-      <a-tag color="blue">任务流</a-tag>
-    </div>
+  <ai-task-tabs-layout
+    v-model:active-tab="activeTab"
+    title="AI 智能出题"
+    subtitle="填写信息后创建任务，后端完成模拟出题，你可调整题目后确认入库"
+    :task-list="taskList"
+    :task-loading="taskLoading"
+    :active-task-id="activeTask?.id || null"
+    :status-labels="statusLabels"
+    :status-colors="statusColors"
+    @refresh-tasks="loadTasks"
+    @select-task="selectTask"
+  >
+    <template #create>
+      <a-form layout="vertical">
+        <a-form-item label="任务名称" required>
+          <a-input v-model:value="taskForm.taskName" placeholder="例：刑侦基础训练出题任务" />
+        </a-form-item>
+        <a-form-item label="出题主题" required>
+          <a-input v-model:value="taskForm.topic" placeholder="例：刑事侦查程序规范" />
+        </a-form-item>
+        <a-form-item label="参考文本">
+          <a-textarea v-model:value="taskForm.sourceText" :rows="5" :maxlength="2000" show-count />
+        </a-form-item>
+        <a-form-item label="知识点">
+          <a-textarea v-model:value="knowledgePointsText" :rows="3" placeholder="每行一个知识点" />
+        </a-form-item>
+        <a-row :gutter="12">
+          <a-col :span="12">
+            <a-form-item label="题目数量">
+              <a-input-number v-model:value="taskForm.questionCount" :min="1" :max="50" style="width:100%" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="默认分值">
+              <a-input-number v-model:value="taskForm.score" :min="1" :max="20" style="width:100%" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-form-item label="题型范围">
+          <a-checkbox-group v-model:value="taskForm.questionTypes">
+            <a-checkbox value="single">单选题</a-checkbox>
+            <a-checkbox value="multi">多选题</a-checkbox>
+            <a-checkbox value="judge">判断题</a-checkbox>
+          </a-checkbox-group>
+        </a-form-item>
+        <a-row :gutter="12">
+          <a-col :span="12">
+            <a-form-item label="整体难度">
+              <a-select v-model:value="taskForm.difficulty">
+                <a-select-option v-for="level in [1, 2, 3, 4, 5]" :key="level" :value="level">
+                  {{ difficultyLabels[level] }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="警种">
+              <a-select v-model:value="taskForm.policeTypeId" allow-clear placeholder="可选">
+                <a-select-option v-for="item in policeTypeOptions" :key="item.id" :value="item.id">
+                  {{ item.name }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-form-item label="补充要求">
+          <a-textarea v-model:value="taskForm.requirements" :rows="3" :maxlength="1000" show-count />
+        </a-form-item>
+        <a-button type="primary" block :loading="creating" @click="handleCreateTask">创建任务</a-button>
+      </a-form>
+    </template>
 
-    <a-row :gutter="16">
-      <a-col :span="9">
-        <a-card title="创建任务" :bordered="false">
-          <a-form layout="vertical">
-            <a-form-item label="任务名称" required>
-              <a-input v-model:value="taskForm.taskName" placeholder="例：刑侦基础训练出题任务" />
-            </a-form-item>
-            <a-form-item label="出题主题" required>
-              <a-input v-model:value="taskForm.topic" placeholder="例：刑事侦查程序规范" />
-            </a-form-item>
-            <a-form-item label="参考文本">
-              <a-textarea v-model:value="taskForm.sourceText" :rows="5" :maxlength="2000" show-count />
-            </a-form-item>
-            <a-form-item label="知识点">
-              <a-textarea v-model:value="knowledgePointsText" :rows="3" placeholder="每行一个知识点" />
-            </a-form-item>
-            <a-row :gutter="12">
-              <a-col :span="12">
-                <a-form-item label="题目数量">
-                  <a-input-number v-model:value="taskForm.questionCount" :min="1" :max="50" style="width:100%" />
-                </a-form-item>
-              </a-col>
-              <a-col :span="12">
-                <a-form-item label="默认分值">
-                  <a-input-number v-model:value="taskForm.score" :min="1" :max="20" style="width:100%" />
-                </a-form-item>
-              </a-col>
-            </a-row>
-            <a-form-item label="题型范围">
-              <a-checkbox-group v-model:value="taskForm.questionTypes">
-                <a-checkbox value="single">单选题</a-checkbox>
-                <a-checkbox value="multi">多选题</a-checkbox>
-                <a-checkbox value="judge">判断题</a-checkbox>
-              </a-checkbox-group>
-            </a-form-item>
-            <a-row :gutter="12">
-              <a-col :span="12">
-                <a-form-item label="整体难度">
-                  <a-select v-model:value="taskForm.difficulty">
-                    <a-select-option v-for="level in [1, 2, 3, 4, 5]" :key="level" :value="level">
-                      {{ difficultyLabels[level] }}
-                    </a-select-option>
-                  </a-select>
-                </a-form-item>
-              </a-col>
-              <a-col :span="12">
-                <a-form-item label="警种">
-                  <a-select v-model:value="taskForm.policeTypeId" allow-clear placeholder="可选">
-                    <a-select-option v-for="item in policeTypeOptions" :key="item.id" :value="item.id">
-                      {{ item.name }}
-                    </a-select-option>
-                  </a-select>
-                </a-form-item>
-              </a-col>
-            </a-row>
-            <a-form-item label="补充要求">
-              <a-textarea v-model:value="taskForm.requirements" :rows="3" :maxlength="1000" show-count />
-            </a-form-item>
-            <a-button type="primary" block :loading="creating" @click="handleCreateTask">创建任务</a-button>
-          </a-form>
-        </a-card>
+    <template #task-description="{ item }">
+      共 {{ item.itemCount || 0 }} 题
+    </template>
 
-        <a-card title="任务列表" :bordered="false" style="margin-top:16px">
-          <template #extra>
-            <a-button type="link" size="small" @click="loadTasks">刷新</a-button>
-          </template>
-          <a-list :data-source="taskList" :loading="taskLoading" item-layout="horizontal">
-            <template #renderItem="{ item }">
-              <a-list-item class="task-list-item" @click="selectTask(item.id)">
-                <a-list-item-meta :title="item.taskName" :description="`共 ${item.itemCount || 0} 题`" />
-                <a-tag :color="statusColors[item.status]">{{ statusLabels[item.status] }}</a-tag>
-              </a-list-item>
-            </template>
-          </a-list>
-          <a-empty v-if="!taskLoading && !taskList.length" description="暂无任务" />
-        </a-card>
-      </a-col>
+    <template #detail>
+      <template v-if="activeTask">
+        <div class="detail-header">
+          <div>
+            <div class="detail-title">{{ activeTask.taskName }}</div>
+            <div class="detail-sub">主题：{{ activeTask.requestPayload.topic }}</div>
+          </div>
+          <a-space>
+            <a-button @click="loadTaskDetail(activeTask.id)">刷新详情</a-button>
+            <a-button v-if="canEditTask" @click="openCreateQuestion">新增题目</a-button>
+            <a-button v-if="canEditTask" :loading="saving" @click="handleSaveTask">保存修改</a-button>
+            <a-button type="primary" :loading="confirming" :disabled="activeTask.status !== 'completed'" @click="handleConfirmTask">
+              确认入题库
+            </a-button>
+          </a-space>
+        </div>
 
-      <a-col :span="15">
-        <a-card :bordered="false" class="task-detail-card">
-          <template v-if="activeTask">
-            <div class="detail-header">
-              <div>
-                <div class="detail-title">{{ activeTask.taskName }}</div>
-                <div class="detail-sub">主题：{{ activeTask.requestPayload.topic }}</div>
+        <ai-task-timeline
+          :status="activeTask.status"
+          :created-at="activeTask.createdAt"
+          :completed-at="activeTask.completedAt"
+          :confirmed-at="activeTask.confirmedAt"
+        />
+
+        <div class="detail-section">
+          <div class="detail-section-title">任务请求</div>
+          <a-descriptions :column="2" size="small" bordered>
+            <a-descriptions-item label="知识点">{{ activeTask.requestPayload.knowledgePoints?.join('、') || '未设置' }}</a-descriptions-item>
+            <a-descriptions-item label="题型">{{ activeTask.requestPayload.questionTypes?.join('、') || '未设置' }}</a-descriptions-item>
+            <a-descriptions-item label="题目数量">{{ activeTask.requestPayload.questionCount }}</a-descriptions-item>
+            <a-descriptions-item label="默认分值">{{ activeTask.requestPayload.score }}</a-descriptions-item>
+          </a-descriptions>
+        </div>
+
+        <div class="detail-section">
+          <div class="detail-section-title">任务结果</div>
+          <a-empty v-if="!activeTask.questions?.length" description="任务尚未生成结果" />
+          <div v-else class="question-grid">
+            <div v-for="(item, index) in activeTask.questions" :key="item.tempId || index" class="question-card">
+              <div class="question-card-head">
+                <a-space>
+                  <a-tag :color="typeColors[item.type]">{{ typeLabels[item.type] }}</a-tag>
+                  <span>第 {{ index + 1 }} 题</span>
+                </a-space>
+                <a-space v-if="canEditTask">
+                  <a-button type="link" size="small" @click="openEditQuestion(item, index)">编辑</a-button>
+                  <a-button type="link" danger size="small" @click="removeQuestion(index)">删除</a-button>
+                </a-space>
               </div>
-              <a-space>
-                <a-button @click="loadTaskDetail(activeTask.id)">刷新详情</a-button>
-                <a-button v-if="canEditTask" @click="openCreateQuestion">新增题目</a-button>
-                <a-button v-if="canEditTask" :loading="saving" @click="handleSaveTask">保存修改</a-button>
-                <a-button type="primary" :loading="confirming" :disabled="activeTask.status !== 'completed'" @click="handleConfirmTask">
-                  确认入题库
-                </a-button>
-              </a-space>
-            </div>
-
-            <ai-task-timeline
-              :status="activeTask.status"
-              :created-at="activeTask.createdAt"
-              :completed-at="activeTask.completedAt"
-              :confirmed-at="activeTask.confirmedAt"
-            />
-
-            <div class="detail-section">
-              <div class="detail-section-title">任务请求</div>
-              <a-descriptions :column="2" size="small" bordered>
-                <a-descriptions-item label="知识点">{{ activeTask.requestPayload.knowledgePoints?.join('、') || '未设置' }}</a-descriptions-item>
-                <a-descriptions-item label="题型">{{ activeTask.requestPayload.questionTypes?.join('、') || '未设置' }}</a-descriptions-item>
-                <a-descriptions-item label="题目数量">{{ activeTask.requestPayload.questionCount }}</a-descriptions-item>
-                <a-descriptions-item label="默认分值">{{ activeTask.requestPayload.score }}</a-descriptions-item>
-              </a-descriptions>
-            </div>
-
-            <div class="detail-section">
-              <div class="detail-section-title">任务结果</div>
-              <a-empty v-if="!activeTask.questions?.length" description="任务尚未生成结果" />
-              <div v-else class="question-grid">
-                <div v-for="(item, index) in activeTask.questions" :key="item.tempId || index" class="question-card">
-                  <div class="question-card-head">
-                    <a-space>
-                      <a-tag :color="typeColors[item.type]">{{ typeLabels[item.type] }}</a-tag>
-                      <span>第 {{ index + 1 }} 题</span>
-                    </a-space>
-                    <a-space v-if="canEditTask">
-                      <a-button type="link" size="small" @click="openEditQuestion(item, index)">编辑</a-button>
-                      <a-button type="link" danger size="small" @click="removeQuestion(index)">删除</a-button>
-                    </a-space>
-                  </div>
-                  <div class="question-card-content">{{ item.content }}</div>
-                  <div class="question-card-meta">
-                    <span>难度 {{ item.difficulty }}</span>
-                    <span>分值 {{ item.score }}</span>
-                    <span>{{ item.knowledgePoint || '未设置知识点' }}</span>
-                  </div>
-                </div>
+              <div class="question-card-content">{{ item.content }}</div>
+              <div class="question-card-meta">
+                <span>难度 {{ item.difficulty }}</span>
+                <span>分值 {{ item.score }}</span>
+                <span>{{ item.knowledgePoint || '未设置知识点' }}</span>
               </div>
             </div>
-          </template>
-          <a-empty v-else description="请选择左侧任务查看详情" />
-        </a-card>
-      </a-col>
-    </a-row>
+          </div>
+        </div>
+      </template>
+      <a-empty v-else description="请选择任务查看详情" />
+    </template>
+  </ai-task-tabs-layout>
 
-    <question-form-modal
-      v-model:open="questionModalOpen"
-      :title="editingQuestionIndex === -1 ? '新增题目' : '编辑题目'"
-      :question="editingQuestion"
-      :police-type-options="policeTypeOptions"
-      @submit="handleSubmitQuestion"
-    />
-  </div>
+  <question-form-modal
+    v-model:open="questionModalOpen"
+    :title="editingQuestionIndex === -1 ? '新增题目' : '编辑题目'"
+    :question="editingQuestion"
+    :police-type-options="policeTypeOptions"
+    @submit="handleSubmitQuestion"
+  />
 </template>
 
 <script setup>
@@ -172,8 +158,10 @@ import {
   updateAiQuestionTaskResult,
 } from '@/api/ai'
 import { getPoliceTypes } from '@/api/user'
+import AiTaskTabsLayout from './components/AiTaskTabsLayout.vue'
 import AiTaskTimeline from './components/AiTaskTimeline.vue'
 import QuestionFormModal from './components/QuestionFormModal.vue'
+import { sortQuestionsByType } from './utils/questionSort'
 
 const difficultyLabels = { 1: '1级', 2: '2级', 3: '3级', 4: '4级', 5: '5级' }
 const typeLabels = { single: '单选题', multi: '多选题', judge: '判断题' }
@@ -190,6 +178,7 @@ const editingQuestion = ref(null)
 const editingQuestionIndex = ref(-1)
 const taskList = ref([])
 const activeTask = ref(null)
+const activeTab = ref('create')
 const knowledgePointsText = ref('')
 const policeTypeOptions = ref([])
 
@@ -284,6 +273,7 @@ async function handleCreateTask() {
     resetTaskForm()
     await loadTasks()
     await loadTaskDetail(result.id)
+    activeTab.value = 'list'
   } catch (error) {
     message.error(error.message || '创建任务失败')
   } finally {
@@ -315,7 +305,7 @@ function handleSubmitQuestion(question) {
   } else {
     nextQuestions.push(question)
   }
-  activeTask.value.questions = nextQuestions
+  activeTask.value.questions = sortQuestionsByType(nextQuestions)
   editingQuestionIndex.value = -1
   editingQuestion.value = null
 }
@@ -372,42 +362,6 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.ai-task-page {
-  padding: 0;
-}
-
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  margin-bottom: 20px;
-}
-
-.page-header h2 {
-  margin: 0;
-  color: #001234;
-}
-
-.page-sub {
-  margin: 6px 0 0;
-  color: #8c8c8c;
-  font-size: 13px;
-}
-
-.task-list-item {
-  cursor: pointer;
-  border-radius: 8px;
-  transition: background 0.2s;
-}
-
-.task-list-item:hover {
-  background: #f7f9ff;
-}
-
-.task-detail-card {
-  min-height: 100%;
-}
-
 .detail-header {
   display: flex;
   justify-content: space-between;
