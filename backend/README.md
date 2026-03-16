@@ -529,6 +529,7 @@ python migrate.py generate "your message"
 - 试卷详情接口现在会返回每道题的标准答案；前端试卷详情页依赖该字段展示答案与解析。
 - 历史库中的缺失权限、`admin` 权限集合以及内置角色默认 `data_scopes`，会在最新 Alembic 迁移里被一次性修正；部署后请先执行 `python migrate.py upgrade`。
 - 某些系统管理接口同时提供 REST 风格和兼容旧前端的 `/create`、`/update`、`/delete` 别名。
+- 项目已全面移除 `from __future__ import annotations`。该语句会将所有类型注解变为字符串延迟求值，导致 Pydantic v2 在 Python 3.12 下无法解析模型字段，启动时报 `PydanticUndefinedAnnotation`。根治方式是重排 `schemas/course.py` 和 `schemas/training.py` 中的类定义顺序，将被引用类移到引用方前面，彻底消除 forward reference，无需 `model_rebuild()`。**后续新增代码禁止再使用 `from __future__ import annotations`。**
 
 ## 进一步阅读
 
