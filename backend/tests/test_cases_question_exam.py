@@ -2,7 +2,6 @@
 题库与考试相关测试用例
 """
 
-from __future__ import annotations
 
 import time
 from datetime import datetime, timedelta

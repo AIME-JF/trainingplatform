@@ -1,7 +1,6 @@
 """
 培训管理相关的数据验证模型
 """
-from __future__ import annotations
 
 from datetime import date as DateType
 from datetime import datetime
@@ -223,106 +222,7 @@ class TrainingUpdate(BaseModel):
     roster_assignments: Optional[List[TrainingRosterAssignment]] = None
 
 
-class TrainingResponse(BaseModel):
-    """培训班响应"""
-
-    id: int
-    name: str
-    type: str
-    status: str = "upcoming"
-    publish_status: str = "draft"
-    progress_percent: int = 0
-    start_date: Optional[DateType] = None
-    end_date: Optional[DateType] = None
-    location: Optional[str] = None
-    department_id: Optional[int] = None
-    department_name: Optional[str] = None
-    police_type_id: Optional[int] = None
-    police_type_name: Optional[str] = None
-    training_base_id: Optional[int] = None
-    training_base_name: Optional[str] = None
-    created_by: Optional[int] = None
-    class_code: Optional[str] = None
-    instructor_id: Optional[int] = None
-    instructor_name: Optional[str] = None
-    capacity: int = 0
-    enrolled_count: int = 0
-    student_ids: List[int] = Field(default_factory=list)
-    students: List["EnrollmentResponse"] = Field(default_factory=list)
-    description: Optional[str] = None
-    subjects: List[str] = Field(default_factory=list)
-    enrollment_requires_approval: bool = True
-    enrollment_start_at: Optional[datetime] = None
-    enrollment_end_at: Optional[datetime] = None
-    published_at: Optional[datetime] = None
-    locked_at: Optional[datetime] = None
-    is_locked: bool = False
-    admission_exam_id: Optional[int] = None
-    admission_exam_title: Optional[str] = None
-    group_names: List[str] = Field(default_factory=list)
-    cadre_count: int = 0
-    courses: List[TrainingCourseResponse] = Field(default_factory=list)
-    exam_sessions: List[TrainingExamSummary] = Field(default_factory=list)
-    checkin_records: List["CheckinResponse"] = Field(default_factory=list)
-    notices: List[NoticeResponse] = Field(default_factory=list)
-    resources: List[ResourceListItemResponse] = Field(default_factory=list)
-    workflow_steps: List[TrainingWorkflowStepResponse] = Field(default_factory=list)
-    current_step_key: str = "draft"
-    current_session: Optional[TrainingCurrentSessionResponse] = None
-    can_manage_all: bool = False
-    can_manage_training: bool = False
-    can_edit_training: bool = False
-    can_edit_courses: bool = False
-    can_view_course_change_logs: bool = False
-    can_review_enrollments: bool = False
-    current_enrollment_status: Optional[str] = None
-    can_enter_training: bool = False
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class TrainingListResponse(BaseModel):
-    """培训班列表响应"""
-
-    id: int
-    name: str
-    type: str
-    status: str = "upcoming"
-    publish_status: str = "draft"
-    progress_percent: int = 0
-    start_date: Optional[DateType] = None
-    end_date: Optional[DateType] = None
-    location: Optional[str] = None
-    department_id: Optional[int] = None
-    department_name: Optional[str] = None
-    police_type_id: Optional[int] = None
-    police_type_name: Optional[str] = None
-    training_base_id: Optional[int] = None
-    training_base_name: Optional[str] = None
-    created_by: Optional[int] = None
-    class_code: Optional[str] = None
-    instructor_id: Optional[int] = None
-    instructor_name: Optional[str] = None
-    capacity: int = 0
-    enrolled_count: int = 0
-    student_ids: List[int] = Field(default_factory=list)
-    description: Optional[str] = None
-    subjects: List[str] = Field(default_factory=list)
-    enrollment_requires_approval: bool = True
-    enrollment_start_at: Optional[datetime] = None
-    enrollment_end_at: Optional[datetime] = None
-    is_locked: bool = False
-    admission_exam_id: Optional[int] = None
-    admission_exam_title: Optional[str] = None
-    current_step_key: str = "draft"
-    current_enrollment_status: Optional[str] = None
-    can_enter_training: bool = False
-    created_at: Optional[datetime] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
+# ========== Enrollment / Checkin (定义在 TrainingResponse 之前以避免 forward reference) ==========
 
 class EnrollmentCreate(BaseModel):
     """报名"""
@@ -410,6 +310,110 @@ class CheckinResponse(BaseModel):
     absence_reason: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class TrainingResponse(BaseModel):
+    """培训班响应"""
+
+    id: int
+    name: str
+    type: str
+    status: str = "upcoming"
+    publish_status: str = "draft"
+    progress_percent: int = 0
+    start_date: Optional[DateType] = None
+    end_date: Optional[DateType] = None
+    location: Optional[str] = None
+    department_id: Optional[int] = None
+    department_name: Optional[str] = None
+    police_type_id: Optional[int] = None
+    police_type_name: Optional[str] = None
+    training_base_id: Optional[int] = None
+    training_base_name: Optional[str] = None
+    created_by: Optional[int] = None
+    class_code: Optional[str] = None
+    instructor_id: Optional[int] = None
+    instructor_name: Optional[str] = None
+    capacity: int = 0
+    enrolled_count: int = 0
+    student_ids: List[int] = Field(default_factory=list)
+    students: List[EnrollmentResponse] = Field(default_factory=list)
+    description: Optional[str] = None
+    subjects: List[str] = Field(default_factory=list)
+    enrollment_requires_approval: bool = True
+    enrollment_start_at: Optional[datetime] = None
+    enrollment_end_at: Optional[datetime] = None
+    published_at: Optional[datetime] = None
+    locked_at: Optional[datetime] = None
+    is_locked: bool = False
+    admission_exam_id: Optional[int] = None
+    admission_exam_title: Optional[str] = None
+    group_names: List[str] = Field(default_factory=list)
+    cadre_count: int = 0
+    courses: List[TrainingCourseResponse] = Field(default_factory=list)
+    exam_sessions: List[TrainingExamSummary] = Field(default_factory=list)
+    checkin_records: List[CheckinResponse] = Field(default_factory=list)
+    notices: List[NoticeResponse] = Field(default_factory=list)
+    resources: List[ResourceListItemResponse] = Field(default_factory=list)
+    workflow_steps: List[TrainingWorkflowStepResponse] = Field(default_factory=list)
+    current_step_key: str = "draft"
+    current_session: Optional[TrainingCurrentSessionResponse] = None
+    can_manage_all: bool = False
+    can_manage_training: bool = False
+    can_edit_training: bool = False
+    can_edit_courses: bool = False
+    can_view_course_change_logs: bool = False
+    can_review_enrollments: bool = False
+    current_enrollment_status: Optional[str] = None
+    can_enter_training: bool = False
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TrainingListResponse(BaseModel):
+    """培训班列表响应"""
+
+    id: int
+    name: str
+    type: str
+    status: str = "upcoming"
+    publish_status: str = "draft"
+    progress_percent: int = 0
+    start_date: Optional[DateType] = None
+    end_date: Optional[DateType] = None
+    location: Optional[str] = None
+    department_id: Optional[int] = None
+    department_name: Optional[str] = None
+    police_type_id: Optional[int] = None
+    police_type_name: Optional[str] = None
+    training_base_id: Optional[int] = None
+    training_base_name: Optional[str] = None
+    created_by: Optional[int] = None
+    class_code: Optional[str] = None
+    instructor_id: Optional[int] = None
+    instructor_name: Optional[str] = None
+    capacity: int = 0
+    enrolled_count: int = 0
+    student_ids: List[int] = Field(default_factory=list)
+    description: Optional[str] = None
+    subjects: List[str] = Field(default_factory=list)
+    enrollment_requires_approval: bool = True
+    enrollment_start_at: Optional[datetime] = None
+    enrollment_end_at: Optional[datetime] = None
+    is_locked: bool = False
+    admission_exam_id: Optional[int] = None
+    admission_exam_title: Optional[str] = None
+    current_step_key: str = "draft"
+    current_enrollment_status: Optional[str] = None
+    can_enter_training: bool = False
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+
 
 
 class TrainingAttendanceSummaryResponse(BaseModel):

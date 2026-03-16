@@ -2,7 +2,6 @@
 个人中心、看板、人才库、AI 相关测试用例
 """
 
-from __future__ import annotations
 
 import time
 

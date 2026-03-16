@@ -10,7 +10,6 @@
 - API_BASE_URL
 """
 
-from __future__ import annotations
 
 from api_test_base import APITestRunner
 from test_cases_auth import get_cases as auth_cases

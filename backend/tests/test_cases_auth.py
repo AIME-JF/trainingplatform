@@ -2,7 +2,6 @@
 认证与基础相关测试用例
 """
 
-from __future__ import annotations
 
 from typing import Any, Dict
 

@@ -2,7 +2,6 @@
 API 集成测试基础能力
 """
 
-from __future__ import annotations
 
 import os
 import sys

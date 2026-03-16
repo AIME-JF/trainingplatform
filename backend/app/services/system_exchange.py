@@ -1,7 +1,6 @@
 """
 系统管理 Excel 导入导出服务。
 """
-from __future__ import annotations
 
 from io import BytesIO
 from typing import Any, Dict, Iterable, List, Optional, Sequence

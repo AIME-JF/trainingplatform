@@ -2,7 +2,6 @@
 课程与培训相关测试用例
 """
 
-from __future__ import annotations
 
 import time
 from datetime import datetime, timedelta, date

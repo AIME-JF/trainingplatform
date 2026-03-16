@@ -2,7 +2,6 @@
 教官与证书相关测试用例
 """
 
-from __future__ import annotations
 
 from datetime import date
 

@@ -1,7 +1,6 @@
 """
 课程管理服务
 """
-from __future__ import annotations
 
 from datetime import datetime
 from typing import List, Optional

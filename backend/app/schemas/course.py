@@ -1,7 +1,6 @@
 """
 课程管理相关的数据验证模型
 """
-from __future__ import annotations
 
 from typing import Optional, List
 from datetime import datetime
@@ -87,6 +86,34 @@ class CourseUpdate(BaseModel):
     chapters: Optional[List[ChapterCreate]] = None
 
 
+# ========== CourseNote / CourseQA (定义在 CourseResponse 之前以避免 forward reference) ==========
+
+class CourseNoteResponse(BaseModel):
+    """课程笔记响应"""
+    id: int
+    user_id: int
+    course_id: int
+    content: str = ''
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CourseQAResponse(BaseModel):
+    """答疑响应"""
+    id: int
+    user_id: int
+    user_name: Optional[str] = None
+    course_id: int
+    question: str
+    answer: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class CourseResponse(BaseModel):
     """课程响应"""
     id: int
@@ -114,8 +141,8 @@ class CourseResponse(BaseModel):
     last_playback_seconds: int = 0
     can_view_learning_status: bool = False
     chapters: List[ChapterResponse] = []
-    note: Optional["CourseNoteResponse"] = None
-    qa_list: List["CourseQAResponse"] = Field(default_factory=list)
+    note: Optional[CourseNoteResponse] = None
+    qa_list: List[CourseQAResponse] = Field(default_factory=list)
     resources: List[ResourceListItemResponse] = Field(default_factory=list)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
@@ -175,18 +202,6 @@ class CourseNoteUpdate(BaseModel):
     content: str = Field('', description="笔记内容")
 
 
-class CourseNoteResponse(BaseModel):
-    """课程笔记响应"""
-    id: int
-    user_id: int
-    course_id: int
-    content: str = ''
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-
 class CourseProgressResponse(BaseModel):
     """学习进度响应"""
     id: int
@@ -226,17 +241,3 @@ class CourseQACreate(BaseModel):
 class CourseQAUpdate(BaseModel):
     """回答问题（仅教官/管理员）"""
     answer: str = Field(..., description="回答内容")
-
-
-class CourseQAResponse(BaseModel):
-    """答疑响应"""
-    id: int
-    user_id: int
-    user_name: Optional[str] = None
-    course_id: int
-    question: str
-    answer: Optional[str] = None
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
-
-    model_config = ConfigDict(from_attributes=True)

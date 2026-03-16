@@ -1,7 +1,6 @@
 """
 Excel批量导入服务（用户底库、培训学员/教官、课表）
 """
-from __future__ import annotations
 
 import re
 import time
