@@ -31,6 +31,9 @@ class TrainingScheduleItem(BaseModel):
     skipped_at: Optional[datetime] = None
     skipped_by: Optional[int] = None
     skip_reason: Optional[str] = None
+    is_expired: bool = False
+    can_edit: bool = False
+    can_delete: bool = False
 
 
 class TrainingSessionActionPermissions(BaseModel):
@@ -66,6 +69,7 @@ class TrainingCourseCreate(BaseModel):
 
     course_key: Optional[str] = Field(None, description="稳定课程键")
     name: str = Field(..., max_length=200, description="课程名称")
+    location: Optional[str] = Field(None, max_length=200, description="课程地点")
     instructor: Optional[str] = Field(None, description="主讲教官名称")
     primary_instructor_id: Optional[int] = Field(None, description="主讲教官ID")
     assistant_instructor_ids: List[int] = Field(default_factory=list, description="带教教官ID列表")
@@ -81,6 +85,7 @@ class TrainingCourseResponse(BaseModel):
     training_id: int
     course_key: Optional[str] = None
     name: str
+    location: Optional[str] = None
     instructor: Optional[str] = None
     primary_instructor_id: Optional[int] = None
     primary_instructor_name: Optional[str] = None
@@ -135,6 +140,8 @@ class TrainingBaseResponse(BaseModel):
     created_by: Optional[int] = None
     description: Optional[str] = None
     linked_training_count: int = 0
+    upcoming_training_count: int = 0
+    active_training_count: int = 0
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

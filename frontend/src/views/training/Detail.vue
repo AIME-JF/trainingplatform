@@ -141,6 +141,7 @@
                       </template>
                     </div>
                     <div class="ci-time" v-if="c.schedules?.length">{{ c.schedules.length }} 个课次 · {{ c.hours }} 课时</div>
+                    <div class="ci-time">地点：{{ c.location || '未设置' }}</div>
                   </div>
                   <div class="ci-right">
                     <a-tag :color="c.type === 'theory' ? 'blue' : 'green'" size="small">{{ c.type === 'theory' ? '理论' : '实操' }}</a-tag>
@@ -174,22 +175,47 @@
                 <a-table-column title="日期" data-index="date" key="date" width="120" />
                 <a-table-column title="时间" data-index="timeRange" key="timeRange" width="140" />
                 <a-table-column title="课程" data-index="courseName" key="courseName" />
+                <a-table-column title="地点" data-index="location" key="location" width="180">
+                  <template #default="{ record }">
+                    {{ record.location || '未设置' }}
+                  </template>
+                </a-table-column>
                 <a-table-column title="教官" data-index="instructorText" key="instructorText" width="220" />
                 <a-table-column title="状态" key="status" width="140">
                   <template #default="{ record }">
                     <a-tag :color="scheduleStatusColorMap[record.status] || 'default'">{{ scheduleStatusLabelMap[record.status] || record.status }}</a-tag>
                   </template>
                 </a-table-column>
-                <a-table-column title="操作" key="action" width="200">
+                <a-table-column title="操作" key="action" width="320">
                   <template #default="{ record }">
-                    <a-space v-if="currentSession && currentSession.sessionId === record.sessionId">
-                      <a-button v-if="currentSession.actionPermissions?.canStartCheckin" size="small" type="link" @click="handleStartSessionCheckin">开始签到</a-button>
-                      <a-button v-if="currentSession.actionPermissions?.canEndCheckin" size="small" type="link" @click="handleEndSessionCheckin">结束签到</a-button>
-                      <a-button v-if="currentSession.actionPermissions?.canStartCheckout" size="small" type="link" @click="handleStartSessionCheckout">开始签退</a-button>
-                      <a-button v-if="currentSession.actionPermissions?.canEndCheckout" size="small" type="link" @click="handleEndSessionCheckout">结束签退</a-button>
-                      <a-button v-if="currentSession.actionPermissions?.canSkip" size="small" type="link" danger @click="handleSkipCurrentSession">跳过</a-button>
+                    <a-space wrap>
+                      <template v-if="!authStore.isStudent">
+                        <a-button
+                          size="small"
+                          type="link"
+                          :disabled="!canScheduleEdit || !record.canEdit"
+                          @click="openScheduleModal(record)"
+                        >
+                          编辑
+                        </a-button>
+                        <a-button
+                          size="small"
+                          type="link"
+                          danger
+                          :disabled="!canScheduleEdit || !record.canDelete"
+                          @click="removeSchedule(record)"
+                        >
+                          删除
+                        </a-button>
+                      </template>
+                      <template v-if="currentSession && currentSession.sessionId === record.sessionId">
+                        <a-button v-if="currentSession.actionPermissions?.canStartCheckin" size="small" type="link" @click="handleStartSessionCheckin">开始签到</a-button>
+                        <a-button v-if="currentSession.actionPermissions?.canEndCheckin" size="small" type="link" @click="handleEndSessionCheckin">结束签到</a-button>
+                        <a-button v-if="currentSession.actionPermissions?.canStartCheckout" size="small" type="link" @click="handleStartSessionCheckout">开始签退</a-button>
+                        <a-button v-if="currentSession.actionPermissions?.canEndCheckout" size="small" type="link" @click="handleEndSessionCheckout">结束签退</a-button>
+                        <a-button v-if="currentSession.actionPermissions?.canSkip" size="small" type="link" danger @click="handleSkipCurrentSession">跳过</a-button>
+                      </template>
                     </a-space>
-                    <span v-else style="color:#999">仅当前课次可操作</span>
                   </template>
                 </a-table-column>
               </a-table>
@@ -536,6 +562,9 @@
         <a-form-item label="课程名称" required>
           <a-input v-model:value="courseForm.name" placeholder="例：刑事诉讼法实务操作" />
         </a-form-item>
+        <a-form-item label="课程地点">
+          <a-input v-model:value="courseForm.location" placeholder="请输入课程地点" />
+        </a-form-item>
         <a-row :gutter="12">
           <a-col :span="12">
             <a-form-item label="授课教官" required>
@@ -583,16 +612,20 @@
         <a-row :gutter="12">
           <a-col :span="24">
             <a-form-item label="详细排课清单" required>
-              <div v-if="courseForm.schedules.length > 0" style="margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 8px; background: #f9f9f9; padding: 12px; border-radius: 6px;">
-                <a-tag
-                  v-for="(sch, idx) in courseForm.schedules"
-                  :key="idx"
-                  closable
-                  color="blue"
-                  @close="removeCourseSchedule(idx)"
-                >
-                  {{ sch.date }} ({{ sch.timeRange }}) · {{ sch.hours }}课时
-                </a-tag>
+              <div v-if="courseForm.schedules.length > 0" class="course-schedule-list">
+                <div v-for="(sch, idx) in courseForm.schedules" :key="sch.sessionId || idx" class="course-schedule-item">
+                  <div>
+                    <div>{{ sch.date }} · {{ sch.timeRange }}</div>
+                    <div style="color:#666;font-size:12px">
+                      地点：{{ sch.location || courseForm.location || '未设置' }} · {{ sch.hours }}课时
+                      <span v-if="sch.canEdit === false || sch.canDelete === false"> · 已过时间段，不可编辑删除</span>
+                    </div>
+                  </div>
+                  <a-space size="small">
+                    <a-button size="small" type="link" :disabled="sch.canEdit === false" @click="startEditCourseSchedule(idx)">编辑</a-button>
+                    <a-button size="small" type="link" danger :disabled="sch.canDelete === false" @click="removeCourseSchedule(idx)">删除</a-button>
+                  </a-space>
+                </div>
               </div>
               <div class="schedule-editor-box">
                 <div class="schedule-mode-row">
@@ -623,8 +656,16 @@
                     :minute-step="5"
                     :placeholder="['开始', '结束']"
                   />
+                  <a-input
+                    v-model:value="tempScheduleLocation"
+                    class="schedule-location-input"
+                    placeholder="课次地点，默认使用课程地点"
+                  />
                   <a-button type="primary" size="small" @click="addCourseSchedule">
-                    添加
+                    {{ editingCourseScheduleIdx !== null ? '更新课次' : '添加课次' }}
+                  </a-button>
+                  <a-button v-if="editingCourseScheduleIdx !== null" size="small" @click="resetCourseScheduleEditor">
+                    取消编辑
                   </a-button>
                 </div>
               </div>
@@ -646,6 +687,57 @@
             </a-form-item>
           </a-col>
         </a-row>
+      </a-form>
+    </a-modal>
+
+    <a-modal
+      v-model:open="showScheduleModal"
+      title="编辑课次"
+      @ok="saveSchedule"
+      @cancel="resetScheduleModal"
+      ok-text="保存"
+      cancel-text="取消"
+      width="520px"
+    >
+      <a-form layout="vertical" style="margin-top:12px">
+        <a-form-item label="所属课程">
+          <a-input :value="scheduleForm.courseName || '-'" disabled />
+        </a-form-item>
+        <a-form-item label="课程地点">
+          <a-input :value="scheduleForm.courseLocation || '未设置'" disabled />
+        </a-form-item>
+        <a-row :gutter="12">
+          <a-col :span="12">
+            <a-form-item label="上课日期" required>
+              <a-date-picker
+                v-model:value="scheduleForm.date"
+                style="width:100%"
+                format="YYYY-MM-DD"
+                placeholder="选择日期"
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="课时数(自动计算)">
+              <a-input-number :value="scheduleModalHours" :min="0" disabled style="width:100%" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-form-item label="上课时段" required>
+          <a-time-range-picker
+            v-model:value="scheduleFormTimeRange"
+            style="width:100%"
+            format="HH:mm"
+            :minute-step="5"
+            :placeholder="['开始', '结束']"
+          />
+        </a-form-item>
+        <a-form-item label="课次地点">
+          <a-input
+            v-model:value="scheduleForm.location"
+            placeholder="不填则使用课程地点"
+          />
+        </a-form-item>
       </a-form>
     </a-modal>
 
@@ -1131,7 +1223,7 @@ onMounted(() => {
 const activeTab = ref('overview')
 const studentSearch = ref('')
 const selectedSchedules = reactive({}) // { courseIdx: scheduleIdx }
-const scheduleViewMode = ref('course')
+const scheduleViewMode = ref('timetable')
 const canEdit = computed(() => !!trainingData.canManageAll)
 const canScheduleEdit = computed(() => !!trainingData.canEditCourses && trainingData.status !== 'ended')
 const canManageStudents = computed(() => !!trainingData.canManageAll)
@@ -1250,13 +1342,18 @@ const currentSessionStatusLabel = computed(() => {
   if (!currentSession.value) return '无'
   return scheduleStatusLabelMap[currentSession.value.status] || currentSession.value.status
 })
-const scheduleRows = computed(() => (trainingData.courses || []).flatMap((course) =>
-  (course.schedules || []).map((schedule) => ({
+const scheduleRows = computed(() => (trainingData.courses || []).flatMap((course, courseIndex) =>
+  (course.schedules || []).map((schedule, scheduleIndex) => ({
     sessionId: schedule.sessionId,
     date: schedule.date,
     timeRange: schedule.timeRange,
+    location: schedule.location || course.location || '',
     status: schedule.status,
     courseName: course.name,
+    courseIndex,
+    scheduleIndex,
+    canEdit: !!schedule.canEdit,
+    canDelete: !!schedule.canDelete,
     instructorText: [
       course.primaryInstructorName || course.instructor || '未指定',
       course.assistantInstructorNames?.length ? `带教：${course.assistantInstructorNames.join('、')}` : '',
@@ -1671,22 +1768,35 @@ async function addSelectedStudents() {
 // ===== 课程 CRUD =====
 
 const showCourseModal = ref(false)
+const showScheduleModal = ref(false)
 const editingCourseIdx = ref(null)
+const editingCourseScheduleIdx = ref(null)
 const dateAddMode = ref('single')
 const tempDate = ref(null)
 const tempDateRange = ref([])
 const tempTimeRange = ref([])
+const tempScheduleLocation = ref('')
+const scheduleFormTimeRange = ref([])
 
 // 'schedules' will store objects like { date: 'YYYY-MM-DD', timeRange: 'HH:mm~HH:mm', hours: 2 }
 const courseForm = reactive({
   courseKey: '',
   name: '',
+  location: '',
   instructor: '',
   instructorId: null,
   assistantInstructorIds: [],
   hours: 0,
   type: 'theory',
   schedules: [],
+})
+const scheduleForm = reactive({
+  courseIndex: null,
+  sessionId: '',
+  courseName: '',
+  courseLocation: '',
+  date: null,
+  location: '',
 })
 
 function onInstructorChange(userId) {
@@ -1698,20 +1808,95 @@ function calcTotalHours() {
   courseForm.hours = Math.round(courseForm.schedules.reduce((sum, sch) => sum + (sch.hours || 0), 0))
 }
 
+function sortCourseSchedules(schedules) {
+  schedules.sort((a, b) => {
+    const dateCompare = (a.date || '').localeCompare(b.date || '')
+    if (dateCompare !== 0) return dateCompare
+    return (a.timeRange || '').localeCompare(b.timeRange || '')
+  })
+}
+
+function buildScheduleTimePayload(rangeValue) {
+  if (!rangeValue || rangeValue.length !== 2) {
+    return null
+  }
+  const startText = rangeValue[0].format('HH:mm')
+  const endText = rangeValue[1].format('HH:mm')
+  const start = dayjs(`2000-01-01 ${startText}`)
+  const end = dayjs(`2000-01-01 ${endText}`)
+  const diffMs = end.diff(start)
+  return {
+    timeRange: `${startText}~${endText}`,
+    hours: diffMs > 0 ? Math.round(diffMs / (1000 * 60 * 60)) : 0,
+  }
+}
+
+const scheduleModalHours = computed(() => {
+  const payload = buildScheduleTimePayload(scheduleFormTimeRange.value)
+  return payload?.hours || 0
+})
+
+function cloneTrainingCourses() {
+  return JSON.parse(JSON.stringify(trainingData.courses || []))
+}
+
+function getMutableCoursePayload(courseIndex) {
+  const nextCourses = cloneTrainingCourses()
+  const targetCourse = nextCourses[courseIndex]
+  if (!targetCourse) {
+    return { nextCourses, targetCourse: null }
+  }
+  targetCourse.schedules = [...(targetCourse.schedules || [])]
+  return { nextCourses, targetCourse }
+}
+
+function resetScheduleModal() {
+  showScheduleModal.value = false
+  Object.assign(scheduleForm, {
+    courseIndex: null,
+    sessionId: '',
+    courseName: '',
+    courseLocation: '',
+    date: null,
+    location: '',
+  })
+  scheduleFormTimeRange.value = []
+}
+
+function resetCourseScheduleEditor() {
+  editingCourseScheduleIdx.value = null
+  tempDate.value = null
+  tempDateRange.value = []
+  tempTimeRange.value = []
+  tempScheduleLocation.value = ''
+  dateAddMode.value = 'single'
+}
+
+function startEditCourseSchedule(idx) {
+  const schedule = courseForm.schedules[idx]
+  if (!schedule) return
+  if (schedule.canEdit === false) {
+    message.warning('已过时间段的课次不能编辑')
+    return
+  }
+  editingCourseScheduleIdx.value = idx
+  dateAddMode.value = 'single'
+  tempDate.value = dayjs(schedule.date)
+  tempDateRange.value = []
+  const [startText = '', endText = ''] = String(schedule.timeRange || '').split('~')
+  tempTimeRange.value = startText && endText ? [dayjs(`2000-01-01 ${startText}`), dayjs(`2000-01-01 ${endText}`)] : []
+  tempScheduleLocation.value = schedule.location || courseForm.location || ''
+}
+
 function addCourseSchedule() {
   if (!tempTimeRange.value || tempTimeRange.value.length !== 2) {
     message.warning('请选择上课时段')
     return
   }
 
-  const tStr1 = tempTimeRange.value[0].format('HH:mm')
-  const tStr2 = tempTimeRange.value[1].format('HH:mm')
-  const tRange = `${tStr1}~${tStr2}`
-
-  const startT = dayjs(`2000-01-01 ${tStr1}`)
-  const endT = dayjs(`2000-01-01 ${tStr2}`)
-  const diffMs = endT.diff(startT)
-  const hrs = diffMs > 0 ? Math.round(diffMs / (1000 * 60 * 60)) : 0
+  const timePayload = buildScheduleTimePayload(tempTimeRange.value)
+  const tRange = timePayload?.timeRange || ''
+  const hrs = timePayload?.hours || 0
 
   if (hrs <= 0) {
     message.warning('时长太短或结束时间早于开始时间')
@@ -1723,6 +1908,10 @@ function addCourseSchedule() {
     if (!tempDate.value) { message.warning('请选择上课日期'); return }
     datesToAdd.push(tempDate.value.format('YYYY-MM-DD'))
   } else {
+    if (editingCourseScheduleIdx.value !== null) {
+      message.warning('编辑课次时仅支持单日修改')
+      return
+    }
     if (!tempDateRange.value || tempDateRange.value.length !== 2) { message.warning('请选择上课日期范围'); return }
     let current = tempDateRange.value[0]
     const end = tempDateRange.value[1]
@@ -1733,46 +1922,77 @@ function addCourseSchedule() {
   }
 
   let addedCount = 0
+  const normalizedLocation = tempScheduleLocation.value || courseForm.location || ''
+  if (editingCourseScheduleIdx.value !== null) {
+    const editingSchedule = courseForm.schedules[editingCourseScheduleIdx.value]
+    if (!editingSchedule) {
+      resetCourseScheduleEditor()
+      return
+    }
+    const nextDate = datesToAdd[0]
+    const duplicate = courseForm.schedules.some((schedule, idx) => (
+      idx !== editingCourseScheduleIdx.value
+      && schedule.date === nextDate
+      && schedule.timeRange === tRange
+    ))
+    if (duplicate) {
+      message.warning('该课次时间段已存在')
+      return
+    }
+    courseForm.schedules.splice(editingCourseScheduleIdx.value, 1, {
+      ...editingSchedule,
+      date: nextDate,
+      timeRange: tRange,
+      hours: hrs,
+      location: normalizedLocation,
+    })
+    sortCourseSchedules(courseForm.schedules)
+    calcTotalHours()
+    message.success('课次已更新')
+    resetCourseScheduleEditor()
+    return
+  }
   datesToAdd.forEach(dStr => {
     // Avoid exact duplicate
     const exists = courseForm.schedules.some(s => s.date === dStr && s.timeRange === tRange)
     if (!exists) {
-      courseForm.schedules.push({ date: dStr, timeRange: tRange, hours: hrs })
+      courseForm.schedules.push({ date: dStr, timeRange: tRange, hours: hrs, location: normalizedLocation })
       addedCount++
     }
   })
 
   if (addedCount > 0) {
-    courseForm.schedules.sort((a, b) => {
-      const db = a.date.localeCompare(b.date)
-      if (db !== 0) return db
-      return a.timeRange.localeCompare(b.timeRange)
-    })
+    sortCourseSchedules(courseForm.schedules)
     calcTotalHours()
     message.success(`成功添加 ${addedCount} 节排课`)
   } else {
     message.warning('所选排课已存在，未重复添加')
   }
 
-  // Clear temps
-  tempDate.value = null
-  tempDateRange.value = []
-  tempTimeRange.value = []
+  resetCourseScheduleEditor()
 }
 
 function removeCourseSchedule(idx) {
+  const schedule = courseForm.schedules[idx]
+  if (!schedule) return
+  if (schedule.canDelete === false) {
+    message.warning('已过时间段的课次不能删除')
+    return
+  }
   courseForm.schedules.splice(idx, 1)
   calcTotalHours()
+  if (editingCourseScheduleIdx.value === idx) {
+    resetCourseScheduleEditor()
+  } else if (editingCourseScheduleIdx.value !== null && editingCourseScheduleIdx.value > idx) {
+    editingCourseScheduleIdx.value -= 1
+  }
 }
 
-function openCourseModal(idx = null) {
+function openCourseModal(idx = null, sessionId = null) {
   if (!canScheduleEdit.value) return
   ensureInstructorOptionsLoaded(true)
   editingCourseIdx.value = idx
-  tempDate.value = null
-  tempDateRange.value = []
-  tempTimeRange.value = []
-  dateAddMode.value = 'single'
+  resetCourseScheduleEditor()
   
   if (idx !== null && trainingData.courses[idx]) {
     const c = JSON.parse(JSON.stringify(trainingData.courses[idx]))
@@ -1780,6 +2000,7 @@ function openCourseModal(idx = null) {
     Object.assign(courseForm, {
       courseKey: c.courseKey || '',
       name: c.name,
+      location: c.location || '',
       instructor: c.instructor,
       instructorId: (c.primaryInstructorId || inst?.userId) ?? null,
       assistantInstructorIds: c.assistantInstructorIds || [],
@@ -1798,26 +2019,123 @@ function openCourseModal(idx = null) {
           if (diff > 0) hrs = Number((diff / (1000 * 60 * 60)).toFixed(1))
         }
         c.dates.forEach(d => {
-          courseForm.schedules.push({ date: d, timeRange: c.timeRange, hours: hrs })
+          courseForm.schedules.push({ date: d, timeRange: c.timeRange, hours: hrs, location: c.location || '' })
         })
       } else if (c.date && c.timeRange) {
-        courseForm.schedules.push({ date: c.date, timeRange: c.timeRange, hours: c.hours })
+        courseForm.schedules.push({ date: c.date, timeRange: c.timeRange, hours: c.hours, location: c.location || '' })
       } else if (c.startTime && c.endTime) {
          courseForm.schedules.push({ 
            date: dayjs(c.startTime).format('YYYY-MM-DD'), 
            timeRange: `${dayjs(c.startTime).format('HH:mm')}~${dayjs(c.endTime).format('HH:mm')}`, 
-           hours: c.hours 
+           hours: c.hours,
+           location: c.location || '',
         })
       }
     }
   } else {
-    Object.assign(courseForm, { courseKey: '', name: '', instructor: '', instructorId: null, assistantInstructorIds: [], hours: 0, type: 'theory', schedules: [] })
+    Object.assign(courseForm, { courseKey: '', name: '', location: '', instructor: '', instructorId: null, assistantInstructorIds: [], hours: 0, type: 'theory', schedules: [] })
+  }
+
+  tempScheduleLocation.value = ''
+  if (sessionId) {
+    const scheduleIdx = courseForm.schedules.findIndex((item) => item.sessionId === sessionId)
+    if (scheduleIdx >= 0) {
+      startEditCourseSchedule(scheduleIdx)
+    }
   }
   showCourseModal.value = true
 }
 
+function openScheduleModal(record) {
+  if (!canScheduleEdit.value || !record?.canEdit) return
+  const targetCourse = trainingData.courses?.[record.courseIndex]
+  const targetSchedule = targetCourse?.schedules?.find((item) => item.sessionId === record.sessionId)
+  if (!targetCourse || !targetSchedule) {
+    message.warning('未找到要编辑的课次')
+    return
+  }
+  const [startText = '', endText = ''] = String(targetSchedule.timeRange || '').split('~')
+  Object.assign(scheduleForm, {
+    courseIndex: record.courseIndex,
+    sessionId: record.sessionId,
+    courseName: targetCourse.name || '',
+    courseLocation: targetCourse.location || '',
+    date: targetSchedule.date ? dayjs(targetSchedule.date) : null,
+    location: targetSchedule.location || '',
+  })
+  scheduleFormTimeRange.value = startText && endText
+    ? [dayjs(`2000-01-01 ${startText}`), dayjs(`2000-01-01 ${endText}`)]
+    : []
+  showScheduleModal.value = true
+}
+
+async function saveSchedule() {
+  if (!canScheduleEdit.value) return
+  if (scheduleForm.courseIndex === null || !scheduleForm.sessionId) {
+    message.warning('缺少课次信息')
+    return
+  }
+  if (!scheduleForm.date) {
+    message.warning('请选择上课日期')
+    return
+  }
+  const timePayload = buildScheduleTimePayload(scheduleFormTimeRange.value)
+  if (!timePayload) {
+    message.warning('请选择上课时段')
+    return
+  }
+  if (timePayload.hours <= 0) {
+    message.warning('时长太短或结束时间早于开始时间')
+    return
+  }
+
+  const { nextCourses, targetCourse } = getMutableCoursePayload(scheduleForm.courseIndex)
+  if (!targetCourse) {
+    message.warning('未找到所属课程')
+    return
+  }
+  const scheduleIdx = targetCourse.schedules.findIndex((item) => item.sessionId === scheduleForm.sessionId)
+  if (scheduleIdx < 0) {
+    message.warning('未找到要编辑的课次')
+    return
+  }
+  const nextDate = scheduleForm.date.format('YYYY-MM-DD')
+  const duplicate = targetCourse.schedules.some((item, idx) => (
+    idx !== scheduleIdx
+    && item.date === nextDate
+    && item.timeRange === timePayload.timeRange
+  ))
+  if (duplicate) {
+    message.warning('该课次时间段已存在')
+    return
+  }
+
+  targetCourse.schedules.splice(scheduleIdx, 1, {
+    ...targetCourse.schedules[scheduleIdx],
+    date: nextDate,
+    timeRange: timePayload.timeRange,
+    location: scheduleForm.location || targetCourse.location || '',
+    hours: timePayload.hours,
+  })
+  sortCourseSchedules(targetCourse.schedules)
+  targetCourse.hours = Math.round(targetCourse.schedules.reduce((sum, item) => sum + (item.hours || 0), 0))
+
+  try {
+    await submitTrainingUpdate({ courses: nextCourses })
+    message.success('课次已更新')
+    resetScheduleModal()
+    await loadTrainingDetail()
+  } catch (error) {
+    message.error(error.message || '课次保存失败')
+  }
+}
+
 async function saveCourse() {
   if (!canScheduleEdit.value) return
+  if (editingCourseScheduleIdx.value !== null) {
+    message.warning('请先完成当前课次编辑')
+    return
+  }
   if (!courseForm.name || !courseForm.instructor || courseForm.schedules.length === 0) { 
     message.warning('请填写课程名称、教官，并至少添加一节排课')
     return 
@@ -1857,6 +2175,35 @@ function removeCourse(idx) {
         message.error(error.message || '课程删除失败')
       }
     }
+  })
+}
+
+function removeSchedule(record) {
+  if (!canScheduleEdit.value || !record?.canDelete) return
+  Modal.confirm({
+    title: '确认删除课次',
+    content: `确定删除课次「${record.courseName} ${record.date} ${record.timeRange}」吗？`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      const { nextCourses, targetCourse } = getMutableCoursePayload(record.courseIndex)
+      if (!targetCourse) return
+      targetCourse.schedules = targetCourse.schedules.filter((item) => item.sessionId !== record.sessionId)
+      targetCourse.hours = Math.round(targetCourse.schedules.reduce((sum, item) => sum + (item.hours || 0), 0))
+      if (targetCourse.schedules.length > 0) {
+        nextCourses.splice(record.courseIndex, 1, targetCourse)
+      } else {
+        nextCourses.splice(record.courseIndex, 1)
+      }
+      try {
+        await submitTrainingUpdate({ courses: nextCourses })
+        message.success(targetCourse.schedules.length > 0 ? '课次已删除' : '课次已删除，所属课程已同步移除')
+        await loadTrainingDetail()
+      } catch (error) {
+        message.error(error.message || '课次删除失败')
+      }
+    },
   })
 }
 
@@ -2121,6 +2468,23 @@ function exportMsg() {
   border-radius: 6px;
 }
 
+.course-schedule-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.course-schedule-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  background: #f9f9f9;
+}
+
 .schedule-mode-row {
   margin-bottom: 8px;
 }
@@ -2129,6 +2493,7 @@ function exportMsg() {
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .schedule-date-picker {
@@ -2137,6 +2502,10 @@ function exportMsg() {
 
 .schedule-time-range {
   width: 220px;
+}
+
+.schedule-location-input {
+  width: 200px;
 }
 
 .ci-rate {

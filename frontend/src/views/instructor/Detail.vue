@@ -20,6 +20,10 @@
             <div class="profile-title">{{ instructor.title }}</div>
             <div class="profile-unit">{{ instructor.unit }}</div>
 
+            <div v-if="canEditInstructor" class="profile-actions">
+              <a-button type="primary" ghost size="small" @click="openEditModal">编辑教官信息</a-button>
+            </div>
+
             <a-divider />
 
             <div class="profile-stats">
@@ -78,6 +82,13 @@
                       <span v-if="!instructor.specialties || instructor.specialties.length === 0" style="color: #999">未设置</span>
                     </div>
                   </div>
+                  <div class="specialty-section">
+                    <h4>教官资质</h4>
+                    <div class="specialty-tags">
+                      <a-tag v-for="item in instructor.instructorQualification" :key="item" color="gold">{{ item }}</a-tag>
+                      <span v-if="!instructor.instructorQualification || instructor.instructorQualification.length === 0" style="color: #999">未设置</span>
+                    </div>
+                  </div>
                 </div>
               </a-tab-pane>
 
@@ -93,19 +104,36 @@
         </a-col>
       </a-row>
     </a-spin>
+
+    <InstructorEditModal
+      v-model:open="editDialog.open"
+      :user="editDialog.user"
+      :submitting="editDialog.submitting"
+      @submit="handleEditSubmit"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { getUser } from '@/api/user'
+import { message } from 'ant-design-vue'
+import { useAuthStore } from '@/stores/auth'
+import { getUser, updateUser } from '@/api/user'
+import InstructorEditModal from './components/InstructorEditModal.vue'
 
 const route = useRoute()
 const instructorId = Number(route.params.id)
+const authStore = useAuthStore()
 
 const loading = ref(false)
 const activeTab = ref('intro')
+const canEditInstructor = computed(() => authStore.hasPermission('UPDATE_USER'))
+const editDialog = ref({
+  open: false,
+  submitting: false,
+  user: null,
+})
 const instructor = ref({
   id: null,
   name: '',
@@ -116,6 +144,8 @@ const instructor = ref({
   joinDate: '',
   level: '',
   specialties: [],
+  instructorQualification: [],
+  instructorIntro: '',
   examCount: 0,
   studyHours: 0,
   avgScore: 0,
@@ -144,6 +174,9 @@ const specialtiesText = computed(() => {
 })
 
 const introText = computed(() => {
+  if (instructor.value.instructorIntro) {
+    return instructor.value.instructorIntro
+  }
   const n = instructor.value.name || '该教官'
   const unit = instructor.value.unit || '未分配单位'
   const level = instructor.value.level || '教官'
@@ -151,7 +184,7 @@ const introText = computed(() => {
     `累计学习时长 ${Math.round(instructor.value.studyHours || 0)} 小时，考试次数 ${instructor.value.examCount || 0} 次，平均成绩 ${instructor.value.avgScore || 0}。`
 })
 
-onMounted(async () => {
+async function loadInstructorDetail() {
   loading.value = true
   try {
     const data = await getUser(instructorId)
@@ -168,6 +201,8 @@ onMounted(async () => {
       specialties: (data.instructorSpecialties && data.instructorSpecialties.length > 0)
         ? data.instructorSpecialties
         : (data.policeTypes || []).map((p) => p.name).filter(Boolean),
+      instructorQualification: data.instructorQualification || [],
+      instructorIntro: data.instructorIntro || '',
       examCount: data.examCount || 0,
       studyHours: data.studyHours || 0,
       avgScore: data.avgScore || 0,
@@ -183,6 +218,8 @@ onMounted(async () => {
       joinDate: '',
       level: '',
       specialties: [],
+      instructorQualification: [],
+      instructorIntro: '',
       examCount: 0,
       studyHours: 0,
       avgScore: 0,
@@ -190,7 +227,31 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+function openEditModal() {
+  if (!canEditInstructor.value) return
+  editDialog.value = {
+    open: true,
+    submitting: false,
+    user: { ...instructor.value },
+  }
+}
+
+async function handleEditSubmit(payload) {
+  editDialog.value = { ...editDialog.value, submitting: true }
+  try {
+    await updateUser(instructorId, payload)
+    message.success('教官信息已更新')
+    editDialog.value = { open: false, submitting: false, user: null }
+    await loadInstructorDetail()
+  } catch (error) {
+    editDialog.value = { ...editDialog.value, submitting: false }
+    message.error(error.message || '教官信息更新失败')
+  }
+}
+
+onMounted(loadInstructorDetail)
 </script>
 
 <style scoped>
@@ -204,6 +265,7 @@ onMounted(async () => {
 .profile-name { font-size: 22px; font-weight: 700; color: #1a1a1a; }
 .profile-title { font-size: 14px; color: var(--police-primary); margin: 4px 0; }
 .profile-unit { font-size: 12px; color: #888; }
+.profile-actions { margin-top: 16px; }
 .profile-stats { display: flex; justify-content: space-around; align-items: center; }
 .ps-item { text-align: center; }
 .ps-num { font-size: 22px; font-weight: 700; color: #1a1a1a; }

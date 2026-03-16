@@ -287,6 +287,8 @@ class BatchImportService:
                 if bucket is None:
                     bucket = course_seed
                     grouped_courses[course_key] = bucket
+                elif not bucket.get("location") and schedule_item.get("location"):
+                    bucket["location"] = schedule_item.get("location")
 
                 if not self._schedule_exists(bucket["schedules"], schedule_item):
                     bucket["schedules"].append(schedule_item)
@@ -316,6 +318,7 @@ class BatchImportService:
                     training_id=training_id,
                     course_key=course.get("course_key"),
                     name=course["name"],
+                    location=course.get("location"),
                     instructor=course.get("instructor"),
                     primary_instructor_id=course.get("primary_instructor_id"),
                     assistant_instructor_ids=course.get("assistant_instructor_ids") or [],
@@ -724,6 +727,7 @@ class BatchImportService:
         course_seed = {
             "course_key": None,
             "name": course_name,
+            "location": self._to_text(row.get("location")),
             "instructor": instructor_name,
             "primary_instructor_id": self._guess_instructor_id(instructor_name),
             "assistant_instructor_ids": [],
@@ -801,6 +805,7 @@ class BatchImportService:
         return {
             "course_key": course.course_key or str(uuid.uuid4()),
             "name": course.name,
+            "location": self._to_text(course.location),
             "instructor": course.instructor,
             "primary_instructor_id": course.primary_instructor_id,
             "assistant_instructor_ids": list(course.assistant_instructor_ids or []),
@@ -827,6 +832,7 @@ class BatchImportService:
         return {
             "course_key": course.get("course_key") or existing_course.get("course_key") or str(uuid.uuid4()),
             "name": course["name"],
+            "location": course.get("location") or existing_course.get("location"),
             "instructor": course.get("instructor"),
             "primary_instructor_id": (
                 course.get("primary_instructor_id")

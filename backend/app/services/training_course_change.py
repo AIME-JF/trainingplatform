@@ -19,7 +19,7 @@ class TrainingCourseChangeService:
     COURSE_TARGET = "course"
     SESSION_TARGET = "session"
 
-    COURSE_FIELDS = ("name", "instructor", "primary_instructor_id", "assistant_instructor_ids", "hours", "type")
+    COURSE_FIELDS = ("name", "location", "instructor", "primary_instructor_id", "assistant_instructor_ids", "hours", "type")
     SESSION_FIELDS = (
         "date",
         "time_range",
@@ -50,6 +50,7 @@ class TrainingCourseChangeService:
     }
     FIELD_LABELS = {
         "name": "课程名称",
+        "location": "课程地点",
         "instructor": "主讲教官",
         "primary_instructor_id": "主讲教官账号",
         "assistant_instructor_ids": "带教教官",
@@ -328,6 +329,7 @@ class TrainingCourseChangeService:
         normalized = {
             "course_key": self._clean_text(course_key),
             "name": self._clean_text(self._read_value(raw, "name")),
+            "location": self._clean_text(self._read_value(raw, "location")),
             "instructor": self._clean_text(self._read_value(raw, "instructor")),
             "primary_instructor_id": self._to_int(primary_instructor_id),
             "assistant_instructor_ids": self._normalize_id_list(assistant_instructor_ids),

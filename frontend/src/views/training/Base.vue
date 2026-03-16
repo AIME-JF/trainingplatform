@@ -40,8 +40,11 @@
           <template v-if="column.key === 'departmentName'">
             {{ record.departmentName || '未设置' }}
           </template>
-          <template v-if="column.key === 'linkedTrainingCount'">
-            <a-tag color="blue">{{ record.linkedTrainingCount || 0 }}</a-tag>
+          <template v-if="column.key === 'linkedTrainingStatus'">
+            <a-space size="small">
+              <a-tag color="orange">待开班 {{ record.upcomingTrainingCount || 0 }}</a-tag>
+              <a-tag color="green">已开班 {{ record.activeTrainingCount || 0 }}</a-tag>
+            </a-space>
           </template>
           <template v-if="column.key === 'action'">
             <a-space size="small">
@@ -124,7 +127,7 @@ const columns = [
   { title: '基地名称', dataIndex: 'name', key: 'name' },
   { title: '基地地点', dataIndex: 'location', key: 'location' },
   { title: '部门', dataIndex: 'departmentName', key: 'departmentName', width: 180 },
-  { title: '关联培训班', dataIndex: 'linkedTrainingCount', key: 'linkedTrainingCount', width: 120 },
+  { title: '关联培训班', key: 'linkedTrainingStatus', width: 220 },
   { title: '操作', key: 'action', width: 140 },
 ]
 

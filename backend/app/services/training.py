@@ -301,6 +301,8 @@ class TrainingService:
         if courses is not None:
             self._assert_training_course_editable(training, "修改课程安排")
             before_courses = self.course_change_service.snapshot_course_entities(training.courses or [])
+            after_courses = self.course_change_service.snapshot_course_payloads(courses or [])
+            self._validate_schedule_mutation_window(training, before_courses, after_courses)
             self._replace_courses(training.id, courses)
             self.db.flush()
             after_courses = self._load_training_courses(training.id)
@@ -553,6 +555,15 @@ class TrainingService:
         )
         self.db.flush()
         after_courses = self._load_training_courses(training_id)
+        try:
+            self._validate_schedule_mutation_window(
+                training,
+                before_courses,
+                self.course_change_service.snapshot_course_entities(after_courses),
+            )
+        except ValueError:
+            self.db.rollback()
+            raise
         if training.status == "active":
             self.course_change_service.record_changes(
                 training_id,
@@ -1260,6 +1271,7 @@ class TrainingService:
                 training_id=training_id,
                 course_key=payload.get("course_key"),
                 name=payload["name"],
+                location=payload.get("location"),
                 instructor=payload.get("instructor"),
                 primary_instructor_id=payload.get("primary_instructor_id"),
                 assistant_instructor_ids=payload.get("assistant_instructor_ids") or [],
@@ -1270,8 +1282,9 @@ class TrainingService:
 
     def _normalize_course_payload(self, course: Any) -> Dict[str, Any]:
         payload = course.model_dump() if hasattr(course, "model_dump") else dict(course)
-        course_key = str(payload.get("course_key") or "").strip() or str(uuid.uuid4())
-        primary_instructor_id = payload.get("primary_instructor_id")
+        course_key = str(payload.get("course_key") or payload.get("courseKey") or "").strip() or str(uuid.uuid4())
+        primary_instructor_id = payload.get("primary_instructor_id") or payload.get("primaryInstructorId")
+        course_location = self._normalize_optional_text(payload.get("location"))
         instructor_name = (payload.get("instructor") or "").strip() or None
         if not primary_instructor_id and instructor_name:
             primary_instructor_id = self._guess_primary_instructor_id(instructor_name)
@@ -1279,7 +1292,7 @@ class TrainingService:
             instructor_name = self._resolve_user_name(primary_instructor_id)
 
         assistant_instructor_ids = []
-        for raw_id in payload.get("assistant_instructor_ids") or []:
+        for raw_id in (payload.get("assistant_instructor_ids") or payload.get("assistantInstructorIds") or []):
             if raw_id is None:
                 continue
             assistant_instructor_ids.append(int(raw_id))
@@ -1293,6 +1306,7 @@ class TrainingService:
         return {
             "course_key": course_key,
             "name": payload["name"],
+            "location": course_location,
             "instructor": instructor_name,
             "primary_instructor_id": primary_instructor_id,
             "assistant_instructor_ids": sorted(set(assistant_instructor_ids)),
@@ -1337,27 +1351,34 @@ class TrainingService:
         if (training.status or "upcoming") == "ended":
             raise ValueError(f"已结班的培训班不能再{action_text}")
 
+    @staticmethod
+    def _normalize_optional_text(value: Any) -> Optional[str]:
+        if value is None:
+            return None
+        text = str(value).strip()
+        return text or None
+
     def _normalize_schedule_item(self, item: Any) -> Dict[str, Any]:
         raw = item.model_dump() if hasattr(item, "model_dump") else dict(item)
         raw_date = raw.get("date")
         if isinstance(raw_date, date):
             raw_date = raw_date.isoformat()
         return {
-            "session_id": raw.get("session_id") or str(uuid.uuid4()),
+            "session_id": raw.get("session_id") or raw.get("sessionId") or str(uuid.uuid4()),
             "date": raw_date,
             "time_range": raw.get("time_range") or raw.get("timeRange") or "",
             "hours": float(raw.get("hours", 0) or 0),
-            "location": raw.get("location"),
+            "location": self._normalize_optional_text(raw.get("location")),
             "status": raw.get("status") or self.SESSION_PENDING,
-            "started_at": self._serialize_dt(raw.get("started_at")),
-            "checkin_started_at": self._serialize_dt(raw.get("checkin_started_at")),
-            "checkin_ended_at": self._serialize_dt(raw.get("checkin_ended_at")),
-            "checkout_started_at": self._serialize_dt(raw.get("checkout_started_at")),
-            "checkout_ended_at": self._serialize_dt(raw.get("checkout_ended_at")),
-            "ended_at": self._serialize_dt(raw.get("ended_at")),
-            "skipped_at": self._serialize_dt(raw.get("skipped_at")),
-            "skipped_by": raw.get("skipped_by"),
-            "skip_reason": raw.get("skip_reason"),
+            "started_at": self._serialize_dt(raw.get("started_at") or raw.get("startedAt")),
+            "checkin_started_at": self._serialize_dt(raw.get("checkin_started_at") or raw.get("checkinStartedAt")),
+            "checkin_ended_at": self._serialize_dt(raw.get("checkin_ended_at") or raw.get("checkinEndedAt")),
+            "checkout_started_at": self._serialize_dt(raw.get("checkout_started_at") or raw.get("checkoutStartedAt")),
+            "checkout_ended_at": self._serialize_dt(raw.get("checkout_ended_at") or raw.get("checkoutEndedAt")),
+            "ended_at": self._serialize_dt(raw.get("ended_at") or raw.get("endedAt")),
+            "skipped_at": self._serialize_dt(raw.get("skipped_at") or raw.get("skippedAt")),
+            "skipped_by": raw.get("skipped_by") or raw.get("skippedBy"),
+            "skip_reason": raw.get("skip_reason") or raw.get("skipReason"),
         }
 
     def _serialize_dt(self, value: Any) -> Optional[str]:
@@ -1366,6 +1387,112 @@ class TrainingService:
         if isinstance(value, datetime):
             return value.isoformat()
         return str(value)
+
+    def _resolve_schedule_deadline_from_item(self, schedule: Dict[str, Any]) -> Optional[datetime]:
+        schedule_date = self._parse_schedule_date(schedule)
+        if not schedule_date:
+            return None
+        _, time_end = self._parse_time_range(schedule.get("time_range"))
+        if time_end:
+            return datetime.combine(schedule_date, time_end)
+        return datetime.combine(schedule_date, time(23, 59))
+
+    def _is_schedule_editable(self, training: Training, schedule: Dict[str, Any]) -> bool:
+        if (training.status or "upcoming") == "ended":
+            return False
+        if (schedule.get("status") or self.SESSION_PENDING) != self.SESSION_PENDING:
+            return False
+        deadline = self._resolve_schedule_deadline_from_item(schedule)
+        if deadline is None:
+            return False
+        now = self._current_time(deadline)
+        normalized_deadline = self._normalize_datetime(deadline, now.tzinfo)
+        return bool(normalized_deadline and now <= normalized_deadline)
+
+    def _is_schedule_expired(self, training: Training, schedule: Dict[str, Any]) -> bool:
+        if (training.status or "upcoming") == "ended":
+            return True
+        deadline = self._resolve_schedule_deadline_from_item(schedule)
+        if deadline is None:
+            return True
+        now = self._current_time(deadline)
+        normalized_deadline = self._normalize_datetime(deadline, now.tzinfo)
+        return not bool(normalized_deadline and now <= normalized_deadline)
+
+    @staticmethod
+    def _format_schedule_label(schedule: Dict[str, Any]) -> str:
+        return f"{schedule.get('date') or '-'} {schedule.get('time_range') or '-'}"
+
+    def _build_schedule_response_item(
+        self,
+        training: Training,
+        course: TrainingCourse,
+        item: Any,
+    ) -> Dict[str, Any]:
+        schedule = self._normalize_schedule_item(item)
+        can_edit = self._is_schedule_editable(training, schedule)
+        return {
+            **schedule,
+            "location": schedule.get("location") or course.location,
+            "is_expired": self._is_schedule_expired(training, schedule),
+            "can_edit": can_edit,
+            "can_delete": can_edit,
+        }
+
+    def _validate_schedule_mutation_window(
+        self,
+        training: Training,
+        before_courses: List[Dict[str, Any]],
+        after_courses: List[Dict[str, Any]],
+    ) -> None:
+        before_map = {item.get("course_key"): item for item in before_courses or [] if item.get("course_key")}
+        after_map = {item.get("course_key"): item for item in after_courses or [] if item.get("course_key")}
+
+        for after_course in after_courses or []:
+            course_name = after_course.get("name") or "未命名课程"
+            before_course = before_map.get(after_course.get("course_key"))
+            before_schedule_ids = {
+                item.get("session_id")
+                for item in (before_course or {}).get("schedules", [])
+                if item.get("session_id")
+            }
+            for after_schedule in after_course.get("schedules", []) or []:
+                session_id = after_schedule.get("session_id")
+                if session_id in before_schedule_ids:
+                    continue
+                if not self._is_schedule_editable(training, after_schedule):
+                    raise ValueError(
+                        f"已过时间段的课次不能新增：{course_name} {self._format_schedule_label(after_schedule)}"
+                    )
+
+        for before_course in before_courses or []:
+            course_name = before_course.get("name") or "未命名课程"
+            immutable_schedules = [
+                item for item in (before_course.get("schedules") or [])
+                if not self._is_schedule_editable(training, item)
+            ]
+            if not immutable_schedules:
+                continue
+            after_course = after_map.get(before_course.get("course_key"))
+            if after_course is None:
+                raise ValueError(f"课程「{course_name}」包含已过时间段课次，不能删除")
+
+            after_schedule_map = {
+                item.get("session_id"): item
+                for item in (after_course.get("schedules") or [])
+                if item.get("session_id")
+            }
+            for before_schedule in immutable_schedules:
+                session_id = before_schedule.get("session_id")
+                after_schedule = after_schedule_map.get(session_id)
+                if after_schedule is None:
+                    raise ValueError(
+                        f"已过时间段的课次不能删除：{course_name} {self._format_schedule_label(before_schedule)}"
+                    )
+                if after_schedule != before_schedule:
+                    raise ValueError(
+                        f"已过时间段的课次不能编辑：{course_name} {self._format_schedule_label(before_schedule)}"
+                    )
 
     def _guess_primary_instructor_id(self, instructor_name: str) -> Optional[int]:
         user = self.db.query(User).filter(
@@ -1905,14 +2032,20 @@ class TrainingService:
         rows = self.db.query(User).filter(User.id.in_(wanted_ids)).all()
         return {row.id: (row.nickname or row.username) for row in rows}
 
-    def _build_course_response(self, course: TrainingCourse, user_name_map: Dict[int, str]) -> TrainingCourseResponse:
+    def _build_course_response(
+        self,
+        training: Training,
+        course: TrainingCourse,
+        user_name_map: Dict[int, str],
+    ) -> TrainingCourseResponse:
         assistant_ids = [int(item) for item in (course.assistant_instructor_ids or []) if item is not None]
-        schedules = [self._normalize_schedule_item(item) for item in (course.schedules or [])]
+        schedules = [self._build_schedule_response_item(training, course, item) for item in (course.schedules or [])]
         return TrainingCourseResponse(
             id=course.id,
             training_id=course.training_id,
             course_key=course.course_key,
             name=course.name,
+            location=course.location,
             instructor=course.instructor,
             primary_instructor_id=course.primary_instructor_id,
             primary_instructor_name=user_name_map.get(course.primary_instructor_id),
@@ -1961,7 +2094,7 @@ class TrainingService:
             date=session["date"],
             time_range=session["schedule"].get("time_range") or "",
             status=session["status"],
-            location=session["schedule"].get("location"),
+            location=session["schedule"].get("location") or course.location,
             primary_instructor_id=course.primary_instructor_id,
             primary_instructor_name=user_name_map.get(course.primary_instructor_id),
             assistant_instructor_ids=assistant_ids,
@@ -2001,7 +2134,7 @@ class TrainingService:
                 instructor_ids.append(course.primary_instructor_id)
             instructor_ids.extend(int(item) for item in (course.assistant_instructor_ids or []) if item is not None)
         user_name_map = self._load_user_name_map(instructor_ids)
-        courses = [self._build_course_response(item, user_name_map) for item in (training.courses or [])]
+        courses = [self._build_course_response(training, item, user_name_map) for item in (training.courses or [])]
 
         exam_sessions = []
         for session in (training.exam_sessions or []):

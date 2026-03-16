@@ -98,6 +98,7 @@ class TrainingCourse(Base):
     training_id = Column(Integer, ForeignKey("trainings.id", ondelete="CASCADE"), nullable=False, comment="培训班ID")
     course_key = Column(String(36), nullable=True, index=True, comment="稳定课程键")
     name = Column(String(200), nullable=False, comment="课程名称")
+    location = Column(String(200), nullable=True, comment="课程地点")
     instructor = Column(String(100), nullable=True, comment="主讲教官名称")
     primary_instructor_id = Column(Integer, ForeignKey("users.id"), nullable=True, comment="主讲教官ID")
     assistant_instructor_ids = Column(JSON, nullable=True, comment="带教教官ID列表")

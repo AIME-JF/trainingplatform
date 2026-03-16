@@ -148,6 +148,9 @@ class TrainingBaseService:
             raise ValueError("超出当前角色可操作的数据范围")
 
     def _to_response(self, training_base: TrainingBase) -> TrainingBaseResponse:
+        linked_trainings = training_base.linked_trainings or []
+        upcoming_training_count = sum(1 for item in linked_trainings if (item.status or "upcoming") == "upcoming")
+        active_training_count = sum(1 for item in linked_trainings if (item.status or "upcoming") == "active")
         return TrainingBaseResponse(
             id=training_base.id,
             name=training_base.name,
@@ -156,7 +159,9 @@ class TrainingBaseService:
             department_name=training_base.department.name if training_base.department else None,
             created_by=training_base.created_by,
             description=training_base.description,
-            linked_training_count=len(training_base.linked_trainings or []),
+            linked_training_count=len(linked_trainings),
+            upcoming_training_count=upcoming_training_count,
+            active_training_count=active_training_count,
             created_at=training_base.created_at,
             updated_at=training_base.updated_at,
         )

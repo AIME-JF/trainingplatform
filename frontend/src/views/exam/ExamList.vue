@@ -37,24 +37,34 @@
           </div>
 
           <div class="exam-actions">
-            <a-button
-              v-if="exam.canJoin"
-              type="primary"
-              block
-              size="large"
-              @click="startExam(exam)"
-            >
-              进入考试
-            </a-button>
-            <a-button v-else block size="large" disabled>
-              {{ disabledLabel(exam) }}
-            </a-button>
+            <a-space direction="vertical" style="width: 100%">
+              <a-button
+                v-if="exam.canJoin"
+                type="primary"
+                block
+                size="large"
+                @click="startExam(exam)"
+              >
+                进入考试
+              </a-button>
+              <a-button
+                v-if="hasExamResult(exam)"
+                block
+                size="large"
+                @click="viewExamResult(exam)"
+              >
+                查看考试详情
+              </a-button>
+              <a-button v-if="!exam.canJoin && !hasExamResult(exam)" block size="large" disabled>
+                {{ disabledLabel(exam) }}
+              </a-button>
+            </a-space>
           </div>
         </div>
       </a-col>
     </a-row>
 
-    <a-empty v-if="!examList.length" description="暂无可参加的考试" style="margin-top:80px" />
+    <a-empty v-if="!examList.length" description="暂无考试记录" style="margin-top:80px" />
   </div>
 </template>
 
@@ -87,17 +97,21 @@ const upcomingExams = computed(() => examList.value.filter(item => item.status =
 
 async function fetchExams() {
   try {
-    const [activeTraining, upcomingTraining, activeAdmission, upcomingAdmission] = await Promise.all([
+    const [activeTraining, upcomingTraining, endedTraining, activeAdmission, upcomingAdmission, endedAdmission] = await Promise.all([
       getExams({ size: 100, status: 'active' }),
       getExams({ size: 100, status: 'upcoming' }),
+      getExams({ size: 100, status: 'ended' }),
       getAdmissionExams({ size: 100, status: 'active' }),
       getAdmissionExams({ size: 100, status: 'upcoming' }),
+      getAdmissionExams({ size: 100, status: 'ended' }),
     ])
     const items = [
       ...(activeTraining.items || []),
       ...(upcomingTraining.items || []),
+      ...((endedTraining.items || []).filter((item) => (item.attemptCount || 0) > 0)),
       ...(activeAdmission.items || []),
       ...(upcomingAdmission.items || []),
+      ...((endedAdmission.items || []).filter((item) => (item.attemptCount || 0) > 0)),
     ]
     const unique = new Map(items.map(item => [`${item.kind}-${item.id}`, item]))
     examList.value = [...unique.values()].sort((left, right) => {
@@ -117,8 +131,11 @@ function formatDate(value) {
 function disabledLabel(exam) {
   if (exam.status === 'upcoming') return '考试未开始'
   if (exam.status === 'ended') return '考试已结束'
-  if ((exam.attemptCount || 0) >= (exam.maxAttempts || 1)) return '次数已用尽'
   return '暂不可参加'
+}
+
+function hasExamResult(exam) {
+  return (exam.attemptCount || 0) > 0
 }
 
 function startExam(exam) {
@@ -129,6 +146,10 @@ function startExam(exam) {
       router.push({ name: 'DoExam', params: { id: exam.id }, query: { kind: exam.kind || 'training' } })
     },
   })
+}
+
+function viewExamResult(exam) {
+  router.push({ name: 'ExamResult', params: { id: exam.id }, query: { kind: exam.kind || 'training' } })
 }
 
 onMounted(fetchExams)

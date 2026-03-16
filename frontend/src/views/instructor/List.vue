@@ -63,23 +63,44 @@
               <div class="is-label">平均分</div>
             </div>
           </div>
+
+          <div v-if="canEditInstructor" class="inst-card-actions" @click.stop>
+            <a-button type="link" size="small" @click="openEditModal(inst)">编辑教官信息</a-button>
+          </div>
         </div>
       </div>
       <a-empty v-else description="暂无教官数据" style="margin-top: 60px" />
     </a-spin>
+
+    <InstructorEditModal
+      v-model:open="editDialog.open"
+      :user="editDialog.user"
+      :submitting="editDialog.submitting"
+      @submit="handleEditSubmit"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { getUsers } from '@/api/user'
+import { message } from 'ant-design-vue'
+import { useAuthStore } from '@/stores/auth'
+import { getUsers, updateUser } from '@/api/user'
+import InstructorEditModal from './components/InstructorEditModal.vue'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const searchText = ref('')
 const filterSpecialty = ref('全部')
 const loading = ref(false)
 const instructorList = ref([])
+const canEditInstructor = computed(() => authStore.hasPermission('UPDATE_USER'))
+const editDialog = ref({
+  open: false,
+  submitting: false,
+  user: null,
+})
 
 const avatarColors = ['#003087', '#c8a84b', '#8B1A1A', '#1a5c2e', '#6b3a8a', '#2e86de']
 function getAvatarColor(id) {
@@ -151,6 +172,29 @@ const filteredInstructors = computed(() => {
 function goDetail(inst) {
   router.push({ name: 'InstructorDetail', params: { id: inst.id } })
 }
+
+function openEditModal(inst) {
+  if (!canEditInstructor.value) return
+  editDialog.value = {
+    open: true,
+    submitting: false,
+    user: { ...inst },
+  }
+}
+
+async function handleEditSubmit(payload) {
+  if (!editDialog.value.user?.id) return
+  editDialog.value = { ...editDialog.value, submitting: true }
+  try {
+    await updateUser(editDialog.value.user.id, payload)
+    message.success('教官信息已更新')
+    editDialog.value = { open: false, submitting: false, user: null }
+    await loadInstructors()
+  } catch (error) {
+    editDialog.value = { ...editDialog.value, submitting: false }
+    message.error(error.message || '教官信息更新失败')
+  }
+}
 </script>
 
 <style scoped>
@@ -177,4 +221,5 @@ function goDetail(inst) {
 .is-num { font-size: 20px; font-weight: 700; color: #1a1a1a; }
 .is-label { font-size: 11px; color: #888; }
 .is-divider { width: 1px; height: 30px; background: #f0f0f0; }
+.inst-card-actions { margin-top: 12px; padding-top: 8px; border-top: 1px solid #f0f0f0; text-align: right; }
 </style>
