@@ -70,7 +70,11 @@
 - 培训基地：独立 `TrainingBase` 模型，培训班可通过 `training_base_id` 关联
 - 培训班流程：草稿 -> 发布招生 -> 锁定名单 -> 开班进行中 -> 结班归档
 - 培训班流程接口已做严格顺序校验；如果提前执行“锁定名单”或“开班”，必须显式传入 `skip_steps` 才会自动补齐并锁定被跳过环节
+- 培训班报名模式：支持 `enrollment_requires_approval`
+  - `true`：报名后进入 `pending`，需班主任 / 管理员审批
+  - `false`：报名后直接写入 `approved`
 - 培训班详情：步骤条、当前课次、课程安排、考试安排、资源绑定
+- 培训班详情页可直接查看待审核报名申请，审批通过 / 拒绝仍走统一报名接口
 - 课程安排：主讲教官 1 人 + 带教教官多人
 - 课次状态流：未开始 -> 签到中 -> 课程进行中（签到窗口已结束） -> 签退中 -> 已完成 / 已跳过 / 已错过
 - 培训训历：根据报名、签到、考试记录汇总归档
@@ -82,7 +86,7 @@
 
 - 功能权限：仍由角色权限码与部门权限决定
 - 数据范围：由角色上的 `data_scopes` 决定
-- 对象级控制：当前已接入 `User`、`Training`、`TrainingBase`、`Question`
+- 对象级控制：当前已接入 `User`、`Training`、`TrainingBase`、`Question`、`ExamPaper`、`Exam`
 
 支持的数据范围值：
 
@@ -104,6 +108,8 @@
 - 培训班：如果同时配置了部门和警种，则必须同时满足；`created_by` 和 `instructor_id` 同时计入“本人”
 - 培训基地：按部门范围控制；`created_by` 计入“本人”
 - 题目：按 `police_type_id` 控制；`created_by` 计入“本人”
+- 试卷：按题目所属警种与创建人范围控制；无权用户不可见试卷列表，也不可读取试卷详情
+- 培训班考试：按所属培训班的数据范围控制；无权用户不可见考试列表或考试详情
 
 ## 技术栈
 
@@ -136,8 +142,7 @@ backend/
 │   ├── middleware/              # 鉴权、日志、异常处理
 │   ├── database/                # 数据库、Redis、自动迁移
 │   ├── tasks/                   # Celery 任务
-│   ├── utils/                   # 工具函数与授权判断
-│   └── runtime_sync.py          # 运行时兼容修复与额外权限同步
+│   └── utils/                   # 工具函数与授权判断
 ├── alembic/                     # 数据库迁移版本
 ├── data/                        # 本地数据目录
 ├── docker/                      # 容器启动脚本
@@ -197,14 +202,15 @@ uvicorn.run("app:app", host="0.0.0.0", port=8001)
 1. 如果 `AUTO_MIGRATE_ON_STARTUP=True`，先尝试执行 Alembic 自动迁移
 2. 对关键表结构做兼容性校验；发现“版本号已是 head，但列缺失”的坏状态会直接阻断启动
 3. 调用 `init_db()`，仅补齐仍缺失的表，不负责已有表的字段升级
-4. 调用 `sync_runtime_state()`，同步额外权限和兼容性修复
-5. 测试 Redis 连接
+4. 测试 Redis 连接
 
 注意：
 
 - 这些步骤不会执行 `init_data.py`
 - 首次初始化种子数据仍需手动运行 `python init_data.py`
 - 自动迁移不会再对“已有业务表但无版本记录”的旧库直接 `stamp head`
+- 新增权限码、`admin` 权限回填和内置角色 `data_scopes` 修正，统一通过 Alembic 数据迁移下发
+- 空库初始化应通过建表 + `init_data.py` 完成，再 `stamp head`；不要把历史增量迁移链直接当作空库 bootstrap 方案
 
 ## 环境变量
 
@@ -359,6 +365,7 @@ python migrate.py generate "your message"
 - `python migrate.py stamp head` 只允许在“你已经确认数据库结构和最新迁移完全一致”时使用
 - `Base.metadata.create_all()` 只负责补缺表，不能替代 Alembic 字段迁移
 - 当前迁移已经覆盖考试重构、试卷状态字段、培训 P0 重构、培训班考试去除 `scope`、准入考试结构化适用范围字段以及 AI 任务表
+- 当前迁移也承担历史库的权限补齐与内置角色修正，不再依赖应用启动时做运行时兼容补丁
 
 ## 认证与权限
 
@@ -395,16 +402,18 @@ python migrate.py generate "your message"
 
 - 用户权限由角色权限与部门权限共同决定
 - 角色还可配置 `data_scopes`，用于列表过滤、详情访问和对象创建/更新时的归属范围校验
-- `admin` 角色会在运行时自动补齐所有激活权限
+- `admin` 角色的全量权限回填与内置角色默认 `data_scopes` 修正由 Alembic 迁移负责
 - 培训域的对象级权限以当前代码为准：
   - 管理员：全部可操作
   - 班主任：`training.instructor_id`
   - 主讲 / 带教教官：仅可操作自己课次
   - 学员：只能查看和操作自己的报名、签到、训历等数据
+- 培训班更新接口已拆成两条：
+  - `PUT /api/v1/trainings/{id}`：要求 `UPDATE_TRAINING`，且必须是当前培训班班主任
+  - `PUT /api/v1/trainings/{id}/manage`：要求 `MANAGE_TRAINING`，用于管理端直接更新
 - 用户管理、培训班、培训基地、题库当前已接入数据范围控制：
   - 用户：部门或警种命中即可
   - 培训班 / 培训基地 / 题目：按对象自身的部门、警种归属控制
-- 运行时额外补充的权限定义位于 `app/runtime_sync.py`
 
 ### 受保护对象
 
@@ -481,7 +490,9 @@ python migrate.py generate "your message"
 - `checkin_closed` 的真实语义是“课程仍在进行，但签到窗口已结束”；前端展示应按“进行中”理解，而不是“已结束”。
 - 培训班和培训基地新增了 `created_by`；旧库需要执行最新 Alembic 迁移后才能正常读取这些字段。
 - 准入考试现在新增了 `scope_type`、`scope_target_ids` 两个字段；旧库必须执行最新 Alembic 迁移后才能正常保存结构化适用范围。
-- 内置角色的默认数据范围会在 `init_data.py` 和 `runtime_sync.py` 中被同步到位；如果历史库中的 `instructor` 或 `student` 仍是 `["all"]`，启动时会被自动收敛到新的默认值。
+- 培训班现在新增了 `enrollment_requires_approval`；旧库必须执行最新 Alembic 迁移后才能正常区分“审批报名”和“直接通过”两种模式。
+- 试卷详情接口现在会返回每道题的标准答案；前端试卷详情页依赖该字段展示答案与解析。
+- 历史库中的缺失权限、`admin` 权限集合以及内置角色默认 `data_scopes`，会在最新 Alembic 迁移里被一次性修正；部署后请先执行 `python migrate.py upgrade`。
 - 某些系统管理接口同时提供 REST 风格和兼容旧前端的 `/create`、`/update`、`/delete` 别名。
 
 ## 进一步阅读

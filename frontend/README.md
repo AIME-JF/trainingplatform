@@ -127,6 +127,7 @@ pnpm preview
 
 - 培训管理：`frontend/src/views/training`
 - 考试系统：`frontend/src/views/exam`
+- 试卷详情页：`frontend/src/views/exam/PaperDetail.vue`
 - 准入考试发布页：`frontend/src/views/exam/ExamManage.vue`
 - 准入考试适用范围选择：`frontend/src/views/exam/components/AdmissionScopeSelector.vue`
 - AI 任务页：`frontend/src/views/exam/AiQuestionTask.vue`、`AiAssemblePaperTask.vue`、`AiGeneratePaperTask.vue`
@@ -158,15 +159,25 @@ pnpm preview
 
 - 前端仍保留 `frontend/src/mock/` 中的历史 mock 与少量兜底逻辑，真实联调请以后端接口为准
 - 登录页保留演示角色切换，但不会改变后端真实权限
+- 前端登录后会通过 `/api/v1/auth/me` 获取当前用户角色与权限集合；后端新增权限码和内置角色修正依赖 Alembic 迁移下发，而不是运行时自动补齐
+- 侧边栏、移动端抽屉和主要菜单入口已改成权限驱动：
+  - 菜单配置位于 `frontend/src/layouts/menuConfig.js`
+  - 页面权限常量位于 `frontend/src/constants/pagePermissions.js`
+  - 路由守卫会按 `meta.anyPermissions / meta.allPermissions` 校验，不再只看角色
 - 培训管理、考试系统、数据范围等页面已按当前后端能力改造，文档优先看仓库根 README 与后端接口文档
 - AI 能力已经收敛为 3 个任务页：
   - `AI 智能出题`
   - `AI 自动组卷`
   - `AI 自动生成试卷`
 - 3 个 AI 页面都采用 `创建任务 / 任务列表` 标签页切换
+- 试卷仓库的“查看”已改成独立详情页，不再使用只读抽屉；详情页会按题目折叠展示选项、标准答案和解析
 - 发布准入考试时，适用范围不再是自由输入，而是结构化选择：
   - 全部
   - 指定用户
   - 指定部门
   - 指定角色
+- 培训班创建 / 编辑时已支持“报名是否需要申请”：
+  - `申请审核`
+  - `直接通过`
+- 培训班详情页的“学员名单”标签已内嵌“申请管理”弹层，可直接审核报名申请并填写拒绝理由
 - 学员端在线考试列表现在会同时展示培训班考试和准入考试，并按考试类型自动进入对应作答 / 成绩页

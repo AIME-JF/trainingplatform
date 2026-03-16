@@ -33,15 +33,16 @@ class ExamController:
         paper_status: Optional[str] = None,
         paper_type: Optional[str] = None,
         search: Optional[str] = None,
+        current_user_id: Optional[int] = None,
     ):
         try:
-            return self.service.get_exam_papers(page, size, paper_status, paper_type, search)
+            return self.service.get_exam_papers(page, size, paper_status, paper_type, search, current_user_id)
         except Exception as exc:
             logger.error("获取试卷列表异常: %s", exc)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取试卷列表失败")
 
-    def get_exam_paper_detail(self, paper_id: int):
-        result = self.service.get_exam_paper_detail(paper_id)
+    def get_exam_paper_detail(self, paper_id: int, current_user_id: Optional[int] = None):
+        result = self.service.get_exam_paper_detail(paper_id, current_user_id)
         if not result:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="试卷不存在")
         return result
@@ -169,8 +170,8 @@ class ExamController:
             logger.error("更新准入考试异常: %s", exc)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新准入考试失败")
 
-    def get_exam_detail(self, exam_id: int):
-        result = self.service.get_exam_detail(exam_id)
+    def get_exam_detail(self, exam_id: int, current_user_id: Optional[int] = None):
+        result = self.service.get_exam_detail(exam_id, current_user_id)
         if not result:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="考试不存在")
         return result

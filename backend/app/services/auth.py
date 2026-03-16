@@ -10,7 +10,6 @@ from passlib.context import CryptContext
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import Department, Permission, Role, User
-from app.runtime_sync import EXTRA_PERMISSION_DEFINITIONS
 from app.schemas import TokenData
 from config import settings
 from logger import logger
@@ -123,7 +122,6 @@ class AuthService:
                     .all()
                 )
                 permissions.update(code for (code,) in permission_rows)
-                permissions.update(item["code"] for item in EXTRA_PERMISSION_DEFINITIONS)
 
             return sorted(permissions)
         except Exception as e:

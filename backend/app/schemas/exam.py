@@ -108,6 +108,7 @@ class ExamQuestionSnapshotResponse(BaseModel):
     type: str
     content: str
     options: Optional[List[dict]] = None
+    answer: Any = None
     explanation: Optional[str] = None
     score: int = 1
     knowledge_point: Optional[str] = None

@@ -51,7 +51,7 @@ def get_exam_papers(
 ):
     _require_admin_or_instructor(db, current_user.user_id)
     controller = ExamController(db)
-    data = controller.get_exam_papers(page, size, status, type, search)
+    data = controller.get_exam_papers(page, size, status, type, search, current_user.user_id)
     return StandardResponse(data=data)
 
 
@@ -75,7 +75,7 @@ def get_exam_paper(
 ):
     _require_admin_or_instructor(db, current_user.user_id)
     controller = ExamController(db)
-    data = controller.get_exam_paper_detail(paper_id)
+    data = controller.get_exam_paper_detail(paper_id, current_user.user_id)
     return StandardResponse(data=data)
 
 
@@ -281,7 +281,7 @@ def get_exam(
     db: Session = Depends(get_db),
 ):
     controller = ExamController(db)
-    data = controller.get_exam_detail(exam_id)
+    data = controller.get_exam_detail(exam_id, current_user.user_id)
     return StandardResponse(data=data)
 
 

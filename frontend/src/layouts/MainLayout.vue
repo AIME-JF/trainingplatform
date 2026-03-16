@@ -23,83 +23,19 @@
         class="sidebar-menu"
         @click="handleMenuClick"
       >
-        <a-menu-item key="/">
-          <template #icon><HomeOutlined /></template>
-          工作台
-        </a-menu-item>
-
-        <a-menu-item key="/courses">
-          <template #icon><PlayCircleOutlined /></template>
-          课程学习
-        </a-menu-item>
-
-        <a-sub-menu key="examCenter" v-if="!isStudent">
-          <template #icon><FormOutlined /></template>
-          <template #title>考试中心</template>
-          <a-menu-item key="/exam/manage">考试管理</a-menu-item>
-        </a-sub-menu>
-        <a-menu-item key="/exam/list" v-else>
-          <template #icon><FormOutlined /></template>
-          参加考试
-        </a-menu-item>
-
-        <a-sub-menu key="questionCenter" v-if="!isStudent">
-          <template #icon><DatabaseOutlined /></template>
-          <template #title>题库管理</template>
-          <a-menu-item key="/question/repository">试题仓库</a-menu-item>
-          <a-menu-item key="/question/ai">AI 智能出题</a-menu-item>
-        </a-sub-menu>
-
-        <a-sub-menu key="paperCenter" v-if="!isStudent">
-          <template #icon><FileTextOutlined /></template>
-          <template #title>卷库管理</template>
-          <a-menu-item key="/paper/repository">试卷仓库</a-menu-item>
-          <a-menu-item key="/paper/ai-assemble">AI 自动组卷</a-menu-item>
-          <a-menu-item key="/paper/ai-generate">AI 自动生成试卷</a-menu-item>
-        </a-sub-menu>
-
-        <a-sub-menu key="training">
-          <template #icon><TeamOutlined /></template>
-          <template #title>培训管理</template>
-          <a-menu-item key="/training">培训班列表</a-menu-item>
-          <a-menu-item key="/training/base" v-if="!isStudent">培训基地</a-menu-item>
-          <a-menu-item key="/training/schedule">周训练计划</a-menu-item>
-          <a-menu-item key="/training/board" v-if="isAdmin">培训看板</a-menu-item>
-        </a-sub-menu>
-
-        <a-sub-menu key="resource">
-          <template #icon><BookOutlined /></template>
-          <template #title>资源中心</template>
-          <a-menu-item key="/resource/library">资源库</a-menu-item>
-          <a-menu-item key="/resource/recommend">资源推荐</a-menu-item>
-          <a-menu-item key="/resource/upload" v-if="!isStudent">上传资源</a-menu-item>
-          <a-menu-item key="/resource/my" v-if="!isStudent">我的资源</a-menu-item>
-          <a-menu-item key="/resource/manage" v-if="isAdmin">资源管理</a-menu-item>
-          <a-menu-item key="/resource/review" v-if="!isStudent">审核工作台</a-menu-item>
-          <a-menu-item key="/resource/policy" v-if="isAdmin">审核策略</a-menu-item>
-        </a-sub-menu>
-
-        <a-sub-menu key="archives">
-          <template #icon><UserOutlined /></template>
-          <template #title>人员档案</template>
-          <a-menu-item key="/trainee">学员库</a-menu-item>
-          <a-menu-item key="/instructor" v-if="!isStudent">教官库</a-menu-item>
-          <a-menu-item key="/talent" v-if="isAdmin">人才库</a-menu-item>
-          <a-menu-item key="/certificate">结业证书</a-menu-item>
-        </a-sub-menu>
-
-        <a-menu-item key="/report" v-if="isAdmin">
-          <template #icon><BarChartOutlined /></template>
-          数据看板
-        </a-menu-item>
-
-        <a-sub-menu key="system" v-if="isAdmin">
-          <template #icon><SettingOutlined /></template>
-          <template #title>系统管理</template>
-          <a-menu-item key="/system/users">用户管理</a-menu-item>
-          <a-menu-item key="/system/roles">角色管理</a-menu-item>
-          <a-menu-item key="/system/departments">部门管理</a-menu-item>
-        </a-sub-menu>
+        <template v-for="item in visibleMenuItems" :key="item.key">
+          <a-sub-menu v-if="item.children?.length" :key="item.key">
+            <template #icon><component :is="item.icon" /></template>
+            <template #title>{{ item.label }}</template>
+            <a-menu-item v-for="child in item.children" :key="child.key">
+              {{ child.label }}
+            </a-menu-item>
+          </a-sub-menu>
+          <a-menu-item v-else :key="item.key">
+            <template #icon><component :is="item.icon" /></template>
+            {{ item.label }}
+          </a-menu-item>
+        </template>
       </a-menu>
     </a-layout-sider>
 
@@ -123,75 +59,19 @@
         class="sidebar-menu"
         @click="handleDrawerMenuClick"
       >
-        <a-menu-item key="/">
-          <template #icon><HomeOutlined /></template>
-          工作台
-        </a-menu-item>
-        <a-menu-item key="/courses">
-          <template #icon><PlayCircleOutlined /></template>
-          课程学习
-        </a-menu-item>
-        <a-sub-menu key="examCenter" v-if="!isStudent">
-          <template #icon><FormOutlined /></template>
-          <template #title>考试中心</template>
-          <a-menu-item key="/exam/manage">考试管理</a-menu-item>
-        </a-sub-menu>
-        <a-menu-item key="/exam/list" v-else>
-          <template #icon><FormOutlined /></template>
-          参加考试
-        </a-menu-item>
-        <a-sub-menu key="questionCenter" v-if="!isStudent">
-          <template #icon><DatabaseOutlined /></template>
-          <template #title>题库管理</template>
-          <a-menu-item key="/question/repository">试题仓库</a-menu-item>
-          <a-menu-item key="/question/ai">AI 智能出题</a-menu-item>
-        </a-sub-menu>
-        <a-sub-menu key="paperCenter" v-if="!isStudent">
-          <template #icon><FileTextOutlined /></template>
-          <template #title>卷库管理</template>
-          <a-menu-item key="/paper/repository">试卷仓库</a-menu-item>
-          <a-menu-item key="/paper/ai-assemble">AI 自动组卷</a-menu-item>
-          <a-menu-item key="/paper/ai-generate">AI 自动生成试卷</a-menu-item>
-        </a-sub-menu>
-        <a-sub-menu key="training">
-          <template #icon><TeamOutlined /></template>
-          <template #title>培训管理</template>
-          <a-menu-item key="/training">培训班列表</a-menu-item>
-          <a-menu-item key="/training/base" v-if="!isStudent">培训基地</a-menu-item>
-          <a-menu-item key="/training/schedule">周训练计划</a-menu-item>
-          <a-menu-item key="/training/board" v-if="isAdmin">培训看板</a-menu-item>
-        </a-sub-menu>
-        <a-sub-menu key="resource">
-          <template #icon><BookOutlined /></template>
-          <template #title>资源中心</template>
-          <a-menu-item key="/resource/library">资源库</a-menu-item>
-          <a-menu-item key="/resource/recommend">资源推荐</a-menu-item>
-          <a-menu-item key="/resource/upload" v-if="!isStudent">上传资源</a-menu-item>
-          <a-menu-item key="/resource/my" v-if="!isStudent">我的资源</a-menu-item>
-          <a-menu-item key="/resource/manage" v-if="isAdmin">资源管理</a-menu-item>
-          <a-menu-item key="/resource/review" v-if="!isStudent">审核工作台</a-menu-item>
-          <a-menu-item key="/resource/policy" v-if="isAdmin">审核策略</a-menu-item>
-        </a-sub-menu>
-        <a-sub-menu key="archives">
-          <template #icon><UserOutlined /></template>
-          <template #title>人员档案</template>
-          <a-menu-item key="/trainee">学员库</a-menu-item>
-          <a-menu-item key="/instructor" v-if="!isStudent">教官库</a-menu-item>
-          <a-menu-item key="/talent" v-if="isAdmin">人才库</a-menu-item>
-          <a-menu-item key="/certificate">结业证书</a-menu-item>
-        </a-sub-menu>
-        <a-menu-item key="/report" v-if="isAdmin">
-          <template #icon><BarChartOutlined /></template>
-          数据看板
-        </a-menu-item>
-
-        <a-sub-menu key="system" v-if="isAdmin">
-          <template #icon><SettingOutlined /></template>
-          <template #title>系统管理</template>
-          <a-menu-item key="/system/users">用户管理</a-menu-item>
-          <a-menu-item key="/system/roles">角色管理</a-menu-item>
-          <a-menu-item key="/system/departments">部门管理</a-menu-item>
-        </a-sub-menu>
+        <template v-for="item in visibleMenuItems" :key="item.key">
+          <a-sub-menu v-if="item.children?.length" :key="item.key">
+            <template #icon><component :is="item.icon" /></template>
+            <template #title>{{ item.label }}</template>
+            <a-menu-item v-for="child in item.children" :key="child.key">
+              {{ child.label }}
+            </a-menu-item>
+          </a-sub-menu>
+          <a-menu-item v-else :key="item.key">
+            <template #icon><component :is="item.icon" /></template>
+            {{ item.label }}
+          </a-menu-item>
+        </template>
       </a-menu>
     </a-drawer>
 
@@ -262,19 +142,39 @@
 
     <!-- 移动端底部导航栏 -->
     <nav class="mobile-bottom-nav">
-      <a class="mobile-nav-item" :class="{ active: $route.path === '/' }" @click="$router.push('/')">
+      <a
+        v-if="showDashboardNav"
+        class="mobile-nav-item"
+        :class="{ active: $route.path === '/' }"
+        @click="$router.push('/')"
+      >
         <span class="nav-icon"><HomeOutlined /></span>
         <span class="nav-label">首页</span>
       </a>
-      <a class="mobile-nav-item" :class="{ active: $route.path.startsWith('/courses') }" @click="$router.push('/courses')">
+      <a
+        v-if="showCourseNav"
+        class="mobile-nav-item"
+        :class="{ active: $route.path.startsWith('/courses') }"
+        @click="$router.push('/courses')"
+      >
         <span class="nav-icon"><PlayCircleOutlined /></span>
         <span class="nav-label">课程</span>
       </a>
-      <a class="mobile-nav-item" :class="{ active: $route.path.startsWith('/training') }" @click="$router.push('/training')">
+      <a
+        v-if="primaryTrainingRoute"
+        class="mobile-nav-item"
+        :class="{ active: $route.path.startsWith('/training') }"
+        @click="$router.push(primaryTrainingRoute)"
+      >
         <span class="nav-icon"><TeamOutlined /></span>
         <span class="nav-label">培训</span>
       </a>
-      <a class="mobile-nav-item" :class="{ active: $route.path.startsWith('/exam') || $route.path.startsWith('/question') || $route.path.startsWith('/paper') }" @click="$router.push(isStudent ? '/exam/list' : '/exam/manage')">
+      <a
+        v-if="primaryExamRoute"
+        class="mobile-nav-item"
+        :class="{ active: $route.path.startsWith('/exam') || $route.path.startsWith('/question') || $route.path.startsWith('/paper') }"
+        @click="$router.push(primaryExamRoute)"
+      >
         <span class="nav-icon"><FormOutlined /></span>
         <span class="nav-label">考试</span>
       </a>
@@ -290,12 +190,11 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
+import { appMenuConfig } from './menuConfig'
 import {
   HomeOutlined, PlayCircleOutlined, FormOutlined,
-  TeamOutlined, UserOutlined, BarChartOutlined, BookOutlined,
+  TeamOutlined, UserOutlined,
   MenuUnfoldOutlined, MenuFoldOutlined, DownOutlined, LogoutOutlined,
-  SettingOutlined,
-  DatabaseOutlined, FileTextOutlined,
 } from '@ant-design/icons-vue'
 
 const router = useRouter()
@@ -331,9 +230,6 @@ onMounted(() => {
 
 onUnmounted(() => window.removeEventListener('resize', onResize))
 
-const isStudent = computed(() => authStore.isStudent)
-const isInstructor = computed(() => authStore.isInstructor)
-const isAdmin = computed(() => authStore.isAdmin)
 const currentRole = computed(() => authStore.role)
 
 const roles = [
@@ -344,6 +240,55 @@ const roles = [
 
 const currentPageTitle = computed(() => {
   return route.meta?.title || '智慧教育训练平台'
+})
+
+function hasMenuAccess(item) {
+  const anyPermissions = item.anyPermissions || []
+  const allPermissions = item.allPermissions || []
+  return authStore.hasAnyPermission(anyPermissions) && authStore.hasAllPermissions(allPermissions)
+}
+
+function filterMenuItems(items) {
+  return items
+    .map((item) => {
+      if (item.children?.length) {
+        const children = filterMenuItems(item.children)
+        if (!children.length) return null
+        return { ...item, children }
+      }
+      return hasMenuAccess(item) ? { ...item } : null
+    })
+    .filter(Boolean)
+}
+
+function flattenMenuKeys(items) {
+  return items.flatMap((item) => item.children?.length ? flattenMenuKeys(item.children) : [item.key])
+}
+
+const visibleMenuItems = computed(() => filterMenuItems(appMenuConfig))
+const visibleMenuKeys = computed(() => flattenMenuKeys(visibleMenuItems.value))
+const showDashboardNav = computed(() => visibleMenuKeys.value.includes('/'))
+const showCourseNav = computed(() => visibleMenuKeys.value.includes('/courses'))
+const primaryTrainingRoute = computed(() => {
+  const preferredRoutes = [
+    '/training',
+    '/training/base',
+    '/training/schedule',
+    '/training/board',
+  ]
+  return preferredRoutes.find((item) => visibleMenuKeys.value.includes(item)) || ''
+})
+const primaryExamRoute = computed(() => {
+  const preferredRoutes = [
+    '/exam/manage',
+    '/exam/list',
+    '/question/repository',
+    '/paper/repository',
+    '/question/ai',
+    '/paper/ai-assemble',
+    '/paper/ai-generate',
+  ]
+  return preferredRoutes.find((item) => visibleMenuKeys.value.includes(item)) || ''
 })
 
 function getSelectedMenuKeyByPath(path) {

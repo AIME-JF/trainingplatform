@@ -75,6 +75,7 @@
 
         <div class="extra-info">
           <div>报名窗口：{{ formatWindow(training.enrollmentStartAt, training.enrollmentEndAt) }}</div>
+          <div>报名方式：{{ training.enrollmentRequiresApproval === false ? '直接通过' : '申请审核' }}</div>
           <div>准入考试：{{ training.admissionExamTitle || '无' }}</div>
           <div>培训基地：{{ training.trainingBaseName || '手动输入地点' }}</div>
           <div>数据域：{{ [training.departmentName, training.policeTypeName].filter(Boolean).join(' / ') || '未设置' }}</div>
@@ -83,17 +84,38 @@
         <a-progress :percent="Number.isFinite(training.progressPercent) ? training.progressPercent : 0" size="small" style="margin:12px 0 16px" />
 
         <div class="card-actions">
-          <a-button size="small" type="primary" @click="goDetail(training)">进入培训班</a-button>
+          <a-button
+            size="small"
+            type="primary"
+            :disabled="authStore.isStudent && !training.canEnterTraining"
+            @click="goDetail(training)"
+          >
+            进入培训班
+          </a-button>
           <a-button size="small" @click="goHistory(training)">训历</a-button>
 
           <template v-if="authStore.isStudent && !isMyTraining(training)">
             <a-button
-              v-if="training.status !== 'ended' && training.publishStatus === 'published'"
+              v-if="training.currentEnrollmentStatus === 'pending'"
+              size="small"
+              disabled
+            >
+              待审核
+            </a-button>
+            <a-button
+              v-else-if="training.currentEnrollmentStatus === 'rejected'"
+              size="small"
+              disabled
+            >
+              审核未通过
+            </a-button>
+            <a-button
+              v-else-if="training.status !== 'ended' && training.publishStatus === 'published'"
               size="small"
               :disabled="training.isLocked"
               @click="goEnroll(training)"
             >
-              {{ training.isLocked ? '名单已锁定' : '报名申请' }}
+              {{ training.isLocked ? '名单已锁定' : (training.enrollmentRequiresApproval === false ? '加入培训班' : '报名申请') }}
             </a-button>
           </template>
         </div>
@@ -244,6 +266,14 @@
               </a-select>
             </a-form-item>
           </a-col>
+          <a-col :span="12">
+            <a-form-item label="报名方式">
+              <a-radio-group v-model:value="trainingForm.enrollmentRequiresApproval">
+                <a-radio :value="true">申请审核</a-radio>
+                <a-radio :value="false">直接通过</a-radio>
+              </a-radio-group>
+            </a-form-item>
+          </a-col>
           <a-col :span="24">
             <a-form-item label="培训简介">
               <a-textarea v-model:value="trainingForm.description" :rows="3" />
@@ -337,6 +367,7 @@ const trainingForm = reactive({
   description: '',
   enrollmentStartAt: '',
   enrollmentEndAt: '',
+  enrollmentRequiresApproval: true,
   admissionExamId: undefined,
 })
 
@@ -372,7 +403,7 @@ function getTrainingStudentIds(training) {
 }
 
 function isMyTraining(training) {
-  return getTrainingStudentIds(training).includes(authStore.currentUser?.id)
+  return !!training.canEnterTraining || getTrainingStudentIds(training).includes(authStore.currentUser?.id)
 }
 
 function formatWindow(start, end) {
@@ -440,6 +471,7 @@ function resetForm() {
     description: '',
     enrollmentStartAt: '',
     enrollmentEndAt: '',
+    enrollmentRequiresApproval: true,
     admissionExamId: undefined,
   })
   locationSourceMode.value = 'manual'
@@ -476,6 +508,7 @@ function openEditModal(training) {
     description: training.description || '',
     enrollmentStartAt: training.enrollmentStartAt || '',
     enrollmentEndAt: training.enrollmentEndAt || '',
+    enrollmentRequiresApproval: training.enrollmentRequiresApproval !== false,
     admissionExamId: training.admissionExamId,
   })
   locationSourceMode.value = training.trainingBaseId ? 'base' : 'manual'
@@ -586,6 +619,7 @@ async function handleSubmitTraining() {
     description: trainingForm.description || undefined,
     enrollmentStartAt: trainingForm.enrollmentStartAt || undefined,
     enrollmentEndAt: trainingForm.enrollmentEndAt || undefined,
+    enrollmentRequiresApproval: trainingForm.enrollmentRequiresApproval,
     admissionExamId: trainingForm.admissionExamId || undefined,
   }
 
@@ -667,6 +701,10 @@ async function handleEnd(training) {
 }
 
 function goDetail(training) {
+  if (authStore.isStudent && !training.canEnterTraining) {
+    message.warning('当前用户尚未被录取到该培训班')
+    return
+  }
   router.push({ name: 'TrainingDetail', params: { id: training.id } })
 }
 

@@ -99,6 +99,25 @@ class TrainingService:
     def __init__(self, db: Session):
         self.db = db
 
+    @staticmethod
+    def _is_aware_datetime(value: Optional[datetime]) -> bool:
+        return bool(value and value.tzinfo and value.tzinfo.utcoffset(value) is not None)
+
+    @classmethod
+    def _current_time(cls, *references: Optional[datetime]) -> datetime:
+        for reference in references:
+            if cls._is_aware_datetime(reference):
+                return datetime.now(reference.tzinfo)
+        return datetime.now()
+
+    @classmethod
+    def _normalize_datetime(cls, value: Optional[datetime], reference_tzinfo: Any) -> Optional[datetime]:
+        if value is None:
+            return None
+        if cls._is_aware_datetime(value) or reference_tzinfo is None:
+            return value
+        return value.replace(tzinfo=reference_tzinfo)
+
     def get_trainings(
         self,
         page: int = 1,
@@ -166,9 +185,11 @@ class TrainingService:
             capacity=data.capacity,
             description=data.description,
             subjects=data.subjects,
+            enrollment_requires_approval=bool(data.enrollment_requires_approval),
             enrollment_start_at=data.enrollment_start_at,
             enrollment_end_at=data.enrollment_end_at,
-            published_at=datetime.now() if data.publish_status == "published" else None,
+            published_at=self._current_time(data.enrollment_start_at, data.enrollment_end_at)
+            if data.publish_status == "published" else None,
             published_by=user_id if data.publish_status == "published" else None,
         )
         self._apply_training_domain_fields(
@@ -452,19 +473,30 @@ class TrainingService:
         if training.publish_status == "published":
             return
         training.publish_status = "published"
-        training.published_at = datetime.now()
+        training.published_at = self._current_time(
+            training.enrollment_start_at,
+            training.enrollment_end_at,
+            training.published_at,
+            training.locked_at,
+        )
         training.published_by = user_id
 
     def _mark_training_locked(self, training: Training, user_id: int) -> None:
         if training.locked_at:
             return
-        training.locked_at = datetime.now()
+        now = self._current_time(
+            training.enrollment_start_at,
+            training.enrollment_end_at,
+            training.published_at,
+            training.locked_at,
+        )
+        training.locked_at = now
         training.locked_by = user_id
         for enrollment in training.enrollments or []:
             if enrollment.status == "pending":
                 enrollment.status = "rejected"
                 enrollment.note = enrollment.note or "班次名单已锁定"
-                enrollment.reviewed_at = datetime.now()
+                enrollment.reviewed_at = now
                 enrollment.reviewed_by = user_id
 
     def import_training_students(self, training_id: int, file_bytes: bytes) -> dict:
@@ -521,10 +553,17 @@ class TrainingService:
         if training.locked_at:
             raise ValueError("当前培训班名单已锁定")
 
-        now = datetime.now()
-        if training.enrollment_start_at and now < training.enrollment_start_at:
+        now = self._current_time(
+            training.enrollment_start_at,
+            training.enrollment_end_at,
+            training.published_at,
+            training.locked_at,
+        )
+        enrollment_start_at = self._normalize_datetime(training.enrollment_start_at, now.tzinfo)
+        enrollment_end_at = self._normalize_datetime(training.enrollment_end_at, now.tzinfo)
+        if enrollment_start_at and now < enrollment_start_at:
             raise ValueError("报名尚未开始")
-        if training.enrollment_end_at and now > training.enrollment_end_at:
+        if enrollment_end_at and now > enrollment_end_at:
             raise ValueError("报名已截止")
 
         existing = self.db.query(Enrollment).filter(
@@ -545,16 +584,26 @@ class TrainingService:
                 raise ValueError("该培训班要求先通过准入考试")
 
         user = self.db.query(User).options(joinedload(User.departments)).filter(User.id == user_id).first()
+        requires_approval = bool(training.enrollment_requires_approval if training.enrollment_requires_approval is not None else True)
+        if not requires_approval:
+            approved_count = sum(1 for item in (training.enrollments or []) if item.status == "approved")
+            if training.capacity and training.capacity > 0 and approved_count >= training.capacity:
+                raise ValueError("培训班名额已满")
         enrollment = Enrollment(
             training_id=training_id,
             user_id=user_id,
-            status="pending",
+            status="pending" if requires_approval else "approved",
             note=data.note,
             contact_phone=data.phone,
             need_accommodation=bool(data.need_accommodation),
             profile_snapshot=self._build_profile_snapshot(user),
+            approved_at=None if requires_approval else now,
+            reviewed_at=None if requires_approval else now,
+            reviewed_by=None if requires_approval else user_id,
         )
         self.db.add(enrollment)
+        if not requires_approval:
+            self._refresh_training_histories(training_id, [user_id])
         self.db.commit()
         self.db.refresh(enrollment)
 
@@ -608,9 +657,10 @@ class TrainingService:
         if not enrollment:
             raise ValueError("报名记录不存在")
 
+        now = self._current_time(enrollment.enroll_time, enrollment.approved_at, enrollment.reviewed_at)
         enrollment.status = "approved"
-        enrollment.approved_at = datetime.now()
-        enrollment.reviewed_at = datetime.now()
+        enrollment.approved_at = now
+        enrollment.reviewed_at = now
         enrollment.reviewed_by = reviewer_id
         self._refresh_training_histories(training_id, [enrollment.user_id])
         self.db.commit()
@@ -636,7 +686,7 @@ class TrainingService:
 
         enrollment.status = "rejected"
         enrollment.note = note or enrollment.note
-        enrollment.reviewed_at = datetime.now()
+        enrollment.reviewed_at = self._current_time(enrollment.enroll_time, enrollment.approved_at, enrollment.reviewed_at)
         enrollment.reviewed_by = reviewer_id
         self._refresh_training_histories(training_id, [enrollment.user_id])
         self.db.commit()
@@ -1223,7 +1273,11 @@ class TrainingService:
             if enrollment.user_id in wanted_ids:
                 if enrollment.status != "approved":
                     enrollment.status = "approved"
-                    enrollment.approved_at = datetime.now()
+                    enrollment.approved_at = self._current_time(
+                        enrollment.enroll_time,
+                        enrollment.approved_at,
+                        enrollment.reviewed_at,
+                    )
                     changed_user_ids.append(enrollment.user_id)
             elif enrollment.status == "approved":
                 enrollment.status = "rejected"
@@ -1236,7 +1290,7 @@ class TrainingService:
                 user_id=user_id,
                 status="approved",
                 note="详情页配置学员",
-                approved_at=datetime.now(),
+                approved_at=self._current_time(training.published_at, training.locked_at),
             ))
             changed_user_ids.append(user_id)
 
@@ -1438,7 +1492,13 @@ class TrainingService:
 
         session_date = target_date or session["date"]
         deadline = self._resolve_session_deadline(training, session_key, session_date)
-        if session["status"] not in {self.SESSION_COMPLETED, self.SESSION_MISSED} and datetime.now() < deadline:
+        now = self._current_time(deadline)
+        normalized_deadline = self._normalize_datetime(deadline, now.tzinfo)
+        if (
+            normalized_deadline
+            and session["status"] not in {self.SESSION_COMPLETED, self.SESSION_MISSED}
+            and now < normalized_deadline
+        ):
             return
 
         approved_user_ids = [
@@ -1496,7 +1556,15 @@ class TrainingService:
             return None
 
     def _refresh_schedule_states(self, training: Training) -> bool:
-        now = datetime.now()
+        deadline_references: List[datetime] = []
+        for course in training.courses or []:
+            for item in course.schedules or []:
+                schedule = self._normalize_schedule_item(item)
+                schedule_date = self._parse_schedule_date(schedule)
+                _, time_end = self._parse_time_range(schedule.get("time_range"))
+                if schedule_date:
+                    deadline_references.append(datetime.combine(schedule_date, time_end or time(23, 59)))
+        now = self._current_time(*deadline_references)
         changed = False
         for course in training.courses or []:
             normalized: List[Dict[str, Any]] = []
@@ -1505,9 +1573,10 @@ class TrainingService:
                 session_date = self._parse_schedule_date(schedule)
                 _, time_end = self._parse_time_range(schedule.get("time_range"))
                 deadline = datetime.combine(session_date, time_end or time(23, 59)) if session_date else None
+                normalized_deadline = self._normalize_datetime(deadline, now.tzinfo)
                 if (
-                    deadline
-                    and now > deadline
+                    normalized_deadline
+                    and now > normalized_deadline
                     and schedule.get("status") in {
                         self.SESSION_PENDING,
                         self.SESSION_CHECKIN_OPEN,
@@ -1542,7 +1611,9 @@ class TrainingService:
             if item["status"] != self.SESSION_PENDING:
                 continue
             deadline = self._resolve_session_deadline(training, item["session_key"], item["date"])
-            if datetime.now() <= deadline:
+            now = self._current_time(deadline)
+            normalized_deadline = self._normalize_datetime(deadline, now.tzinfo)
+            if normalized_deadline and now <= normalized_deadline:
                 return item
         return None
 
@@ -1595,9 +1666,11 @@ class TrainingService:
         if not session:
             return False
         deadline = self._resolve_session_deadline(training, schedule["session_id"], session["date"])
+        now = self._current_time(deadline)
+        normalized_deadline = self._normalize_datetime(deadline, now.tzinfo)
         status = schedule.get("status") or self.SESSION_PENDING
         if action in {"start_checkin", "skip"}:
-            return status == self.SESSION_PENDING and datetime.now() <= deadline
+            return bool(normalized_deadline and status == self.SESSION_PENDING and now <= normalized_deadline)
         if action == "end_checkin":
             return status == self.SESSION_CHECKIN_OPEN
         if action == "start_checkout":
@@ -1777,6 +1850,15 @@ class TrainingService:
             return "published"
         return "draft"
 
+    @staticmethod
+    def _resolve_current_enrollment(training: Training, current_user_id: Optional[int]) -> Optional[Enrollment]:
+        if not current_user_id:
+            return None
+        for enrollment in training.enrollments or []:
+            if enrollment.user_id == current_user_id:
+                return enrollment
+        return None
+
     def _to_response(self, training: Training, current_user_id: Optional[int] = None) -> TrainingResponse:
         approved_enrollments = [item for item in (training.enrollments or []) if item.status == "approved"]
         student_ids = [item.user_id for item in approved_enrollments]
@@ -1817,6 +1899,8 @@ class TrainingService:
             and can_manage_training(self.db, training, current_user_id)
         )
         can_manage_all = can_edit_training or can_manage_training_directly
+        current_enrollment = self._resolve_current_enrollment(training, current_user_id)
+        current_enrollment_status = current_enrollment.status if current_enrollment else None
         current_step_key = self._resolve_current_step_key(training)
         students = [self._enrollment_to_response(item) for item in approved_enrollments] if can_manage_all else []
         checkin_records = self._get_detail_checkin_records(training.id, current_user_id, can_manage_all)
@@ -1849,6 +1933,7 @@ class TrainingService:
             students=students,
             description=training.description,
             subjects=training.subjects or [],
+            enrollment_requires_approval=bool(training.enrollment_requires_approval if training.enrollment_requires_approval is not None else True),
             enrollment_start_at=training.enrollment_start_at,
             enrollment_end_at=training.enrollment_end_at,
             published_at=training.published_at,
@@ -1871,6 +1956,8 @@ class TrainingService:
             can_edit_training=can_edit_training,
             can_edit_courses=can_manage_all,
             can_review_enrollments=can_manage_all,
+            current_enrollment_status=current_enrollment_status,
+            can_enter_training=current_enrollment_status == "approved",
             created_at=training.created_at,
             updated_at=training.updated_at,
         )
@@ -1878,6 +1965,8 @@ class TrainingService:
     def _to_list_response(self, training: Training, current_user_id: Optional[int] = None) -> TrainingListResponse:
         approved_enrollments = [item for item in (training.enrollments or []) if item.status == "approved"]
         student_ids = [item.user_id for item in approved_enrollments]
+        current_enrollment = self._resolve_current_enrollment(training, current_user_id)
+        current_enrollment_status = current_enrollment.status if current_enrollment else None
         return TrainingListResponse(
             id=training.id,
             name=training.name,
@@ -1903,12 +1992,15 @@ class TrainingService:
             student_ids=student_ids,
             description=training.description,
             subjects=training.subjects or [],
+            enrollment_requires_approval=bool(training.enrollment_requires_approval if training.enrollment_requires_approval is not None else True),
             enrollment_start_at=training.enrollment_start_at,
             enrollment_end_at=training.enrollment_end_at,
             is_locked=training.locked_at is not None,
             admission_exam_id=training.admission_exam_id,
             admission_exam_title=training.admission_exam.title if training.admission_exam else None,
             current_step_key=self._resolve_current_step_key(training),
+            current_enrollment_status=current_enrollment_status,
+            can_enter_training=current_enrollment_status == "approved",
             created_at=training.created_at,
         )
 

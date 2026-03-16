@@ -243,15 +243,26 @@
             <a-tab-pane key="students" tab="学员名单" v-if="!authStore.isStudent">
               <div class="section-header" style="margin-bottom:16px">
                 <a-input-search v-model:value="studentSearch" placeholder="搜索学员..." class="student-search-input" />
-                <permissions-tooltip
-                  :allowed="canManageStudents"
-                  :tips="trainingManageTooltip"
-                  v-slot="{ disabled }"
-                >
-                  <a-button type="primary" size="small" :disabled="disabled" @click="openStudentModal">
-                    <template #icon><PlusOutlined /></template>添加学员
-                  </a-button>
-                </permissions-tooltip>
+                <a-space>
+                  <permissions-tooltip
+                    :allowed="canManageEnrollmentApplications"
+                    :tips="trainingManageTooltip"
+                    v-slot="{ disabled }"
+                  >
+                    <a-button size="small" :disabled="disabled" @click="openEnrollmentApplicationModal">
+                      申请管理<span v-if="pendingEnrollmentCount > 0">（{{ pendingEnrollmentCount }}）</span>
+                    </a-button>
+                  </permissions-tooltip>
+                  <permissions-tooltip
+                    :allowed="canManageStudents"
+                    :tips="trainingManageTooltip"
+                    v-slot="{ disabled }"
+                  >
+                    <a-button type="primary" size="small" :disabled="disabled" @click="openStudentModal">
+                      <template #icon><PlusOutlined /></template>添加学员
+                    </a-button>
+                  </permissions-tooltip>
+                </a-space>
               </div>
               <a-table :dataSource="filteredStudents" :columns="studentColumnsWithAction" size="small" :pagination="{ pageSize: 10 }">
                 <template #bodyCell="{ column, record }">
@@ -690,8 +701,82 @@
             <a-select-option value="ended">已结束</a-select-option>
           </a-select>
         </a-form-item>
+        <a-form-item label="报名方式">
+          <a-radio-group v-model:value="editForm.enrollmentRequiresApproval">
+            <a-radio :value="true">申请审核</a-radio>
+            <a-radio :value="false">直接通过</a-radio>
+          </a-radio-group>
+        </a-form-item>
         <a-form-item label="培训简介">
           <a-textarea v-model:value="editForm.description" :rows="2" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
+    <a-modal
+      v-model:open="showEnrollmentApplicationModal"
+      title="申请管理"
+      :footer="null"
+      width="860px"
+    >
+      <div class="section-header" style="margin-bottom:16px">
+        <div class="page-sub">待审核申请 {{ pendingEnrollmentCount }} 人</div>
+        <a-button size="small" @click="loadEnrollmentApplications">刷新</a-button>
+      </div>
+      <a-empty v-if="!pendingEnrollmentApplications.length && !enrollmentApplicationsLoading" description="暂无待审核申请" />
+      <a-table
+        v-else
+        :loading="enrollmentApplicationsLoading"
+        :data-source="pendingEnrollmentApplications"
+        :pagination="{ pageSize: 6 }"
+        row-key="id"
+        size="small"
+      >
+        <a-table-column title="姓名" data-index="userNickname" key="userNickname" />
+        <a-table-column title="警号" data-index="policeId" key="policeId" width="120" />
+        <a-table-column title="单位" key="departments" :custom-render="({ record }) => (record.departments || []).join(' / ') || '-'" />
+        <a-table-column title="联系电话" data-index="contactPhone" key="contactPhone" width="140" />
+        <a-table-column title="住宿" key="needAccommodation" width="80" :custom-render="({ record }) => (record.needAccommodation ? '需要' : '无需')" />
+        <a-table-column title="报名备注" key="note" :custom-render="({ record }) => record.note || '-'" />
+        <a-table-column title="操作" key="action" width="180">
+          <template #default="{ record }">
+            <a-space>
+              <permissions-tooltip
+                :allowed="canManageEnrollmentApplications && authStore.hasPermission('APPROVE_ENROLLMENT')"
+                :tips="approveEnrollmentTooltip"
+                v-slot="{ disabled }"
+              >
+                <a-button type="primary" size="small" :disabled="disabled" @click="handleApproveEnrollment(record)">通过</a-button>
+              </permissions-tooltip>
+              <permissions-tooltip
+                :allowed="canManageEnrollmentApplications && authStore.hasPermission('REJECT_ENROLLMENT')"
+                :tips="rejectEnrollmentTooltip"
+                v-slot="{ disabled }"
+              >
+                <a-button size="small" danger :disabled="disabled" @click="openRejectEnrollmentModal(record)">拒绝</a-button>
+              </permissions-tooltip>
+            </a-space>
+          </template>
+        </a-table-column>
+      </a-table>
+    </a-modal>
+
+    <a-modal
+      v-model:open="showRejectEnrollmentModal"
+      title="拒绝报名申请"
+      @ok="submitRejectEnrollment"
+      @cancel="closeRejectEnrollmentModal"
+      ok-text="确认拒绝"
+      cancel-text="取消"
+      width="520px"
+    >
+      <a-form layout="vertical" style="margin-top:12px">
+        <a-form-item label="拒绝理由" required>
+          <a-textarea
+            v-model:value="rejectEnrollmentNote"
+            :rows="4"
+            placeholder="请输入拒绝理由，学员会在报名结果中看到该说明"
+          />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -725,6 +810,9 @@ import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QrcodeOutlined, Do
 import dayjs from 'dayjs'
 import {
   getTraining,
+  getEnrollments,
+  approveEnrollment,
+  rejectEnrollment,
   manageTraining as apiManageTraining,
   updateTraining as apiUpdateTraining,
   publishTraining,
@@ -776,6 +864,7 @@ const trainingData = reactive({
   instructorId: null,
   instructorName: '',
   description: '',
+  enrollmentRequiresApproval: true,
   courses: [],
   studentIds: [],
   students: [],
@@ -794,6 +883,8 @@ const trainingData = reactive({
   canEditTraining: false,
   canEditCourses: false,
   canReviewEnrollments: false,
+  currentEnrollmentStatus: null,
+  canEnterTraining: false,
 })
 
 const allUserList = ref([])
@@ -854,6 +945,7 @@ function applyTrainingDetail(data) {
     students: normalizedStudents,
     enrolledCount: data.enrolledCount ?? normalizedStudentIds.length,
     enrolled: data.enrolledCount ?? normalizedStudentIds.length,
+    enrollmentRequiresApproval: data.enrollmentRequiresApproval !== false,
     checkinRecords: normalizeCheckinRecords(data.checkinRecords || []),
     workflowSteps: data.workflowSteps || [],
     currentStepKey: data.currentStepKey || 'draft',
@@ -869,6 +961,8 @@ function applyTrainingDetail(data) {
     canEditTraining: !!data.canEditTraining,
     canEditCourses: !!data.canEditCourses,
     canReviewEnrollments: !!data.canReviewEnrollments,
+    currentEnrollmentStatus: data.currentEnrollmentStatus || null,
+    canEnterTraining: !!data.canEnterTraining,
   })
   syncTrainingRoster(normalizedStudents, normalizedStudentIds)
   trainingResources.value = data.resources || []
@@ -879,6 +973,26 @@ function applyTrainingDetail(data) {
 async function loadTrainingDetail() {
   try {
     const data = await getTraining(trainingId)
+    if (authStore.isStudent && !data.canEnterTraining) {
+      if (data.currentEnrollmentStatus === 'pending') {
+        message.warning('报名审核通过后才能进入培训班')
+        router.replace({ name: 'Enroll', params: { id: trainingId } })
+        return
+      }
+      if (data.currentEnrollmentStatus === 'rejected') {
+        message.warning('当前报名未通过，不能进入培训班')
+        router.replace({ name: 'Enroll', params: { id: trainingId } })
+        return
+      }
+      if (data.publishStatus === 'published') {
+        message.warning('请先报名并通过审核后再进入培训班')
+        router.replace({ name: 'Enroll', params: { id: trainingId } })
+        return
+      }
+      message.warning('当前用户尚未被录取到该培训班')
+      router.replace('/training')
+      return
+    }
     applyTrainingDetail(data)
   } catch (e) {
     message.error('加载培训班详情失败')
@@ -948,6 +1062,7 @@ const scheduleViewMode = ref('course')
 const canEdit = computed(() => !!trainingData.canManageAll)
 const canScheduleEdit = computed(() => !!trainingData.canEditCourses)
 const canManageStudents = computed(() => !!trainingData.canManageAll)
+const canManageEnrollmentApplications = computed(() => !!trainingData.canReviewEnrollments)
 const canManageResources = computed(() => !!trainingData.canManageAll)
 const canManageNotices = computed(() => !!trainingData.canManageAll)
 const canExportStudents = computed(() => !!trainingData.canManageAll)
@@ -962,6 +1077,16 @@ const scheduleEditTooltip = computed(() => (
 ))
 const quickCreateExamTooltip = computed(() => (
   !authStore.hasPermission('CREATE_EXAM') ? '需要 CREATE_EXAM 权限' : trainingManageTooltip.value
+))
+const approveEnrollmentTooltip = computed(() => (
+  !authStore.hasPermission('APPROVE_ENROLLMENT')
+    ? '需要 APPROVE_ENROLLMENT 权限'
+    : trainingManageTooltip.value
+))
+const rejectEnrollmentTooltip = computed(() => (
+  !authStore.hasPermission('REJECT_ENROLLMENT')
+    ? '需要 REJECT_ENROLLMENT 权限'
+    : trainingManageTooltip.value
 ))
 const currentSession = computed(() => trainingData.currentSession)
 const showPublishWorkflowAction = computed(() => trainingData.status === 'upcoming' && trainingData.publishStatus !== 'published')
@@ -1307,6 +1432,18 @@ const studentColumnsWithAction = computed(() =>
   !authStore.isStudent ? [...baseStudentColumns, { title: '操作', key: 'action', width: 80 }] : baseStudentColumns
 )
 
+const showEnrollmentApplicationModal = ref(false)
+const enrollmentApplicationsLoading = ref(false)
+const enrollmentApplications = ref([])
+const showRejectEnrollmentModal = ref(false)
+const rejectEnrollmentTarget = ref(null)
+const rejectEnrollmentNote = ref('')
+
+const pendingEnrollmentApplications = computed(() => (
+  (enrollmentApplications.value || []).filter((item) => item.status === 'pending')
+))
+const pendingEnrollmentCount = computed(() => pendingEnrollmentApplications.value.length)
+
 function goTraineeDetail(userId) {
   router.push({ name: 'TraineeDetail', params: { id: userId } })
 }
@@ -1320,6 +1457,64 @@ async function removeStudent(userId) {
     await loadTrainingDetail()
   } catch {
     message.error('移除学员失败')
+  }
+}
+
+async function loadEnrollmentApplications() {
+  enrollmentApplicationsLoading.value = true
+  try {
+    const result = await getEnrollments(trainingId, { size: -1 })
+    enrollmentApplications.value = result.items || []
+  } catch (error) {
+    message.error(error.message || '加载报名申请失败')
+  } finally {
+    enrollmentApplicationsLoading.value = false
+  }
+}
+
+async function openEnrollmentApplicationModal() {
+  if (!canManageEnrollmentApplications.value) return
+  showEnrollmentApplicationModal.value = true
+  await loadEnrollmentApplications()
+}
+
+async function handleApproveEnrollment(record) {
+  if (!canManageEnrollmentApplications.value || !authStore.hasPermission('APPROVE_ENROLLMENT')) return
+  try {
+    await approveEnrollment(trainingId, record.id)
+    message.success('已通过报名申请')
+    await Promise.all([loadEnrollmentApplications(), loadTrainingDetail()])
+  } catch (error) {
+    message.error(error.message || '审批失败')
+  }
+}
+
+function openRejectEnrollmentModal(record) {
+  if (!canManageEnrollmentApplications.value || !authStore.hasPermission('REJECT_ENROLLMENT')) return
+  rejectEnrollmentTarget.value = record
+  rejectEnrollmentNote.value = record?.note || ''
+  showRejectEnrollmentModal.value = true
+}
+
+function closeRejectEnrollmentModal() {
+  showRejectEnrollmentModal.value = false
+  rejectEnrollmentTarget.value = null
+  rejectEnrollmentNote.value = ''
+}
+
+async function submitRejectEnrollment() {
+  if (!rejectEnrollmentTarget.value) return
+  if (!rejectEnrollmentNote.value.trim()) {
+    message.warning('请输入拒绝理由')
+    return
+  }
+  try {
+    await rejectEnrollment(trainingId, rejectEnrollmentTarget.value.id, rejectEnrollmentNote.value.trim())
+    message.success('已拒绝报名申请')
+    closeRejectEnrollmentModal()
+    await Promise.all([loadEnrollmentApplications(), loadTrainingDetail()])
+  } catch (error) {
+    message.error(error.message || '拒绝失败')
   }
 }
 
@@ -1568,6 +1763,7 @@ const editForm = reactive({
   name: trainingData.name, startDate: trainingData.startDate, endDate: trainingData.endDate,
   location: trainingData.location, instructorId: trainingData.instructorId || null, instructorName: trainingData.instructorName,
   capacity: trainingData.capacity, status: trainingData.status, description: trainingData.description || '',
+  enrollmentRequiresApproval: true,
 })
 
 function syncEditFormFromTraining() {
@@ -1580,6 +1776,7 @@ function syncEditFormFromTraining() {
   editForm.capacity = trainingData.capacity
   editForm.status = trainingData.status
   editForm.description = trainingData.description || ''
+  editForm.enrollmentRequiresApproval = trainingData.enrollmentRequiresApproval !== false
   editFormDates.value = [
     trainingData.startDate ? dayjs(trainingData.startDate) : null,
     trainingData.endDate ? dayjs(trainingData.endDate) : null,

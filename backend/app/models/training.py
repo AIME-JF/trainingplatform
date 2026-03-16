@@ -46,6 +46,7 @@ class Training(Base):
     capacity = Column(Integer, default=0, comment="容量")
     description = Column(Text, comment="培训描述")
     subjects = Column(JSON, nullable=True, comment="科目标签")
+    enrollment_requires_approval = Column(Boolean, default=True, nullable=False, comment="报名是否需要审核")
     enrollment_start_at = Column(DateTime(timezone=True), nullable=True, comment="报名开始时间")
     enrollment_end_at = Column(DateTime(timezone=True), nullable=True, comment="报名截止时间")
     published_at = Column(DateTime(timezone=True), nullable=True, comment="发布时间")

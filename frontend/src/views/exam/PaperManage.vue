@@ -150,7 +150,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import { PlusOutlined, RobotOutlined } from '@ant-design/icons-vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
   archiveExamPaper,
@@ -165,6 +165,7 @@ import PaperDraftEditor from './components/PaperDraftEditor.vue'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 
 const loading = ref(false)
@@ -302,7 +303,7 @@ function openEditDrawer(record) {
 }
 
 function openViewDrawer(record) {
-  openPaperDetail(record, 'view')
+  router.push({ name: 'PaperDetail', params: { id: record.id } })
 }
 
 async function handleSave() {

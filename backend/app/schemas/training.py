@@ -172,6 +172,7 @@ class TrainingCreate(BaseModel):
     capacity: int = Field(0, description="容量")
     description: Optional[str] = None
     subjects: List[str] = Field(default_factory=list)
+    enrollment_requires_approval: bool = Field(True, description="报名是否需要审核")
     enrollment_start_at: Optional[datetime] = None
     enrollment_end_at: Optional[datetime] = None
     admission_exam_id: Optional[int] = None
@@ -204,6 +205,7 @@ class TrainingUpdate(BaseModel):
     capacity: Optional[int] = None
     description: Optional[str] = None
     subjects: Optional[List[str]] = None
+    enrollment_requires_approval: Optional[bool] = None
     enrollment_start_at: Optional[datetime] = None
     enrollment_end_at: Optional[datetime] = None
     admission_exam_id: Optional[int] = None
@@ -240,6 +242,7 @@ class TrainingResponse(BaseModel):
     students: List["EnrollmentResponse"] = Field(default_factory=list)
     description: Optional[str] = None
     subjects: List[str] = Field(default_factory=list)
+    enrollment_requires_approval: bool = True
     enrollment_start_at: Optional[datetime] = None
     enrollment_end_at: Optional[datetime] = None
     published_at: Optional[datetime] = None
@@ -262,6 +265,8 @@ class TrainingResponse(BaseModel):
     can_edit_training: bool = False
     can_edit_courses: bool = False
     can_review_enrollments: bool = False
+    current_enrollment_status: Optional[str] = None
+    can_enter_training: bool = False
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -295,12 +300,15 @@ class TrainingListResponse(BaseModel):
     student_ids: List[int] = Field(default_factory=list)
     description: Optional[str] = None
     subjects: List[str] = Field(default_factory=list)
+    enrollment_requires_approval: bool = True
     enrollment_start_at: Optional[datetime] = None
     enrollment_end_at: Optional[datetime] = None
     is_locked: bool = False
     admission_exam_id: Optional[int] = None
     admission_exam_title: Optional[str] = None
     current_step_key: str = "draft"
+    current_enrollment_status: Optional[str] = None
+    can_enter_training: bool = False
     created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)

@@ -1,4 +1,31 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import {
+  AI_PAPER_ASSEMBLE_PAGE_PERMISSIONS,
+  AI_PAPER_GENERATE_PAGE_PERMISSIONS,
+  AI_QUESTION_PAGE_PERMISSIONS,
+  CERTIFICATE_PAGE_PERMISSIONS,
+  COURSE_PAGE_PERMISSIONS,
+  DASHBOARD_PAGE_PERMISSIONS,
+  DEPARTMENT_MANAGE_PAGE_PERMISSIONS,
+  ENROLL_MANAGE_PAGE_PERMISSIONS,
+  EXAM_LIST_PAGE_PERMISSIONS,
+  EXAM_MANAGE_PAGE_PERMISSIONS,
+  PAPER_PAGE_PERMISSIONS,
+  QUESTION_BANK_PAGE_PERMISSIONS,
+  REPORT_PAGE_PERMISSIONS,
+  RESOURCE_MANAGE_PAGE_PERMISSIONS,
+  RESOURCE_POLICY_PAGE_PERMISSIONS,
+  RESOURCE_REVIEW_PAGE_PERMISSIONS,
+  RESOURCE_UPLOAD_PAGE_PERMISSIONS,
+  ROLE_MANAGE_PAGE_PERMISSIONS,
+  TALENT_PAGE_PERMISSIONS,
+  TRAINING_BASE_PAGE_PERMISSIONS,
+  TRAINING_PAGE_PERMISSIONS,
+  TRAINING_SCHEDULE_PAGE_PERMISSIONS,
+  USER_ARCHIVE_PAGE_PERMISSIONS,
+  USER_MANAGE_PAGE_PERMISSIONS,
+  MY_RESOURCE_PAGE_PERMISSIONS,
+} from '../constants/pagePermissions'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -18,103 +45,109 @@ const router = createRouter({
           path: '',
           name: 'Dashboard',
           component: () => import('../views/dashboard/Index.vue'),
-          meta: { title: '工作台', icon: 'HomeOutlined' },
+          meta: { title: '工作台', icon: 'HomeOutlined', anyPermissions: DASHBOARD_PAGE_PERMISSIONS },
         },
         {
           path: 'courses',
           name: 'CourseList',
           component: () => import('../views/courses/List.vue'),
-          meta: { title: '课程学习', icon: 'PlayCircleOutlined' },
+          meta: { title: '课程学习', icon: 'PlayCircleOutlined', anyPermissions: COURSE_PAGE_PERMISSIONS },
         },
         {
           path: 'courses/:id',
           name: 'CourseDetail',
           component: () => import('../views/courses/Detail.vue'),
-          meta: { title: '课程详情' },
+          meta: { title: '课程详情', anyPermissions: COURSE_PAGE_PERMISSIONS },
         },
         {
           path: 'exam/list',
           name: 'ExamList',
           component: () => import('../views/exam/ExamList.vue'),
-          meta: { title: '参加考试' },
+          meta: { title: '参加考试', anyPermissions: EXAM_LIST_PAGE_PERMISSIONS },
         },
         {
           path: 'exam/manage',
           name: 'ExamManage',
           component: () => import('../views/exam/ExamManage.vue'),
-          meta: { title: '考试管理', roles: ['admin', 'instructor'] },
+          meta: { title: '考试管理', anyPermissions: EXAM_MANAGE_PAGE_PERMISSIONS },
         },
         {
           path: 'paper/repository',
           name: 'PaperManage',
           component: () => import('../views/exam/PaperManage.vue'),
-          meta: { title: '试卷仓库', roles: ['admin', 'instructor'] },
+          meta: { title: '试卷仓库', anyPermissions: PAPER_PAGE_PERMISSIONS },
+        },
+        {
+          path: 'paper/repository/:id',
+          name: 'PaperDetail',
+          component: () => import('../views/exam/PaperDetail.vue'),
+          meta: { title: '试卷详情', anyPermissions: PAPER_PAGE_PERMISSIONS },
         },
         {
           path: 'question/repository',
           name: 'QuestionBank',
           component: () => import('../views/exam/QuestionBank.vue'),
-          meta: { title: '试题仓库', roles: ['admin', 'instructor'] },
+          meta: { title: '试题仓库', anyPermissions: QUESTION_BANK_PAGE_PERMISSIONS },
         },
         {
           path: 'exam/do/:id',
           name: 'DoExam',
           component: () => import('../views/exam/Exam.vue'),
-          meta: { title: '在线考试', fullscreen: true },
+          meta: { title: '在线考试', fullscreen: true, anyPermissions: EXAM_LIST_PAGE_PERMISSIONS },
         },
         {
           path: 'exam/result/:id',
           name: 'ExamResult',
           component: () => import('../views/exam/Result.vue'),
-          meta: { title: '考试结果' },
+          meta: { title: '考试结果', anyPermissions: EXAM_LIST_PAGE_PERMISSIONS },
         },
         {
           path: 'question/ai',
           name: 'AiQuestionTask',
           component: () => import('../views/exam/AiQuestionTask.vue'),
-          meta: { title: 'AI智能出题', roles: ['admin', 'instructor'] },
+          meta: { title: 'AI智能出题', anyPermissions: AI_QUESTION_PAGE_PERMISSIONS },
         },
         {
           path: 'paper/ai-assemble',
           name: 'AiAssemblePaperTask',
           component: () => import('../views/exam/AiAssemblePaperTask.vue'),
-          meta: { title: 'AI自动组卷', roles: ['admin', 'instructor'] },
+          meta: { title: 'AI自动组卷', anyPermissions: AI_PAPER_ASSEMBLE_PAGE_PERMISSIONS },
         },
         {
           path: 'paper/ai-generate',
           name: 'AiGeneratePaperTask',
           component: () => import('../views/exam/AiGeneratePaperTask.vue'),
-          meta: { title: 'AI自动生成试卷', roles: ['admin', 'instructor'] },
+          meta: { title: 'AI自动生成试卷', anyPermissions: AI_PAPER_GENERATE_PAGE_PERMISSIONS },
         },
         {
           path: 'training',
           name: 'TrainingList',
           component: () => import('../views/training/List.vue'),
-          meta: { title: '培训管理' },
+          meta: { title: '培训管理', anyPermissions: TRAINING_PAGE_PERMISSIONS },
         },
         {
           path: 'training/base',
           name: 'TrainingBaseManage',
           component: () => import('../views/training/Base.vue'),
-          meta: { title: '培训基地', roles: ['admin', 'instructor'] },
+          meta: { title: '培训基地', anyPermissions: TRAINING_BASE_PAGE_PERMISSIONS },
         },
         {
           path: 'training/schedule/:id?',
           name: 'TrainingSchedule',
           component: () => import('../views/training/Schedule.vue'),
-          meta: { title: '周训练计划' },
+          meta: { title: '周训练计划', anyPermissions: TRAINING_SCHEDULE_PAGE_PERMISSIONS },
         },
         {
           path: 'training/board',
           name: 'TrainingBoard',
           component: () => import('../views/training/Board.vue'),
-          meta: { title: '培训看板', roles: ['admin'] },
+          meta: { title: '培训看板', anyPermissions: REPORT_PAGE_PERMISSIONS },
         },
         {
           path: 'training/:id',
           name: 'TrainingDetail',
           component: () => import('../views/training/Detail.vue'),
-          meta: { title: '培训班详情' },
+          meta: { title: '培训班详情', anyPermissions: TRAINING_PAGE_PERMISSIONS },
         },
         {
           path: 'training/:id/checkin/:sessionKey?',
@@ -132,7 +165,7 @@ const router = createRouter({
           path: 'training/:id/history',
           name: 'TrainingHistory',
           component: () => import('../views/training/History.vue'),
-          meta: { title: '培训训历' },
+          meta: { title: '培训训历', anyPermissions: TRAINING_PAGE_PERMISSIONS },
         },
         {
           path: 'resource/library',
@@ -156,85 +189,85 @@ const router = createRouter({
           path: 'resource/upload',
           name: 'ResourceUpload',
           component: () => import('../views/resource/Upload.vue'),
-          meta: { title: '上传资源', roles: ['admin', 'instructor'] },
+          meta: { title: '上传资源', anyPermissions: RESOURCE_UPLOAD_PAGE_PERMISSIONS },
         },
         {
           path: 'resource/my',
           name: 'MyResources',
           component: () => import('../views/resource/MyResources.vue'),
-          meta: { title: '我的资源', roles: ['admin', 'instructor'] },
+          meta: { title: '我的资源', anyPermissions: MY_RESOURCE_PAGE_PERMISSIONS },
         },
         {
           path: 'resource/manage',
           name: 'ResourceManage',
           component: () => import('../views/resource/Manage.vue'),
-          meta: { title: '资源管理', roles: ['admin'] },
+          meta: { title: '资源管理', anyPermissions: RESOURCE_MANAGE_PAGE_PERMISSIONS },
         },
         {
           path: 'resource/review',
           name: 'ResourceReviewQueue',
           component: () => import('../views/resource/ReviewQueue.vue'),
-          meta: { title: '审核工作台', roles: ['admin', 'instructor'] },
+          meta: { title: '审核工作台', anyPermissions: RESOURCE_REVIEW_PAGE_PERMISSIONS },
         },
         {
           path: 'resource/policy',
           name: 'ResourcePolicyManage',
           component: () => import('../views/resource/PolicyManage.vue'),
-          meta: { title: '审核策略', roles: ['admin'] },
+          meta: { title: '审核策略', anyPermissions: RESOURCE_POLICY_PAGE_PERMISSIONS },
         },
         {
           path: 'instructor',
           name: 'InstructorList',
           component: () => import('../views/instructor/List.vue'),
-          meta: { title: '教官库', roles: ['admin', 'instructor'] },
+          meta: { title: '教官库', anyPermissions: USER_ARCHIVE_PAGE_PERMISSIONS },
         },
         {
           path: 'instructor/:id',
           name: 'InstructorDetail',
           component: () => import('../views/instructor/Detail.vue'),
-          meta: { title: '教官详情', roles: ['admin', 'instructor'] },
+          meta: { title: '教官详情', anyPermissions: USER_ARCHIVE_PAGE_PERMISSIONS },
         },
         {
           path: 'trainee',
           name: 'TraineeList',
           component: () => import('../views/trainee/List.vue'),
-          meta: { title: '学员库' },
+          meta: { title: '学员库', anyPermissions: USER_ARCHIVE_PAGE_PERMISSIONS },
         },
         {
           path: 'trainee/:id',
           name: 'TraineeDetail',
           component: () => import('../views/trainee/Detail.vue'),
-          meta: { title: '学员详情' },
+          meta: { title: '学员详情', anyPermissions: USER_ARCHIVE_PAGE_PERMISSIONS },
         },
         {
           path: 'talent',
           name: 'Talent',
           component: () => import('../views/talent/Index.vue'),
-          meta: { title: '人才库', roles: ['admin'] },
+          meta: { title: '人才库', anyPermissions: TALENT_PAGE_PERMISSIONS },
         },
         {
           path: 'report',
           name: 'Report',
           component: () => import('../views/report/Dashboard.vue'),
-          meta: { title: '数据看板', roles: ['admin'] },
+          meta: { title: '数据看板', anyPermissions: REPORT_PAGE_PERMISSIONS },
         },
         {
           path: 'system/users',
           name: 'UserManage',
           component: () => import('../views/system/UserManage.vue'),
-          meta: { title: '用户管理', roles: ['admin'] },
+          meta: { title: '用户管理', anyPermissions: USER_MANAGE_PAGE_PERMISSIONS },
         },
         {
           path: 'system/roles',
           name: 'RoleManage',
           component: () => import('../views/system/RoleManage.vue'),
-          meta: { title: '角色管理', roles: ['admin'] },
+          meta: { title: '角色管理', anyPermissions: ROLE_MANAGE_PAGE_PERMISSIONS },
         },
         {
           path: 'system/departments',
           name: 'DepartmentManage',
           component: () => import('../views/system/DepartmentManage.vue'),
-          meta: { title: '部门管理', roles: ['admin'] },
+          meta: { title: '部门管理', anyPermissions: DEPARTMENT_MANAGE_PAGE_PERMISSIONS },
         },
         {
           path: 'profile',
@@ -252,19 +285,19 @@ const router = createRouter({
           path: 'training/:id/enroll/manage',
           name: 'EnrollManage',
           component: () => import('../views/training/EnrollManage.vue'),
-          meta: { title: '报名审核', roles: ['admin', 'instructor'] },
+          meta: { title: '报名审核', anyPermissions: ENROLL_MANAGE_PAGE_PERMISSIONS },
         },
         {
           path: 'exam/scores',
           name: 'ExamScores',
           component: () => import('../views/exam/Scores.vue'),
-          meta: { title: '成绩管理', roles: ['admin', 'instructor'] },
+          meta: { title: '成绩管理', anyPermissions: EXAM_MANAGE_PAGE_PERMISSIONS },
         },
         {
           path: 'certificate',
           name: 'Certificate',
           component: () => import('../views/certificate/Index.vue'),
-          meta: { title: '结业证书' },
+          meta: { title: '结业证书', anyPermissions: CERTIFICATE_PAGE_PERMISSIONS },
         },
       ],
     },
@@ -278,6 +311,38 @@ const router = createRouter({
   ],
 })
 
+function getCachedUser() {
+  const userInfo = localStorage.getItem('userInfo')
+  if (!userInfo) return null
+  try {
+    return JSON.parse(userInfo)
+  } catch {
+    return null
+  }
+}
+
+function getCachedPermissions() {
+  return Array.isArray(getCachedUser()?.permissions) ? getCachedUser().permissions : []
+}
+
+function hasAnyPermission(permissionList) {
+  const list = Array.isArray(permissionList)
+    ? permissionList.filter(Boolean)
+    : [permissionList].filter(Boolean)
+  if (!list.length) return true
+  const permissions = getCachedPermissions()
+  return list.some((permission) => permissions.includes(permission))
+}
+
+function hasAllPermissions(permissionList) {
+  const list = Array.isArray(permissionList)
+    ? permissionList.filter(Boolean)
+    : [permissionList].filter(Boolean)
+  if (!list.length) return true
+  const permissions = getCachedPermissions()
+  return list.every((permission) => permissions.includes(permission))
+}
+
 router.beforeEach((to) => {
   const token = localStorage.getItem('token')
   if (to.meta.requiresAuth && !token) {
@@ -286,20 +351,23 @@ router.beforeEach((to) => {
   if (to.path === '/login' && token) {
     return '/'
   }
-  if (to.meta.roles && token) {
-    const userInfo = localStorage.getItem('userInfo')
-    if (userInfo) {
-      try {
-        const user = JSON.parse(userInfo)
-        const userRole = user.role
-        if (userRole && !to.meta.roles.includes(userRole)) {
-          return '/'
-        }
-      } catch {
-        // ignore parse errors
-      }
+  if (!token) {
+    return true
+  }
+
+  if (to.meta.anyPermissions && !hasAnyPermission(to.meta.anyPermissions)) {
+    return '/'
+  }
+  if (to.meta.allPermissions && !hasAllPermissions(to.meta.allPermissions)) {
+    return '/'
+  }
+  if (to.meta.roles) {
+    const userRole = getCachedUser()?.role
+    if (userRole && !to.meta.roles.includes(userRole)) {
+      return '/'
     }
   }
+  return true
 })
 
 export default router

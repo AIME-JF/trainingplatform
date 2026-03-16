@@ -73,6 +73,8 @@ Authorization: Bearer <access_token>
 - 培训班
 - 培训基地
 - 题库题目
+- 试卷
+- 培训班考试
 
 角色可配置的数据范围值：
 
@@ -88,6 +90,13 @@ Authorization: Bearer <access_token>
 - 培训班：如果同时配置了部门和警种，则必须同时满足；`created_by` 和 `instructor_id` 也计入“本人”
 - 培训基地：按部门范围控制，`created_by` 计入“本人”
 - 题目：按 `police_type_id` 控制，`created_by` 计入“本人”
+- 试卷：按题目所属警种和创建人范围控制
+- 培训班考试：按所属培训班的部门、警种、班主任 / 创建人范围控制
+
+### 1.6 迁移说明
+
+- 新增权限码、`admin` 权限回填、内置角色默认 `data_scopes` 修正等兼容性数据，由 Alembic 迁移统一下发
+- 部署新版本后，请先执行 `python migrate.py upgrade`，不要再依赖应用启动时自动补齐权限或角色状态
 
 ## 2. 公共接口
 
@@ -225,7 +234,7 @@ Authorization: Bearer <access_token>
 | --- | --- | --- | --- |
 | `GET` | `/api/v1/exams/papers` | 试卷列表 | Query：`page` `size` `status` `type` `search` |
 | `POST` | `/api/v1/exams/papers` | 创建试卷 | JSON：`title` `description` `duration` `total_score` `passing_score` `type` `question_ids[]` |
-| `GET` | `/api/v1/exams/papers/{paper_id}` | 试卷详情 | 返回试卷基础信息和题目快照 |
+| `GET` | `/api/v1/exams/papers/{paper_id}` | 试卷详情 | 返回试卷基础信息、题目快照、标准答案 |
 | `PUT` | `/api/v1/exams/papers/{paper_id}` | 更新试卷 | 字段同创建接口，均可选 |
 | `POST` | `/api/v1/exams/papers/{paper_id}/publish` | 发布试卷 | 无 |
 | `POST` | `/api/v1/exams/papers/{paper_id}/archive` | 归档试卷 | 无 |
@@ -236,6 +245,8 @@ Authorization: Bearer <access_token>
 - `status` 常见值：`draft`、`published`、`archived`
 - 试卷发布后不能再更新题目
 - 已被准入考试或培训班考试引用的试卷不能删除
+- 试卷列表和详情已接入数据范围控制；无权用户不可见、不可读取、也不可在创建考试时选用该试卷
+- 题目快照当前会返回 `answer`，供试卷详情页展示标准答案和解析
 
 ### 7.3 准入考试接口
 
@@ -283,6 +294,7 @@ Authorization: Bearer <access_token>
 - 培训班考试的参试范围由 `training_id` 决定，不存在 `scope`
 - `paper_id` 必须指向已发布试卷
 - 培训班考试创建后不能再更换试卷
+- 培训班考试列表和详情也会按所属培训班的数据范围过滤；即使有功能权限，范围不命中时仍不可见
 - `purpose` 常见值：
   - `class_assessment`
   - `final_assessment`
@@ -313,9 +325,10 @@ Authorization: Bearer <access_token>
 | Method | Path | 说明 | 请求要点 |
 | --- | --- | --- | --- |
 | `GET` | `/api/v1/trainings` | 培训列表 | Query：`page` `size` `status` `type` `search` |
-| `POST` | `/api/v1/trainings` | 创建培训班 | JSON：`name` `type` `status` `publish_status` `start_date` `end_date` `location` `department_id` `police_type_id` `training_base_id` `class_code` `instructor_id` `capacity` `description` `subjects[]` `enrollment_start_at` `enrollment_end_at` `admission_exam_id` `courses[]` |
-| `GET` | `/api/v1/trainings/{training_id}` | 培训详情 | 返回课程、考试摘要、流程步骤、当前课次、权限标记 |
-| `PUT` | `/api/v1/trainings/{training_id}` | 更新培训班 | 字段同创建接口，均可选；支持更新 `student_ids`、`roster_assignments` |
+| `POST` | `/api/v1/trainings` | 创建培训班 | JSON：`name` `type` `status` `publish_status` `start_date` `end_date` `location` `department_id` `police_type_id` `training_base_id` `class_code` `instructor_id` `capacity` `description` `subjects[]` `enrollment_start_at` `enrollment_end_at` `enrollment_requires_approval` `admission_exam_id` `courses[]` |
+| `GET` | `/api/v1/trainings/{training_id}` | 培训详情 | 返回课程、考试摘要、流程步骤、当前课次、权限标记、学员、签到、公告、资源 |
+| `PUT` | `/api/v1/trainings/{training_id}` | 更新培训班 | 字段同创建接口，均可选；要求 `UPDATE_TRAINING` 且必须是班主任 |
+| `PUT` | `/api/v1/trainings/{training_id}/manage` | 管理端更新培训班 | 请求体同更新培训班；要求 `MANAGE_TRAINING` |
 | `DELETE` | `/api/v1/trainings/{training_id}` | 删除培训班 | 仅管理员 |
 | `POST` | `/api/v1/trainings/{training_id}/publish` | 发布培训班 | 可选 JSON：`skip_steps[]`；当前一般无需传 |
 | `POST` | `/api/v1/trainings/{training_id}/lock` | 锁定名单 | 可选 JSON：`skip_steps[]`，可传 `["published"]` |
@@ -331,6 +344,7 @@ Authorization: Bearer <access_token>
 - `admission_exam_id`
 - `admission_exam_title`
 - `can_manage_all`
+- `can_manage_training`
 - `can_edit_training`
 - `can_edit_courses`
 - `can_review_enrollments`
@@ -340,6 +354,7 @@ Authorization: Bearer <access_token>
 - 培训班当前支持可选 `department_id`、`police_type_id`、`training_base_id`
 - 选择培训基地时，服务层会优先使用基地地点，并在基地配置了部门时默认同步该部门
 - 培训列表和详情已接入数据范围控制；如果角色范围不覆盖培训班归属的部门 / 警种，则不可见
+- `enrollment_requires_approval=true` 时，学员报名进入待审核；为 `false` 时，学员报名后直接通过
 - 培训班流程按 `发布招生 -> 锁定名单 -> 开班 -> 结班` 严格顺序执行
 - 如果直接调用后续流程接口而未完成前置步骤，后端会拒绝；只有显式传入 `skip_steps[]` 才会自动补齐并锁定被跳过环节
 
@@ -394,6 +409,8 @@ Authorization: Bearer <access_token>
 - 名单未锁定
 - 当前时间位于报名窗口内
 - 如果培训班配置了 `admission_exam_id`，报名人必须先通过该准入考试
+- 如果 `enrollment_requires_approval=false`，报名结果会直接变成 `approved`
+- 如果 `enrollment_requires_approval=true`，报名结果会先进入 `pending`
 
 ### 8.5 课次签到、签退、评课
 

@@ -44,7 +44,13 @@ from app.schemas.exam import (
     ExamUpdate,
     ExamWrongQuestionResponse,
 )
-from app.utils.authz import is_admin_user, is_instructor_user
+from app.utils.authz import (
+    can_view_question_with_context,
+    can_view_training_with_context,
+    is_admin_user,
+    is_instructor_user,
+)
+from app.utils.data_scope import DataScopeContext, build_data_scope_context
 from logger import logger
 
 
@@ -71,6 +77,7 @@ class ExamService:
         status: Optional[str] = None,
         paper_type: Optional[str] = None,
         search: Optional[str] = None,
+        current_user_id: Optional[int] = None,
     ) -> PaginatedResponse[ExamPaperResponse]:
         """获取试卷列表"""
         query = self.db.query(ExamPaper).options(*self._paper_load_options())
@@ -83,12 +90,22 @@ class ExamService:
             query = query.filter(ExamPaper.title.contains(search))
 
         papers = query.order_by(ExamPaper.created_at.desc(), ExamPaper.id.desc()).all()
+        scope_context = self._get_scope_context(current_user_id)
+        if scope_context:
+            papers = [paper for paper in papers if self._can_view_paper_with_context(scope_context, paper)]
         return self._paginate([self._to_paper_response(paper) for paper in papers], page, size)
 
-    def get_exam_paper_detail(self, paper_id: int) -> Optional[ExamPaperDetailResponse]:
+    def get_exam_paper_detail(
+        self,
+        paper_id: int,
+        current_user_id: Optional[int] = None,
+    ) -> Optional[ExamPaperDetailResponse]:
         """获取试卷详情"""
         paper = self._get_paper_detail_entity(paper_id)
         if not paper:
+            return None
+        scope_context = self._get_scope_context(current_user_id)
+        if scope_context and not self._can_view_paper_with_context(scope_context, paper):
             return None
         return self._to_paper_detail_response(paper)
 
@@ -112,7 +129,7 @@ class ExamService:
         self.db.commit()
 
         logger.info("创建试卷: %s", paper.title)
-        detail = self.get_exam_paper_detail(paper.id)
+        detail = self.get_exam_paper_detail(paper.id, user_id)
         if not detail:
             raise ValueError("创建试卷后读取详情失败")
         return detail
@@ -139,7 +156,7 @@ class ExamService:
 
         self.db.commit()
 
-        detail = self.get_exam_paper_detail(paper.id)
+        detail = self.get_exam_paper_detail(paper.id, paper.created_by)
         if not detail:
             raise ValueError("试卷不存在")
         return detail
@@ -152,7 +169,7 @@ class ExamService:
         if not (paper.paper_questions or []):
             raise ValueError("试卷至少需要配置一道题目")
         if paper.status == "published":
-            detail = self.get_exam_paper_detail(paper.id)
+            detail = self.get_exam_paper_detail(paper.id, paper.created_by)
             if not detail:
                 raise ValueError("试卷不存在")
             return detail
@@ -161,7 +178,7 @@ class ExamService:
         paper.published_at = paper.published_at or self._current_time(paper.published_at)
         self.db.commit()
 
-        detail = self.get_exam_paper_detail(paper.id)
+        detail = self.get_exam_paper_detail(paper.id, paper.created_by)
         if not detail:
             raise ValueError("试卷不存在")
         return detail
@@ -172,7 +189,7 @@ class ExamService:
         if not paper:
             raise ValueError("试卷不存在")
         if paper.status == "archived":
-            detail = self.get_exam_paper_detail(paper.id)
+            detail = self.get_exam_paper_detail(paper.id, paper.created_by)
             if not detail:
                 raise ValueError("试卷不存在")
             return detail
@@ -180,7 +197,7 @@ class ExamService:
         paper.status = "archived"
         self.db.commit()
 
-        detail = self.get_exam_paper_detail(paper.id)
+        detail = self.get_exam_paper_detail(paper.id, paper.created_by)
         if not detail:
             raise ValueError("试卷不存在")
         return detail
@@ -224,12 +241,15 @@ class ExamService:
             query = query.filter(Exam.purpose == purpose)
 
         exams = query.order_by(Exam.created_at.desc(), Exam.id.desc()).all()
+        scope_context = self._get_scope_context(current_user_id)
         changed = False
         items: List[ExamResponse] = []
         for exam in exams:
             if self._refresh_exam_status(exam):
                 changed = True
             if status and (exam.status or "upcoming") != status:
+                continue
+            if scope_context and not self._can_view_training_exam_with_context(scope_context, exam):
                 continue
             items.append(self._to_training_exam_response(exam, current_user_id))
 
@@ -285,7 +305,7 @@ class ExamService:
         if not training:
             raise ValueError("关联培训班不存在")
 
-        paper = self._get_selectable_paper(data.paper_id)
+        paper = self._get_selectable_paper(data.paper_id, user_id)
         exam = Exam(
             paper_id=paper.id,
             title=data.title,
@@ -309,14 +329,14 @@ class ExamService:
         self.db.refresh(exam)
 
         logger.info("创建培训班内考试: %s", exam.title)
-        detail = self.get_exam_detail(exam.id)
+        detail = self.get_exam_detail(exam.id, user_id)
         if not detail:
             raise ValueError("创建考试后读取详情失败")
         return detail
 
     def create_admission_exam(self, data: AdmissionExamCreate, user_id: int) -> AdmissionExamResponse:
         """创建独立准入考试"""
-        paper = self._get_selectable_paper(data.paper_id)
+        paper = self._get_selectable_paper(data.paper_id, user_id)
         scope_type, scope_target_ids, scope_summary = self._prepare_admission_scope(
             data.scope_type,
             data.scope_target_ids,
@@ -388,7 +408,11 @@ class ExamService:
             raise ValueError("准入考试不存在")
         return detail
 
-    def get_exam_detail(self, exam_id: int) -> Optional[ExamDetailResponse]:
+    def get_exam_detail(
+        self,
+        exam_id: int,
+        current_user_id: Optional[int] = None,
+    ) -> Optional[ExamDetailResponse]:
         """获取培训班内考试详情"""
         exam = self.db.query(Exam).options(
             joinedload(Exam.paper).joinedload(ExamPaper.paper_questions),
@@ -400,9 +424,12 @@ class ExamService:
 
         if self._refresh_exam_status(exam):
             self.db.commit()
+        scope_context = self._get_scope_context(current_user_id)
+        if scope_context and not self._can_view_training_exam_with_context(scope_context, exam):
+            return None
 
         return ExamDetailResponse(
-            **self._to_training_exam_response(exam).model_dump(),
+            **self._to_training_exam_response(exam, current_user_id).model_dump(),
             questions=self._build_snapshot_responses(exam.paper),
         )
 
@@ -642,13 +669,58 @@ class ExamService:
             selectinload(ExamPaper.admission_exams),
         )
 
+    def _get_scope_context(self, current_user_id: Optional[int]) -> Optional[DataScopeContext]:
+        if not current_user_id:
+            return None
+        return build_data_scope_context(self.db, current_user_id)
+
+    def _can_view_paper_with_context(
+        self,
+        scope_context: Optional[DataScopeContext],
+        paper: Optional[ExamPaper],
+    ) -> bool:
+        if not paper:
+            return False
+        if scope_context is None:
+            return True
+
+        paper_questions = sorted(paper.paper_questions or [], key=lambda item: item.sort_order or 0)
+        if not paper_questions:
+            return True
+
+        for paper_question in paper_questions:
+            question = paper_question.question
+            if question is None:
+                if paper.created_by and paper.created_by == scope_context.user_id:
+                    continue
+                return False
+            if not can_view_question_with_context(scope_context, question):
+                return False
+        return True
+
+    def _can_view_training_exam_with_context(
+        self,
+        scope_context: Optional[DataScopeContext],
+        exam: Optional[Exam],
+    ) -> bool:
+        if not exam:
+            return False
+        if scope_context is None:
+            return True
+        if not exam.training:
+            return False
+        return can_view_training_with_context(scope_context, exam.training)
+
     def _get_paper_detail_entity(self, paper_id: int) -> Optional[ExamPaper]:
         return self.db.query(ExamPaper).options(*self._paper_load_options()).filter(ExamPaper.id == paper_id).first()
 
-    def _get_selectable_paper(self, paper_id: int) -> ExamPaper:
+    def _get_selectable_paper(self, paper_id: int, current_user_id: Optional[int] = None) -> ExamPaper:
         paper = self._get_paper_detail_entity(paper_id)
         if not paper:
             raise ValueError("试卷不存在")
+        scope_context = self._get_scope_context(current_user_id)
+        if scope_context and not self._can_view_paper_with_context(scope_context, paper):
+            raise ValueError("无权使用该试卷")
         if paper.status != "published":
             raise ValueError("只能选择已发布试卷")
         if not (paper.paper_questions or []):
@@ -866,6 +938,7 @@ class ExamService:
                 type=item.question_type or (item.question.type if item.question else "single"),
                 content=item.content or (item.question.content if item.question else ""),
                 options=item.options if item.options is not None else (item.question.options if item.question else None),
+                answer=item.answer if item.answer is not None else (item.question.answer if item.question else None),
                 explanation=item.explanation if item.explanation is not None else (item.question.explanation if item.question else None),
                 score=int(item.score or (item.question.score if item.question else 0) or 0),
                 knowledge_point=item.knowledge_point or (item.question.knowledge_point if item.question else None),

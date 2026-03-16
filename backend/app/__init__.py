@@ -8,7 +8,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
 from app.middleware import RequestLoggingMiddleware, register_exception_handlers
-from app.runtime_sync import sync_runtime_state
 from app.schemas import StandardResponse
 from app.views import all_routers
 from config import settings
@@ -111,13 +110,6 @@ def startup_event():
         except Exception as e:
             logger.error(f"Database schema compatibility check failed after table initialization: {e}")
             raise
-
-    try:
-        logger.info("Syncing runtime permissions and schema compatibility...")
-        sync_runtime_state()
-    except Exception as e:
-        logger.error(f"Runtime sync failed during startup: {e}")
-        raise
 
     try:
         from app.database import test_redis_connection

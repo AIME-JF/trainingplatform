@@ -102,6 +102,26 @@
         </template>
       </a-table>
     </a-card>
+
+    <a-modal
+      v-model:open="rejectModalOpen"
+      title="拒绝报名申请"
+      ok-text="确认拒绝"
+      cancel-text="取消"
+      width="520px"
+      @ok="submitReject"
+      @cancel="resetRejectModal"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="拒绝理由" required>
+          <a-textarea
+            v-model:value="rejectNote"
+            :rows="4"
+            placeholder="请输入拒绝理由，学员会在报名结果中看到该说明"
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -128,6 +148,9 @@ const training = ref(null)
 const enrollments = ref([])
 const searchText = ref('')
 const statusFilter = ref('all')
+const rejectModalOpen = ref(false)
+const rejectTarget = ref(null)
+const rejectNote = ref('')
 
 const statusLabels = { pending: '待审核', approved: '已录取', rejected: '已拒绝' }
 const statusColors = { pending: 'orange', approved: 'green', rejected: 'red' }
@@ -208,10 +231,29 @@ async function approve(record) {
 
 async function reject(record) {
   if (!canRejectEnrollment.value) return
+  rejectTarget.value = record
+  rejectNote.value = record?.note || ''
+  rejectModalOpen.value = true
+}
+
+function resetRejectModal() {
+  rejectModalOpen.value = false
+  rejectTarget.value = null
+  rejectNote.value = ''
+}
+
+async function submitReject() {
+  if (!rejectTarget.value) return
+  if (!rejectNote.value.trim()) {
+    message.warning('请输入拒绝理由')
+    return
+  }
   try {
-    await rejectEnrollment(trainingId, record.id, '审核未通过')
-    record.status = 'rejected'
+    await rejectEnrollment(trainingId, rejectTarget.value.id, rejectNote.value.trim())
+    rejectTarget.value.status = 'rejected'
+    rejectTarget.value.note = rejectNote.value.trim()
     message.success('已拒绝报名申请')
+    resetRejectModal()
   } catch (error) {
     message.error(error.message || '操作失败')
   }

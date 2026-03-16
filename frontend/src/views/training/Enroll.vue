@@ -12,6 +12,7 @@
       </div>
       <div class="rule-panel">
         <div>报名窗口：{{ formatWindow(training.enrollmentStartAt, training.enrollmentEndAt) }}</div>
+        <div>报名方式：{{ training.enrollmentRequiresApproval === false ? '直接通过' : '申请审核' }}</div>
         <div>准入考试：{{ training.admissionExamTitle || '无' }}</div>
         <div>名单状态：{{ training.isLocked ? '已锁定' : '未锁定' }}</div>
       </div>
@@ -70,7 +71,7 @@
         <div class="actions">
           <a-button @click="$router.back()">返回</a-button>
           <a-button type="primary" :loading="submitting" :disabled="!canSubmit" @click="handleSubmit">
-            {{ disabledReason || '提交报名申请' }}
+            {{ disabledReason || (training?.enrollmentRequiresApproval === false ? '提交并加入培训班' : '提交报名申请') }}
           </a-button>
         </div>
       </a-form>
@@ -119,6 +120,28 @@ function formatWindow(start, end) {
   return `${start ? String(start).replace('T', ' ').slice(0, 16) : '即时'} ~ ${end ? String(end).replace('T', ' ').slice(0, 16) : '长期'}`
 }
 
+function applyEnrollmentStatus(current) {
+  submitted.value = true
+
+  if (current.status === 'approved') {
+    submitStatus.value = 'success'
+    submitTitle.value = '您已被录取到该培训班'
+    submitSubtitle.value = '可直接进入培训班完成签到、签退和评课。'
+    return
+  }
+
+  if (current.status === 'rejected') {
+    submitStatus.value = 'warning'
+    submitTitle.value = '报名申请未通过'
+    submitSubtitle.value = current.note || '当前报名未通过，如需处理请联系管理员。'
+    return
+  }
+
+  submitStatus.value = 'info'
+  submitTitle.value = '报名申请已提交'
+  submitSubtitle.value = '审核结果请在报名管理或培训列表中查看。'
+}
+
 async function loadData() {
   try {
     const [trainingDetail, enrollmentResult] = await Promise.all([
@@ -129,10 +152,7 @@ async function loadData() {
     const rows = enrollmentResult.items || []
     const current = rows.find(item => String(item.userId) === String(authStore.currentUser?.id))
     if (current) {
-      submitted.value = true
-      submitStatus.value = current.status === 'approved' ? 'success' : 'info'
-      submitTitle.value = current.status === 'approved' ? '您已被录取到该培训班' : '报名申请已提交'
-      submitSubtitle.value = current.status === 'approved' ? '可直接进入培训班完成签到、签退和评课。' : '审核结果请在报名管理或培训列表中查看。'
+      applyEnrollmentStatus(current)
     }
   } catch (error) {
     message.error(error.message || '加载报名信息失败')
@@ -146,15 +166,12 @@ async function handleSubmit() {
   }
   submitting.value = true
   try {
-    await enroll(trainingId, {
+    const result = await enroll(trainingId, {
       note: formData.value.note || undefined,
       phone: formData.value.phone,
       needAccommodation: formData.value.needAccommodation,
     })
-    submitted.value = true
-    submitStatus.value = 'success'
-    submitTitle.value = '报名申请已提交'
-    submitSubtitle.value = '等待管理员审核后即可加入培训班。'
+    applyEnrollmentStatus(result)
   } catch (error) {
     message.error(error.message || '报名失败')
   } finally {
