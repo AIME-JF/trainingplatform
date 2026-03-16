@@ -51,7 +51,7 @@ def upgrade() -> None:
                existing_type=postgresql.TIMESTAMP(timezone=True),
                comment='更新时间',
                existing_nullable=True)
-    op.create_index(op.f('ix_ai_tasks_id'), 'ai_tasks', ['id'], unique=False)
+
     op.alter_column('checkin_records', 'session_key',
                existing_type=sa.VARCHAR(length=100),
                comment='课次标识',
@@ -148,7 +148,7 @@ def upgrade() -> None:
                existing_type=postgresql.TIMESTAMP(timezone=True),
                comment='更新时间',
                existing_nullable=True)
-    op.create_index(op.f('ix_exam_papers_id'), 'exam_papers', ['id'], unique=False)
+
     op.alter_column('exam_questions', 'question_id',
                existing_type=sa.INTEGER(),
                comment='来源题目ID',
@@ -309,7 +309,7 @@ def upgrade() -> None:
                existing_type=postgresql.JSON(astext_type=sa.Text()),
                comment='扩展摘要',
                existing_nullable=True)
-    op.create_index(op.f('ix_training_histories_id'), 'training_histories', ['id'], unique=False)
+
     op.alter_column('trainings', 'publish_status',
                existing_type=sa.VARCHAR(length=20),
                nullable=True,
@@ -356,7 +356,7 @@ def downgrade() -> None:
                comment='发布状态',
                existing_comment='发布状态: draft/published',
                existing_server_default=sa.text("'draft'::character varying"))
-    op.drop_index(op.f('ix_training_histories_id'), table_name='training_histories')
+
     op.alter_column('training_histories', 'summary',
                existing_type=postgresql.JSON(astext_type=sa.Text()),
                comment=None,
@@ -534,7 +534,7 @@ def downgrade() -> None:
                comment=None,
                existing_comment='来源题目ID',
                existing_nullable=False)
-    op.drop_index(op.f('ix_exam_papers_id'), table_name='exam_papers')
+
     op.alter_column('exam_papers', 'updated_at',
                existing_type=postgresql.TIMESTAMP(timezone=True),
                comment=None,
@@ -634,7 +634,7 @@ def downgrade() -> None:
                comment='签到场次标识',
                existing_comment='课次标识',
                existing_nullable=False)
-    op.drop_index(op.f('ix_ai_tasks_id'), table_name='ai_tasks')
+
     op.alter_column('ai_tasks', 'updated_at',
                existing_type=postgresql.TIMESTAMP(timezone=True),
                comment=None,
