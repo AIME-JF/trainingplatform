@@ -31,3 +31,24 @@ export function toggleDepartmentStatus(departmentId, isActive) {
 export function updateDepartmentPermissions(departmentId, permissionIds) {
   return request.post(`/departments/${departmentId}/permissions`, { permissionIds })
 }
+
+export function downloadDepartmentImportTemplate() {
+  return request.get('/departments/import/template', {
+    responseType: 'blob',
+  })
+}
+
+export function exportDepartments(params) {
+  return request.get('/departments/export', {
+    params,
+    responseType: 'blob',
+  })
+}
+
+export function importDepartments(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post('/departments/import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}

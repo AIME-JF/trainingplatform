@@ -84,10 +84,14 @@ def can_view_training(db: Session, training: Optional[Training], user_id: int) -
 def can_manage_training(db: Session, training: Optional[Training], user_id: int) -> bool:
     if not can_view_training(db, training, user_id):
         return False
+    return is_admin_user(db, user_id) or is_training_director(training, user_id)
+
+
+def can_update_training(db: Session, training: Optional[Training], user_id: int) -> bool:
+    if not can_view_training(db, training, user_id):
+        return False
     return (
-        is_admin_user(db, user_id)
-        or is_instructor_user(db, user_id)
-        or is_training_director(training, user_id)
+        is_training_director(training, user_id)
     )
 
 

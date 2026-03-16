@@ -2,7 +2,11 @@
   <div class="role-manage-page">
     <div class="page-header">
       <h2>角色管理</h2>
-      <a-button type="primary" @click="openCreate">新增角色</a-button>
+      <a-space>
+        <a-button @click="openImportModal">角色导入</a-button>
+        <a-button :loading="exportingRoles" @click="handleExportRoles">角色导出</a-button>
+        <a-button type="primary" @click="openCreate">新增角色</a-button>
+      </a-space>
     </div>
 
     <a-card :bordered="false" style="margin-bottom: 16px">
@@ -94,6 +98,14 @@
       </div>
     </a-card>
 
+    <ExcelImportModal
+      v-model:open="importDialog.visible"
+      title="角色导入"
+      :confirm-loading="importDialog.submitting"
+      @submit="submitImport"
+      @download-template="handleDownloadImportTemplate"
+    />
+
     <a-modal
       v-model:open="editDialog.visible"
       :title="editDialog.mode === 'add' ? '新增角色' : '编辑角色'"
@@ -158,18 +170,24 @@ import { message } from 'ant-design-vue'
 import {
   createRole,
   deleteRole,
+  downloadRoleImportTemplate,
+  exportRoles,
   getRoleDetail,
   getRoleList,
+  importRoles,
   toggleRoleStatus,
   updateRole,
   updateRolePermissions,
 } from '@/api/role'
 import { getPermissionList } from '@/api/permission'
+import { downloadBlob } from '@/utils/download'
+import ExcelImportModal from './components/ExcelImportModal.vue'
 import PermissionTransfer from './components/PermissionTransfer.vue'
 
 const loading = ref(false)
 const rows = ref([])
 const switchingRoleId = ref(null)
+const exportingRoles = ref(false)
 
 const searchForm = reactive({
   keyword: '',
@@ -227,6 +245,11 @@ const permissionDialog = reactive({
   targetKeys: [],
 })
 
+const importDialog = reactive({
+  visible: false,
+  submitting: false,
+})
+
 onMounted(() => {
   fetchRoleList()
 })
@@ -277,6 +300,10 @@ function handleReset() {
   pagination.page = 1
   pagination.size = 10
   fetchRoleList()
+}
+
+function openImportModal() {
+  importDialog.visible = true
 }
 
 function onPageChange(page, size) {
@@ -434,6 +461,46 @@ async function submitRolePermissions() {
     message.error(error?.message || '更新角色权限失败')
   } finally {
     permissionDialog.submitting = false
+  }
+}
+
+async function handleDownloadImportTemplate() {
+  try {
+    const blob = await downloadRoleImportTemplate()
+    downloadBlob(blob, '角色导入模板.xlsx')
+  } catch (error) {
+    message.error(error?.message || '下载模板失败')
+  }
+}
+
+async function handleExportRoles() {
+  exportingRoles.value = true
+  try {
+    const blob = await exportRoles({
+      name: searchForm.keyword || undefined,
+      isActive: searchForm.status === '' ? undefined : searchForm.status === 'true',
+    })
+    downloadBlob(blob, '角色导出.xlsx')
+  } catch (error) {
+    message.error(error?.message || '角色导出失败')
+  } finally {
+    exportingRoles.value = false
+  }
+}
+
+async function submitImport(file) {
+  importDialog.submitting = true
+  try {
+    const result = await importRoles(file)
+    message.success(
+      `导入完成：成功 ${result?.successRows || 0} 行，新增角色 ${result?.createdCount || 0} 个，更新 ${result?.updatedCount || 0} 个`
+    )
+    importDialog.visible = false
+    fetchRoleList()
+  } catch (error) {
+    message.error(error?.message || '角色导入失败')
+  } finally {
+    importDialog.submitting = false
   }
 }
 </script>

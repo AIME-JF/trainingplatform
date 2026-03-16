@@ -48,3 +48,25 @@ export function importPoliceBase(file, defaultRole = 'student') {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }
+
+export function downloadUserImportTemplate() {
+  return request.get('/users/import/template', {
+    responseType: 'blob',
+  })
+}
+
+export function exportUsers(params) {
+  return request.get('/users/export', {
+    params,
+    responseType: 'blob',
+  })
+}
+
+export function importUsers(file, defaultRole = 'student') {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('default_role', defaultRole)
+  return request.post('/users/import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}

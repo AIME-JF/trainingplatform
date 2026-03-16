@@ -2,7 +2,10 @@
 用户管理路由
 """
 from typing import Optional
+
 from fastapi import APIRouter, Depends, Query, Body, UploadFile, File, Form, HTTPException, status
+from fastapi.responses import StreamingResponse
+from io import BytesIO
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
@@ -13,6 +16,7 @@ from app.models.department import Department
 from app.models.police_type import PoliceType
 from app.services.auth import auth_service
 from app.services.batch_import import BatchImportService
+from app.services.system_exchange import SystemExchangeService
 from app.utils.authz import can_access_user_record, can_access_user_record_with_context, is_admin_user
 from app.utils.data_scope import (
     build_data_scope_context,
@@ -22,6 +26,14 @@ from app.utils.data_scope import (
 from logger import logger
 
 router = APIRouter(prefix="/users", tags=["用户管理"])
+
+
+def _excel_response(data: bytes, filename: str) -> StreamingResponse:
+    return StreamingResponse(
+        BytesIO(data),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 def _require_admin(db: Session, user_id: int):
@@ -101,6 +113,48 @@ def get_users(
         total=total,
         items=items
     ))
+
+
+@router.get("/import/template", summary="下载用户导入模板")
+def download_user_import_template(
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_permission(current_user, "DOWNLOAD_USER_IMPORT_TEMPLATE")
+    data = SystemExchangeService(db).build_user_template()
+    return _excel_response(data, "user_import_template.xlsx")
+
+
+@router.get("/export", summary="导出用户")
+def export_users_excel(
+    role: Optional[str] = Query(None, description="按角色 code 筛选"),
+    search: Optional[str] = Query(None, description="搜索姓名/用户名/警号"),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_permission(current_user, "EXPORT_USERS")
+    data = SystemExchangeService(db).export_users(search=search, role_code=role)
+    return _excel_response(data, "users_export.xlsx")
+
+
+@router.post("/import", response_model=StandardResponse, summary="导入用户")
+async def import_users_excel(
+    file: UploadFile = File(...),
+    default_role: str = Form("student"),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_permission(current_user, "IMPORT_USERS")
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="导入文件为空")
+
+    service = SystemExchangeService(db)
+    try:
+        data = service.import_users(file_bytes=file_bytes, default_role_code=default_role)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return StandardResponse(data=data)
 
 
 @router.post("/import/police-base", response_model=StandardResponse, summary="全员底库导入")

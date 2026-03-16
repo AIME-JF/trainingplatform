@@ -427,6 +427,9 @@ class CourseService:
         if hasattr(course, 'chapters') and course.chapters:
             chapters = [self._chapter_to_response(ch, user_progress) for ch in
                         sorted(course.chapters, key=lambda x: x.sort_order)]
+        note = self.get_course_note(course.id, user_id) if user_id else None
+        qa_list = self.get_course_qa(course.id)
+        resources = self.list_course_resources(course.id)
 
         return CourseResponse(
             id=course.id, title=course.title, category=course.category,
@@ -437,6 +440,7 @@ class CourseService:
             rating=course.rating, difficulty=course.difficulty,
             is_required=course.is_required, cover_color=course.cover_color,
             tags=course.tags, chapters=chapters,
+            note=note, qa_list=qa_list, resources=resources,
             created_at=course.created_at, updated_at=course.updated_at
         )
     def get_course_qa(self, course_id: int) -> List[CourseQAResponse]:

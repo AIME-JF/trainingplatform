@@ -20,7 +20,9 @@ from app.models import (
     Exam,
     ExamPaper,
     ExamRecord,
+    Notice,
     PoliceType,
+    Role,
     ScheduleItem,
     Training,
     TrainingBase,
@@ -53,9 +55,11 @@ from app.schemas.training import (
     TrainingUpdate,
     TrainingWorkflowStepResponse,
 )
+from app.schemas.notice import NoticeResponse
 from app.services.batch_import import BatchImportService
 from app.utils.authz import (
     can_manage_training,
+    can_update_training,
     can_operate_training_course,
     can_view_training,
     can_view_training_with_context,
@@ -1801,8 +1805,23 @@ class TrainingService:
                 passing_score=session.passing_score or 60,
             ))
 
-        can_manage_all = bool(current_user_id and can_manage_training(self.db, training, current_user_id))
+        user_permission_codes = self._get_user_permission_codes(current_user_id) if current_user_id else set()
+        can_edit_training = bool(
+            current_user_id
+            and "UPDATE_TRAINING" in user_permission_codes
+            and can_update_training(self.db, training, current_user_id)
+        )
+        can_manage_training_directly = bool(
+            current_user_id
+            and "MANAGE_TRAINING" in user_permission_codes
+            and can_manage_training(self.db, training, current_user_id)
+        )
+        can_manage_all = can_edit_training or can_manage_training_directly
         current_step_key = self._resolve_current_step_key(training)
+        students = [self._enrollment_to_response(item) for item in approved_enrollments] if can_manage_all else []
+        checkin_records = self._get_detail_checkin_records(training.id, current_user_id, can_manage_all)
+        notices = self._list_training_notices(training.id)
+        resources = self.list_training_resources(training.id)
 
         return TrainingResponse(
             id=training.id,
@@ -1827,6 +1846,7 @@ class TrainingService:
             capacity=training.capacity or 0,
             enrolled_count=len(student_ids),
             student_ids=student_ids,
+            students=students,
             description=training.description,
             subjects=training.subjects or [],
             enrollment_start_at=training.enrollment_start_at,
@@ -1840,11 +1860,15 @@ class TrainingService:
             cadre_count=cadre_count,
             courses=courses,
             exam_sessions=sorted(exam_sessions, key=lambda item: item.start_time.isoformat() if item.start_time else ""),
+            checkin_records=checkin_records,
+            notices=notices,
+            resources=resources,
             workflow_steps=self._build_workflow_steps(training),
             current_step_key=current_step_key,
             current_session=self._build_current_session_response(training, current_user_id),
             can_manage_all=can_manage_all,
-            can_edit_training=can_manage_all,
+            can_manage_training=can_manage_training_directly,
+            can_edit_training=can_edit_training,
             can_edit_courses=can_manage_all,
             can_review_enrollments=can_manage_all,
             created_at=training.created_at,
@@ -1910,6 +1934,47 @@ class TrainingService:
             enroll_time=enrollment.enroll_time,
         )
 
+    def _get_user_permission_codes(self, user_id: Optional[int]) -> set[str]:
+        if not user_id:
+            return set()
+        user = self.db.query(User).options(
+            joinedload(User.roles).joinedload(Role.permissions),
+        ).filter(
+            User.id == user_id,
+            User.is_active == True,
+        ).first()
+        if not user:
+            return set()
+        permission_codes = set()
+        for role in user.roles or []:
+            for permission in role.permissions or []:
+                if permission.code:
+                    permission_codes.add(str(permission.code))
+        return permission_codes
+
+    def _get_detail_checkin_records(
+        self,
+        training_id: int,
+        current_user_id: Optional[int],
+        can_manage_all: bool,
+    ) -> List[CheckinResponse]:
+        query = self.db.query(CheckinRecord).options(
+            joinedload(CheckinRecord.user),
+        ).filter(CheckinRecord.training_id == training_id)
+        if not can_manage_all and current_user_id is not None:
+            query = query.filter(CheckinRecord.user_id == current_user_id)
+        records = query.order_by(CheckinRecord.date.desc(), CheckinRecord.time.asc().nulls_last()).all()
+        return [self._checkin_to_response(record) for record in records]
+
+    def _list_training_notices(self, training_id: int) -> List[NoticeResponse]:
+        notices = self.db.query(Notice).options(
+            joinedload(Notice.author),
+        ).filter(
+            Notice.type == "training",
+            Notice.training_id == training_id,
+        ).order_by(Notice.created_at.desc()).all()
+        return [self._notice_to_response(notice) for notice in notices]
+
     def _checkin_to_response(self, record: CheckinRecord) -> CheckinResponse:
         user = record.user if getattr(record, "user", None) else None
         return CheckinResponse(
@@ -1928,6 +1993,19 @@ class TrainingService:
             evaluation_comment=record.evaluation_comment,
             evaluation_submitted_at=record.evaluation_submitted_at,
             absence_reason=record.absence_reason,
+        )
+
+    def _notice_to_response(self, notice: Notice) -> NoticeResponse:
+        return NoticeResponse(
+            id=notice.id,
+            title=notice.title,
+            content=notice.content,
+            type=notice.type,
+            training_id=notice.training_id,
+            author_id=notice.author_id,
+            author_name=notice.author.nickname if notice.author else None,
+            created_at=notice.created_at,
+            updated_at=notice.updated_at,
         )
 
     def _history_to_response(self, history: TrainingHistory) -> TrainingHistoryResponse:

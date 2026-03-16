@@ -2,7 +2,11 @@
   <div class="department-manage-page">
     <div class="page-header">
       <h2>部门管理</h2>
-      <a-button type="primary" @click="openCreate">新增部门</a-button>
+      <a-space>
+        <a-button @click="openImportModal">部门导入</a-button>
+        <a-button :loading="exportingDepartments" @click="handleExportDepartments">部门导出</a-button>
+        <a-button type="primary" @click="openCreate">新增部门</a-button>
+      </a-space>
     </div>
 
     <a-card :bordered="false" style="margin-bottom: 16px">
@@ -91,6 +95,14 @@
       </a-table>
     </a-card>
 
+    <ExcelImportModal
+      v-model:open="importDialog.visible"
+      title="部门导入"
+      :confirm-loading="importDialog.submitting"
+      @submit="submitImport"
+      @download-template="handleDownloadImportTemplate"
+    />
+
     <a-modal
       v-model:open="editDialog.visible"
       :title="editDialog.mode === 'add' ? '新增部门' : '编辑部门'"
@@ -163,18 +175,24 @@ import { message } from 'ant-design-vue'
 import {
   createDepartment,
   deleteDepartment,
+  downloadDepartmentImportTemplate,
+  exportDepartments,
   getDepartmentDetail,
   getDepartmentList,
+  importDepartments,
   toggleDepartmentStatus,
   updateDepartment,
   updateDepartmentPermissions,
 } from '@/api/department'
 import { getPermissionList } from '@/api/permission'
+import { downloadBlob } from '@/utils/download'
+import ExcelImportModal from './components/ExcelImportModal.vue'
 import PermissionTransfer from './components/PermissionTransfer.vue'
 
 const loading = ref(false)
 const rows = ref([])
 const switchingDepartmentId = ref(null)
+const exportingDepartments = ref(false)
 
 const searchForm = reactive({
   keyword: '',
@@ -213,6 +231,11 @@ const permissionDialog = reactive({
   department: null,
   permissions: [],
   targetKeys: [],
+})
+
+const importDialog = reactive({
+  visible: false,
+  submitting: false,
 })
 
 const allDepartmentOptions = computed(() =>
@@ -328,6 +351,10 @@ function handleReset() {
   searchForm.keyword = ''
   searchForm.status = ''
   searchForm.parentId = ''
+}
+
+function openImportModal() {
+  importDialog.visible = true
 }
 
 function resetEditForm() {
@@ -466,6 +493,47 @@ async function submitDepartmentPermissions() {
     message.error(error?.message || '更新部门权限失败')
   } finally {
     permissionDialog.submitting = false
+  }
+}
+
+async function handleDownloadImportTemplate() {
+  try {
+    const blob = await downloadDepartmentImportTemplate()
+    downloadBlob(blob, '部门导入模板.xlsx')
+  } catch (error) {
+    message.error(error?.message || '下载模板失败')
+  }
+}
+
+async function handleExportDepartments() {
+  exportingDepartments.value = true
+  try {
+    const blob = await exportDepartments({
+      keyword: searchForm.keyword || undefined,
+      status: searchForm.status === '' ? undefined : searchForm.status === 'true',
+      parentId: searchForm.parentId || undefined,
+    })
+    downloadBlob(blob, '部门导出.xlsx')
+  } catch (error) {
+    message.error(error?.message || '部门导出失败')
+  } finally {
+    exportingDepartments.value = false
+  }
+}
+
+async function submitImport(file) {
+  importDialog.submitting = true
+  try {
+    const result = await importDepartments(file)
+    message.success(
+      `导入完成：成功 ${result?.successRows || 0} 行，新增部门 ${result?.createdCount || 0} 个，更新 ${result?.updatedCount || 0} 个`
+    )
+    importDialog.visible = false
+    fetchDepartmentList()
+  } catch (error) {
+    message.error(error?.message || '部门导入失败')
+  } finally {
+    importDialog.submitting = false
   }
 }
 </script>

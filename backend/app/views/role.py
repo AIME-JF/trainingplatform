@@ -1,9 +1,11 @@
 """
 角色管理路由
 """
+from io import BytesIO
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.controllers import RoleController
@@ -19,9 +21,18 @@ from app.schemas import (
     StandardResponse,
     TokenData,
 )
+from app.services.system_exchange import SystemExchangeService
 
 
 router = APIRouter(prefix="/roles", tags=["角色管理"])
+
+
+def _excel_response(data: bytes, filename: str) -> StreamingResponse:
+    return StreamingResponse(
+        BytesIO(data),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 def _require_permission(current_user: TokenData, permission: str):
@@ -43,6 +54,47 @@ def create_role(
     controller = RoleController(db)
     result = controller.create_role(data)
     return StandardResponse(message="创建角色成功", data=result)
+
+
+@router.get("/import/template", summary="下载角色导入模板")
+def download_role_import_template(
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_permission(current_user, "DOWNLOAD_ROLE_IMPORT_TEMPLATE")
+    data = SystemExchangeService(db).build_role_template()
+    return _excel_response(data, "role_import_template.xlsx")
+
+
+@router.get("/export", summary="导出角色")
+def export_roles_excel(
+    name: Optional[str] = Query(None, description="角色名称"),
+    is_active: Optional[bool] = Query(None, description="是否启用"),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_permission(current_user, "EXPORT_ROLES")
+    data = SystemExchangeService(db).export_roles(name=name, is_active=is_active)
+    return _excel_response(data, "roles_export.xlsx")
+
+
+@router.post("/import", response_model=StandardResponse, summary="导入角色")
+async def import_roles_excel(
+    file: UploadFile = File(...),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_permission(current_user, "IMPORT_ROLES")
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="导入文件为空")
+
+    service = SystemExchangeService(db)
+    try:
+        data = service.import_roles(file_bytes=file_bytes)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return StandardResponse(data=data)
 
 
 @router.get("/{role_id}/detail", response_model=StandardResponse[RoleResponse], summary="角色详情")

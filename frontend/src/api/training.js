@@ -36,6 +36,10 @@ export function updateTraining(id, data) {
   return request.put(`/trainings/${id}`, data)
 }
 
+export function manageTraining(id, data) {
+  return request.put(`/trainings/${id}/manage`, data)
+}
+
 export function publishTraining(id, data) {
   return request.post(`/trainings/${id}/publish`, data)
 }

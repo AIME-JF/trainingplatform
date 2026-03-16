@@ -298,6 +298,8 @@ const filterPublish = ref('all')
 const searchText = ref('')
 const trainingList = ref([])
 const instructorList = ref([])
+const instructorOptionsLoaded = ref(false)
+const instructorOptionsLoading = ref(false)
 const admissionExamOptions = ref([])
 const trainingBaseOptions = ref([])
 const departmentOptions = ref([])
@@ -443,6 +445,7 @@ function resetForm() {
 function openCreateModal() {
   resetForm()
   showCreateModal.value = true
+  ensureInstructorOptionsLoaded(true)
 }
 
 function openEditModal(training) {
@@ -475,6 +478,7 @@ function openEditModal(training) {
     training.enrollmentEndAt || null,
   ].filter(Boolean)
   showCreateModal.value = true
+  ensureInstructorOptionsLoaded(true)
 }
 
 async function fetchTrainings() {
@@ -486,7 +490,11 @@ async function fetchTrainings() {
   }
 }
 
-async function fetchInstructors() {
+async function ensureInstructorOptionsLoaded(force = false) {
+  if (instructorOptionsLoading.value) return
+  if (instructorOptionsLoaded.value && !force) return
+
+  instructorOptionsLoading.value = true
   try {
     const result = await getUsers({ role: 'instructor', size: -1 })
     instructorList.value = (result.items || []).map(item => ({
@@ -494,8 +502,15 @@ async function fetchInstructors() {
       userId: item.id,
       name: item.nickname || item.username,
     }))
-  } catch {
+    instructorOptionsLoaded.value = true
+  } catch (error) {
     instructorList.value = []
+    instructorOptionsLoaded.value = false
+    if (force) {
+      message.warning(error?.message || '暂无权限加载教官候选列表')
+    }
+  } finally {
+    instructorOptionsLoading.value = false
   }
 }
 
@@ -667,7 +682,6 @@ function goHistory(training) {
 onMounted(() => {
   fetchTrainings()
   if (authStore.isAdmin || authStore.isInstructor) {
-    fetchInstructors()
     fetchAdmissionExams()
     fetchDepartments()
     fetchPoliceTypeOptions()

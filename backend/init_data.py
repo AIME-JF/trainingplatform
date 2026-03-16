@@ -33,6 +33,9 @@ def init_permissions():
                 {"path": "/api/v1/users/{user_id}/delete", "code": "DELETE_USER", "description": "删除用户"},
                 {"path": "/api/v1/users/{user_id}/roles", "code": "UPDATE_USER_ROLES", "description": "更新用户角色"},
                 {"path": "/api/v1/users/{user_id}/departments", "code": "UPDATE_USER_DEPARTMENTS", "description": "更新用户部门"},
+                {"path": "/api/v1/users/import/template", "code": "DOWNLOAD_USER_IMPORT_TEMPLATE", "description": "下载用户导入模板"},
+                {"path": "/api/v1/users/export", "code": "EXPORT_USERS", "description": "导出用户"},
+                {"path": "/api/v1/users/import", "code": "IMPORT_USERS", "description": "导入用户"},
 
                 # 角色管理权限
                 {"path": "/api/v1/roles", "code": "CREATE_ROLE", "description": "创建角色"},
@@ -41,6 +44,9 @@ def init_permissions():
                 {"path": "/api/v1/roles/{role_id}/update", "code": "UPDATE_ROLE", "description": "更新角色"},
                 {"path": "/api/v1/roles/{role_id}/delete", "code": "DELETE_ROLE", "description": "删除角色"},
                 {"path": "/api/v1/roles/{role_id}/permissions", "code": "UPDATE_ROLE_PERMISSIONS", "description": "更新角色权限"},
+                {"path": "/api/v1/roles/import/template", "code": "DOWNLOAD_ROLE_IMPORT_TEMPLATE", "description": "下载角色导入模板"},
+                {"path": "/api/v1/roles/export", "code": "EXPORT_ROLES", "description": "导出角色"},
+                {"path": "/api/v1/roles/import", "code": "IMPORT_ROLES", "description": "导入角色"},
 
                 # 权限管理权限
                 {"path": "/api/v1/permissions", "code": "CREATE_PERMISSION", "description": "创建权限"},
@@ -58,6 +64,9 @@ def init_permissions():
                 {"path": "/api/v1/departments/{department_id}/update", "code": "UPDATE_DEPARTMENT", "description": "更新部门"},
                 {"path": "/api/v1/departments/{department_id}", "code": "DELETE_DEPARTMENT", "description": "删除部门"},
                 {"path": "/api/v1/departments/{department_id}/permissions", "code": "UPDATE_DEPARTMENT_PERMISSIONS", "description": "更新部门权限"},
+                {"path": "/api/v1/departments/import/template", "code": "DOWNLOAD_DEPARTMENT_IMPORT_TEMPLATE", "description": "下载部门导入模板"},
+                {"path": "/api/v1/departments/export", "code": "EXPORT_DEPARTMENTS", "description": "导出部门"},
+                {"path": "/api/v1/departments/import", "code": "IMPORT_DEPARTMENTS", "description": "导入部门"},
 
                 # 系统权限
                 {"path": "/", "code": "ROOT", "description": "根路径访问"},
@@ -93,6 +102,7 @@ def init_permissions():
                 {"path": "/api/v1/trainings/create", "code": "CREATE_TRAINING", "description": "创建培训班"},
                 {"path": "/api/v1/trainings/{id}", "code": "GET_TRAINING_DETAIL", "description": "获取培训详情"},
                 {"path": "/api/v1/trainings/{id}/update", "code": "UPDATE_TRAINING", "description": "更新培训班"},
+                {"path": "/api/v1/trainings/{id}/manage", "code": "MANAGE_TRAINING", "description": "管理端更新培训班"},
                 {"path": "/api/v1/trainings/{id}/delete", "code": "DELETE_TRAINING", "description": "删除培训班"},
                 {"path": "/api/v1/trainings/{id}/students", "code": "GET_TRAINING_STUDENTS", "description": "获取培训学员"},
                 {"path": "/api/v1/trainings/{id}/schedule", "code": "GET_TRAINING_SCHEDULE", "description": "获取训练计划"},

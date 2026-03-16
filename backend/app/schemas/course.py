@@ -1,9 +1,13 @@
 """
 课程管理相关的数据验证模型
 """
+from __future__ import annotations
+
 from typing import Optional, List
 from datetime import datetime
 from pydantic import BaseModel, Field, ConfigDict
+
+from .resource import ResourceListItemResponse
 
 
 # ========== Chapter ==========
@@ -96,6 +100,9 @@ class CourseResponse(BaseModel):
     cover_color: Optional[str] = None
     tags: Optional[List[str]] = None
     chapters: List[ChapterResponse] = []
+    note: Optional["CourseNoteResponse"] = None
+    qa_list: List["CourseQAResponse"] = Field(default_factory=list)
+    resources: List[ResourceListItemResponse] = Field(default_factory=list)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

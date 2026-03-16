@@ -12,6 +12,51 @@ from logger import logger
 
 EXTRA_PERMISSION_DEFINITIONS = [
     {
+        "path": "/api/v1/users/import/template",
+        "code": "DOWNLOAD_USER_IMPORT_TEMPLATE",
+        "description": "下载用户导入模板",
+    },
+    {
+        "path": "/api/v1/users/export",
+        "code": "EXPORT_USERS",
+        "description": "导出用户",
+    },
+    {
+        "path": "/api/v1/users/import",
+        "code": "IMPORT_USERS",
+        "description": "导入用户",
+    },
+    {
+        "path": "/api/v1/departments/import/template",
+        "code": "DOWNLOAD_DEPARTMENT_IMPORT_TEMPLATE",
+        "description": "下载部门导入模板",
+    },
+    {
+        "path": "/api/v1/departments/export",
+        "code": "EXPORT_DEPARTMENTS",
+        "description": "导出部门",
+    },
+    {
+        "path": "/api/v1/departments/import",
+        "code": "IMPORT_DEPARTMENTS",
+        "description": "导入部门",
+    },
+    {
+        "path": "/api/v1/roles/import/template",
+        "code": "DOWNLOAD_ROLE_IMPORT_TEMPLATE",
+        "description": "下载角色导入模板",
+    },
+    {
+        "path": "/api/v1/roles/export",
+        "code": "EXPORT_ROLES",
+        "description": "导出角色",
+    },
+    {
+        "path": "/api/v1/roles/import",
+        "code": "IMPORT_ROLES",
+        "description": "导入角色",
+    },
+    {
         "path": "/api/v1/ai/question-tasks",
         "code": "GET_AI_QUESTION_TASKS",
         "description": "获取 AI 智能出题任务",
@@ -70,6 +115,11 @@ EXTRA_PERMISSION_DEFINITIONS = [
         "path": "/api/v1/ai/paper-generation-tasks/{task_id}/confirm",
         "code": "CONFIRM_AI_PAPER_GENERATION_TASK",
         "description": "确认 AI 自动生成试卷任务",
+    },
+    {
+        "path": "/api/v1/trainings/{id}/manage",
+        "code": "MANAGE_TRAINING",
+        "description": "管理端更新培训班",
     },
     {
         "path": "/api/v1/resources/list",

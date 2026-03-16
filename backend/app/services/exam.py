@@ -158,7 +158,7 @@ class ExamService:
             return detail
 
         paper.status = "published"
-        paper.published_at = paper.published_at or datetime.now()
+        paper.published_at = paper.published_at or self._current_time(paper.published_at)
         self.db.commit()
 
         detail = self.get_exam_paper_detail(paper.id)
@@ -301,7 +301,7 @@ class ExamService:
             allow_makeup=data.allow_makeup,
             start_time=data.start_time,
             end_time=data.end_time,
-            published_at=datetime.now(),
+            published_at=self._current_time(data.start_time, data.end_time),
             created_by=user_id,
         )
         self.db.add(exam)
@@ -336,7 +336,7 @@ class ExamService:
             max_attempts=data.max_attempts,
             start_time=data.start_time,
             end_time=data.end_time,
-            published_at=datetime.now(),
+            published_at=self._current_time(data.start_time, data.end_time),
             created_by=user_id,
         )
         self.db.add(exam)
@@ -682,7 +682,7 @@ class ExamService:
 
         exam.total_score = exam.paper.total_score or exam.total_score or 0
         if exam.status in {"active", "ended"} and not exam.published_at:
-            exam.published_at = datetime.now()
+            exam.published_at = self._current_time(exam.start_time, exam.end_time, exam.published_at)
 
     def _update_admission_exam_entity(self, exam: AdmissionExam, data: AdmissionExamUpdate) -> None:
         update_data = data.model_dump(exclude_unset=True)
@@ -706,7 +706,7 @@ class ExamService:
         exam.scope = scope_summary
         exam.total_score = exam.paper.total_score or exam.total_score or 0
         if exam.status in {"active", "ended"} and not exam.published_at:
-            exam.published_at = datetime.now()
+            exam.published_at = self._current_time(exam.start_time, exam.end_time, exam.published_at)
 
     def _can_manage_admission_exam(self, user_id: int) -> bool:
         return is_admin_user(self.db, user_id) or is_instructor_user(self.db, user_id)
@@ -947,10 +947,11 @@ class ExamService:
                 score=question_score,
             ))
 
-        now = datetime.now()
+        now = self._current_time(data.start_time)
+        start_time = self._normalize_datetime(data.start_time, now.tzinfo)
         duration = 0
-        if data.start_time:
-            duration = max(0, int((now - data.start_time).total_seconds() / 60))
+        if start_time:
+            duration = max(0, int((now - start_time).total_seconds() / 60))
         dimension_scores = {
             key: int(round((dimension_gains[key] / dimension_totals[key]) * 100))
             if dimension_totals[key] > 0 else 0
@@ -965,7 +966,7 @@ class ExamService:
             "score": score,
             "result": "pass" if score >= int(exam.passing_score or 60) else "fail",
             "grade": self._resolve_grade(score),
-            "start_time": data.start_time,
+            "start_time": start_time,
             "end_time": now,
             "duration": duration,
             "answers": data.answers,
@@ -1154,19 +1155,40 @@ class ExamService:
             dimension_scores=record.dimension_scores or {},
         )
 
+    @staticmethod
+    def _is_aware_datetime(value: Optional[datetime]) -> bool:
+        return bool(value and value.tzinfo and value.tzinfo.utcoffset(value) is not None)
+
+    @classmethod
+    def _current_time(cls, *references: Optional[datetime]) -> datetime:
+        for reference in references:
+            if cls._is_aware_datetime(reference):
+                return datetime.now(reference.tzinfo)
+        return datetime.now()
+
+    @classmethod
+    def _normalize_datetime(cls, value: Optional[datetime], reference_tzinfo: Any) -> Optional[datetime]:
+        if value is None:
+            return None
+        if cls._is_aware_datetime(value) or reference_tzinfo is None:
+            return value
+        return value.replace(tzinfo=reference_tzinfo)
+
     def _refresh_exam_status(self, exam: Any) -> bool:
-        now = datetime.now()
+        now = self._current_time(exam.start_time, exam.end_time)
+        start_time = self._normalize_datetime(exam.start_time, now.tzinfo)
+        end_time = self._normalize_datetime(exam.end_time, now.tzinfo)
         next_status = exam.status or "upcoming"
-        if exam.start_time and exam.end_time:
-            if now < exam.start_time:
+        if start_time and end_time:
+            if now < start_time:
                 next_status = "upcoming"
-            elif exam.start_time <= now <= exam.end_time:
+            elif start_time <= now <= end_time:
                 next_status = "active"
             else:
                 next_status = "ended"
-        elif exam.end_time and now > exam.end_time:
+        elif end_time and now > end_time:
             next_status = "ended"
-        elif exam.start_time and now >= exam.start_time:
+        elif start_time and now >= start_time:
             next_status = "active"
         if next_status != exam.status:
             exam.status = next_status

@@ -27,3 +27,24 @@ export function toggleRoleStatus(roleId, isActive) {
 export function updateRolePermissions(roleId, permissionIds) {
   return request.post(`/roles/${roleId}/permissions`, { permissionIds })
 }
+
+export function downloadRoleImportTemplate() {
+  return request.get('/roles/import/template', {
+    responseType: 'blob',
+  })
+}
+
+export function exportRoles(params) {
+  return request.get('/roles/export', {
+    params,
+    responseType: 'blob',
+  })
+}
+
+export function importRoles(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post('/roles/import', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}

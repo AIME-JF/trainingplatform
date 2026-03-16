@@ -2,8 +2,10 @@
 部门管理路由
 """
 from typing import List, Optional
+from io import BytesIO
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.controllers import DepartmentController
@@ -19,9 +21,18 @@ from app.schemas import (
     StandardResponse,
     TokenData,
 )
+from app.services.system_exchange import SystemExchangeService
 
 
 router = APIRouter(prefix="/departments", tags=["部门管理"])
+
+
+def _excel_response(data: bytes, filename: str) -> StreamingResponse:
+    return StreamingResponse(
+        BytesIO(data),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 def _require_permission(current_user: TokenData, permission: str):
@@ -43,6 +54,52 @@ def create_department(
     controller = DepartmentController(db)
     result = controller.create_department(data)
     return StandardResponse(message="创建部门成功", data=result)
+
+
+@router.get("/import/template", summary="下载部门导入模板")
+def download_department_import_template(
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_permission(current_user, "DOWNLOAD_DEPARTMENT_IMPORT_TEMPLATE")
+    data = SystemExchangeService(db).build_department_template()
+    return _excel_response(data, "department_import_template.xlsx")
+
+
+@router.get("/export", summary="导出部门")
+def export_departments_excel(
+    keyword: Optional[str] = Query(None, description="搜索部门名称/编码"),
+    status_value: Optional[bool] = Query(None, alias="status", description="是否启用"),
+    parent_id: Optional[str] = Query(None, description="父级部门 ID 或 root"),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_permission(current_user, "EXPORT_DEPARTMENTS")
+    data = SystemExchangeService(db).export_departments(
+        keyword=keyword,
+        status_value=status_value,
+        parent_value=parent_id,
+    )
+    return _excel_response(data, "departments_export.xlsx")
+
+
+@router.post("/import", response_model=StandardResponse, summary="导入部门")
+async def import_departments_excel(
+    file: UploadFile = File(...),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_permission(current_user, "IMPORT_DEPARTMENTS")
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="导入文件为空")
+
+    service = SystemExchangeService(db)
+    try:
+        data = service.import_departments(file_bytes=file_bytes)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return StandardResponse(data=data)
 
 
 @router.get("/{department_id}/detail", response_model=StandardResponse[DepartmentResponse], summary="部门详情")

@@ -255,6 +255,8 @@ const allCategories = [{ key: 'all', label: '全部' }, ...COURSE_CATEGORIES]
 const courseList = ref([])
 const loading = ref(false)
 const instructorOptions = ref([])
+const instructorOptionsLoaded = ref(false)
+const instructorOptionsLoading = ref(false)
 const categoryColorMap = {
   law: '#003087',
   fraud: '#8B1A1A',
@@ -285,7 +287,11 @@ async function fetchCourses() {
   }
 }
 
-async function fetchInstructors() {
+async function ensureInstructorOptionsLoaded(force = false) {
+  if (instructorOptionsLoading.value) return
+  if (instructorOptionsLoaded.value && !force) return
+
+  instructorOptionsLoading.value = true
   try {
     const res = await getUsers({ role: 'instructor', size: -1 })
     const items = res.items || []
@@ -293,14 +299,20 @@ async function fetchInstructors() {
       value: i.id,
       label: i.nickname || i.username || `教官#${i.id}`,
     }))
-  } catch {
+    instructorOptionsLoaded.value = true
+  } catch (error) {
     instructorOptions.value = []
+    instructorOptionsLoaded.value = false
+    if (force) {
+      message.warning(error?.message || '暂无权限加载教官候选列表')
+    }
+  } finally {
+    instructorOptionsLoading.value = false
   }
 }
 
 onMounted(() => {
   fetchCourses()
-  fetchInstructors()
 })
 
 watch([searchText, selectedCategory, sortBy], () => {
@@ -350,6 +362,7 @@ const openCreate = () => {
   currentStep.value = 0
   resetForm()
   modalVisible.value = true
+  ensureInstructorOptionsLoaded(true)
 }
 
 const openEdit = async (course, e) => {
@@ -380,6 +393,7 @@ const openEdit = async (course, e) => {
   }))
   if (!form.chapters.length) form.chapters = [{ title: '', duration: 30, fileId: null, fileList: [] }]
   modalVisible.value = true
+  ensureInstructorOptionsLoaded(true)
 }
 
 const closeModal = () => {

@@ -149,7 +149,7 @@
                   class="resource-bind-select"
                 />
                 <a-button type="primary" @click="bindSelectedResource">绑定资源</a-button>
-                <a-button @click="loadCourseResources">刷新</a-button>
+                <a-button @click="fetchCourse">刷新</a-button>
               </div>
               <a-table :data-source="courseResources" :columns="resourceColumns" row-key="id" :pagination="false">
                 <template #bodyCell="{ column, record }">
@@ -319,9 +319,9 @@ import { message } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
 import {
   getCourse, updateChapterProgress,
-  getCourseNote, saveCourseNote,
-  getCourseQA, createCourseQA,
-  getCourseResources, bindCourseResource, unbindCourseResource,
+  saveCourseNote,
+  createCourseQA,
+  bindCourseResource, unbindCourseResource,
   updateCourse as apiUpdateCourse,
   deleteCourse as apiDeleteCourse,
 } from '@/api/course'
@@ -347,8 +347,14 @@ const localCourse = ref({
   studentCount: 0,
 })
 const instructorOptions = ref([])
+const instructorOptionsLoaded = ref(false)
+const instructorOptionsLoading = ref(false)
 
-async function fetchInstructors() {
+async function ensureInstructorOptionsLoaded(force = false) {
+  if (instructorOptionsLoading.value) return
+  if (instructorOptionsLoaded.value && !force) return
+
+  instructorOptionsLoading.value = true
   try {
     const res = await getUsers({ role: 'instructor', size: -1 })
     const items = res.items || []
@@ -356,13 +362,21 @@ async function fetchInstructors() {
       value: i.id,
       label: i.nickname || i.username || `教官#${i.id}`,
     }))
-  } catch {
+    instructorOptionsLoaded.value = true
+  } catch (error) {
     instructorOptions.value = []
+    instructorOptionsLoaded.value = false
+    if (force) {
+      message.warning(error?.message || '暂无权限加载教官候选列表')
+    }
+  } finally {
+    instructorOptionsLoading.value = false
   }
 }
 
 async function fetchCourse() {
   const data = await getCourse(courseId)
+  const noteCacheKey = getNoteCacheKey()
   localCourse.value = {
     ...data,
     instructor: data.instructor || data.instructorName || '',
@@ -372,12 +386,15 @@ async function fetchCourse() {
       locked: false,
     })),
   }
+  noteContent.value = data.note?.content ?? localStorage.getItem(noteCacheKey) ?? ''
+  qaList.value = data.qaList || []
+  courseResources.value = data.resources || []
   recalcChapterLocks()
 }
 
 onMounted(async () => {
   try {
-    await Promise.all([fetchInstructors(), fetchCourse(), fetchNote(), fetchQA(), loadResourceCandidates(), loadCourseResources()])
+    await fetchCourse()
   } catch {
     message.error('加载课程失败')
   }
@@ -574,14 +591,11 @@ const resourceOptions = computed(() => (availableResources.value || []).map(r =>
   label: `${r.title}（${r.status || '-'}）`,
 })))
 
-async function fetchQA() {
-  try {
-    const res = await getCourseQA(courseId)
-    qaList.value = res || []
-  } catch {
-    qaList.value = []
+watch(activeTab, (tab) => {
+  if (tab === 'resources' && (authStore.isAdmin || authStore.isInstructor)) {
+    loadResourceCandidates()
   }
-}
+})
 
 async function handleQASubmit() {
   const q = qaInput.value.trim()
@@ -609,22 +623,13 @@ async function loadResourceCandidates() {
   }
 }
 
-async function loadCourseResources() {
-  if (!(authStore.isAdmin || authStore.isInstructor)) return
-  try {
-    courseResources.value = await getCourseResources(courseId) || []
-  } catch {
-    courseResources.value = []
-  }
-}
-
 async function bindSelectedResource() {
   if (!selectedResourceId.value) return message.warning('请选择资源')
   try {
     await bindCourseResource(courseId, { resourceId: selectedResourceId.value, usageType: 'required', sortOrder: 0 })
     message.success('绑定成功')
     selectedResourceId.value = undefined
-    loadCourseResources()
+    await fetchCourse()
   } catch (e) {
     message.error(e.message || '绑定失败')
   }
@@ -634,7 +639,7 @@ async function removeResource(resourceId) {
   try {
     await unbindCourseResource(courseId, resourceId)
     message.success('解绑成功')
-    loadCourseResources()
+    await fetchCourse()
   } catch (e) {
     message.error(e.message || '解绑失败')
   }
@@ -643,14 +648,8 @@ async function removeResource(resourceId) {
 const noteContent = ref('')
 const noteSaving = ref(false)
 
-async function fetchNote() {
-  try {
-    const res = await getCourseNote(courseId)
-    noteContent.value = res?.content || ''
-  } catch {
-    const cacheKey = `course_note_${authStore.currentUser?.id || 'guest'}_${courseId}`
-    noteContent.value = localStorage.getItem(cacheKey) || ''
-  }
+function getNoteCacheKey() {
+  return `course_note_${authStore.currentUser?.id || 'guest'}_${courseId}`
 }
 
 async function handleSaveNote() {
@@ -658,12 +657,12 @@ async function handleSaveNote() {
   try {
     const res = await saveCourseNote(courseId, noteContent.value || '')
     noteContent.value = res?.content || ''
-    const cacheKey = `course_note_${authStore.currentUser?.id || 'guest'}_${courseId}`
+    const cacheKey = getNoteCacheKey()
     localStorage.setItem(cacheKey, noteContent.value)
     notesSaved.value = true
     setTimeout(() => { notesSaved.value = false }, 2000)
   } catch (e) {
-    const cacheKey = `course_note_${authStore.currentUser?.id || 'guest'}_${courseId}`
+    const cacheKey = getNoteCacheKey()
     localStorage.setItem(cacheKey, noteContent.value)
     notesSaved.value = true
     setTimeout(() => { notesSaved.value = false }, 2000)
@@ -692,7 +691,7 @@ const editDifficultyLabel = computed(() => {
   return labels[Math.round(editForm.difficulty)] || ''
 })
 
-const openEdit = () => {
+const openEdit = async () => {
   const c = localCourse.value
   editForm.title = c.title
   editForm.description = c.description || ''
@@ -708,6 +707,7 @@ const openEdit = () => {
   }))
   editTab.value = 'basic'
   editVisible.value = true
+  await ensureInstructorOptionsLoaded(true)
 }
 
 const editSaving = ref(false)
@@ -767,7 +767,7 @@ const saveEdit = async () => {
 
     await apiUpdateCourse(courseId, courseData)
 
-    await Promise.all([fetchCourse(), fetchNote()])
+    await fetchCourse()
 
     if (currentChapterIdx.value >= localCourse.value.chapters.length) {
       currentChapterIdx.value = 0

@@ -218,7 +218,7 @@
             <a-tab-pane key="students" tab="学员名单" v-if="!authStore.isStudent">
               <div class="section-header" style="margin-bottom:16px">
                 <a-input-search v-model:value="studentSearch" placeholder="搜索学员..." class="student-search-input" />
-                <a-button type="primary" size="small" @click="showStudentModal = true" v-if="canEdit">
+                <a-button type="primary" size="small" @click="openStudentModal" v-if="canEdit">
                   <template #icon><PlusOutlined /></template>添加学员
                 </a-button>
               </div>
@@ -259,7 +259,7 @@
                     class="training-resource-select"
                   />
                   <a-button type="primary" size="small" @click="bindSelectedTrainingResource">绑定</a-button>
-                  <a-button size="small" @click="loadTrainingResources">刷新</a-button>
+                  <a-button size="small" @click="loadTrainingDetail">刷新</a-button>
                 </a-space>
               </div>
 
@@ -329,7 +329,7 @@
             <a-button block style="margin-bottom:8px" @click="$router.push('/training/schedule/' + trainingData.id)">
               <template #icon><CalendarOutlined /></template>查看日程
             </a-button>
-            <a-button block style="margin-bottom:8px" @click="showEditModal = true" v-if="canEdit">
+            <a-button block style="margin-bottom:8px" @click="openEditModal" v-if="canEdit">
               <template #icon><EditOutlined /></template>编辑班级信息
             </a-button>
             <a-button block @click="exportMsg" v-if="!authStore.isStudent">
@@ -599,15 +599,15 @@
 </template>
 
 <script setup>
-import { ref, computed, reactive, onMounted } from 'vue'
+import { ref, computed, reactive, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QrcodeOutlined, DownloadOutlined, PlusOutlined, EditOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import {
   getTraining,
+  manageTraining as apiManageTraining,
   updateTraining as apiUpdateTraining,
-  getCheckinRecords as apiGetCheckinRecords,
   publishTraining,
   lockTraining,
   startTraining,
@@ -617,20 +617,24 @@ import {
   startTrainingSessionCheckout,
   endTrainingSessionCheckout,
   skipTrainingSession,
-  getTrainingResources,
   bindTrainingResource,
   unbindTrainingResource,
 } from '@/api/training'
 import { getResources } from '@/api/resource'
 import { getUsers } from '@/api/user'
-import { getNotices as apiGetNotices, createNotice as apiCreateNotice, updateNotice as apiUpdateNotice, deleteNotice as apiDeleteNotice } from '@/api/notice'
+import { createNotice as apiCreateNotice, updateNotice as apiUpdateNotice, deleteNotice as apiDeleteNotice } from '@/api/notice'
 import { useAuthStore } from '@/stores/auth'
+import { formatDateTime } from '@/utils/datetime'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const trainingId = route.params.id
 const instructorList = ref([])
+const instructorOptionsLoaded = ref(false)
+const instructorOptionsLoading = ref(false)
+const studentCandidatesLoaded = ref(false)
+const studentCandidatesLoading = ref(false)
 
 // 使用 reactive 使数据可编辑
 const trainingData = reactive({
@@ -666,80 +670,150 @@ const trainingData = reactive({
   currentStepKey: 'draft',
   currentSession: null,
   canManageAll: false,
+  canManageTraining: false,
   canEditTraining: false,
   canEditCourses: false,
   canReviewEnrollments: false,
 })
 
 const allUserList = ref([])
+const rosterUserList = ref([])
+const notices = ref([])
 const userMap = computed(() => {
   const map = {}
-  allUserList.value.forEach(u => { map[u.id] = u })
+  rosterUserList.value.forEach(u => { map[u.id] = u })
   return map
 })
 
+function normalizeCheckinRecords(records = []) {
+  return records.map((record) => ({
+    ...record,
+    studentId: record.userId,
+    name: record.userNickname || record.userName || record.userId,
+    sessionKey: record.sessionKey || 'start',
+  }))
+}
+
+function normalizeNotices(items = []) {
+  return items.map((item) => ({
+    ...item,
+    time: formatDateTime(item.createdAt, ''),
+  }))
+}
+
+function syncTrainingRoster(students = [], studentIds = []) {
+  const mappedStudents = (students || []).map((item) => ({
+    id: item.userId,
+    username: item.userName,
+    nickname: item.userNickname,
+    policeId: item.policeId,
+    departments: (item.departments || []).map((name) => ({ name })),
+  }))
+  rosterUserList.value = mappedStudents.length
+    ? mappedStudents
+    : (studentIds || []).map((userId) => ({ id: userId }))
+}
+
+function applyTrainingDetail(data) {
+  const normalizedStudents = data.students || []
+  const normalizedStudentIds = data.studentIds || normalizedStudents.map((item) => item.userId).filter((item) => item != null)
+  Object.assign(trainingData, data, {
+    progressPercent: data.progressPercent || 0,
+    instructorId: data.instructorId || null,
+    publishStatus: data.publishStatus || 'draft',
+    isLocked: !!data.isLocked,
+    courses: (data.courses || []).map((course) => ({
+      ...course,
+      schedules: (course.schedules || []).map((schedule) => ({
+        ...schedule,
+        timeRange: schedule.timeRange || schedule.time_range || '',
+        sessionId: schedule.sessionId || schedule.session_id,
+      })),
+    })),
+    studentIds: normalizedStudentIds,
+    students: normalizedStudents,
+    enrolledCount: data.enrolledCount ?? normalizedStudentIds.length,
+    enrolled: data.enrolledCount ?? normalizedStudentIds.length,
+    checkinRecords: normalizeCheckinRecords(data.checkinRecords || []),
+    workflowSteps: data.workflowSteps || [],
+    currentStepKey: data.currentStepKey || 'draft',
+    currentSession: data.currentSession
+      ? {
+          ...data.currentSession,
+          timeRange: data.currentSession.timeRange || data.currentSession.time_range || '',
+          sessionId: data.currentSession.sessionId || data.currentSession.session_id,
+        }
+      : null,
+    canManageAll: !!data.canManageAll,
+    canManageTraining: !!data.canManageTraining,
+    canEditTraining: !!data.canEditTraining,
+    canEditCourses: !!data.canEditCourses,
+    canReviewEnrollments: !!data.canReviewEnrollments,
+  })
+  syncTrainingRoster(normalizedStudents, normalizedStudentIds)
+  trainingResources.value = data.resources || []
+  notices.value = normalizeNotices(data.notices || [])
+  syncEditFormFromTraining()
+}
+
 async function loadTrainingDetail() {
   try {
-    const [data, instRes, checkinRes, usersRes] = await Promise.all([
-      getTraining(trainingId),
-      getUsers({ role: 'instructor', size: -1 }),
-      apiGetCheckinRecords(trainingId),
-      getUsers({ role: 'student', size: -1 })
-    ])
-    allUserList.value = usersRes.items || []
-
-    const normalizedStudentIds = data.studentIds || data.students || []
-    const normalizedCheckinRecords = (checkinRes || []).map((r) => ({
-      ...r,
-      studentId: r.userId,
-      name: r.userNickname || r.userName || r.userId,
-      sessionKey: r.sessionKey || 'start'
-    }))
-
-    Object.assign(trainingData, data, {
-      progressPercent: data.progressPercent || 0,
-      instructorId: data.instructorId || null,
-      publishStatus: data.publishStatus || 'draft',
-      isLocked: !!data.isLocked,
-      courses: (data.courses || []).map((course) => ({
-        ...course,
-        schedules: (course.schedules || []).map((schedule) => ({
-          ...schedule,
-          timeRange: schedule.timeRange || schedule.time_range || '',
-          sessionId: schedule.sessionId || schedule.session_id,
-        })),
-      })),
-      studentIds: normalizedStudentIds,
-      students: normalizedStudentIds,
-      enrolledCount: data.enrolledCount ?? normalizedStudentIds.length,
-      enrolled: data.enrolledCount ?? normalizedStudentIds.length,
-      checkinRecords: normalizedCheckinRecords,
-      workflowSteps: data.workflowSteps || [],
-      currentStepKey: data.currentStepKey || 'draft',
-      currentSession: data.currentSession
-        ? {
-            ...data.currentSession,
-            timeRange: data.currentSession.timeRange || data.currentSession.time_range || '',
-            sessionId: data.currentSession.sessionId || data.currentSession.session_id,
-          }
-        : null,
-      canManageAll: !!data.canManageAll,
-      canEditTraining: !!data.canEditTraining,
-      canEditCourses: !!data.canEditCourses,
-      canReviewEnrollments: !!data.canReviewEnrollments,
-    })
-    syncEditFormFromTraining()
-
-    instructorList.value = (instRes.items || []).map((it) => ({
-      ...it,
-      id: it.id,
-      userId: it.id,
-      name: it.nickname || it.username
-    }))
-    await Promise.all([loadTrainingResources(), loadResourceCandidates()])
-    loadNotices()
+    const data = await getTraining(trainingId)
+    applyTrainingDetail(data)
   } catch (e) {
     message.error('加载培训班详情失败')
+  }
+}
+
+async function submitTrainingUpdate(payload) {
+  if (trainingData.canManageTraining) {
+    return apiManageTraining(trainingId, payload)
+  }
+  return apiUpdateTraining(trainingId, payload)
+}
+
+async function ensureInstructorOptionsLoaded(force = false) {
+  if (instructorOptionsLoading.value) return
+  if (instructorOptionsLoaded.value && !force) return
+
+  instructorOptionsLoading.value = true
+  try {
+    const result = await getUsers({ role: 'instructor', size: -1 })
+    instructorList.value = (result.items || []).map((item) => ({
+      ...item,
+      id: item.id,
+      userId: item.id,
+      name: item.nickname || item.username,
+    }))
+    instructorOptionsLoaded.value = true
+  } catch (error) {
+    instructorList.value = []
+    instructorOptionsLoaded.value = false
+    if (force) {
+      message.warning(error?.message || '暂无权限加载教官候选列表')
+    }
+  } finally {
+    instructorOptionsLoading.value = false
+  }
+}
+
+async function ensureStudentCandidatesLoaded(force = false) {
+  if (studentCandidatesLoading.value) return
+  if (studentCandidatesLoaded.value && !force) return
+
+  studentCandidatesLoading.value = true
+  try {
+    const result = await getUsers({ role: 'student', size: -1 })
+    allUserList.value = result.items || []
+    studentCandidatesLoaded.value = true
+  } catch (error) {
+    allUserList.value = []
+    studentCandidatesLoaded.value = false
+    if (force) {
+      message.warning(error?.message || '暂无权限加载可添加学员列表')
+    }
+  } finally {
+    studentCandidatesLoading.value = false
   }
 }
 
@@ -838,6 +912,12 @@ const trainingResourceOptions = computed(() => (resourceCandidates.value || []).
   value: r.id,
   label: `${r.title}（${r.status || '-'}）`,
 })))
+
+watch(activeTab, (tab) => {
+  if (tab === 'resources' && canEdit.value) {
+    loadResourceCandidates()
+  }
+})
 
 const statusLabels = { active: '进行中', upcoming: '未开始', ended: '已结束' }
 const statusColorMap = { active: 'green', upcoming: 'orange', ended: 'default' }
@@ -1084,15 +1164,14 @@ function goTraineeDetail(userId) {
   router.push({ name: 'TraineeDetail', params: { id: userId } })
 }
 
-function removeStudent(userId) {
-  const idx = trainingData.studentIds.indexOf(userId)
-  if (idx !== -1) {
-    trainingData.studentIds.splice(idx, 1)
-    trainingData.students = trainingData.studentIds
-    trainingData.enrolledCount = trainingData.studentIds.length
-    trainingData.enrolled = trainingData.enrolledCount
-    apiUpdateTraining(trainingId, { studentIds: trainingData.studentIds }).catch(() => {})
+async function removeStudent(userId) {
+  const nextStudentIds = trainingData.studentIds.filter((item) => item !== userId)
+  try {
+    await submitTrainingUpdate({ studentIds: nextStudentIds })
     message.success('已移除该学员')
+    await loadTrainingDetail()
+  } catch {
+    message.error('移除学员失败')
   }
 }
 
@@ -1122,18 +1201,24 @@ const addStudentColumns = [
   { title: '单位', dataIndex: 'unit', key: 'unit' },
 ]
 
-function addSelectedStudents() {
+async function openStudentModal() {
+  showStudentModal.value = true
+  await ensureStudentCandidatesLoaded(true)
+}
+
+async function addSelectedStudents() {
   if (selectedStudentKeys.value.length === 0) { message.warning('请先选择要添加的学员'); return }
   const merged = new Set([...trainingData.studentIds, ...selectedStudentKeys.value])
-  trainingData.studentIds = Array.from(merged)
-  trainingData.students = trainingData.studentIds
-  trainingData.enrolledCount = trainingData.studentIds.length
-  trainingData.enrolled = trainingData.enrolledCount
-  apiUpdateTraining(trainingId, { studentIds: trainingData.studentIds }).catch(() => {})
-  message.success(`已添加 ${selectedStudentKeys.value.length} 名学员`)
-  selectedStudentKeys.value = []
-  addStudentSearch.value = ''
-  showStudentModal.value = false
+  try {
+    await submitTrainingUpdate({ studentIds: Array.from(merged) })
+    await loadTrainingDetail()
+    message.success(`已添加 ${selectedStudentKeys.value.length} 名学员`)
+    selectedStudentKeys.value = []
+    addStudentSearch.value = ''
+    showStudentModal.value = false
+  } catch {
+    message.error('添加学员失败')
+  }
 }
 
 // ===== 课程 CRUD =====
@@ -1233,6 +1318,7 @@ function removeCourseSchedule(idx) {
 }
 
 function openCourseModal(idx = null) {
+  ensureInstructorOptionsLoaded(true)
   editingCourseIdx.value = idx
   tempDate.value = null
   tempDateRange.value = []
@@ -1295,7 +1381,7 @@ async function saveCourse() {
     nextCourses.push(courseData)
   }
   try {
-    await apiUpdateTraining(trainingId, { courses: nextCourses })
+    await submitTrainingUpdate({ courses: nextCourses })
     message.success(editingCourseIdx.value !== null ? '课程已更新' : '课程已添加')
     showCourseModal.value = false
     await loadTrainingDetail()
@@ -1312,7 +1398,7 @@ function removeCourse(idx) {
       const nextCourses = [...trainingData.courses]
       nextCourses.splice(idx, 1)
       try {
-        await apiUpdateTraining(trainingId, { courses: nextCourses })
+        await submitTrainingUpdate({ courses: nextCourses })
         message.success('课程已删除')
         await loadTrainingDetail()
       } catch {
@@ -1352,31 +1438,20 @@ function onEditInstructorChange(userId) {
   if (inst) editForm.instructorName = inst.name
 }
 
-function saveClassInfo() {
-  if (!editForm.name || !editForm.startDate || !editForm.endDate || !editForm.location) { message.warning('请填写必填项'); return }
-  Object.assign(trainingData, {
-    name: editForm.name, startDate: editForm.startDate, endDate: editForm.endDate,
-    location: editForm.location, instructorId: editForm.instructorId, instructorName: editForm.instructorName,
-    capacity: editForm.capacity, status: editForm.status, description: editForm.description,
-  })
-  apiUpdateTraining(trainingId, { ...editForm }).catch(() => {})
-  message.success('班级信息已更新')
-  syncEditFormFromTraining()
-  showEditModal.value = false
+async function openEditModal() {
+  showEditModal.value = true
+  await ensureInstructorOptionsLoaded(true)
 }
 
-// ===== 公告 =====
-const notices = ref([])
-
-async function loadNotices() {
+async function saveClassInfo() {
+  if (!editForm.name || !editForm.startDate || !editForm.endDate || !editForm.location) { message.warning('请填写必填项'); return }
   try {
-    const res = await apiGetNotices({ type: 'training', trainingId: trainingId, size: -1 })
-    notices.value = (res.items || []).map(n => ({
-      ...n,
-      time: n.createdAt ? new Date(n.createdAt).toLocaleString('zh-CN') : ''
-    }))
+    await submitTrainingUpdate({ ...editForm })
+    message.success('班级信息已更新')
+    showEditModal.value = false
+    await loadTrainingDetail()
   } catch {
-    notices.value = []
+    message.error('班级信息更新失败')
   }
 }
 
@@ -1422,21 +1497,12 @@ async function saveNotice() {
       message.success('公告已更新')
     } else {
       const res = await apiCreateNotice({ title: noticeForm.title, content: noticeForm.content, type: 'training', trainingId: trainingId })
-      notices.value.unshift({ ...res, time: new Date().toLocaleString('zh-CN') })
+      notices.value.unshift({ ...res, time: formatDateTime(res.createdAt, '') })
       message.success('公告已发布')
     }
     showNoticeModal.value = false
   } catch {
     message.error('操作失败')
-  }
-}
-
-async function loadTrainingResources() {
-  if (!canEdit.value) return
-  try {
-    trainingResources.value = await getTrainingResources(trainingId) || []
-  } catch {
-    trainingResources.value = []
   }
 }
 
@@ -1456,14 +1522,17 @@ async function bindSelectedTrainingResource() {
     return
   }
   try {
-    await bindTrainingResource(trainingId, {
+    const resource = await bindTrainingResource(trainingId, {
       resourceId: selectedTrainingResourceId.value,
       usageType: 'required',
       sortOrder: 0,
     })
     message.success('资源绑定成功')
     selectedTrainingResourceId.value = undefined
-    loadTrainingResources()
+    trainingResources.value = [
+      ...trainingResources.value.filter((item) => item.id !== resource.id),
+      resource,
+    ]
   } catch (e) {
     message.error(e.message || '资源绑定失败')
   }
@@ -1473,7 +1542,7 @@ async function removeTrainingResource(resourceId) {
   try {
     await unbindTrainingResource(trainingId, resourceId)
     message.success('资源解绑成功')
-    loadTrainingResources()
+    trainingResources.value = trainingResources.value.filter((item) => item.id !== resourceId)
   } catch (e) {
     message.error(e.message || '资源解绑失败')
   }

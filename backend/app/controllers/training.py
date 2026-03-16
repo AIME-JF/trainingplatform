@@ -73,6 +73,9 @@ class TrainingController:
             logger.error("更新培训异常: %s", exc)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新培训失败")
 
+    def manage_training(self, training_id: int, data: TrainingUpdate, actor_id: Optional[int] = None):
+        return self.update_training(training_id, data, actor_id)
+
     def delete_training(self, training_id: int):
         if not self.service.delete_training(training_id):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="培训班不存在")

@@ -1,11 +1,16 @@
 """
 培训管理相关的数据验证模型
 """
+from __future__ import annotations
+
 from datetime import date as DateType
 from datetime import datetime
 from typing import List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from .notice import NoticeResponse
+from .resource import ResourceListItemResponse
 
 
 class TrainingScheduleItem(BaseModel):
@@ -232,6 +237,7 @@ class TrainingResponse(BaseModel):
     capacity: int = 0
     enrolled_count: int = 0
     student_ids: List[int] = Field(default_factory=list)
+    students: List["EnrollmentResponse"] = Field(default_factory=list)
     description: Optional[str] = None
     subjects: List[str] = Field(default_factory=list)
     enrollment_start_at: Optional[datetime] = None
@@ -245,10 +251,14 @@ class TrainingResponse(BaseModel):
     cadre_count: int = 0
     courses: List[TrainingCourseResponse] = Field(default_factory=list)
     exam_sessions: List[TrainingExamSummary] = Field(default_factory=list)
+    checkin_records: List["CheckinResponse"] = Field(default_factory=list)
+    notices: List[NoticeResponse] = Field(default_factory=list)
+    resources: List[ResourceListItemResponse] = Field(default_factory=list)
     workflow_steps: List[TrainingWorkflowStepResponse] = Field(default_factory=list)
     current_step_key: str = "draft"
     current_session: Optional[TrainingCurrentSessionResponse] = None
     can_manage_all: bool = False
+    can_manage_training: bool = False
     can_edit_training: bool = False
     can_edit_courses: bool = False
     can_review_enrollments: bool = False

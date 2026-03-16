@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.controllers import TrainingController
 from app.database import get_db
 from app.middleware.auth import get_current_user, get_current_user_optional
-from app.models import Training
+from app.models import Permission, Role, Training, User
 from app.schemas import (
     CheckinCreate,
     CheckinResponse,
@@ -36,7 +36,7 @@ from app.schemas import (
     TrainingWorkflowActionRequest,
 )
 from app.services.training import TrainingService
-from app.utils.authz import can_manage_training, can_view_training, is_admin_user, is_instructor_user
+from app.utils.authz import can_manage_training, can_update_training, can_view_training, is_admin_user, is_instructor_user
 
 router = APIRouter(prefix="/trainings", tags=["培训管理"])
 
@@ -51,6 +51,21 @@ def _require_admin_or_instructor(db: Session, user_id: int):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅管理员或教官可执行该操作")
 
 
+def _require_permission(db: Session, current_user: TokenData, permission: str):
+    if permission in current_user.permissions:
+        return
+    has_permission = db.query(User.id).join(User.roles).join(Role.permissions).filter(
+        User.id == current_user.user_id,
+        User.is_active == True,
+        Permission.code == permission,
+    ).first()
+    if not has_permission:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"权限不足，需要权限: {permission}",
+        )
+
+
 def _get_training_or_404(db: Session, training_id: int) -> Training:
     training = db.query(Training).filter(Training.id == training_id).first()
     if not training:
@@ -62,6 +77,13 @@ def _require_training_manager(db: Session, training_id: int, user_id: int):
     training = _get_training_or_404(db, training_id)
     if not can_manage_training(db, training, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权操作该培训班")
+    return training
+
+
+def _require_training_updater(db: Session, training_id: int, user_id: int):
+    training = _get_training_or_404(db, training_id)
+    if not can_update_training(db, training, user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅当前培训班班主任可更新")
     return training
 
 
@@ -156,9 +178,24 @@ def update_training(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _require_training_manager(db, training_id, current_user.user_id)
+    _require_permission(db, current_user, "UPDATE_TRAINING")
+    _require_training_updater(db, training_id, current_user.user_id)
     controller = TrainingController(db)
     result = controller.update_training(training_id, data, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.put("/{training_id}/manage", response_model=StandardResponse[TrainingResponse], summary="管理端更新培训班")
+def manage_training(
+    training_id: int,
+    data: TrainingUpdate,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_permission(db, current_user, "MANAGE_TRAINING")
+    _require_training_manager(db, training_id, current_user.user_id)
+    controller = TrainingController(db)
+    result = controller.manage_training(training_id, data, current_user.user_id)
     return StandardResponse(data=result)
 
 

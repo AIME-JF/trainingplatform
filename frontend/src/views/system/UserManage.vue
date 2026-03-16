@@ -4,6 +4,7 @@
       <h2>用户管理</h2>
       <a-space>
         <a-button @click="openImportModal">用户导入</a-button>
+        <a-button :loading="exportingUsers" @click="handleExportUsers">用户导出</a-button>
         <a-button type="primary" @click="openCreateModal">
           <PlusOutlined />
           新增用户
@@ -93,33 +94,13 @@
       </a-table>
     </a-card>
 
-    <a-modal
+    <ExcelImportModal
       v-model:open="importDialog.visible"
       title="用户导入"
-      ok-text="开始导入"
-      cancel-text="取消"
       :confirm-loading="importDialog.submitting"
-      :destroy-on-close="true"
-      @ok="submitImport"
-      @cancel="closeImportModal"
-    >
-      <a-upload-dragger
-        v-model:fileList="importDialog.fileList"
-        :before-upload="beforeImportUpload"
-        :max-count="1"
-        accept=".xlsx"
-      >
-        <p class="ant-upload-drag-icon">
-          <InboxOutlined style="font-size: 24px; color: #003087;" />
-        </p>
-        <p>拖拽到此上传</p>
-        <p class="upload-hint">或点击选择 Excel 文件（仅支持 .xlsx）</p>
-      </a-upload-dragger>
-
-      <div class="import-modal-actions">
-        <a-button type="link" @click="downloadImportTemplate">下载模板</a-button>
-      </div>
-    </a-modal>
+      @submit="submitImport"
+      @download-template="handleDownloadImportTemplate"
+    />
 
     <a-modal
       v-model:open="editDialog.visible"
@@ -227,14 +208,16 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { InboxOutlined, PlusOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import {
   createUser,
   deleteUser,
+  downloadUserImportTemplate,
+  exportUsers,
   getPoliceTypes,
   getUsers,
-  importPoliceBase,
+  importUsers,
   resetPassword,
   updateUser,
   updateUserDepartments,
@@ -243,12 +226,15 @@ import {
 } from '@/api/user'
 import { getDepartmentList } from '@/api/department'
 import { getRoleList } from '@/api/role'
+import { downloadBlob } from '@/utils/download'
+import ExcelImportModal from './components/ExcelImportModal.vue'
 
 const loading = ref(false)
 const userList = ref([])
 const roleList = ref([])
 const departmentList = ref([])
 const policeTypeList = ref([])
+const exportingUsers = ref(false)
 
 const PROTECTED_ADMIN_USERNAME = 'admin'
 
@@ -311,7 +297,6 @@ const editDialog = reactive({
 const importDialog = reactive({
   visible: false,
   submitting: false,
-  fileList: [],
 })
 
 const resetPasswordDialog = reactive({
@@ -531,46 +516,43 @@ function openImportModal() {
   importDialog.visible = true
 }
 
-function closeImportModal() {
-  importDialog.visible = false
-  importDialog.fileList = []
-}
-
-function beforeImportUpload() {
-  return false
-}
-
-function downloadImportTemplate() {
-  const baseUrl = import.meta.env.BASE_URL || '/'
-  const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`
-  const link = document.createElement('a')
-  link.href = `${normalizedBase}templates/user-import-template.xlsx`
-  link.download = '用户导入模板.xlsx'
-  document.body.appendChild(link)
-  link.click()
-  document.body.removeChild(link)
-}
-
-async function submitImport() {
-  const selected = importDialog.fileList[0]
-  const file = selected?.originFileObj || selected
-  if (!file) {
-    message.warning('请先选择导入文件')
-    return
+async function handleDownloadImportTemplate() {
+  try {
+    const blob = await downloadUserImportTemplate()
+    downloadBlob(blob, '用户导入模板.xlsx')
+  } catch (error) {
+    message.error(error?.message || '下载模板失败')
   }
+}
 
+async function submitImport(file) {
   importDialog.submitting = true
   try {
-    const result = await importPoliceBase(file, 'student')
+    const result = await importUsers(file, 'student')
     message.success(
       `导入完成：成功 ${result?.successRows || 0} 行，新增账号 ${result?.createdCount || 0} 个，更新 ${result?.updatedCount || 0} 个`
     )
-    closeImportModal()
+    importDialog.visible = false
     loadUsers()
   } catch (error) {
     message.error(error?.message || '用户导入失败')
   } finally {
     importDialog.submitting = false
+  }
+}
+
+async function handleExportUsers() {
+  exportingUsers.value = true
+  try {
+    const blob = await exportUsers({
+      search: filters.search || undefined,
+      role: filters.role || undefined,
+    })
+    downloadBlob(blob, '用户导出.xlsx')
+  } catch (error) {
+    message.error(error?.message || '用户导出失败')
+  } finally {
+    exportingUsers.value = false
   }
 }
 </script>
@@ -592,16 +574,6 @@ async function submitImport() {
   font-size: 20px;
   font-weight: 600;
   color: var(--police-primary);
-}
-
-.upload-hint {
-  font-size: 12px;
-  color: #999;
-}
-
-.import-modal-actions {
-  margin-top: 12px;
-  text-align: left;
 }
 
 .role-lock-tip {

@@ -48,7 +48,13 @@ request.interceptors.request.use((config) => {
 // Response interceptor: unwrap { code, message, data } and convert keys to camelCase
 request.interceptors.response.use(
   (response) => {
+    if (response.config?.responseType === 'blob' || response.config?.responseType === 'arraybuffer') {
+      return response.data
+    }
     const res = response.data
+    if (res instanceof Blob || res instanceof ArrayBuffer) {
+      return res
+    }
     // If response has the standard wrapper format
     if (res && typeof res === 'object' && 'code' in res) {
       if (res.code === 200) {
