@@ -3,9 +3,21 @@
     <div class="page-header">
       <h2>角色管理</h2>
       <a-space>
-        <a-button @click="openImportModal">角色导入</a-button>
-        <a-button :loading="exportingRoles" @click="handleExportRoles">角色导出</a-button>
-        <a-button type="primary" @click="openCreate">新增角色</a-button>
+        <PermissionsTooltip :allowed="canImportRoles" tips="需要 IMPORT_ROLES 权限">
+          <template #default="{ disabled }">
+            <a-button :disabled="disabled" @click="openImportModal">角色导入</a-button>
+          </template>
+        </PermissionsTooltip>
+        <PermissionsTooltip :allowed="canExportRoles" tips="需要 EXPORT_ROLES 权限">
+          <template #default="{ disabled }">
+            <a-button :loading="exportingRoles" :disabled="disabled" @click="handleExportRoles">角色导出</a-button>
+          </template>
+        </PermissionsTooltip>
+        <PermissionsTooltip :allowed="canCreateRole" tips="需要 CREATE_ROLE 权限">
+          <template #default="{ disabled }">
+            <a-button type="primary" :disabled="disabled" @click="openCreate">新增角色</a-button>
+          </template>
+        </PermissionsTooltip>
       </a-space>
     </div>
 
@@ -69,17 +81,32 @@
           </template>
           <template v-if="column.key === 'action'">
             <a-space>
-              <a-button size="small" :disabled="isAdminRole(record)" @click="openEdit(record)">编辑</a-button>
-              <a-button size="small" :disabled="isAdminRole(record)" @click="openPermissionDialog(record)">分配权限</a-button>
-              <a-popconfirm
-                :disabled="isAdminRole(record)"
-                title="确认删除该角色吗？"
-                ok-text="删除"
-                cancel-text="取消"
-                @confirm="removeRole(record)"
-              >
-                <a-button size="small" danger :disabled="isAdminRole(record)">删除</a-button>
-              </a-popconfirm>
+              <PermissionsTooltip :allowed="canUpdateRole" tips="需要 UPDATE_ROLE 权限">
+                <template #default="{ disabled }">
+                  <a-button size="small" :disabled="disabled || isAdminRole(record)" @click="openEdit(record)">编辑</a-button>
+                </template>
+              </PermissionsTooltip>
+              <PermissionsTooltip :allowed="canUpdateRolePermissions" tips="需要 UPDATE_ROLE_PERMISSIONS 权限">
+                <template #default="{ disabled }">
+                  <a-button size="small" :disabled="disabled || isAdminRole(record)" @click="openPermissionDialog(record)">分配权限</a-button>
+                </template>
+              </PermissionsTooltip>
+              <template v-if="canDeleteRole">
+                <a-popconfirm
+                  :disabled="isAdminRole(record)"
+                  title="确认删除该角色吗？"
+                  ok-text="删除"
+                  cancel-text="取消"
+                  @confirm="removeRole(record)"
+                >
+                  <a-button size="small" danger :disabled="isAdminRole(record)">删除</a-button>
+                </a-popconfirm>
+              </template>
+              <PermissionsTooltip v-else :allowed="false" tips="需要 DELETE_ROLE 权限">
+                <template #default="{ disabled }">
+                  <a-button size="small" danger :disabled="disabled">删除</a-button>
+                </template>
+              </PermissionsTooltip>
             </a-space>
           </template>
         </template>
@@ -102,6 +129,10 @@
       v-model:open="importDialog.visible"
       title="角色导入"
       :confirm-loading="importDialog.submitting"
+      :can-submit="canImportRoles"
+      :can-download-template="canDownloadRoleImportTemplate"
+      submit-tooltip="需要 IMPORT_ROLES 权限"
+      download-template-tooltip="需要 DOWNLOAD_ROLE_IMPORT_TEMPLATE 权限"
       @submit="submitImport"
       @download-template="handleDownloadImportTemplate"
     />
@@ -165,8 +196,9 @@
 
 <script setup>
 import dayjs from 'dayjs'
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
+import { useAuthStore } from '@/stores/auth'
 import {
   createRole,
   deleteRole,
@@ -181,9 +213,11 @@ import {
 } from '@/api/role'
 import { getPermissionList } from '@/api/permission'
 import { downloadBlob } from '@/utils/download'
+import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 import ExcelImportModal from './components/ExcelImportModal.vue'
 import PermissionTransfer from './components/PermissionTransfer.vue'
 
+const authStore = useAuthStore()
 const loading = ref(false)
 const rows = ref([])
 const switchingRoleId = ref(null)
@@ -212,6 +246,13 @@ const dataScopeLabelMap = dataScopeOptions.reduce((acc, item) => {
   acc[item.value] = item.label
   return acc
 }, {})
+const canCreateRole = computed(() => authStore.hasPermission('CREATE_ROLE'))
+const canImportRoles = computed(() => authStore.hasPermission('IMPORT_ROLES'))
+const canExportRoles = computed(() => authStore.hasPermission('EXPORT_ROLES'))
+const canDownloadRoleImportTemplate = computed(() => authStore.hasPermission('DOWNLOAD_ROLE_IMPORT_TEMPLATE'))
+const canUpdateRole = computed(() => authStore.hasPermission('UPDATE_ROLE'))
+const canDeleteRole = computed(() => authStore.hasPermission('DELETE_ROLE'))
+const canUpdateRolePermissions = computed(() => authStore.hasPermission('UPDATE_ROLE_PERMISSIONS'))
 
 const columns = [
   { title: '角色编码', dataIndex: 'code', key: 'code', width: 150 },
@@ -303,6 +344,7 @@ function handleReset() {
 }
 
 function openImportModal() {
+  if (!canImportRoles.value) return
   importDialog.visible = true
 }
 
@@ -326,6 +368,7 @@ function resetEditForm() {
 }
 
 function openCreate() {
+  if (!canCreateRole.value) return
   editDialog.mode = 'add'
   editDialog.currentId = null
   resetEditForm()
@@ -333,6 +376,7 @@ function openCreate() {
 }
 
 function openEdit(record) {
+  if (!canUpdateRole.value) return
   if (isAdminRole(record)) {
     message.warning('管理员角色不可修改')
     return
@@ -348,6 +392,14 @@ function openEdit(record) {
 }
 
 async function submitRole() {
+  if (editDialog.mode === 'add' && !canCreateRole.value) {
+    message.warning('没有新增角色权限')
+    return
+  }
+  if (editDialog.mode === 'edit' && !canUpdateRole.value) {
+    message.warning('没有编辑角色权限')
+    return
+  }
   if (!editDialog.form.name?.trim()) {
     message.warning('请输入角色名称')
     return
@@ -385,6 +437,7 @@ async function submitRole() {
 }
 
 async function changeStatus(record, checked) {
+  if (!canUpdateRole.value) return
   if (isAdminRole(record)) {
     message.warning('管理员角色不可修改')
     return
@@ -405,6 +458,7 @@ async function changeStatus(record, checked) {
 }
 
 async function removeRole(record) {
+  if (!canDeleteRole.value) return
   if (isAdminRole(record)) {
     message.warning('管理员角色不可修改')
     return
@@ -420,6 +474,7 @@ async function removeRole(record) {
 }
 
 async function openPermissionDialog(record) {
+  if (!canUpdateRolePermissions.value) return
   if (isAdminRole(record)) {
     message.warning('管理员角色不可修改')
     return
@@ -446,6 +501,10 @@ async function openPermissionDialog(record) {
 }
 
 async function submitRolePermissions() {
+  if (!canUpdateRolePermissions.value) {
+    message.warning('没有分配角色权限')
+    return
+  }
   if (!permissionDialog.role) return
   const permissionIds = permissionDialog.targetKeys
     .map((key) => Number(key))
@@ -465,6 +524,7 @@ async function submitRolePermissions() {
 }
 
 async function handleDownloadImportTemplate() {
+  if (!canDownloadRoleImportTemplate.value) return
   try {
     const blob = await downloadRoleImportTemplate()
     downloadBlob(blob, '角色导入模板.xlsx')
@@ -474,6 +534,7 @@ async function handleDownloadImportTemplate() {
 }
 
 async function handleExportRoles() {
+  if (!canExportRoles.value) return
   exportingRoles.value = true
   try {
     const blob = await exportRoles({
@@ -489,6 +550,10 @@ async function handleExportRoles() {
 }
 
 async function submitImport(file) {
+  if (!canImportRoles.value) {
+    message.warning('没有角色导入权限')
+    return
+  }
   importDialog.submitting = true
   try {
     const result = await importRoles(file)

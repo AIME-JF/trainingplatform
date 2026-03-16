@@ -64,23 +64,38 @@
           <template v-if="column.key === 'action'">
             <a-space>
               <a-button size="small" @click="viewDetail(record.id)">查看</a-button>
-              <a-button
+              <permissions-tooltip
                 v-if="record.status === 'published'"
-                size="small"
-                danger
-                ghost
-                @click="offline(record.id)"
+                :allowed="canManageResource(record)"
+                tips="仅资源上传者或具备 UPDATE_RESOURCE / VIEW_RESOURCE_ALL 权限可执行该操作"
+                v-slot="{ disabled }"
               >
-                下线
-              </a-button>
-              <a-popconfirm
-                title="确认删除该资源吗？"
-                ok-text="删除"
-                cancel-text="取消"
-                @confirm="removeResource(record.id)"
+                <a-button
+                  size="small"
+                  danger
+                  ghost
+                  :disabled="disabled"
+                  @click="offline(record.id)"
+                >
+                  下线
+                </a-button>
+              </permissions-tooltip>
+              <permissions-tooltip
+                :allowed="canManageResource(record)"
+                tips="仅资源上传者或具备 UPDATE_RESOURCE / VIEW_RESOURCE_ALL 权限可执行该操作"
+                v-slot="{ disabled }"
               >
-                <a-button size="small" danger>删除</a-button>
-              </a-popconfirm>
+                <a-popconfirm
+                  v-if="!disabled"
+                  title="确认删除该资源吗？"
+                  ok-text="删除"
+                  cancel-text="取消"
+                  @confirm="removeResource(record.id)"
+                >
+                  <a-button size="small" danger>删除</a-button>
+                </a-popconfirm>
+                <a-button v-else size="small" danger :disabled="disabled">删除</a-button>
+              </permissions-tooltip>
             </a-space>
           </template>
         </template>
@@ -103,16 +118,20 @@
 
 <script setup>
 import dayjs from 'dayjs'
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import { useAuthStore } from '@/stores/auth'
 import { getResources, offlineResource, deleteResource } from '@/api/resource'
+import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
 const loading = ref(false)
 const rows = ref([])
 const total = ref(0)
+const canManageAnyResource = computed(() => authStore.hasAnyPermission(['UPDATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
 const query = reactive({
   page: 1,
   size: 10,
@@ -217,7 +236,13 @@ function viewDetail(id) {
   router.push(`/resource/detail/${id}`)
 }
 
+function canManageResource(record) {
+  return record?.uploaderId === authStore.currentUser?.id || canManageAnyResource.value
+}
+
 async function offline(id) {
+  const record = rows.value.find((item) => item.id === id)
+  if (record && !canManageResource(record)) return
   try {
     await offlineResource(id)
     message.success('资源已下线')
@@ -228,6 +253,8 @@ async function offline(id) {
 }
 
 async function removeResource(id) {
+  const record = rows.value.find((item) => item.id === id)
+  if (record && !canManageResource(record)) return
   try {
     await deleteResource(id)
     message.success('删除成功')

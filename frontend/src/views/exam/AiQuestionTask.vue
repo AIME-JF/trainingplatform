@@ -67,7 +67,14 @@
         <a-form-item label="补充要求">
           <a-textarea v-model:value="taskForm.requirements" :rows="3" :maxlength="1000" show-count />
         </a-form-item>
-        <a-button type="primary" block :loading="creating" @click="handleCreateTask">创建任务</a-button>
+        <permissions-tooltip
+          :allowed="canCreateTaskPermission"
+          tips="需要 CREATE_AI_QUESTION_TASK 权限"
+          block
+          v-slot="{ disabled }"
+        >
+          <a-button type="primary" block :loading="creating" :disabled="disabled" @click="handleCreateTask">创建任务</a-button>
+        </permissions-tooltip>
       </a-form>
     </template>
 
@@ -81,16 +88,37 @@
           <div>
             <div class="detail-title">{{ activeTask.taskName }}</div>
             <div class="detail-sub">主题：{{ activeTask.requestPayload.topic }}</div>
-          </div>
-          <a-space>
-            <a-button @click="loadTaskDetail(activeTask.id)">刷新详情</a-button>
-            <a-button v-if="canEditTask" @click="openCreateQuestion">新增题目</a-button>
-            <a-button v-if="canEditTask" :loading="saving" @click="handleSaveTask">保存修改</a-button>
-            <a-button type="primary" :loading="confirming" :disabled="activeTask.status !== 'completed'" @click="handleConfirmTask">
+        </div>
+        <a-space>
+          <a-button @click="loadTaskDetail(activeTask.id)">刷新详情</a-button>
+          <permissions-tooltip
+            :allowed="canUpdateTaskPermission"
+            :disabled="activeTask.status !== 'completed'"
+            tips="需要 UPDATE_AI_QUESTION_TASK 权限"
+            v-slot="{ disabled }"
+          >
+            <a-button :disabled="disabled" @click="openCreateQuestion">新增题目</a-button>
+          </permissions-tooltip>
+          <permissions-tooltip
+            :allowed="canUpdateTaskPermission"
+            :disabled="activeTask.status !== 'completed'"
+            tips="需要 UPDATE_AI_QUESTION_TASK 权限"
+            v-slot="{ disabled }"
+          >
+            <a-button :loading="saving" :disabled="disabled" @click="handleSaveTask">保存修改</a-button>
+          </permissions-tooltip>
+          <permissions-tooltip
+            :allowed="canConfirmTaskPermission"
+            :disabled="activeTask.status !== 'completed'"
+            tips="需要 CONFIRM_AI_QUESTION_TASK 权限"
+            v-slot="{ disabled }"
+          >
+            <a-button type="primary" :loading="confirming" :disabled="disabled" @click="handleConfirmTask">
               确认入题库
             </a-button>
-          </a-space>
-        </div>
+          </permissions-tooltip>
+        </a-space>
+      </div>
 
         <ai-task-timeline
           :status="activeTask.status"
@@ -119,9 +147,21 @@
                   <a-tag :color="typeColors[item.type]">{{ typeLabels[item.type] }}</a-tag>
                   <span>第 {{ index + 1 }} 题</span>
                 </a-space>
-                <a-space v-if="canEditTask">
-                  <a-button type="link" size="small" @click="openEditQuestion(item, index)">编辑</a-button>
-                  <a-button type="link" danger size="small" @click="removeQuestion(index)">删除</a-button>
+                <a-space v-if="activeTask.status === 'completed'">
+                  <permissions-tooltip
+                    :allowed="canUpdateTaskPermission"
+                    tips="需要 UPDATE_AI_QUESTION_TASK 权限"
+                    v-slot="{ disabled }"
+                  >
+                    <a-button type="link" size="small" :disabled="disabled" @click="openEditQuestion(item, index)">编辑</a-button>
+                  </permissions-tooltip>
+                  <permissions-tooltip
+                    :allowed="canUpdateTaskPermission"
+                    tips="需要 UPDATE_AI_QUESTION_TASK 权限"
+                    v-slot="{ disabled }"
+                  >
+                    <a-button type="link" danger size="small" :disabled="disabled" @click="removeQuestion(index)">删除</a-button>
+                  </permissions-tooltip>
                 </a-space>
               </div>
               <div class="question-card-content">{{ item.content }}</div>
@@ -150,6 +190,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
+import { useAuthStore } from '@/stores/auth'
 import {
   confirmAiQuestionTask,
   createAiQuestionTask,
@@ -162,7 +203,9 @@ import AiTaskTabsLayout from './components/AiTaskTabsLayout.vue'
 import AiTaskTimeline from './components/AiTaskTimeline.vue'
 import QuestionFormModal from './components/QuestionFormModal.vue'
 import { sortQuestionsByType } from './utils/questionSort'
+import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
+const authStore = useAuthStore()
 const difficultyLabels = { 1: '1级', 2: '2级', 3: '3级', 4: '4级', 5: '5级' }
 const typeLabels = { single: '单选题', multi: '多选题', judge: '判断题' }
 const typeColors = { single: 'blue', multi: 'purple', judge: 'orange' }
@@ -194,7 +237,10 @@ const taskForm = reactive({
   requirements: '',
 })
 
-const canEditTask = computed(() => activeTask.value?.status === 'completed')
+const canCreateTaskPermission = computed(() => authStore.hasPermission('CREATE_AI_QUESTION_TASK'))
+const canUpdateTaskPermission = computed(() => authStore.hasPermission('UPDATE_AI_QUESTION_TASK'))
+const canConfirmTaskPermission = computed(() => authStore.hasPermission('CONFIRM_AI_QUESTION_TASK'))
+const canEditTask = computed(() => activeTask.value?.status === 'completed' && canUpdateTaskPermission.value)
 
 function parseKnowledgePoints() {
   return knowledgePointsText.value
@@ -259,6 +305,7 @@ async function selectTask(taskId) {
 }
 
 async function handleCreateTask() {
+  if (!canCreateTaskPermission.value) return
   if (!taskForm.taskName.trim() || !taskForm.topic.trim()) {
     message.warning('请填写任务名称和出题主题')
     return
@@ -282,12 +329,14 @@ async function handleCreateTask() {
 }
 
 function openEditQuestion(question, index) {
+  if (!canUpdateTaskPermission.value) return
   editingQuestion.value = { ...question }
   editingQuestionIndex.value = index
   questionModalOpen.value = true
 }
 
 function openCreateQuestion() {
+  if (!canUpdateTaskPermission.value) return
   editingQuestion.value = {
     origin: 'manual',
     difficulty: 3,
@@ -311,10 +360,12 @@ function handleSubmitQuestion(question) {
 }
 
 function removeQuestion(index) {
+  if (!canUpdateTaskPermission.value) return
   activeTask.value.questions.splice(index, 1)
 }
 
 async function handleSaveTask() {
+  if (!canUpdateTaskPermission.value) return false
   if (!activeTask.value) return false
   saving.value = true
   try {
@@ -335,6 +386,7 @@ async function handleSaveTask() {
 }
 
 async function handleConfirmTask() {
+  if (!canConfirmTaskPermission.value) return
   if (!activeTask.value) return
   confirming.value = true
   try {

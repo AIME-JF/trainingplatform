@@ -12,7 +12,13 @@
             {{ exam.title }}
           </a-select-option>
         </a-select>
-        <a-button type="primary" ghost @click="exportCSV"><DownloadOutlined /> 导出成绩</a-button>
+        <permissions-tooltip
+          :allowed="canExportScores"
+          tips="需要 GET_EXAM_SCORES 权限"
+          v-slot="{ disabled }"
+        >
+          <a-button type="primary" ghost :disabled="disabled" @click="exportCSV"><DownloadOutlined /> 导出成绩</a-button>
+        </permissions-tooltip>
       </div>
     </div>
 
@@ -107,13 +113,17 @@ import VChart from 'vue-echarts'
 import { DownloadOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
 import { computeScoreKPI } from '@/mock/scores'
 import { getExams, getExamRecordsAnalysis } from '@/api/exam'
+import { useAuthStore } from '@/stores/auth'
+import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
 use([CanvasRenderer, BarChart, RadarChart, GridComponent, TooltipComponent, RadarComponent, LegendComponent])
 
+const authStore = useAuthStore()
 const selectedExam = ref(null)
 const searchText = ref('')
 const examList = ref([])
 const students = ref([])
+const canExportScores = computed(() => authStore.hasPermission('GET_EXAM_SCORES'))
 
 const kpiCards = computed(() => computeScoreKPI(filteredStudents.value))
 
@@ -238,6 +248,7 @@ onMounted(() => {
 
 // 导出 CSV
 function exportCSV() {
+  if (!canExportScores.value) return
   const header = ['姓名', '警号', '所属单位', '总分', '法律法规', '执法程序', '证据规则', '体能技能', '职业道德', '用时', '结果']
   const rows = filteredStudents.value.map(s => [
     s.name, s.policeId, s.unit, s.score, s.law, s.enforce, s.evidence, s.physical, s.ethic, s.time, s.score >= 60 ? '通过' : '不合格'

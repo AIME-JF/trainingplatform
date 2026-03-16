@@ -80,7 +80,14 @@
         <a-form-item label="补充要求">
           <a-textarea v-model:value="taskForm.requirements" :rows="3" :maxlength="1000" show-count />
         </a-form-item>
-        <a-button type="primary" block :loading="creating" @click="handleCreateTask">创建任务</a-button>
+        <permissions-tooltip
+          :allowed="canCreateTaskPermission"
+          tips="需要 CREATE_AI_PAPER_ASSEMBLY_TASK 权限"
+          block
+          v-slot="{ disabled }"
+        >
+          <a-button type="primary" block :loading="creating" :disabled="disabled" @click="handleCreateTask">创建任务</a-button>
+        </permissions-tooltip>
       </a-form>
     </template>
 
@@ -94,15 +101,29 @@
           <div>
             <div class="detail-title">{{ activeTask.taskName }}</div>
             <div class="detail-sub">试卷：{{ activeTask.paperDraft?.title || activeTask.paperTitle }}</div>
-          </div>
-          <a-space>
-            <a-button @click="loadTaskDetail(activeTask.id)">刷新详情</a-button>
-            <a-button v-if="canEditTask" :loading="saving" @click="handleSaveTask">保存修改</a-button>
-            <a-button type="primary" :loading="confirming" :disabled="activeTask.status !== 'completed'" @click="handleConfirmTask">
+        </div>
+        <a-space>
+          <a-button @click="loadTaskDetail(activeTask.id)">刷新详情</a-button>
+          <permissions-tooltip
+            :allowed="canUpdateTaskPermission"
+            :disabled="activeTask.status !== 'completed'"
+            tips="需要 UPDATE_AI_PAPER_ASSEMBLY_TASK 权限"
+            v-slot="{ disabled }"
+          >
+            <a-button :loading="saving" :disabled="disabled" @click="handleSaveTask">保存修改</a-button>
+          </permissions-tooltip>
+          <permissions-tooltip
+            :allowed="canConfirmTaskPermission"
+            :disabled="activeTask.status !== 'completed'"
+            tips="需要 CONFIRM_AI_PAPER_ASSEMBLY_TASK 权限"
+            v-slot="{ disabled }"
+          >
+            <a-button type="primary" :loading="confirming" :disabled="disabled" @click="handleConfirmTask">
               确认入卷库
             </a-button>
-          </a-space>
-        </div>
+          </permissions-tooltip>
+        </a-space>
+      </div>
 
         <ai-task-timeline
           :status="activeTask.status"
@@ -155,6 +176,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
+import { useAuthStore } from '@/stores/auth'
 import {
   confirmAiPaperAssemblyTask,
   createAiPaperAssemblyTask,
@@ -168,7 +190,9 @@ import AiTaskTimeline from './components/AiTaskTimeline.vue'
 import PaperDraftEditor from './components/PaperDraftEditor.vue'
 import QuestionFormModal from './components/QuestionFormModal.vue'
 import { sortQuestionsByType } from './utils/questionSort'
+import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
+const authStore = useAuthStore()
 const typeLabels = { single: '单选题', multi: '多选题', judge: '判断题' }
 const modeLabels = { balanced: '均衡组卷', practice: '练习导向', exam: '考试导向' }
 const statusLabels = { pending: '待处理', processing: '处理中', completed: '已完成', confirmed: '已确认', failed: '处理失败' }
@@ -189,7 +213,10 @@ const policeTypeOptions = ref([])
 
 const taskForm = reactive(createDefaultTaskForm())
 
-const canEditTask = computed(() => activeTask.value?.status === 'completed')
+const canCreateTaskPermission = computed(() => authStore.hasPermission('CREATE_AI_PAPER_ASSEMBLY_TASK'))
+const canUpdateTaskPermission = computed(() => authStore.hasPermission('UPDATE_AI_PAPER_ASSEMBLY_TASK'))
+const canConfirmTaskPermission = computed(() => authStore.hasPermission('CONFIRM_AI_PAPER_ASSEMBLY_TASK'))
+const canEditTask = computed(() => activeTask.value?.status === 'completed' && canUpdateTaskPermission.value)
 
 function createDefaultTaskForm() {
   return {
@@ -263,6 +290,7 @@ async function selectTask(taskId) {
 }
 
 async function handleCreateTask() {
+  if (!canCreateTaskPermission.value) return
   if (!taskForm.taskName.trim() || !taskForm.paperTitle.trim()) {
     message.warning('请填写任务名称和试卷名称')
     return
@@ -286,12 +314,14 @@ async function handleCreateTask() {
 }
 
 function openEditQuestion(question, index) {
+  if (!canUpdateTaskPermission.value) return
   editingQuestion.value = { ...question }
   editingQuestionIndex.value = index
   questionModalOpen.value = true
 }
 
 function openCreateQuestion() {
+  if (!canUpdateTaskPermission.value) return
   editingQuestion.value = { origin: 'manual', difficulty: 3, score: 2 }
   editingQuestionIndex.value = -1
   questionModalOpen.value = true
@@ -311,6 +341,7 @@ function handleSubmitQuestion(question) {
 }
 
 async function handleSaveTask() {
+  if (!canUpdateTaskPermission.value) return false
   if (!activeTask.value) return false
   saving.value = true
   try {
@@ -334,6 +365,7 @@ async function handleSaveTask() {
 }
 
 async function handleConfirmTask() {
+  if (!canConfirmTaskPermission.value) return
   if (!activeTask.value) return
   confirming.value = true
   try {

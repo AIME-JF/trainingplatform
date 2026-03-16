@@ -59,8 +59,20 @@
         </a-form-item>
 
         <a-space>
-          <a-button type="primary" :loading="submitting" @click="submit">保存草稿</a-button>
-          <a-button :loading="submitting" @click="submitAndSubmitReview">提交审核</a-button>
+          <permissions-tooltip
+            :allowed="canSaveDraft"
+            tips="需要 CREATE_RESOURCE 或 VIEW_RESOURCE_ALL 权限"
+            v-slot="{ disabled }"
+          >
+            <a-button type="primary" :loading="submitting" :disabled="disabled" @click="submit">保存草稿</a-button>
+          </permissions-tooltip>
+          <permissions-tooltip
+            :allowed="canSubmitReview"
+            tips="需要同时具备 CREATE_RESOURCE 和 SUBMIT_RESOURCE_REVIEW 权限"
+            v-slot="{ disabled }"
+          >
+            <a-button :loading="submitting" :disabled="disabled" @click="submitAndSubmitReview">提交审核</a-button>
+          </permissions-tooltip>
         </a-space>
       </a-form>
     </a-card>
@@ -74,10 +86,15 @@ import { message, Upload } from 'ant-design-vue'
 import { uploadFile } from '@/api/media'
 import { createResource } from '@/api/resource'
 import { submitResource } from '@/api/review'
+import { useAuthStore } from '@/stores/auth'
+import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const submitting = ref(false)
 const fileList = ref([])
+const canSaveDraft = computed(() => authStore.hasAnyPermission(['CREATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
+const canSubmitReview = computed(() => authStore.hasAllPermissions(['CREATE_RESOURCE', 'SUBMIT_RESOURCE_REVIEW']))
 
 const ALLOWED_EXTENSIONS = {
   video: ['mp4'],
@@ -203,6 +220,7 @@ async function createDraft() {
 }
 
 async function submit() {
+  if (!canSaveDraft.value) return
   submitting.value = true
   try {
     const res = await createDraft()
@@ -217,6 +235,7 @@ async function submit() {
 }
 
 async function submitAndSubmitReview() {
+  if (!canSubmitReview.value) return
   submitting.value = true
   try {
     const res = await createDraft()

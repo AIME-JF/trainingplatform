@@ -5,9 +5,15 @@
         <h2>{{ activeKind === 'admission' ? '准入考试管理' : '培训班考试管理' }}</h2>
         <p class="page-sub">考试只关联已发布试卷，题目配置统一收口到试卷管理</p>
       </div>
-      <a-button type="primary" @click="openCreateDrawer">
-        <template #icon><PlusOutlined /></template>{{ activeKind === 'admission' ? '发布准入考试' : '发布培训班考试' }}
-      </a-button>
+      <permissions-tooltip
+        :allowed="canManageExam"
+        tips="需要 CREATE_EXAM 权限"
+        v-slot="{ disabled }"
+      >
+        <a-button type="primary" :disabled="disabled" @click="openCreateDrawer">
+          <template #icon><PlusOutlined /></template>{{ activeKind === 'admission' ? '发布准入考试' : '发布培训班考试' }}
+        </a-button>
+      </permissions-tooltip>
     </div>
 
     <a-card :bordered="false" style="margin-bottom:16px">
@@ -75,7 +81,13 @@
           </template>
           <template v-else-if="column.key === 'action'">
             <a-space>
-              <a-button type="link" size="small" @click="openEditDrawer(record)">编辑</a-button>
+              <permissions-tooltip
+                :allowed="canManageExam"
+                tips="需要 CREATE_EXAM 权限"
+                v-slot="{ disabled }"
+              >
+                <a-button type="link" size="small" :disabled="disabled" @click="openEditDrawer(record)">编辑</a-button>
+              </permissions-tooltip>
             </a-space>
           </template>
         </template>
@@ -235,7 +247,13 @@
       <template #footer>
         <a-space style="float:right">
           <a-button @click="resetForm">取消</a-button>
-          <a-button type="primary" :loading="submitting" @click="handleSave">保存</a-button>
+          <permissions-tooltip
+            :allowed="canManageExam"
+            tips="需要 CREATE_EXAM 权限"
+            v-slot="{ disabled }"
+          >
+            <a-button type="primary" :loading="submitting" :disabled="disabled" @click="handleSave">保存</a-button>
+          </permissions-tooltip>
         </a-space>
       </template>
     </a-drawer>
@@ -247,6 +265,7 @@ import { computed, reactive, ref, onMounted, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 import {
   createAdmissionExam,
   createExam,
@@ -261,9 +280,11 @@ import {
 } from '@/api/exam'
 import { getTrainings } from '@/api/training'
 import AdmissionScopeSelector from './components/AdmissionScopeSelector.vue'
+import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 
 const statusLabels = { upcoming: '即将开始', active: '进行中', ended: '已结束' }
 const statusColors = { upcoming: 'orange', active: 'green', ended: 'default' }
@@ -345,6 +366,7 @@ const availablePaperOptions = computed(() => {
   }
   return paperOptions.value.filter(item => item.status === 'published')
 })
+const canManageExam = computed(() => authStore.hasPermission('CREATE_EXAM'))
 
 function resetForm() {
   Object.assign(form, {
@@ -444,6 +466,7 @@ function handleTableChange(pag) {
 }
 
 function openCreateDrawer() {
+  if (!canManageExam.value) return
   resetForm()
   editingKind.value = activeKind.value
   applyRouteTrainingContext()
@@ -474,6 +497,7 @@ function handlePaperChange(value) {
 }
 
 async function openEditDrawer(record) {
+  if (!canManageExam.value) return
   resetForm()
   isEdit.value = true
   editingId.value = record.id
@@ -517,6 +541,7 @@ function goToPaperManage() {
 }
 
 async function handleSave() {
+  if (!canManageExam.value) return
   if (!form.title) {
     message.warning('请输入场次名称')
     return

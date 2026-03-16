@@ -2,7 +2,13 @@
   <div class="policy-manage-page">
     <div class="page-header">
       <h2>审核策略管理</h2>
-      <a-button type="primary" @click="openCreate">新建策略</a-button>
+      <permissions-tooltip
+        :allowed="canManagePolicy"
+        tips="需要 MANAGE_REVIEW_POLICY 或 VIEW_RESOURCE_ALL 权限"
+        v-slot="{ disabled }"
+      >
+        <a-button type="primary" :disabled="disabled" @click="openCreate">新建策略</a-button>
+      </permissions-tooltip>
     </div>
 
     <a-card :bordered="false">
@@ -15,7 +21,13 @@
             {{ (record.stages || []).length }} 级
           </template>
           <template v-if="column.key === 'action'">
-            <a-button size="small" @click="openEdit(record)">编辑</a-button>
+            <permissions-tooltip
+              :allowed="canManagePolicy"
+              tips="需要 MANAGE_REVIEW_POLICY 或 VIEW_RESOURCE_ALL 权限"
+              v-slot="{ disabled }"
+            >
+              <a-button size="small" :disabled="disabled" @click="openEdit(record)">编辑</a-button>
+            </permissions-tooltip>
           </template>
         </template>
       </a-table>
@@ -93,26 +105,45 @@
               <a-input-number v-model:value="stage.minApprovals" :min="1" style="width:100%" placeholder="至少 1" />
             </a-col>
             <a-col :span="3"><a-switch v-model:checked="stage.allowSelfReview" /></a-col>
-            <a-col :span="1"><a-button type="link" danger @click="removeStage(idx)">删</a-button></a-col>
+            <a-col :span="1">
+              <permissions-tooltip
+                :allowed="canManagePolicy"
+                tips="需要 MANAGE_REVIEW_POLICY 或 VIEW_RESOURCE_ALL 权限"
+                v-slot="{ disabled }"
+              >
+                <a-button type="link" danger :disabled="disabled" @click="removeStage(idx)">删</a-button>
+              </permissions-tooltip>
+            </a-col>
           </a-row>
         </div>
-        <a-button type="dashed" block @click="addStage">添加阶段</a-button>
+        <permissions-tooltip
+          :allowed="canManagePolicy"
+          tips="需要 MANAGE_REVIEW_POLICY 或 VIEW_RESOURCE_ALL 权限"
+          block
+          v-slot="{ disabled }"
+        >
+          <a-button type="dashed" block :disabled="disabled" @click="addStage">添加阶段</a-button>
+        </permissions-tooltip>
       </a-form>
     </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { getReviewPolicies, createReviewPolicy, updateReviewPolicy } from '@/api/review'
 import { getUsers } from '@/api/user'
 import { getRoleList } from '@/api/role'
 import { getDepartmentList } from '@/api/department'
+import { useAuthStore } from '@/stores/auth'
+import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
+const authStore = useAuthStore()
 const policies = ref([])
 const visible = ref(false)
 const editing = ref(null)
+const canManagePolicy = computed(() => authStore.hasAnyPermission(['MANAGE_REVIEW_POLICY', 'VIEW_RESOURCE_ALL']))
 
 const userReviewerOptions = ref([])
 const roleReviewerOptions = ref([])
@@ -229,6 +260,7 @@ async function fetchPolicies() {
 }
 
 async function openCreate() {
+  if (!canManagePolicy.value) return
   editing.value = null
   resetForm()
   await ensureReviewerOptionsLoaded()
@@ -236,6 +268,7 @@ async function openCreate() {
 }
 
 async function openEdit(policy) {
+  if (!canManagePolicy.value) return
   editing.value = policy
   form.name = policy.name
   form.enabled = policy.enabled
@@ -257,16 +290,19 @@ async function openEdit(policy) {
 }
 
 function addStage() {
+  if (!canManagePolicy.value) return
   const maxOrder = form.stages.reduce((m, s) => Math.max(m, Number(s.stageOrder || 0)), 0)
   form.stages.push({ stageOrder: maxOrder + 1, reviewerType: 'role', reviewerRefId: null, minApprovals: 1, allowSelfReview: false })
 }
 
 function removeStage(idx) {
+  if (!canManagePolicy.value) return
   form.stages.splice(idx, 1)
   if (!form.stages.length) addStage()
 }
 
 async function save() {
+  if (!canManagePolicy.value) return
   if (!form.name.trim()) return message.warning('请输入策略名称')
   if (!form.stages.length) return message.warning('请至少配置一个审核阶段')
 

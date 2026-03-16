@@ -6,18 +6,36 @@
         <p class="page-sub">统一维护试卷草稿，AI 自动组卷和 AI 自动生成试卷确认后会进入这里</p>
       </div>
       <a-space>
-        <a-button @click="$router.push('/paper/ai-assemble')">
-          <template #icon><RobotOutlined /></template>
-          AI 自动组卷
-        </a-button>
-        <a-button @click="$router.push('/paper/ai-generate')">
-          <template #icon><RobotOutlined /></template>
-          AI 自动生成试卷
-        </a-button>
-        <a-button type="primary" @click="openCreateDrawer">
-          <template #icon><PlusOutlined /></template>
-          新建试卷
-        </a-button>
+        <permissions-tooltip
+          :allowed="canOpenAiAssembleTask"
+          tips="需要 GET_AI_PAPER_ASSEMBLY_TASKS 或 CREATE_AI_PAPER_ASSEMBLY_TASK 权限"
+          v-slot="{ disabled }"
+        >
+          <a-button :disabled="disabled" @click="$router.push('/paper/ai-assemble')">
+            <template #icon><RobotOutlined /></template>
+            AI 自动组卷
+          </a-button>
+        </permissions-tooltip>
+        <permissions-tooltip
+          :allowed="canOpenAiGenerateTask"
+          tips="需要 GET_AI_PAPER_GENERATION_TASKS 或 CREATE_AI_PAPER_GENERATION_TASK 权限"
+          v-slot="{ disabled }"
+        >
+          <a-button :disabled="disabled" @click="$router.push('/paper/ai-generate')">
+            <template #icon><RobotOutlined /></template>
+            AI 自动生成试卷
+          </a-button>
+        </permissions-tooltip>
+        <permissions-tooltip
+          :allowed="canManagePaper"
+          tips="需要 CREATE_EXAM 权限"
+          v-slot="{ disabled }"
+        >
+          <a-button type="primary" :disabled="disabled" @click="openCreateDrawer">
+            <template #icon><PlusOutlined /></template>
+            新建试卷
+          </a-button>
+        </permissions-tooltip>
       </a-space>
     </div>
 
@@ -65,11 +83,39 @@
           </template>
           <template v-else-if="column.key === 'action'">
             <a-space>
-              <a-button v-if="record.status === 'draft'" type="link" size="small" @click="openEditDrawer(record)">编辑</a-button>
+              <permissions-tooltip
+                v-if="record.status === 'draft'"
+                :allowed="canManagePaper"
+                tips="需要 CREATE_EXAM 权限"
+                v-slot="{ disabled }"
+              >
+                <a-button type="link" size="small" :disabled="disabled" @click="openEditDrawer(record)">编辑</a-button>
+              </permissions-tooltip>
               <a-button v-else type="link" size="small" @click="openViewDrawer(record)">查看</a-button>
-              <a-button v-if="record.status === 'draft'" type="link" size="small" @click="handlePublish(record)">发布</a-button>
-              <a-button v-if="record.status === 'published'" type="link" size="small" @click="handleArchive(record)">归档</a-button>
-              <a-button v-if="record.usageCount === 0" type="link" danger size="small" @click="handleDelete(record)">删除</a-button>
+              <permissions-tooltip
+                v-if="record.status === 'draft'"
+                :allowed="canManagePaper"
+                tips="需要 CREATE_EXAM 权限"
+                v-slot="{ disabled }"
+              >
+                <a-button type="link" size="small" :disabled="disabled" @click="handlePublish(record)">发布</a-button>
+              </permissions-tooltip>
+              <permissions-tooltip
+                v-if="record.status === 'published'"
+                :allowed="canManagePaper"
+                tips="需要 CREATE_EXAM 权限"
+                v-slot="{ disabled }"
+              >
+                <a-button type="link" size="small" :disabled="disabled" @click="handleArchive(record)">归档</a-button>
+              </permissions-tooltip>
+              <permissions-tooltip
+                v-if="record.usageCount === 0"
+                :allowed="canManagePaper"
+                tips="需要 CREATE_EXAM 权限"
+                v-slot="{ disabled }"
+              >
+                <a-button type="link" danger size="small" :disabled="disabled" @click="handleDelete(record)">删除</a-button>
+              </permissions-tooltip>
             </a-space>
           </template>
         </template>
@@ -86,7 +132,14 @@
       <template #footer>
         <a-space style="float:right">
           <a-button @click="resetDraft">关闭</a-button>
-          <a-button v-if="!isViewMode" type="primary" :loading="submitting" @click="handleSave">保存</a-button>
+          <permissions-tooltip
+            v-if="!isViewMode"
+            :allowed="canManagePaper"
+            tips="需要 CREATE_EXAM 权限"
+            v-slot="{ disabled }"
+          >
+            <a-button type="primary" :loading="submitting" :disabled="disabled" @click="handleSave">保存</a-button>
+          </permissions-tooltip>
         </a-space>
       </template>
     </a-drawer>
@@ -98,6 +151,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import { PlusOutlined, RobotOutlined } from '@ant-design/icons-vue'
 import { useRoute } from 'vue-router'
+import { useAuthStore } from '@/stores/auth'
 import {
   archiveExamPaper,
   createExamPaper,
@@ -108,8 +162,10 @@ import {
   updateExamPaper,
 } from '@/api/exam'
 import PaperDraftEditor from './components/PaperDraftEditor.vue'
+import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
 const route = useRoute()
+const authStore = useAuthStore()
 
 const loading = ref(false)
 const submitting = ref(false)
@@ -140,6 +196,9 @@ const pagination = reactive({ current: 1, pageSize: 10, total: 0 })
 const paperDraft = reactive(createEmptyDraft())
 
 const isViewMode = computed(() => drawerMode.value === 'view')
+const canManagePaper = computed(() => authStore.hasPermission('CREATE_EXAM'))
+const canOpenAiAssembleTask = computed(() => authStore.hasAnyPermission(['GET_AI_PAPER_ASSEMBLY_TASKS', 'CREATE_AI_PAPER_ASSEMBLY_TASK']))
+const canOpenAiGenerateTask = computed(() => authStore.hasAnyPermission(['GET_AI_PAPER_GENERATION_TASKS', 'CREATE_AI_PAPER_GENERATION_TASK']))
 const drawerTitle = computed(() => {
   if (drawerMode.value === 'edit') return '编辑试卷'
   if (drawerMode.value === 'view') return '查看试卷'
@@ -210,12 +269,14 @@ function handleTableChange(pag) {
 }
 
 function openCreateDrawer() {
+  if (!canManagePaper.value) return
   resetDraft()
   drawerMode.value = 'create'
   drawerVisible.value = true
 }
 
 async function openPaperDetail(record, mode) {
+  if (mode === 'edit' && !canManagePaper.value) return
   resetDraft()
   drawerMode.value = mode
   editingId.value = record.id
@@ -245,6 +306,7 @@ function openViewDrawer(record) {
 }
 
 async function handleSave() {
+  if (!canManagePaper.value) return
   if (!paperDraft.title?.trim()) {
     message.warning('请输入试卷名称')
     return
@@ -289,6 +351,7 @@ async function handleSave() {
 }
 
 function handlePublish(record) {
+  if (!canManagePaper.value) return
   Modal.confirm({
     title: '确认发布试卷',
     content: `发布后【${record.title}】将不能再修改题目，是否继续？`,
@@ -305,6 +368,7 @@ function handlePublish(record) {
 }
 
 function handleArchive(record) {
+  if (!canManagePaper.value) return
   Modal.confirm({
     title: '确认归档试卷',
     content: `归档后【${record.title}】将不再用于创建考试，是否继续？`,
@@ -321,6 +385,7 @@ function handleArchive(record) {
 }
 
 function handleDelete(record) {
+  if (!canManagePaper.value) return
   Modal.confirm({
     title: '确认删除试卷',
     content: `删除后无法恢复，是否删除【${record.title}】？`,

@@ -5,9 +5,15 @@
         <h2>培训基地</h2>
         <p class="page-sub">维护培训班可选基地，并支持按部门归档</p>
       </div>
-      <a-button type="primary" @click="openCreateModal">
-        <template #icon><PlusOutlined /></template>新增培训基地
-      </a-button>
+      <permissions-tooltip
+        :allowed="canManageTrainingBase"
+        tips="仅管理员或教官可新增培训基地"
+        v-slot="{ disabled }"
+      >
+        <a-button type="primary" :disabled="disabled" @click="openCreateModal">
+          <template #icon><PlusOutlined /></template>新增培训基地
+        </a-button>
+      </permissions-tooltip>
     </div>
 
     <a-card :bordered="false" style="margin-bottom: 16px">
@@ -39,8 +45,20 @@
           </template>
           <template v-if="column.key === 'action'">
             <a-space size="small">
-              <a-button type="link" size="small" @click="openEditModal(record)">编辑</a-button>
-              <a-button v-if="authStore.isAdmin" type="link" size="small" danger @click="handleDelete(record)">删除</a-button>
+              <permissions-tooltip
+                :allowed="canManageTrainingBase"
+                tips="仅管理员或教官可编辑培训基地"
+                v-slot="{ disabled }"
+              >
+                <a-button type="link" size="small" :disabled="disabled" @click="openEditModal(record)">编辑</a-button>
+              </permissions-tooltip>
+              <permissions-tooltip
+                :allowed="canDeleteTrainingBase"
+                tips="仅管理员可删除培训基地"
+                v-slot="{ disabled }"
+              >
+                <a-button type="link" size="small" danger :disabled="disabled" @click="handleDelete(record)">删除</a-button>
+              </permissions-tooltip>
             </a-space>
           </template>
         </template>
@@ -79,7 +97,7 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
@@ -90,8 +108,11 @@ import {
   updateTrainingBase,
 } from '@/api/training'
 import { getDepartmentList } from '@/api/department'
+import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
 const authStore = useAuthStore()
+const canManageTrainingBase = computed(() => authStore.isAdmin || authStore.isInstructor)
+const canDeleteTrainingBase = computed(() => authStore.isAdmin)
 const searchText = ref('')
 const departmentFilter = ref(undefined)
 const trainingBaseList = ref([])
@@ -126,11 +147,13 @@ function resetForm() {
 }
 
 function openCreateModal() {
+  if (!canManageTrainingBase.value) return
   resetForm()
   showModal.value = true
 }
 
 function openEditModal(record) {
+  if (!canManageTrainingBase.value) return
   editingBase.value = record
   Object.assign(baseForm, {
     name: record.name || '',
@@ -164,6 +187,7 @@ async function fetchTrainingBases() {
 }
 
 async function handleSubmit() {
+  if (!canManageTrainingBase.value) return
   if (!baseForm.name || !baseForm.location) {
     message.warning('请填写基地名称和地点')
     return
@@ -192,6 +216,7 @@ async function handleSubmit() {
 }
 
 function handleDelete(record) {
+  if (!canDeleteTrainingBase.value) return
   Modal.confirm({
     title: '确认删除培训基地？',
     content: record.name,

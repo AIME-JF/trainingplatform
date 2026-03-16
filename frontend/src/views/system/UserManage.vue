@@ -3,12 +3,24 @@
     <div class="page-header">
       <h2>用户管理</h2>
       <a-space>
-        <a-button @click="openImportModal">用户导入</a-button>
-        <a-button :loading="exportingUsers" @click="handleExportUsers">用户导出</a-button>
-        <a-button type="primary" @click="openCreateModal">
-          <PlusOutlined />
-          新增用户
-        </a-button>
+        <PermissionsTooltip :allowed="canImportUsers" tips="需要 IMPORT_USERS 权限">
+          <template #default="{ disabled }">
+            <a-button :disabled="disabled" @click="openImportModal">用户导入</a-button>
+          </template>
+        </PermissionsTooltip>
+        <PermissionsTooltip :allowed="canExportUsers" tips="需要 EXPORT_USERS 权限">
+          <template #default="{ disabled }">
+            <a-button :loading="exportingUsers" :disabled="disabled" @click="handleExportUsers">用户导出</a-button>
+          </template>
+        </PermissionsTooltip>
+        <PermissionsTooltip :allowed="canCreateUser" tips="需要 CREATE_USER 权限">
+          <template #default="{ disabled }">
+            <a-button type="primary" :disabled="disabled" @click="openCreateModal">
+              <PlusOutlined />
+              新增用户
+            </a-button>
+          </template>
+        </PermissionsTooltip>
       </a-space>
     </div>
 
@@ -78,16 +90,31 @@
 
           <template v-if="column.key === 'action'">
             <a-space>
-              <a-button type="link" size="small" @click="openEditModal(record)">编辑</a-button>
-              <a-button type="link" size="small" @click="openResetPasswordModal(record)">重置密码</a-button>
-              <a-popconfirm
-                :title="`确认删除用户「${record.nickname || record.username}」吗？`"
-                ok-text="删除"
-                cancel-text="取消"
-                @confirm="handleDelete(record)"
-              >
-                <a-button type="link" size="small" danger>删除</a-button>
-              </a-popconfirm>
+              <PermissionsTooltip :allowed="canEditUser" tips="需要 UPDATE_USER 权限">
+                <template #default="{ disabled }">
+                  <a-button type="link" size="small" :disabled="disabled" @click="openEditModal(record)">编辑</a-button>
+                </template>
+              </PermissionsTooltip>
+              <PermissionsTooltip :allowed="canResetPassword" tips="需要 UPDATE_USER 权限">
+                <template #default="{ disabled }">
+                  <a-button type="link" size="small" :disabled="disabled" @click="openResetPasswordModal(record)">重置密码</a-button>
+                </template>
+              </PermissionsTooltip>
+              <template v-if="canDeleteUser">
+                <a-popconfirm
+                  :title="`确认删除用户「${record.nickname || record.username}」吗？`"
+                  ok-text="删除"
+                  cancel-text="取消"
+                  @confirm="handleDelete(record)"
+                >
+                  <a-button type="link" size="small" danger>删除</a-button>
+                </a-popconfirm>
+              </template>
+              <PermissionsTooltip v-else :allowed="false" tips="需要 DELETE_USER 权限">
+                <template #default="{ disabled }">
+                  <a-button type="link" size="small" danger :disabled="disabled">删除</a-button>
+                </template>
+              </PermissionsTooltip>
             </a-space>
           </template>
         </template>
@@ -98,6 +125,10 @@
       v-model:open="importDialog.visible"
       title="用户导入"
       :confirm-loading="importDialog.submitting"
+      :can-submit="canImportUsers"
+      :can-download-template="canDownloadUserImportTemplate"
+      submit-tooltip="需要 IMPORT_USERS 权限"
+      download-template-tooltip="需要 DOWNLOAD_USER_IMPORT_TEMPLATE 权限"
       @submit="submitImport"
       @download-template="handleDownloadImportTemplate"
     />
@@ -127,7 +158,7 @@
             v-model:value="editDialog.form.roleIds"
             mode="multiple"
             placeholder="请选择角色"
-            :disabled="isProtectedAdminUser"
+            :disabled="isProtectedAdminUser || !canManageUserRoles"
           >
             <a-select-option v-for="role in roleList" :key="role.id" :value="role.id">
               {{ role.name }}
@@ -167,6 +198,7 @@
             :filter-option="departmentFilter"
             allow-clear
             show-search
+            :disabled="!canManageUserDepartments"
             style="width: 100%"
           />
         </a-form-item>
@@ -177,6 +209,7 @@
             placeholder="请选择警种"
             :options="policeTypeOptions"
             allow-clear
+            :disabled="!canManageUserPoliceTypes"
             style="width: 100%"
           />
         </a-form-item>
@@ -210,6 +243,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
+import { useAuthStore } from '@/stores/auth'
 import {
   createUser,
   deleteUser,
@@ -227,8 +261,10 @@ import {
 import { getDepartmentList } from '@/api/department'
 import { getRoleList } from '@/api/role'
 import { downloadBlob } from '@/utils/download'
+import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 import ExcelImportModal from './components/ExcelImportModal.vue'
 
+const authStore = useAuthStore()
 const loading = ref(false)
 const userList = ref([])
 const roleList = ref([])
@@ -271,6 +307,16 @@ const policeTypeOptions = computed(() =>
 const isProtectedAdminUser = computed(() =>
   editDialog.mode === 'edit' && String(editDialog.form.username || '').toLowerCase() === PROTECTED_ADMIN_USERNAME
 )
+const canCreateUser = computed(() => authStore.hasPermission('CREATE_USER'))
+const canImportUsers = computed(() => authStore.hasPermission('IMPORT_USERS'))
+const canExportUsers = computed(() => authStore.hasPermission('EXPORT_USERS'))
+const canDownloadUserImportTemplate = computed(() => authStore.hasPermission('DOWNLOAD_USER_IMPORT_TEMPLATE'))
+const canEditUser = computed(() => authStore.hasPermission('UPDATE_USER'))
+const canManageUserRoles = computed(() => authStore.hasPermission('UPDATE_USER_ROLES'))
+const canManageUserDepartments = computed(() => authStore.hasPermission('UPDATE_USER_DEPARTMENTS'))
+const canManageUserPoliceTypes = computed(() => authStore.hasPermission('UPDATE_USER_POLICE_TYPES'))
+const canResetPassword = computed(() => authStore.hasPermission('UPDATE_USER'))
+const canDeleteUser = computed(() => authStore.hasPermission('DELETE_USER'))
 
 const departmentFilter = (input, option) => option.label.toLowerCase().includes(input.toLowerCase())
 
@@ -399,6 +445,7 @@ function resetEditForm() {
 }
 
 function openCreateModal() {
+  if (!canCreateUser.value) return
   editDialog.mode = 'add'
   editDialog.currentUserId = null
   resetEditForm()
@@ -406,6 +453,7 @@ function openCreateModal() {
 }
 
 function openEditModal(record) {
+  if (!canEditUser.value) return
   editDialog.mode = 'edit'
   editDialog.currentUserId = record.id
   editDialog.form.username = record.username || ''
@@ -424,6 +472,10 @@ function openEditModal(record) {
 
 async function submitUser() {
   if (editDialog.mode === 'add') {
+    if (!canCreateUser.value) {
+      message.warning('没有新增用户权限')
+      return
+    }
     if (!editDialog.form.username.trim()) {
       message.warning('请输入用户名')
       return
@@ -452,6 +504,10 @@ async function submitUser() {
       })
       message.success('新增用户成功')
     } else {
+      if (!canEditUser.value) {
+        message.warning('没有编辑用户权限')
+        return
+      }
       await updateUser(editDialog.currentUserId, {
         nickname: editDialog.form.nickname || undefined,
         gender: editDialog.form.gender || undefined,
@@ -460,11 +516,15 @@ async function submitUser() {
         email: editDialog.form.email || undefined,
         joinDate: editDialog.form.joinDate || undefined,
       })
-      if (!isProtectedAdminUser.value) {
+      if (!isProtectedAdminUser.value && canManageUserRoles.value) {
         await updateUserRoles(editDialog.currentUserId, editDialog.form.roleIds)
       }
-      await updateUserDepartments(editDialog.currentUserId, editDialog.form.departmentIds)
-      await updateUserPoliceTypes(editDialog.currentUserId, editDialog.form.policeTypeIds)
+      if (canManageUserDepartments.value) {
+        await updateUserDepartments(editDialog.currentUserId, editDialog.form.departmentIds)
+      }
+      if (canManageUserPoliceTypes.value) {
+        await updateUserPoliceTypes(editDialog.currentUserId, editDialog.form.policeTypeIds)
+      }
       message.success('更新用户成功')
     }
 
@@ -478,6 +538,7 @@ async function submitUser() {
 }
 
 async function handleDelete(record) {
+  if (!canDeleteUser.value) return
   try {
     await deleteUser(record.id)
     message.success('删除用户成功')
@@ -488,12 +549,17 @@ async function handleDelete(record) {
 }
 
 function openResetPasswordModal(record) {
+  if (!canResetPassword.value) return
   resetPasswordDialog.user = record
   resetPasswordDialog.newPassword = ''
   resetPasswordDialog.visible = true
 }
 
 async function submitResetPassword() {
+  if (!canResetPassword.value) {
+    message.warning('没有重置密码权限')
+    return
+  }
   if (!resetPasswordDialog.newPassword) {
     message.warning('请输入新密码')
     return
@@ -513,10 +579,12 @@ async function submitResetPassword() {
 }
 
 function openImportModal() {
+  if (!canImportUsers.value) return
   importDialog.visible = true
 }
 
 async function handleDownloadImportTemplate() {
+  if (!canDownloadUserImportTemplate.value) return
   try {
     const blob = await downloadUserImportTemplate()
     downloadBlob(blob, '用户导入模板.xlsx')
@@ -526,6 +594,10 @@ async function handleDownloadImportTemplate() {
 }
 
 async function submitImport(file) {
+  if (!canImportUsers.value) {
+    message.warning('没有用户导入权限')
+    return
+  }
   importDialog.submitting = true
   try {
     const result = await importUsers(file, 'student')
@@ -542,6 +614,7 @@ async function submitImport(file) {
 }
 
 async function handleExportUsers() {
+  if (!canExportUsers.value) return
   exportingUsers.value = true
   try {
     const blob = await exportUsers({

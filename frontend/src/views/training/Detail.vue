@@ -117,9 +117,16 @@
                     <a-radio-button value="timetable">按课表展示</a-radio-button>
                   </a-radio-group>
                 </a-space>
-                <a-button size="small" type="primary" @click="openCourseModal()" v-if="canScheduleEdit">
-                  <template #icon><PlusOutlined /></template>添加课程
-                </a-button>
+                <permissions-tooltip
+                  v-if="!authStore.isStudent"
+                  :allowed="canScheduleEdit"
+                  :tips="scheduleEditTooltip"
+                  v-slot="{ disabled }"
+                >
+                  <a-button size="small" type="primary" :disabled="disabled" @click="openCourseModal()">
+                    <template #icon><PlusOutlined /></template>添加课程
+                  </a-button>
+                </permissions-tooltip>
               </div>
 
               <template v-if="scheduleViewMode === 'course'">
@@ -137,9 +144,21 @@
                   </div>
                   <div class="ci-right">
                     <a-tag :color="c.type === 'theory' ? 'blue' : 'green'" size="small">{{ c.type === 'theory' ? '理论' : '实操' }}</a-tag>
-                    <template v-if="canScheduleEdit">
-                      <a-button size="small" type="link" @click="openCourseModal(idx)">编辑</a-button>
-                      <a-button size="small" type="link" danger @click="removeCourse(idx)">删除</a-button>
+                    <template v-if="!authStore.isStudent">
+                      <permissions-tooltip
+                        :allowed="canScheduleEdit"
+                        :tips="scheduleEditTooltip"
+                        v-slot="{ disabled }"
+                      >
+                        <a-button size="small" type="link" :disabled="disabled" @click="openCourseModal(idx)">编辑</a-button>
+                      </permissions-tooltip>
+                      <permissions-tooltip
+                        :allowed="canScheduleEdit"
+                        :tips="scheduleEditTooltip"
+                        v-slot="{ disabled }"
+                      >
+                        <a-button size="small" type="link" danger :disabled="disabled" @click="removeCourse(idx)">删除</a-button>
+                      </permissions-tooltip>
                     </template>
                   </div>
                 </div>
@@ -179,10 +198,16 @@
             <a-tab-pane key="exams" tab="考试安排">
               <div class="section-header" style="margin-bottom:16px">
                 <h4>考试安排</h4>
-                <a-space v-if="canEdit">
-                  <a-button size="small" type="primary" @click="quickCreateTrainingExam">
-                    快捷添加考试
-                  </a-button>
+                <a-space v-if="!authStore.isStudent">
+                  <permissions-tooltip
+                    :allowed="canQuickCreateExam"
+                    :tips="quickCreateExamTooltip"
+                    v-slot="{ disabled }"
+                  >
+                    <a-button size="small" type="primary" :disabled="disabled" @click="quickCreateTrainingExam">
+                      快捷添加考试
+                    </a-button>
+                  </permissions-tooltip>
                   <a-button size="small" @click="goTrainingExamManage">
                     前往考试管理
                   </a-button>
@@ -218,9 +243,15 @@
             <a-tab-pane key="students" tab="学员名单" v-if="!authStore.isStudent">
               <div class="section-header" style="margin-bottom:16px">
                 <a-input-search v-model:value="studentSearch" placeholder="搜索学员..." class="student-search-input" />
-                <a-button type="primary" size="small" @click="openStudentModal" v-if="canEdit">
-                  <template #icon><PlusOutlined /></template>添加学员
-                </a-button>
+                <permissions-tooltip
+                  :allowed="canManageStudents"
+                  :tips="trainingManageTooltip"
+                  v-slot="{ disabled }"
+                >
+                  <a-button type="primary" size="small" :disabled="disabled" @click="openStudentModal">
+                    <template #icon><PlusOutlined /></template>添加学员
+                  </a-button>
+                </permissions-tooltip>
               </div>
               <a-table :dataSource="filteredStudents" :columns="studentColumnsWithAction" size="small" :pagination="{ pageSize: 10 }">
                 <template #bodyCell="{ column, record }">
@@ -238,15 +269,22 @@
                     </span>
                   </template>
                   <template v-if="column.key === 'action'">
-                    <a-popconfirm title="确定移除该学员？" @confirm="removeStudent(record.key)" v-if="canEdit">
-                      <a-button size="small" type="link" danger>移除</a-button>
-                    </a-popconfirm>
+                    <permissions-tooltip
+                      :allowed="canManageStudents"
+                      :tips="trainingManageTooltip"
+                      v-slot="{ disabled }"
+                    >
+                      <a-popconfirm v-if="!disabled" title="确定移除该学员？" @confirm="removeStudent(record.key)">
+                        <a-button size="small" type="link" danger>移除</a-button>
+                      </a-popconfirm>
+                      <a-button v-else size="small" type="link" danger :disabled="disabled">移除</a-button>
+                    </permissions-tooltip>
                   </template>
                 </template>
               </a-table>
             </a-tab-pane>
 
-            <a-tab-pane key="resources" tab="培训资源" v-if="canEdit">
+            <a-tab-pane key="resources" tab="培训资源" v-if="!authStore.isStudent">
               <div class="section-header" style="margin-bottom:16px">
                 <h4>资源绑定</h4>
                 <a-space>
@@ -256,9 +294,16 @@
                     :options="trainingResourceOptions"
                     :filter-option="(input, option) => (option?.label || '').toLowerCase().includes(input.toLowerCase())"
                     placeholder="选择已发布资源"
+                    :disabled="!canManageResources"
                     class="training-resource-select"
                   />
-                  <a-button type="primary" size="small" @click="bindSelectedTrainingResource">绑定</a-button>
+                  <permissions-tooltip
+                    :allowed="canManageResources"
+                    :tips="trainingManageTooltip"
+                    v-slot="{ disabled }"
+                  >
+                    <a-button type="primary" size="small" :disabled="disabled" @click="bindSelectedTrainingResource">绑定</a-button>
+                  </permissions-tooltip>
                   <a-button size="small" @click="loadTrainingDetail">刷新</a-button>
                 </a-space>
               </div>
@@ -272,9 +317,16 @@
                     </a-space>
                   </template>
                   <template v-if="column.key === 'action'">
-                    <a-popconfirm title="确认解绑该资源？" @confirm="removeTrainingResource(record.id)">
-                      <a-button size="small" danger type="link">解绑</a-button>
-                    </a-popconfirm>
+                    <permissions-tooltip
+                      :allowed="canManageResources"
+                      :tips="trainingManageTooltip"
+                      v-slot="{ disabled }"
+                    >
+                      <a-popconfirm v-if="!disabled" title="确认解绑该资源？" @confirm="removeTrainingResource(record.id)">
+                        <a-button size="small" danger type="link">解绑</a-button>
+                      </a-popconfirm>
+                      <a-button v-else size="small" danger type="link" :disabled="disabled">解绑</a-button>
+                    </permissions-tooltip>
                   </template>
                 </template>
               </a-table>
@@ -282,22 +334,41 @@
 
             <!-- ===== 公告 ===== -->
             <a-tab-pane key="notice" tab="公告">
-              <div class="section-header" style="margin-bottom:16px" v-if="canEdit">
+              <div class="section-header" style="margin-bottom:16px" v-if="!authStore.isStudent">
                 <h4>班级公告栏</h4>
-                <a-button type="primary" size="small" @click="openNoticeModal">
-                  <template #icon><PlusOutlined /></template>发布新公告
-                </a-button>
+                <permissions-tooltip
+                  :allowed="canManageNotices"
+                  :tips="trainingManageTooltip"
+                  v-slot="{ disabled }"
+                >
+                  <a-button type="primary" size="small" :disabled="disabled" @click="openNoticeModal">
+                    <template #icon><PlusOutlined /></template>发布新公告
+                  </a-button>
+                </permissions-tooltip>
               </div>
               <a-empty v-if="!notices || notices.length === 0" description="暂无公告" />
               <a-collapse v-else accordion :bordered="false" class="custom-notice-collapse">
                 <a-collapse-panel v-for="n in notices" :key="n.id" :header="n.title">
                   <template #extra>
                     <span class="notice-time">{{ n.time }}</span>
-                    <a-space style="margin-left: 12px" v-if="canEdit" @click.stop>
-                      <a-button type="link" size="small" style="padding:0" @click="editNotice(n)">编辑</a-button>
-                      <a-popconfirm title="确定删除该公告？" @confirm="deleteNotice(n.id)">
-                        <a-button type="link" danger size="small" style="padding:0">删除</a-button>
-                      </a-popconfirm>
+                    <a-space style="margin-left: 12px" v-if="!authStore.isStudent" @click.stop>
+                      <permissions-tooltip
+                        :allowed="canManageNotices"
+                        :tips="trainingManageTooltip"
+                        v-slot="{ disabled }"
+                      >
+                        <a-button type="link" size="small" style="padding:0" :disabled="disabled" @click="editNotice(n)">编辑</a-button>
+                      </permissions-tooltip>
+                      <permissions-tooltip
+                        :allowed="canManageNotices"
+                        :tips="trainingManageTooltip"
+                        v-slot="{ disabled }"
+                      >
+                        <a-popconfirm v-if="!disabled" title="确定删除该公告？" @confirm="deleteNotice(n.id)">
+                          <a-button type="link" danger size="small" style="padding:0">删除</a-button>
+                        </a-popconfirm>
+                        <a-button v-else type="link" danger size="small" style="padding:0" :disabled="disabled">删除</a-button>
+                      </permissions-tooltip>
                     </a-space>
                   </template>
                   <p class="notice-content">{{ n.content }}</p>
@@ -311,10 +382,42 @@
       <a-col :xs="24" :md="8">
         <a-card title="流程操作" :bordered="false" style="margin-bottom:16px" v-if="showWorkflowActionCard">
           <a-space direction="vertical" size="small" class="workflow-action-list">
-            <a-button v-if="canPublishWorkflowAction" block type="primary" ghost @click="handlePublish">发布</a-button>
-            <a-button v-if="canLockWorkflowAction" block danger ghost @click="handleLock">锁定名单</a-button>
-            <a-button v-if="canStartWorkflowAction" block type="primary" @click="handleStart">开班</a-button>
-            <a-button v-if="canEndWorkflowAction" block danger @click="handleEnd">结班</a-button>
+            <permissions-tooltip
+              v-if="showPublishWorkflowAction"
+              :allowed="canPublishWorkflowAction"
+              :tips="trainingManageTooltip"
+              block
+              v-slot="{ disabled }"
+            >
+              <a-button block type="primary" ghost :disabled="disabled" @click="handlePublish">发布</a-button>
+            </permissions-tooltip>
+            <permissions-tooltip
+              v-if="showLockWorkflowAction"
+              :allowed="canLockWorkflowAction"
+              :tips="trainingManageTooltip"
+              block
+              v-slot="{ disabled }"
+            >
+              <a-button block danger ghost :disabled="disabled" @click="handleLock">锁定名单</a-button>
+            </permissions-tooltip>
+            <permissions-tooltip
+              v-if="showStartWorkflowAction"
+              :allowed="canStartWorkflowAction"
+              :tips="trainingManageTooltip"
+              block
+              v-slot="{ disabled }"
+            >
+              <a-button block type="primary" :disabled="disabled" @click="handleStart">开班</a-button>
+            </permissions-tooltip>
+            <permissions-tooltip
+              v-if="showEndWorkflowAction"
+              :allowed="canEndWorkflowAction"
+              :tips="trainingManageTooltip"
+              block
+              v-slot="{ disabled }"
+            >
+              <a-button block danger :disabled="disabled" @click="handleEnd">结班</a-button>
+            </permissions-tooltip>
           </a-space>
         </a-card>
 
@@ -329,12 +432,28 @@
             <a-button block style="margin-bottom:8px" @click="$router.push('/training/schedule/' + trainingData.id)">
               <template #icon><CalendarOutlined /></template>查看日程
             </a-button>
-            <a-button block style="margin-bottom:8px" @click="openEditModal" v-if="canEdit">
-              <template #icon><EditOutlined /></template>编辑班级信息
-            </a-button>
-            <a-button block @click="exportMsg" v-if="!authStore.isStudent">
-              <template #icon><DownloadOutlined /></template>导出学员名单
-            </a-button>
+            <permissions-tooltip
+              v-if="!authStore.isStudent"
+              :allowed="canEdit"
+              :tips="trainingManageTooltip"
+              block
+              v-slot="{ disabled }"
+            >
+              <a-button block style="margin-bottom:8px" :disabled="disabled" @click="openEditModal">
+                <template #icon><EditOutlined /></template>编辑班级信息
+              </a-button>
+            </permissions-tooltip>
+            <permissions-tooltip
+              v-if="!authStore.isStudent"
+              :allowed="canExportStudents"
+              :tips="trainingManageTooltip"
+              block
+              v-slot="{ disabled }"
+            >
+              <a-button block :disabled="disabled" @click="exportMsg">
+                <template #icon><DownloadOutlined /></template>导出学员名单
+              </a-button>
+            </permissions-tooltip>
           </div>
         </a-card>
 
@@ -625,6 +744,7 @@ import { getUsers } from '@/api/user'
 import { createNotice as apiCreateNotice, updateNotice as apiUpdateNotice, deleteNotice as apiDeleteNotice } from '@/api/notice'
 import { useAuthStore } from '@/stores/auth'
 import { formatDateTime } from '@/utils/datetime'
+import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -827,16 +947,38 @@ const selectedSchedules = reactive({}) // { courseIdx: scheduleIdx }
 const scheduleViewMode = ref('course')
 const canEdit = computed(() => !!trainingData.canManageAll)
 const canScheduleEdit = computed(() => !!trainingData.canEditCourses)
+const canManageStudents = computed(() => !!trainingData.canManageAll)
+const canManageResources = computed(() => !!trainingData.canManageAll)
+const canManageNotices = computed(() => !!trainingData.canManageAll)
+const canExportStudents = computed(() => !!trainingData.canManageAll)
+const canQuickCreateExam = computed(() => canEdit.value && authStore.hasPermission('CREATE_EXAM'))
+const trainingManageTooltip = computed(() => {
+  if (authStore.hasPermission('MANAGE_TRAINING')) return '当前培训班不在可管理范围内'
+  if (authStore.hasPermission('UPDATE_TRAINING')) return '仅培训班班主任可执行该操作'
+  return '需要 MANAGE_TRAINING，或具备 UPDATE_TRAINING 且为班主任'
+})
+const scheduleEditTooltip = computed(() => (
+  canEdit.value ? '当前角色不能编辑课程安排' : trainingManageTooltip.value
+))
+const quickCreateExamTooltip = computed(() => (
+  !authStore.hasPermission('CREATE_EXAM') ? '需要 CREATE_EXAM 权限' : trainingManageTooltip.value
+))
 const currentSession = computed(() => trainingData.currentSession)
-const canPublishWorkflowAction = computed(() => canEdit.value && trainingData.status === 'upcoming' && trainingData.publishStatus !== 'published')
-const canLockWorkflowAction = computed(() => canEdit.value && trainingData.status === 'upcoming' && !trainingData.isLocked)
-const canStartWorkflowAction = computed(() => canEdit.value && trainingData.status === 'upcoming')
-const canEndWorkflowAction = computed(() => canEdit.value && trainingData.status === 'active')
+const showPublishWorkflowAction = computed(() => trainingData.status === 'upcoming' && trainingData.publishStatus !== 'published')
+const showLockWorkflowAction = computed(() => trainingData.status === 'upcoming' && !trainingData.isLocked)
+const showStartWorkflowAction = computed(() => trainingData.status === 'upcoming')
+const showEndWorkflowAction = computed(() => trainingData.status === 'active')
+const canPublishWorkflowAction = computed(() => canEdit.value && showPublishWorkflowAction.value)
+const canLockWorkflowAction = computed(() => canEdit.value && showLockWorkflowAction.value)
+const canStartWorkflowAction = computed(() => canEdit.value && showStartWorkflowAction.value)
+const canEndWorkflowAction = computed(() => canEdit.value && showEndWorkflowAction.value)
 const showWorkflowActionCard = computed(() => (
-  canPublishWorkflowAction.value ||
-  canLockWorkflowAction.value ||
-  canStartWorkflowAction.value ||
-  canEndWorkflowAction.value
+  !authStore.isStudent && (
+    showPublishWorkflowAction.value ||
+    showLockWorkflowAction.value ||
+    showStartWorkflowAction.value ||
+    showEndWorkflowAction.value
+  )
 ))
 const workflowSkipLabelMap = {
   published: '发布招生',
@@ -914,7 +1056,7 @@ const trainingResourceOptions = computed(() => (resourceCandidates.value || []).
 })))
 
 watch(activeTab, (tab) => {
-  if (tab === 'resources' && canEdit.value) {
+  if (tab === 'resources' && canManageResources.value) {
     loadResourceCandidates()
   }
 })
@@ -1007,6 +1149,7 @@ function goTrainingExamManage() {
 }
 
 function quickCreateTrainingExam() {
+  if (!canQuickCreateExam.value) return
   router.push({
     name: 'ExamManage',
     query: {
@@ -1054,10 +1197,12 @@ function confirmWorkflowSkip(actionLabel, skipSteps, requestFn, successMessage, 
 }
 
 async function handlePublish() {
+  if (!canPublishWorkflowAction.value) return
   await executeWorkflowAction(publishTraining, '培训班已发布', '发布失败')
 }
 
 async function handleLock() {
+  if (!canLockWorkflowAction.value) return
   const skipSteps = getWorkflowMissingSteps('lock')
   if (skipSteps.length) {
     confirmWorkflowSkip('锁定名单', skipSteps, lockTraining, '名单已锁定', '锁定失败')
@@ -1067,6 +1212,7 @@ async function handleLock() {
 }
 
 async function handleStart() {
+  if (!canStartWorkflowAction.value) return
   const skipSteps = getWorkflowMissingSteps('start')
   if (skipSteps.length) {
     confirmWorkflowSkip('开班', skipSteps, startTraining, '培训班已开班', '开班失败')
@@ -1076,6 +1222,7 @@ async function handleStart() {
 }
 
 async function handleEnd() {
+  if (!canEndWorkflowAction.value) return
   try {
     await endTraining(trainingId)
     message.success('培训班已结班')
@@ -1157,7 +1304,7 @@ const baseStudentColumns = [
   { title: '签到率', key: 'checkin', width: 80 },
 ]
 const studentColumnsWithAction = computed(() =>
-  canEdit.value ? [...baseStudentColumns, { title: '操作', key: 'action', width: 80 }] : baseStudentColumns
+  !authStore.isStudent ? [...baseStudentColumns, { title: '操作', key: 'action', width: 80 }] : baseStudentColumns
 )
 
 function goTraineeDetail(userId) {
@@ -1165,6 +1312,7 @@ function goTraineeDetail(userId) {
 }
 
 async function removeStudent(userId) {
+  if (!canManageStudents.value) return
   const nextStudentIds = trainingData.studentIds.filter((item) => item !== userId)
   try {
     await submitTrainingUpdate({ studentIds: nextStudentIds })
@@ -1202,11 +1350,13 @@ const addStudentColumns = [
 ]
 
 async function openStudentModal() {
+  if (!canManageStudents.value) return
   showStudentModal.value = true
   await ensureStudentCandidatesLoaded(true)
 }
 
 async function addSelectedStudents() {
+  if (!canManageStudents.value) return
   if (selectedStudentKeys.value.length === 0) { message.warning('请先选择要添加的学员'); return }
   const merged = new Set([...trainingData.studentIds, ...selectedStudentKeys.value])
   try {
@@ -1318,6 +1468,7 @@ function removeCourseSchedule(idx) {
 }
 
 function openCourseModal(idx = null) {
+  if (!canScheduleEdit.value) return
   ensureInstructorOptionsLoaded(true)
   editingCourseIdx.value = idx
   tempDate.value = null
@@ -1367,6 +1518,7 @@ function openCourseModal(idx = null) {
 }
 
 async function saveCourse() {
+  if (!canScheduleEdit.value) return
   if (!courseForm.name || !courseForm.instructor || courseForm.schedules.length === 0) { 
     message.warning('请填写课程名称、教官，并至少添加一节排课')
     return 
@@ -1391,6 +1543,7 @@ async function saveCourse() {
 }
 
 function removeCourse(idx) {
+  if (!canScheduleEdit.value) return
   Modal.confirm({
     title: '确认删除', content: `确定删除课程「${trainingData.courses[idx]?.name}」吗？`,
     okText: '删除', okType: 'danger', cancelText: '取消',
@@ -1439,11 +1592,13 @@ function onEditInstructorChange(userId) {
 }
 
 async function openEditModal() {
+  if (!canEdit.value) return
   showEditModal.value = true
   await ensureInstructorOptionsLoaded(true)
 }
 
 async function saveClassInfo() {
+  if (!canEdit.value) return
   if (!editForm.name || !editForm.startDate || !editForm.endDate || !editForm.location) { message.warning('请填写必填项'); return }
   try {
     await submitTrainingUpdate({ ...editForm })
@@ -1460,6 +1615,7 @@ const editingNoticeId = ref(null)
 const noticeForm = reactive({ title: '', content: '' })
 
 function openNoticeModal() {
+  if (!canManageNotices.value) return
   editingNoticeId.value = null
   noticeForm.title = ''
   noticeForm.content = ''
@@ -1467,6 +1623,7 @@ function openNoticeModal() {
 }
 
 function editNotice(notice) {
+  if (!canManageNotices.value) return
   editingNoticeId.value = notice.id
   noticeForm.title = notice.title
   noticeForm.content = notice.content
@@ -1474,6 +1631,7 @@ function editNotice(notice) {
 }
 
 async function deleteNotice(id) {
+  if (!canManageNotices.value) return
   try {
     await apiDeleteNotice(id)
     notices.value = notices.value.filter(n => n.id !== id)
@@ -1484,6 +1642,7 @@ async function deleteNotice(id) {
 }
 
 async function saveNotice() {
+  if (!canManageNotices.value) return
   if (!noticeForm.title || !noticeForm.content) { message.warning('请填写公告标题和内容'); return }
 
   try {
@@ -1507,7 +1666,7 @@ async function saveNotice() {
 }
 
 async function loadResourceCandidates() {
-  if (!canEdit.value) return
+  if (!canManageResources.value) return
   try {
     const res = await getResources({ page: 1, size: 200, status: 'published' })
     resourceCandidates.value = res.items || []
@@ -1517,6 +1676,7 @@ async function loadResourceCandidates() {
 }
 
 async function bindSelectedTrainingResource() {
+  if (!canManageResources.value) return
   if (!selectedTrainingResourceId.value) {
     message.warning('请选择资源')
     return
@@ -1539,6 +1699,7 @@ async function bindSelectedTrainingResource() {
 }
 
 async function removeTrainingResource(resourceId) {
+  if (!canManageResources.value) return
   try {
     await unbindTrainingResource(trainingId, resourceId)
     message.success('资源解绑成功')
@@ -1549,6 +1710,7 @@ async function removeTrainingResource(resourceId) {
 }
 
 function exportMsg() {
+  if (!canExportStudents.value) return
   if (filteredStudents.value.length === 0) {
     message.warning('暂无学员数据可导出')
     return

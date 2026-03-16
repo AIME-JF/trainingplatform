@@ -6,14 +6,26 @@
         <p class="page-sub">统一维护题库题目，AI 智能出题任务确认后会进入这里</p>
       </div>
       <a-space>
-        <a-button @click="$router.push('/question/ai')">
-          <template #icon><RobotOutlined /></template>
-          AI 智能出题
-        </a-button>
-        <a-button type="primary" @click="openAddModal">
-          <template #icon><PlusOutlined /></template>
-          手动新增
-        </a-button>
+        <permissions-tooltip
+          :allowed="canOpenAiQuestionTask"
+          tips="需要 GET_AI_QUESTION_TASKS 或 CREATE_AI_QUESTION_TASK 权限"
+          v-slot="{ disabled }"
+        >
+          <a-button :disabled="disabled" @click="$router.push('/question/ai')">
+            <template #icon><RobotOutlined /></template>
+            AI 智能出题
+          </a-button>
+        </permissions-tooltip>
+        <permissions-tooltip
+          :allowed="canCreateQuestion"
+          tips="需要 CREATE_QUESTION 权限"
+          v-slot="{ disabled }"
+        >
+          <a-button type="primary" :disabled="disabled" @click="openAddModal">
+            <template #icon><PlusOutlined /></template>
+            手动新增
+          </a-button>
+        </permissions-tooltip>
       </a-space>
     </div>
 
@@ -101,8 +113,20 @@
           </template>
           <template v-else-if="column.key === 'action'">
             <a-space>
-              <a-button type="link" size="small" @click="openEditModal(record)">编辑</a-button>
-              <a-button type="link" danger size="small" @click="handleDelete(record)">删除</a-button>
+              <permissions-tooltip
+                :allowed="canUpdateQuestion"
+                tips="需要 UPDATE_QUESTION 权限"
+                v-slot="{ disabled }"
+              >
+                <a-button type="link" size="small" :disabled="disabled" @click="openEditModal(record)">编辑</a-button>
+              </permissions-tooltip>
+              <permissions-tooltip
+                :allowed="canDeleteQuestion"
+                tips="需要 DELETE_QUESTION 权限"
+                v-slot="{ disabled }"
+              >
+                <a-button type="link" danger size="small" :disabled="disabled" @click="handleDelete(record)">删除</a-button>
+              </permissions-tooltip>
             </a-space>
           </template>
         </template>
@@ -123,10 +147,13 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import { PlusOutlined, RobotOutlined } from '@ant-design/icons-vue'
+import { useAuthStore } from '@/stores/auth'
 import { createQuestion, deleteQuestion, getQuestions, updateQuestion } from '@/api/question'
 import { getPoliceTypes } from '@/api/user'
 import QuestionFormModal from './components/QuestionFormModal.vue'
+import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
+const authStore = useAuthStore()
 const loading = ref(false)
 const modalOpen = ref(false)
 const editingQuestion = ref(null)
@@ -170,13 +197,19 @@ const stats = computed(() => ([
   { label: '多选题', value: statsState.multi },
   { label: '判断题', value: statsState.judge },
 ]))
+const canOpenAiQuestionTask = computed(() => authStore.hasAnyPermission(['GET_AI_QUESTION_TASKS', 'CREATE_AI_QUESTION_TASK']))
+const canCreateQuestion = computed(() => authStore.hasPermission('CREATE_QUESTION'))
+const canUpdateQuestion = computed(() => authStore.hasPermission('UPDATE_QUESTION'))
+const canDeleteQuestion = computed(() => authStore.hasPermission('DELETE_QUESTION'))
 
 function openAddModal() {
+  if (!canCreateQuestion.value) return
   editingQuestion.value = null
   modalOpen.value = true
 }
 
 function openEditModal(record) {
+  if (!canUpdateQuestion.value) return
   editingQuestion.value = { ...record }
   modalOpen.value = true
 }
@@ -240,6 +273,8 @@ async function loadPoliceTypeOptions() {
 }
 
 async function handleSubmitQuestion(payload) {
+  const allowed = editingQuestion.value?.id ? canUpdateQuestion.value : canCreateQuestion.value
+  if (!allowed) return
   try {
     if (editingQuestion.value?.id) {
       await updateQuestion(editingQuestion.value.id, payload)
@@ -257,6 +292,7 @@ async function handleSubmitQuestion(payload) {
 }
 
 function handleDelete(record) {
+  if (!canDeleteQuestion.value) return
   Modal.confirm({
     title: '确认删除题目',
     content: '删除后无法恢复，是否继续？',

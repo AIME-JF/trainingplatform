@@ -4,7 +4,13 @@
       <h2>我的资源</h2>
       <a-space>
         <a-button @click="$router.push('/resource/library')">资源库</a-button>
-        <a-button type="primary" @click="$router.push('/resource/upload')">上传资源</a-button>
+        <permissions-tooltip
+          :allowed="canUploadResource"
+          tips="需要 CREATE_RESOURCE 或 VIEW_RESOURCE_ALL 权限"
+          v-slot="{ disabled }"
+        >
+          <a-button type="primary" :disabled="disabled" @click="$router.push('/resource/upload')">上传资源</a-button>
+        </permissions-tooltip>
       </a-space>
     </div>
 
@@ -40,17 +46,46 @@
           <a-space>
             <a-button size="small" @click="viewDetail(record.id)">查看</a-button>
             <a-button size="small" @click="viewWorkflow(record)">轨迹</a-button>
-            <a-button size="small" type="primary" ghost v-if="canSubmit(record)" @click="submitReview(record.id)">提交审核</a-button>
-            <a-button size="small" v-if="canRepublish(record)" @click="publish(record.id)">重新发布</a-button>
-            <a-button size="small" danger ghost v-if="record.status === 'published'" @click="offline(record.id)">下线</a-button>
-            <a-popconfirm
-              title="确认删除该资源吗？"
-              ok-text="删除"
-              cancel-text="取消"
-              @confirm="removeResource(record.id)"
+            <permissions-tooltip
+              v-if="showSubmit(record)"
+              :allowed="canSubmit(record)"
+              tips="需要同时具备 CREATE_RESOURCE 和 SUBMIT_RESOURCE_REVIEW 权限"
+              v-slot="{ disabled }"
             >
-              <a-button size="small" danger>删除</a-button>
-            </a-popconfirm>
+              <a-button size="small" type="primary" ghost :disabled="disabled" @click="submitReview(record.id)">提交审核</a-button>
+            </permissions-tooltip>
+            <permissions-tooltip
+              v-if="showRepublish(record)"
+              :allowed="canRepublish(record)"
+              tips="仅资源上传者或具备 UPDATE_RESOURCE / VIEW_RESOURCE_ALL 权限可执行该操作"
+              v-slot="{ disabled }"
+            >
+              <a-button size="small" :disabled="disabled" @click="publish(record.id)">重新发布</a-button>
+            </permissions-tooltip>
+            <permissions-tooltip
+              v-if="showOffline(record)"
+              :allowed="canOffline(record)"
+              tips="仅资源上传者或具备 UPDATE_RESOURCE / VIEW_RESOURCE_ALL 权限可执行该操作"
+              v-slot="{ disabled }"
+            >
+              <a-button size="small" danger ghost :disabled="disabled" @click="offline(record.id)">下线</a-button>
+            </permissions-tooltip>
+            <permissions-tooltip
+              :allowed="canDelete(record)"
+              tips="仅资源上传者或具备 UPDATE_RESOURCE / VIEW_RESOURCE_ALL 权限可执行该操作"
+              v-slot="{ disabled }"
+            >
+              <a-popconfirm
+                v-if="!disabled"
+                title="确认删除该资源吗？"
+                ok-text="删除"
+                cancel-text="取消"
+                @confirm="removeResource(record.id)"
+              >
+                <a-button size="small" danger>删除</a-button>
+              </a-popconfirm>
+              <a-button v-else size="small" danger :disabled="disabled">删除</a-button>
+            </permissions-tooltip>
           </a-space>
         </template>
       </template>
@@ -79,13 +114,16 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import { computed, ref, reactive, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import { useAuthStore } from '@/stores/auth'
 import { getResources, publishResource, offlineResource, deleteResource } from '@/api/resource'
 import { submitResource, getReviewWorkflow } from '@/api/review'
+import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const query = reactive({ page: 1, size: 10, search: '', status: '' })
 const rows = ref([])
 const total = ref(0)
@@ -93,6 +131,9 @@ const total = ref(0)
 const workflowVisible = ref(false)
 const workflow = ref(null)
 const isMobile = ref(window.innerWidth <= 768)
+const canUploadResource = computed(() => authStore.hasAnyPermission(['CREATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
+const canSubmitReviewPermission = computed(() => authStore.hasAllPermissions(['CREATE_RESOURCE', 'SUBMIT_RESOURCE_REVIEW']))
+const canManageAnyResource = computed(() => authStore.hasAnyPermission(['UPDATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
 
 const columns = [
   { title: '标题', dataIndex: 'title', key: 'title' },
@@ -146,12 +187,36 @@ function contentTypeLabel(type) {
   return map[type] || type || '-'
 }
 
-function canSubmit(record) {
+function canEditResource(record) {
+  return record?.uploaderId === authStore.currentUser?.id || canManageAnyResource.value
+}
+
+function showSubmit(record) {
   return ['draft', 'rejected'].includes(record.status)
 }
 
-function canRepublish(record) {
+function canSubmit(record) {
+  return showSubmit(record) && canSubmitReviewPermission.value
+}
+
+function showRepublish(record) {
   return ['offline', 'rejected'].includes(record.status)
+}
+
+function canRepublish(record) {
+  return showRepublish(record) && canEditResource(record)
+}
+
+function showOffline(record) {
+  return record.status === 'published'
+}
+
+function canOffline(record) {
+  return showOffline(record) && canEditResource(record)
+}
+
+function canDelete(record) {
+  return canEditResource(record)
 }
 
 async function fetchMine() {
@@ -165,6 +230,8 @@ async function fetchMine() {
 }
 
 async function submitReview(id) {
+  const record = rows.value.find((item) => item.id === id)
+  if (record && !canSubmit(record)) return
   try {
     await submitResource(id)
     message.success('已提交审核')
@@ -175,6 +242,8 @@ async function submitReview(id) {
 }
 
 async function publish(id) {
+  const record = rows.value.find((item) => item.id === id)
+  if (record && !canRepublish(record)) return
   try {
     await publishResource(id)
     message.success('发布成功')
@@ -185,6 +254,8 @@ async function publish(id) {
 }
 
 async function offline(id) {
+  const record = rows.value.find((item) => item.id === id)
+  if (record && !canOffline(record)) return
   try {
     await offlineResource(id)
     message.success('下线成功')
@@ -199,6 +270,8 @@ function viewDetail(id) {
 }
 
 async function removeResource(id) {
+  const record = rows.value.find((item) => item.id === id)
+  if (record && !canDelete(record)) return
   try {
     await deleteResource(id)
     message.success('删除成功')

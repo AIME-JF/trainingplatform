@@ -2,12 +2,9 @@
   <a-modal
     :open="open"
     :title="title"
-    :ok-text="okText"
-    cancel-text="取消"
     :confirm-loading="confirmLoading"
     :destroy-on-close="true"
     centered
-    @ok="handleSubmit"
     @cancel="handleCancel"
   >
     <a-upload-dragger
@@ -23,9 +20,39 @@
       <p class="upload-hint">{{ hint }}</p>
     </a-upload-dragger>
 
-    <div class="import-modal-actions">
-      <a-button type="link" @click="emit('download-template')">{{ templateButtonText }}</a-button>
-    </div>
+    <template #footer>
+      <div class="import-modal-footer">
+        <PermissionsTooltip
+          :allowed="canDownloadTemplate"
+          :tips="downloadTemplateTooltip"
+        >
+          <template #default="{ disabled }">
+            <a-button type="link" :disabled="disabled" @click="emit('download-template')">
+              {{ templateButtonText }}
+            </a-button>
+          </template>
+        </PermissionsTooltip>
+
+        <a-space>
+          <a-button @click="handleCancel">取消</a-button>
+          <PermissionsTooltip
+            :allowed="canSubmit"
+            :tips="submitTooltip"
+          >
+            <template #default="{ disabled }">
+              <a-button
+                type="primary"
+                :loading="confirmLoading"
+                :disabled="disabled"
+                @click="handleSubmit"
+              >
+                {{ okText }}
+              </a-button>
+            </template>
+          </PermissionsTooltip>
+        </a-space>
+      </div>
+    </template>
   </a-modal>
 </template>
 
@@ -33,6 +60,7 @@
 import { InboxOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { ref, watch } from 'vue'
+import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
 const props = defineProps({
   open: {
@@ -58,6 +86,22 @@ const props = defineProps({
   hint: {
     type: String,
     default: '或点击选择 Excel 文件（仅支持 .xlsx）',
+  },
+  canSubmit: {
+    type: Boolean,
+    default: true,
+  },
+  submitTooltip: {
+    type: String,
+    default: '您没有权限执行导入操作',
+  },
+  canDownloadTemplate: {
+    type: Boolean,
+    default: true,
+  },
+  downloadTemplateTooltip: {
+    type: String,
+    default: '您没有权限下载导入模板',
   },
 })
 
@@ -104,8 +148,9 @@ function handleSubmit() {
   color: #999;
 }
 
-.import-modal-actions {
-  margin-top: 12px;
-  text-align: left;
+.import-modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 </style>

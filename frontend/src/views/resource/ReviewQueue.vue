@@ -13,14 +13,26 @@
               {{ statusLabel(record.status) }}
             </a-tag>
           </template>
-          <template v-if="column.key === 'action'">
-            <a-space>
-              <a-button size="small" @click="viewDetail(record)">查看</a-button>
-              <a-button size="small" type="primary" @click="approve(record)">通过</a-button>
-              <a-button size="small" danger @click="openReject(record)">驳回</a-button>
-            </a-space>
-          </template>
+        <template v-if="column.key === 'action'">
+          <a-space>
+            <a-button size="small" @click="viewDetail(record)">查看</a-button>
+            <permissions-tooltip
+              :allowed="canReviewTask"
+              tips="需要 REVIEW_RESOURCE_STAGE1、REVIEW_RESOURCE_STAGE2 或 VIEW_RESOURCE_ALL 权限"
+              v-slot="{ disabled }"
+            >
+              <a-button size="small" type="primary" :disabled="disabled" @click="approve(record)">通过</a-button>
+            </permissions-tooltip>
+            <permissions-tooltip
+              :allowed="canReviewTask"
+              tips="需要 REVIEW_RESOURCE_STAGE1、REVIEW_RESOURCE_STAGE2 或 VIEW_RESOURCE_ALL 权限"
+              v-slot="{ disabled }"
+            >
+              <a-button size="small" danger :disabled="disabled" @click="openReject(record)">驳回</a-button>
+            </permissions-tooltip>
+          </a-space>
         </template>
+      </template>
       </a-table>
     </a-card>
 
@@ -31,13 +43,17 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import { useAuthStore } from '@/stores/auth'
 import { getReviewTasks, approveReviewTask, rejectReviewTask } from '@/api/review'
+import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const tasks = ref([])
+const canReviewTask = computed(() => authStore.hasAnyPermission(['REVIEW_RESOURCE_STAGE1', 'REVIEW_RESOURCE_STAGE2', 'VIEW_RESOURCE_ALL']))
 const columns = [
   { title: '资源', dataIndex: 'resourceTitle', key: 'resourceTitle' },
   { title: '阶段', dataIndex: 'stageOrder', key: 'stageOrder', width: 100 },
@@ -74,6 +90,7 @@ function viewDetail(task) {
 }
 
 async function approve(task) {
+  if (!canReviewTask.value) return
   try {
     await approveReviewTask(task.id, { comment: '审核通过' })
     message.success('已通过')
@@ -84,12 +101,14 @@ async function approve(task) {
 }
 
 function openReject(task) {
+  if (!canReviewTask.value) return
   currentTask.value = task
   rejectComment.value = ''
   rejectVisible.value = true
 }
 
 async function doReject() {
+  if (!canReviewTask.value) return
   if (!currentTask.value) return
   try {
     await rejectReviewTask(currentTask.value.id, { comment: rejectComment.value || '不符合发布要求' })

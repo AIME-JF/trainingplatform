@@ -4,7 +4,14 @@
       <h2>资源库</h2>
       <a-space>
         <a-button @click="$router.push('/resource/my')">我的资源</a-button>
-        <a-button type="primary" v-if="!authStore.isStudent" @click="$router.push('/resource/upload')">上传资源</a-button>
+        <permissions-tooltip
+          v-if="!authStore.isStudent"
+          :allowed="canUploadResource"
+          tips="需要 CREATE_RESOURCE 或 VIEW_RESOURCE_ALL 权限"
+          v-slot="{ disabled }"
+        >
+          <a-button type="primary" :disabled="disabled" @click="$router.push('/resource/upload')">上传资源</a-button>
+        </permissions-tooltip>
       </a-space>
     </div>
 
@@ -50,8 +57,22 @@
           <div class="actions">
             <a-space>
               <a-button size="small" @click="goDetail(item.id)">查看</a-button>
-              <a-button size="small" type="primary" ghost v-if="canPublish(item)" @click="publish(item.id)">发布</a-button>
-              <a-button size="small" danger ghost v-if="canOffline(item)" @click="offline(item.id)">下线</a-button>
+              <permissions-tooltip
+                v-if="showPublish(item)"
+                :allowed="canPublish(item)"
+                tips="仅资源上传者或具备 UPDATE_RESOURCE / VIEW_RESOURCE_ALL 权限可执行该操作"
+                v-slot="{ disabled }"
+              >
+                <a-button size="small" type="primary" ghost :disabled="disabled" @click="publish(item.id)">发布</a-button>
+              </permissions-tooltip>
+              <permissions-tooltip
+                v-if="showOffline(item)"
+                :allowed="canOffline(item)"
+                tips="仅资源上传者或具备 UPDATE_RESOURCE / VIEW_RESOURCE_ALL 权限可执行该操作"
+                v-slot="{ disabled }"
+              >
+                <a-button size="small" danger ghost :disabled="disabled" @click="offline(item.id)">下线</a-button>
+              </permissions-tooltip>
             </a-space>
           </div>
         </a-card>
@@ -71,11 +92,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { computed, ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { getResources, publishResource, offlineResource } from '@/api/resource'
+import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -83,6 +105,8 @@ const authStore = useAuthStore()
 const query = reactive({ page: 1, size: 10, search: '', status: '', contentType: '' })
 const resources = ref([])
 const total = ref(0)
+const canUploadResource = computed(() => authStore.hasAnyPermission(['CREATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
+const canManageAnyResource = computed(() => authStore.hasAnyPermission(['UPDATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
 
 onMounted(async () => {
   await fetchResources()
@@ -116,15 +140,29 @@ async function fetchResources() {
   }
 }
 
+function canEditResource(item) {
+  return item?.uploaderId === authStore.currentUser?.id || canManageAnyResource.value
+}
+
+function showPublish(item) {
+  return ['draft', 'rejected', 'offline'].includes(item.status)
+}
+
+function showOffline(item) {
+  return item.status === 'published'
+}
+
 function canPublish(item) {
-  return (authStore.isAdmin || authStore.isInstructor) && ['draft', 'rejected', 'offline'].includes(item.status)
+  return showPublish(item) && canEditResource(item)
 }
 
 function canOffline(item) {
-  return (authStore.isAdmin || authStore.isInstructor) && item.status === 'published'
+  return showOffline(item) && canEditResource(item)
 }
 
 async function publish(id) {
+  const item = resources.value.find((resource) => resource.id === id)
+  if (item && !canPublish(item)) return
   try {
     await publishResource(id)
     message.success('发布成功')
@@ -135,6 +173,8 @@ async function publish(id) {
 }
 
 async function offline(id) {
+  const item = resources.value.find((resource) => resource.id === id)
+  if (item && !canOffline(item)) return
   try {
     await offlineResource(id)
     message.success('下线成功')

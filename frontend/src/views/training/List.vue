@@ -5,9 +5,16 @@
         <h2>{{ authStore.isStudent ? '我的培训' : '培训班管理' }}</h2>
         <p class="page-sub">支持发布挂网、准入考试绑定、名单锁定和训历归档</p>
       </div>
-      <a-button type="primary" v-if="authStore.isAdmin || authStore.isInstructor" @click="openCreateModal">
-        <template #icon><PlusOutlined /></template>新建培训班
-      </a-button>
+      <permissions-tooltip
+        v-if="!authStore.isStudent"
+        :allowed="canCreateTraining"
+        tips="需要 CREATE_TRAINING 权限"
+        v-slot="{ disabled }"
+      >
+        <a-button type="primary" :disabled="disabled" @click="openCreateModal">
+          <template #icon><PlusOutlined /></template>新建培训班
+        </a-button>
+      </permissions-tooltip>
     </div>
 
     <a-row :gutter="16" style="margin-bottom:20px">
@@ -269,6 +276,7 @@ import {
   UserOutlined,
 } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
+import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 import {
   createTraining,
   deleteTraining,
@@ -311,6 +319,7 @@ const studentImportFileName = ref('')
 const trainingFormDates = ref([null, null])
 const enrollmentWindow = ref([])
 const locationSourceMode = ref('manual')
+const canCreateTraining = computed(() => authStore.hasPermission('CREATE_TRAINING'))
 
 const trainingForm = reactive({
   name: '',
@@ -443,6 +452,7 @@ function resetForm() {
 }
 
 function openCreateModal() {
+  if (!canCreateTraining.value) return
   resetForm()
   showCreateModal.value = true
   ensureInstructorOptionsLoaded(true)
@@ -552,6 +562,7 @@ async function fetchTrainingBaseOptions() {
 }
 
 async function handleSubmitTraining() {
+  if (!canCreateTraining.value) return
   const hasLocation = locationSourceMode.value === 'base'
     ? Boolean(trainingForm.trainingBaseId && trainingForm.location)
     : Boolean(trainingForm.location)
@@ -681,7 +692,7 @@ function goHistory(training) {
 
 onMounted(() => {
   fetchTrainings()
-  if (authStore.isAdmin || authStore.isInstructor) {
+  if (!authStore.isStudent && canCreateTraining.value) {
     fetchAdmissionExams()
     fetchDepartments()
     fetchPoliceTypeOptions()

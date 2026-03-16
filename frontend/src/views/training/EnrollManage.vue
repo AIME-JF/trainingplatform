@@ -7,10 +7,23 @@
       </div>
       <a-space>
         <a-button @click="$router.back()">返回</a-button>
-        <a-button type="primary" danger ghost :disabled="training.isLocked" @click="handleLock">
-          {{ training.isLocked ? '名单已锁定' : '锁定名单' }}
-        </a-button>
-        <a-button type="primary" @click="saveRosterAssignments">保存编组</a-button>
+        <permissions-tooltip
+          :allowed="canManageRoster"
+          :disabled="training.isLocked"
+          :tips="trainingManageTooltip"
+          v-slot="{ disabled }"
+        >
+          <a-button type="primary" danger ghost :disabled="disabled" @click="handleLock">
+            {{ training.isLocked ? '名单已锁定' : '锁定名单' }}
+          </a-button>
+        </permissions-tooltip>
+        <permissions-tooltip
+          :allowed="canManageRoster"
+          :tips="trainingManageTooltip"
+          v-slot="{ disabled }"
+        >
+          <a-button type="primary" :disabled="disabled" @click="saveRosterAssignments">保存编组</a-button>
+        </permissions-tooltip>
       </a-space>
     </div>
 
@@ -46,7 +59,7 @@
               v-model:value="record.groupName"
               size="small"
               placeholder="编组名称"
-              :disabled="training?.isLocked"
+              :disabled="training?.isLocked || !canManageRoster"
             />
             <span v-else>-</span>
           </template>
@@ -57,7 +70,7 @@
               size="small"
               allow-clear
               placeholder="班干部"
-              :disabled="training?.isLocked"
+              :disabled="training?.isLocked || !canManageRoster"
               style="width:120px"
             >
               <a-select-option value="班长">班长</a-select-option>
@@ -69,8 +82,20 @@
           </template>
           <template v-if="column.key === 'action'">
             <a-space v-if="record.status === 'pending'">
-              <a-button type="primary" size="small" @click="approve(record)">通过</a-button>
-              <a-button danger size="small" @click="reject(record)">拒绝</a-button>
+              <permissions-tooltip
+                :allowed="canApproveEnrollment"
+                :tips="approveTooltip"
+                v-slot="{ disabled }"
+              >
+                <a-button type="primary" size="small" :disabled="disabled" @click="approve(record)">通过</a-button>
+              </permissions-tooltip>
+              <permissions-tooltip
+                :allowed="canRejectEnrollment"
+                :tips="rejectTooltip"
+                v-slot="{ disabled }"
+              >
+                <a-button danger size="small" :disabled="disabled" @click="reject(record)">拒绝</a-button>
+              </permissions-tooltip>
             </a-space>
             <span v-else class="handled-text">已处理</span>
           </template>
@@ -84,6 +109,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
+import { useAuthStore } from '@/stores/auth'
 import {
   approveEnrollment,
   getEnrollments,
@@ -92,8 +118,10 @@ import {
   rejectEnrollment,
   updateTrainingRoster,
 } from '@/api/training'
+import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
 const route = useRoute()
+const authStore = useAuthStore()
 const trainingId = route.params.id
 
 const training = ref(null)
@@ -118,6 +146,24 @@ const columns = [
 
 const pendingList = computed(() => enrollments.value.filter(item => item.status === 'pending'))
 const approvedList = computed(() => enrollments.value.filter(item => item.status === 'approved'))
+const canManageRoster = computed(() => !!training.value?.canManageAll)
+const canApproveEnrollment = computed(() => !!training.value?.canReviewEnrollments && authStore.hasPermission('APPROVE_ENROLLMENT'))
+const canRejectEnrollment = computed(() => !!training.value?.canReviewEnrollments && authStore.hasPermission('REJECT_ENROLLMENT'))
+const trainingManageTooltip = computed(() => {
+  if (authStore.hasPermission('MANAGE_TRAINING')) return '当前培训班不在可管理范围内'
+  if (authStore.hasPermission('UPDATE_TRAINING')) return '仅培训班班主任可执行该操作'
+  return '需要 MANAGE_TRAINING，或具备 UPDATE_TRAINING 且为班主任'
+})
+const approveTooltip = computed(() => (
+  !authStore.hasPermission('APPROVE_ENROLLMENT')
+    ? '需要 APPROVE_ENROLLMENT 权限'
+    : trainingManageTooltip.value
+))
+const rejectTooltip = computed(() => (
+  !authStore.hasPermission('REJECT_ENROLLMENT')
+    ? '需要 REJECT_ENROLLMENT 权限'
+    : trainingManageTooltip.value
+))
 
 const filteredList = computed(() => {
   let rows = [...enrollments.value]
@@ -150,6 +196,7 @@ async function loadData() {
 }
 
 async function approve(record) {
+  if (!canApproveEnrollment.value) return
   try {
     await approveEnrollment(trainingId, record.id)
     record.status = 'approved'
@@ -160,6 +207,7 @@ async function approve(record) {
 }
 
 async function reject(record) {
+  if (!canRejectEnrollment.value) return
   try {
     await rejectEnrollment(trainingId, record.id, '审核未通过')
     record.status = 'rejected'
@@ -170,6 +218,7 @@ async function reject(record) {
 }
 
 async function saveRosterAssignments() {
+  if (!canManageRoster.value) return
   const payload = approvedList.value.map(item => ({
     enrollmentId: item.id,
     groupName: item.groupName || undefined,
@@ -185,6 +234,7 @@ async function saveRosterAssignments() {
 }
 
 function handleLock() {
+  if (!canManageRoster.value || training.value?.isLocked) return
   Modal.confirm({
     title: '确认锁定名单？',
     content: '锁定后将不再接受新报名，待审核记录会自动关闭。',

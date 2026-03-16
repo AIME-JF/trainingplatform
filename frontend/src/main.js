@@ -20,6 +20,6 @@ app.use(Antd, { locale: zhCN })
 
 // 启动时从 localStorage 恢复用户状态，确保刷新后 pinia store 有数据
 const authStore = useAuthStore()
-authStore.restoreFromStorage()
+await authStore.restoreFromStorage()
 
 app.mount('#app')

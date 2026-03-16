@@ -7,16 +7,37 @@ export const useAuthStore = defineStore('auth', () => {
 
   const isLoggedIn = computed(() => !!currentUser.value)
   const role = computed(() => currentUser.value?.role || null)
+  const permissions = computed(() => currentUser.value?.permissions || [])
   const isAdmin = computed(() => role.value === 'admin')
   const isInstructor = computed(() => role.value === 'instructor')
   const isStudent = computed(() => role.value === 'student')
 
+  function extractPermissionCodes(user) {
+    const codeSet = new Set()
+    for (const code of user?.permissions || []) {
+      if (code) {
+        codeSet.add(String(code).trim())
+      }
+    }
+    for (const roleItem of user?.roles || []) {
+      for (const permission of roleItem?.permissions || []) {
+        if (permission?.code) {
+          codeSet.add(String(permission.code).trim())
+        }
+      }
+    }
+    return Array.from(codeSet).sort()
+  }
+
   function setUserFromResponse(user) {
+    const permissionCodes = extractPermissionCodes(user)
     // Map backend user fields to frontend expected shape
     const mapped = {
       ...user,
       name: user.nickname || user.name || user.username,
       role: user.roles?.[0]?.code || user.role || 'student',
+      roleCodes: (user.roles || []).map((item) => item.code).filter(Boolean),
+      permissions: permissionCodes,
       policeId: user.policeId || user.police_id,
       unit: user.departments?.[0]?.name || user.unit || '',
       studyHours: user.studyHours ?? 0,
@@ -84,6 +105,27 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  function hasPermission(permission) {
+    if (!permission) return true
+    return permissions.value.includes(permission)
+  }
+
+  function hasAnyPermission(permissionList) {
+    const list = Array.isArray(permissionList)
+      ? permissionList.filter(Boolean)
+      : [permissionList].filter(Boolean)
+    if (!list.length) return true
+    return list.some((permission) => hasPermission(permission))
+  }
+
+  function hasAllPermissions(permissionList) {
+    const list = Array.isArray(permissionList)
+      ? permissionList.filter(Boolean)
+      : [permissionList].filter(Boolean)
+    if (!list.length) return true
+    return list.every((permission) => hasPermission(permission))
+  }
+
   function switchRole(roleKey) {
     // For dev/demo convenience: update role in current user
     if (currentUser.value) {
@@ -92,5 +134,21 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  return { currentUser, isLoggedIn, role, isAdmin, isInstructor, isStudent, loginWithCredentials, loginWithPhone, logout, restoreFromStorage, switchRole }
+  return {
+    currentUser,
+    isLoggedIn,
+    role,
+    permissions,
+    isAdmin,
+    isInstructor,
+    isStudent,
+    hasPermission,
+    hasAnyPermission,
+    hasAllPermissions,
+    loginWithCredentials,
+    loginWithPhone,
+    logout,
+    restoreFromStorage,
+    switchRole,
+  }
 })

@@ -3,9 +3,21 @@
     <div class="page-header">
       <h2>部门管理</h2>
       <a-space>
-        <a-button @click="openImportModal">部门导入</a-button>
-        <a-button :loading="exportingDepartments" @click="handleExportDepartments">部门导出</a-button>
-        <a-button type="primary" @click="openCreate">新增部门</a-button>
+        <PermissionsTooltip :allowed="canImportDepartments" tips="需要 IMPORT_DEPARTMENTS 权限">
+          <template #default="{ disabled }">
+            <a-button :disabled="disabled" @click="openImportModal">部门导入</a-button>
+          </template>
+        </PermissionsTooltip>
+        <PermissionsTooltip :allowed="canExportDepartments" tips="需要 EXPORT_DEPARTMENTS 权限">
+          <template #default="{ disabled }">
+            <a-button :loading="exportingDepartments" :disabled="disabled" @click="handleExportDepartments">部门导出</a-button>
+          </template>
+        </PermissionsTooltip>
+        <PermissionsTooltip :allowed="canCreateDepartment" tips="需要 CREATE_DEPARTMENT 权限">
+          <template #default="{ disabled }">
+            <a-button type="primary" :disabled="disabled" @click="openCreate">新增部门</a-button>
+          </template>
+        </PermissionsTooltip>
       </a-space>
     </div>
 
@@ -78,17 +90,36 @@
           </template>
           <template v-if="column.key === 'action'">
             <a-space>
-              <a-button size="small" @click="openAddChild(record)">添加子部门</a-button>
-              <a-button size="small" @click="openEdit(record)">编辑</a-button>
-              <a-button size="small" @click="openPermissionDialog(record)">分配权限</a-button>
-              <a-popconfirm
-                title="确认删除该部门吗？"
-                ok-text="删除"
-                cancel-text="取消"
-                @confirm="removeDepartment(record)"
-              >
-                <a-button size="small" danger>删除</a-button>
-              </a-popconfirm>
+              <PermissionsTooltip :allowed="canCreateDepartment" tips="需要 CREATE_DEPARTMENT 权限">
+                <template #default="{ disabled }">
+                  <a-button size="small" :disabled="disabled" @click="openAddChild(record)">添加子部门</a-button>
+                </template>
+              </PermissionsTooltip>
+              <PermissionsTooltip :allowed="canUpdateDepartment" tips="需要 UPDATE_DEPARTMENT 权限">
+                <template #default="{ disabled }">
+                  <a-button size="small" :disabled="disabled" @click="openEdit(record)">编辑</a-button>
+                </template>
+              </PermissionsTooltip>
+              <PermissionsTooltip :allowed="canUpdateDepartmentPermissions" tips="需要 UPDATE_DEPARTMENT_PERMISSIONS 权限">
+                <template #default="{ disabled }">
+                  <a-button size="small" :disabled="disabled" @click="openPermissionDialog(record)">分配权限</a-button>
+                </template>
+              </PermissionsTooltip>
+              <template v-if="canDeleteDepartment">
+                <a-popconfirm
+                  title="确认删除该部门吗？"
+                  ok-text="删除"
+                  cancel-text="取消"
+                  @confirm="removeDepartment(record)"
+                >
+                  <a-button size="small" danger>删除</a-button>
+                </a-popconfirm>
+              </template>
+              <PermissionsTooltip v-else :allowed="false" tips="需要 DELETE_DEPARTMENT 权限">
+                <template #default="{ disabled }">
+                  <a-button size="small" danger :disabled="disabled">删除</a-button>
+                </template>
+              </PermissionsTooltip>
             </a-space>
           </template>
         </template>
@@ -99,6 +130,10 @@
       v-model:open="importDialog.visible"
       title="部门导入"
       :confirm-loading="importDialog.submitting"
+      :can-submit="canImportDepartments"
+      :can-download-template="canDownloadDepartmentImportTemplate"
+      submit-tooltip="需要 IMPORT_DEPARTMENTS 权限"
+      download-template-tooltip="需要 DOWNLOAD_DEPARTMENT_IMPORT_TEMPLATE 权限"
       @submit="submitImport"
       @download-template="handleDownloadImportTemplate"
     />
@@ -172,6 +207,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
+import { useAuthStore } from '@/stores/auth'
 import {
   createDepartment,
   deleteDepartment,
@@ -186,9 +222,11 @@ import {
 } from '@/api/department'
 import { getPermissionList } from '@/api/permission'
 import { downloadBlob } from '@/utils/download'
+import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 import ExcelImportModal from './components/ExcelImportModal.vue'
 import PermissionTransfer from './components/PermissionTransfer.vue'
 
+const authStore = useAuthStore()
 const loading = ref(false)
 const rows = ref([])
 const switchingDepartmentId = ref(null)
@@ -237,6 +275,13 @@ const importDialog = reactive({
   visible: false,
   submitting: false,
 })
+const canCreateDepartment = computed(() => authStore.hasPermission('CREATE_DEPARTMENT'))
+const canImportDepartments = computed(() => authStore.hasPermission('IMPORT_DEPARTMENTS'))
+const canExportDepartments = computed(() => authStore.hasPermission('EXPORT_DEPARTMENTS'))
+const canDownloadDepartmentImportTemplate = computed(() => authStore.hasPermission('DOWNLOAD_DEPARTMENT_IMPORT_TEMPLATE'))
+const canUpdateDepartment = computed(() => authStore.hasPermission('UPDATE_DEPARTMENT'))
+const canDeleteDepartment = computed(() => authStore.hasPermission('DELETE_DEPARTMENT'))
+const canUpdateDepartmentPermissions = computed(() => authStore.hasPermission('UPDATE_DEPARTMENT_PERMISSIONS'))
 
 const allDepartmentOptions = computed(() =>
   rows.value.map((item) => ({
@@ -354,6 +399,7 @@ function handleReset() {
 }
 
 function openImportModal() {
+  if (!canImportDepartments.value) return
   importDialog.visible = true
 }
 
@@ -366,6 +412,7 @@ function resetEditForm() {
 }
 
 function openCreate() {
+  if (!canCreateDepartment.value) return
   editDialog.mode = 'add'
   editDialog.currentId = null
   resetEditForm()
@@ -373,6 +420,7 @@ function openCreate() {
 }
 
 function openAddChild(record) {
+  if (!canCreateDepartment.value) return
   editDialog.mode = 'add'
   editDialog.currentId = null
   resetEditForm()
@@ -381,6 +429,7 @@ function openAddChild(record) {
 }
 
 function openEdit(record) {
+  if (!canUpdateDepartment.value) return
   editDialog.mode = 'edit'
   editDialog.currentId = record.id
   editDialog.form.code = record.code || ''
@@ -392,6 +441,14 @@ function openEdit(record) {
 }
 
 async function submitDepartment() {
+  if (editDialog.mode === 'add' && !canCreateDepartment.value) {
+    message.warning('没有新增部门权限')
+    return
+  }
+  if (editDialog.mode === 'edit' && !canUpdateDepartment.value) {
+    message.warning('没有编辑部门权限')
+    return
+  }
   if (!editDialog.form.name?.trim()) {
     message.warning('请输入部门名称')
     return
@@ -432,6 +489,7 @@ async function submitDepartment() {
 }
 
 async function changeStatus(record, checked) {
+  if (!canUpdateDepartment.value) return
   const oldStatus = record.isActive
   record.isActive = checked
   switchingDepartmentId.value = record.id
@@ -447,6 +505,7 @@ async function changeStatus(record, checked) {
 }
 
 async function removeDepartment(record) {
+  if (!canDeleteDepartment.value) return
   try {
     await deleteDepartment(record.id)
     message.success('删除部门成功')
@@ -457,6 +516,7 @@ async function removeDepartment(record) {
 }
 
 async function openPermissionDialog(record) {
+  if (!canUpdateDepartmentPermissions.value) return
   permissionDialog.visible = true
   permissionDialog.department = record
   permissionDialog.loading = true
@@ -478,6 +538,10 @@ async function openPermissionDialog(record) {
 }
 
 async function submitDepartmentPermissions() {
+  if (!canUpdateDepartmentPermissions.value) {
+    message.warning('没有分配部门权限')
+    return
+  }
   if (!permissionDialog.department) return
   const permissionIds = permissionDialog.targetKeys
     .map((key) => Number(key))
@@ -497,6 +561,7 @@ async function submitDepartmentPermissions() {
 }
 
 async function handleDownloadImportTemplate() {
+  if (!canDownloadDepartmentImportTemplate.value) return
   try {
     const blob = await downloadDepartmentImportTemplate()
     downloadBlob(blob, '部门导入模板.xlsx')
@@ -506,6 +571,7 @@ async function handleDownloadImportTemplate() {
 }
 
 async function handleExportDepartments() {
+  if (!canExportDepartments.value) return
   exportingDepartments.value = true
   try {
     const blob = await exportDepartments({
@@ -522,6 +588,10 @@ async function handleExportDepartments() {
 }
 
 async function submitImport(file) {
+  if (!canImportDepartments.value) {
+    message.warning('没有部门导入权限')
+    return
+  }
   importDialog.submitting = true
   try {
     const result = await importDepartments(file)
