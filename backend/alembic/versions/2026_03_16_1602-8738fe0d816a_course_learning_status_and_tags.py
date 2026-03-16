@@ -177,7 +177,7 @@ def upgrade() -> None:
                comment='状态: submitted/absent/exempt',
                existing_comment='作答状态',
                existing_server_default=sa.text("'submitted'::character varying"))
-    op.drop_index('ix_exam_records_paper_id', table_name='exam_records')
+    op.execute('DROP INDEX IF EXISTS ix_exam_records_paper_id')
     op.alter_column('exams', 'paper_id',
                existing_type=sa.INTEGER(),
                nullable=False,
@@ -217,8 +217,8 @@ def upgrade() -> None:
                nullable=True,
                existing_comment='是否允许补考',
                existing_server_default=sa.text('false'))
-    op.drop_index('ix_exams_paper_id', table_name='exams')
-    op.drop_index('ix_exams_training_id', table_name='exams')
+    op.execute('DROP INDEX IF EXISTS ix_exams_paper_id')
+    op.execute('DROP INDEX IF EXISTS ix_exams_training_id')
     op.alter_column('questions', 'answer',
                existing_type=postgresql.JSON(astext_type=sa.Text()),
                comment='答案 string 或 string[]',
@@ -463,8 +463,8 @@ def downgrade() -> None:
                comment='答案 string或string[]',
                existing_comment='答案 string 或 string[]',
                existing_nullable=False)
-    op.create_index('ix_exams_training_id', 'exams', ['training_id'], unique=False)
-    op.create_index('ix_exams_paper_id', 'exams', ['paper_id'], unique=False)
+    op.execute('CREATE INDEX IF NOT EXISTS ix_exams_training_id ON exams (training_id)')
+    op.execute('CREATE INDEX IF NOT EXISTS ix_exams_paper_id ON exams (paper_id)')
     op.alter_column('exams', 'allow_makeup',
                existing_type=sa.BOOLEAN(),
                nullable=False,
@@ -504,7 +504,7 @@ def downgrade() -> None:
                existing_type=sa.INTEGER(),
                nullable=True,
                existing_comment='试卷ID')
-    op.create_index('ix_exam_records_paper_id', 'exam_records', ['paper_id'], unique=False)
+    op.execute('CREATE INDEX IF NOT EXISTS ix_exam_records_paper_id ON exam_records (paper_id)')
     op.alter_column('exam_records', 'status',
                existing_type=sa.VARCHAR(length=20),
                nullable=False,
