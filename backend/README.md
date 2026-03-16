@@ -77,8 +77,31 @@
 - 培训班详情页可直接查看待审核报名申请，审批通过 / 拒绝仍走统一报名接口
 - 课程安排：主讲教官 1 人 + 带教教官多人
 - 课次状态流：未开始 -> 签到中 -> 课程进行中（签到窗口已结束） -> 签退中 -> 已完成 / 已跳过 / 已错过
+- 培训班开班后，课程和课次的任何变更都会写入 `TrainingCourseChangeLog`
+  - 来源包括详情页改课、课表导入、开始 / 结束签到、开始 / 结束签退、跳过课次、系统自动刷新为 `missed`
+  - 记录内容包括课程 / 课次摘要、操作人、前后快照、批次号
+- 已结班培训班禁止再修改课程安排和课次状态，后端会直接拒绝
 - 培训训历：根据报名、签到、考试记录汇总归档
 - 数据归属字段：`department_id`、`police_type_id`、`training_base_id`、`created_by`
+
+### 课程域
+
+当前课程域的关键规则如下：
+
+- 课程标签已独立成 `CourseTag` / `CourseTagRelation`
+- 标签接口支持：
+  - `GET /api/v1/courses/tags`：按关键字搜索课程标签
+  - `POST /api/v1/courses/tags`：直接创建课程标签
+- 课程章节更新会尽量保留原章节 ID，避免编辑课程后打断已有学习进度
+- 课程总进度统一由 `CourseProgressService` 聚合：
+  - 按章节时长加权
+  - 课程列表、课程详情、个人中心、工作台共用同一口径
+- 视频学习进度会持久化 `playback_seconds`
+  - 章节进度接口会保存最近播放秒数
+  - 课程详情接口会返回最近学习章节和最近播放位置
+- 课程学习情况接口：`GET /api/v1/courses/{course_id}/learning-status`
+  - 仅课程创建者、课程主讲教官，或具备 `GET_COURSE_LEARNING_STATUS` 权限的用户可查看
+  - 返回学员、整门课进度、已完成章节数、最近学习时间、最近播放位置
 
 ### 数据范围域
 
@@ -366,6 +389,11 @@ python migrate.py generate "your message"
 - `Base.metadata.create_all()` 只负责补缺表，不能替代 Alembic 字段迁移
 - 当前迁移已经覆盖考试重构、试卷状态字段、培训 P0 重构、培训班考试去除 `scope`、准入考试结构化适用范围字段以及 AI 任务表
 - 当前迁移也承担历史库的权限补齐与内置角色修正，不再依赖应用启动时做运行时兼容补丁
+- 最新一轮课程 / 培训改造还依赖以下结构迁移：
+  - `course_tags`、`course_tag_relations`
+  - `course_progress.playback_seconds`
+  - `training_courses.course_key`
+  - `training_course_change_logs`
 
 ## 认证与权限
 
@@ -411,6 +439,12 @@ python migrate.py generate "your message"
 - 培训班更新接口已拆成两条：
   - `PUT /api/v1/trainings/{id}`：要求 `UPDATE_TRAINING`，且必须是当前培训班班主任
   - `PUT /api/v1/trainings/{id}/manage`：要求 `MANAGE_TRAINING`，用于管理端直接更新
+- 培训班课程变更记录接口：`GET /api/v1/trainings/{id}/course-change-logs`
+  - 仅班主任可直接查看
+  - 或具备 `MANAGE_TRAINING` 且数据范围允许管理当前培训班的用户可查看
+- 课程学习情况接口：`GET /api/v1/courses/{id}/learning-status`
+  - 课程创建者、课程主讲教官可直接查看
+  - 其余用户需具备 `GET_COURSE_LEARNING_STATUS`
 - 用户管理、培训班、培训基地、题库当前已接入数据范围控制：
   - 用户：部门或警种命中即可
   - 培训班 / 培训基地 / 题目：按对象自身的部门、警种归属控制
@@ -491,6 +525,7 @@ python migrate.py generate "your message"
 - 培训班和培训基地新增了 `created_by`；旧库需要执行最新 Alembic 迁移后才能正常读取这些字段。
 - 准入考试现在新增了 `scope_type`、`scope_target_ids` 两个字段；旧库必须执行最新 Alembic 迁移后才能正常保存结构化适用范围。
 - 培训班现在新增了 `enrollment_requires_approval`；旧库必须执行最新 Alembic 迁移后才能正常区分“审批报名”和“直接通过”两种模式。
+- 课程标签、课程学习播放位置、培训班课程变更日志都依赖最新 Alembic 迁移；旧库不迁移会导致标签、学习进度恢复和课程变更记录不可用。
 - 试卷详情接口现在会返回每道题的标准答案；前端试卷详情页依赖该字段展示答案与解析。
 - 历史库中的缺失权限、`admin` 权限集合以及内置角色默认 `data_scopes`，会在最新 Alembic 迁移里被一次性修正；部署后请先执行 `python migrate.py upgrade`。
 - 某些系统管理接口同时提供 REST 风格和兼容旧前端的 `/create`、`/update`、`/delete` 别名。

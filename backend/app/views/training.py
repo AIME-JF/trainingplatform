@@ -25,6 +25,7 @@ from app.schemas import (
     TrainingAttendanceSummaryResponse,
     TrainingCheckinQrResponse,
     TrainingCreate,
+    TrainingCourseChangeLogResponse,
     TrainingEvaluationCreate,
     TrainingHistoryResponse,
     TrainingListResponse,
@@ -52,18 +53,23 @@ def _require_admin_or_instructor(db: Session, user_id: int):
 
 
 def _require_permission(db: Session, current_user: TokenData, permission: str):
-    if permission in current_user.permissions:
+    if _has_permission(db, current_user, permission):
         return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=f"权限不足，需要权限: {permission}",
+    )
+
+
+def _has_permission(db: Session, current_user: TokenData, permission: str) -> bool:
+    if permission in current_user.permissions:
+        return True
     has_permission = db.query(User.id).join(User.roles).join(Role.permissions).filter(
         User.id == current_user.user_id,
         User.is_active == True,
         Permission.code == permission,
     ).first()
-    if not has_permission:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail=f"权限不足，需要权限: {permission}",
-        )
+    return bool(has_permission)
 
 
 def _get_training_or_404(db: Session, training_id: int) -> Training:
@@ -98,6 +104,15 @@ def _require_self_or_manager(db: Session, training_id: int, actor_id: int, targe
     if target_user_id is None or target_user_id == actor_id:
         return
     _require_training_manager(db, training_id, actor_id)
+
+
+def _require_training_course_change_log_viewer(db: Session, training_id: int, current_user: TokenData):
+    training = _get_training_or_404(db, training_id)
+    if can_update_training(db, training, current_user.user_id):
+        return training
+    if _has_permission(db, current_user, "MANAGE_TRAINING") and can_manage_training(db, training, current_user.user_id):
+        return training
+    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权查看课程变更记录")
 
 
 @router.get("/histories/me", response_model=StandardResponse[List[TrainingHistoryResponse]], summary="我的训历")
@@ -340,7 +355,12 @@ async def import_schedule(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="导入文件为空")
     service = TrainingService(db)
     try:
-        data = service.import_training_schedule(training_id, file_bytes, replace_existing=replace_existing)
+        data = service.import_training_schedule(
+            training_id,
+            file_bytes,
+            replace_existing=replace_existing,
+            actor_id=current_user.user_id,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     return StandardResponse(data=data)
@@ -587,6 +607,22 @@ def get_training_histories(
         target_user_id = current_user.user_id
     controller = TrainingController(db)
     data = controller.get_training_histories(training_id, target_user_id)
+    return StandardResponse(data=data)
+
+
+@router.get(
+    "/{training_id}/course-change-logs",
+    response_model=StandardResponse[List[TrainingCourseChangeLogResponse]],
+    summary="培训班课程变更记录",
+)
+def get_training_course_change_logs(
+    training_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_training_course_change_log_viewer(db, training_id, current_user)
+    controller = TrainingController(db)
+    data = controller.get_training_course_change_logs(training_id)
     return StandardResponse(data=data)
 
 

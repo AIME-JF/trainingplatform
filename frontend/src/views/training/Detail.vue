@@ -195,6 +195,48 @@
               </a-table>
             </a-tab-pane>
 
+            <a-tab-pane key="courseChangeLogs" tab="课程变更记录" v-if="!authStore.isStudent && trainingData.canViewCourseChangeLogs">
+              <div class="section-header" style="margin-bottom:16px">
+                <h4 style="margin:0">课程变更记录</h4>
+                <a-button size="small" @click="loadTrainingCourseChangeLogs">刷新</a-button>
+              </div>
+              <a-table
+                :data-source="courseChangeLogs"
+                :loading="courseChangeLogsLoading"
+                :pagination="{ pageSize: 10, showSizeChanger: false }"
+                row-key="id"
+                size="small"
+              >
+                <a-table-column title="时间" key="createdAt" width="180">
+                  <template #default="{ record }">
+                    {{ formatDateTime(record.createdAt, '-') }}
+                  </template>
+                </a-table-column>
+                <a-table-column title="操作人" key="actor" width="140">
+                  <template #default="{ record }">
+                    {{ record.actorName || '系统' }}
+                  </template>
+                </a-table-column>
+                <a-table-column title="来源" key="source" width="180">
+                  <template #default="{ record }">
+                    <a-space size="small">
+                      <a-tag>{{ courseChangeSourceLabelMap[record.source] || record.source }}</a-tag>
+                      <a-tag :color="courseChangeActionColorMap[record.action] || 'default'">
+                        {{ courseChangeActionLabelMap[record.action] || record.action }}
+                      </a-tag>
+                    </a-space>
+                  </template>
+                </a-table-column>
+                <a-table-column title="对象" key="target" width="260">
+                  <template #default="{ record }">
+                    <div>{{ courseChangeTargetLabelMap[record.targetType] || record.targetType }} · {{ record.courseName || '未命名课程' }}</div>
+                    <div v-if="record.sessionLabel" style="color:#999">{{ record.sessionLabel }}</div>
+                  </template>
+                </a-table-column>
+                <a-table-column title="摘要" data-index="summary" key="summary" />
+              </a-table>
+            </a-tab-pane>
+
             <a-tab-pane key="exams" tab="考试安排">
               <div class="section-header" style="margin-bottom:16px">
                 <h4>考试安排</h4>
@@ -810,6 +852,7 @@ import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QrcodeOutlined, Do
 import dayjs from 'dayjs'
 import {
   getTraining,
+  getTrainingCourseChangeLogs,
   getEnrollments,
   approveEnrollment,
   rejectEnrollment,
@@ -882,6 +925,7 @@ const trainingData = reactive({
   canManageTraining: false,
   canEditTraining: false,
   canEditCourses: false,
+  canViewCourseChangeLogs: false,
   canReviewEnrollments: false,
   currentEnrollmentStatus: null,
   canEnterTraining: false,
@@ -890,6 +934,8 @@ const trainingData = reactive({
 const allUserList = ref([])
 const rosterUserList = ref([])
 const notices = ref([])
+const courseChangeLogs = ref([])
+const courseChangeLogsLoading = ref(false)
 const userMap = computed(() => {
   const map = {}
   rosterUserList.value.forEach(u => { map[u.id] = u })
@@ -960,6 +1006,7 @@ function applyTrainingDetail(data) {
     canManageTraining: !!data.canManageTraining,
     canEditTraining: !!data.canEditTraining,
     canEditCourses: !!data.canEditCourses,
+    canViewCourseChangeLogs: !!data.canViewCourseChangeLogs,
     canReviewEnrollments: !!data.canReviewEnrollments,
     currentEnrollmentStatus: data.currentEnrollmentStatus || null,
     canEnterTraining: !!data.canEnterTraining,
@@ -994,6 +1041,14 @@ async function loadTrainingDetail() {
       return
     }
     applyTrainingDetail(data)
+    if (authStore.isStudent || !data.canViewCourseChangeLogs) {
+      courseChangeLogs.value = []
+      if (activeTab.value === 'courseChangeLogs') {
+        activeTab.value = 'overview'
+      }
+    } else if (activeTab.value === 'courseChangeLogs') {
+      loadTrainingCourseChangeLogs()
+    }
   } catch (e) {
     message.error('加载培训班详情失败')
   }
@@ -1004,6 +1059,24 @@ async function submitTrainingUpdate(payload) {
     return apiManageTraining(trainingId, payload)
   }
   return apiUpdateTraining(trainingId, payload)
+}
+
+async function loadTrainingCourseChangeLogs() {
+  if (authStore.isStudent || !trainingData.canViewCourseChangeLogs) {
+    courseChangeLogs.value = []
+    return
+  }
+  if (courseChangeLogsLoading.value) {
+    return
+  }
+  courseChangeLogsLoading.value = true
+  try {
+    courseChangeLogs.value = await getTrainingCourseChangeLogs(trainingId)
+  } catch (error) {
+    message.error(error.message || '加载课程变更记录失败')
+  } finally {
+    courseChangeLogsLoading.value = false
+  }
 }
 
 async function ensureInstructorOptionsLoaded(force = false) {
@@ -1060,7 +1133,7 @@ const studentSearch = ref('')
 const selectedSchedules = reactive({}) // { courseIdx: scheduleIdx }
 const scheduleViewMode = ref('course')
 const canEdit = computed(() => !!trainingData.canManageAll)
-const canScheduleEdit = computed(() => !!trainingData.canEditCourses)
+const canScheduleEdit = computed(() => !!trainingData.canEditCourses && trainingData.status !== 'ended')
 const canManageStudents = computed(() => !!trainingData.canManageAll)
 const canManageEnrollmentApplications = computed(() => !!trainingData.canReviewEnrollments)
 const canManageResources = computed(() => !!trainingData.canManageAll)
@@ -1073,7 +1146,7 @@ const trainingManageTooltip = computed(() => {
   return '需要 MANAGE_TRAINING，或具备 UPDATE_TRAINING 且为班主任'
 })
 const scheduleEditTooltip = computed(() => (
-  canEdit.value ? '当前角色不能编辑课程安排' : trainingManageTooltip.value
+  trainingData.status === 'ended' ? '已结班，不能再修改课程安排' : trainingManageTooltip.value
 ))
 const quickCreateExamTooltip = computed(() => (
   !authStore.hasPermission('CREATE_EXAM') ? '需要 CREATE_EXAM 权限' : trainingManageTooltip.value
@@ -1147,6 +1220,32 @@ const scheduleStatusColorMap = {
   skipped: 'red',
   missed: 'volcano',
 }
+const courseChangeTargetLabelMap = {
+  course: '课程',
+  session: '课次',
+}
+const courseChangeActionLabelMap = {
+  create: '新增',
+  update: '更新',
+  delete: '删除',
+  statusChange: '状态变更',
+}
+const courseChangeActionColorMap = {
+  create: 'green',
+  update: 'blue',
+  delete: 'red',
+  statusChange: 'orange',
+}
+const courseChangeSourceLabelMap = {
+  detailUpdate: '详情修改',
+  importSchedule: '课表导入',
+  startCheckin: '开始签到',
+  endCheckin: '结束签到',
+  startCheckout: '开始签退',
+  endCheckout: '结束签退',
+  skipSession: '跳过课次',
+  systemRefresh: '系统刷新',
+}
 const currentSessionStatusLabel = computed(() => {
   if (!currentSession.value) return '无'
   return scheduleStatusLabelMap[currentSession.value.status] || currentSession.value.status
@@ -1183,6 +1282,9 @@ const trainingResourceOptions = computed(() => (resourceCandidates.value || []).
 watch(activeTab, (tab) => {
   if (tab === 'resources' && canManageResources.value) {
     loadResourceCandidates()
+  }
+  if (tab === 'courseChangeLogs' && trainingData.canViewCourseChangeLogs && !authStore.isStudent) {
+    loadTrainingCourseChangeLogs()
   }
 })
 
@@ -1577,6 +1679,7 @@ const tempTimeRange = ref([])
 
 // 'schedules' will store objects like { date: 'YYYY-MM-DD', timeRange: 'HH:mm~HH:mm', hours: 2 }
 const courseForm = reactive({
+  courseKey: '',
   name: '',
   instructor: '',
   instructorId: null,
@@ -1675,6 +1778,7 @@ function openCourseModal(idx = null) {
     const c = JSON.parse(JSON.stringify(trainingData.courses[idx]))
     const inst = instructorList.value.find(i => i.userId === c.primaryInstructorId || i.name === c.instructor)
     Object.assign(courseForm, {
+      courseKey: c.courseKey || '',
       name: c.name,
       instructor: c.instructor,
       instructorId: (c.primaryInstructorId || inst?.userId) ?? null,
@@ -1707,7 +1811,7 @@ function openCourseModal(idx = null) {
       }
     }
   } else {
-    Object.assign(courseForm, { name: '', instructor: '', instructorId: null, assistantInstructorIds: [], hours: 0, type: 'theory', schedules: [] })
+    Object.assign(courseForm, { courseKey: '', name: '', instructor: '', instructorId: null, assistantInstructorIds: [], hours: 0, type: 'theory', schedules: [] })
   }
   showCourseModal.value = true
 }
@@ -1732,8 +1836,8 @@ async function saveCourse() {
     message.success(editingCourseIdx.value !== null ? '课程已更新' : '课程已添加')
     showCourseModal.value = false
     await loadTrainingDetail()
-  } catch {
-    message.error('课程保存失败')
+  } catch (error) {
+    message.error(error.message || '课程保存失败')
   }
 }
 
@@ -1749,8 +1853,8 @@ function removeCourse(idx) {
         await submitTrainingUpdate({ courses: nextCourses })
         message.success('课程已删除')
         await loadTrainingDetail()
-      } catch {
-        message.error('课程删除失败')
+      } catch (error) {
+        message.error(error.message || '课程删除失败')
       }
     }
   })

@@ -64,6 +64,7 @@ class TrainingCurrentSessionResponse(BaseModel):
 class TrainingCourseCreate(BaseModel):
     """创建培训课程安排"""
 
+    course_key: Optional[str] = Field(None, description="稳定课程键")
     name: str = Field(..., max_length=200, description="课程名称")
     instructor: Optional[str] = Field(None, description="主讲教官名称")
     primary_instructor_id: Optional[int] = Field(None, description="主讲教官ID")
@@ -78,6 +79,7 @@ class TrainingCourseResponse(BaseModel):
 
     id: int
     training_id: int
+    course_key: Optional[str] = None
     name: str
     instructor: Optional[str] = None
     primary_instructor_id: Optional[int] = None
@@ -264,6 +266,7 @@ class TrainingResponse(BaseModel):
     can_manage_training: bool = False
     can_edit_training: bool = False
     can_edit_courses: bool = False
+    can_view_course_change_logs: bool = False
     can_review_enrollments: bool = False
     current_enrollment_status: Optional[str] = None
     can_enter_training: bool = False
@@ -489,5 +492,28 @@ class TrainingHistoryResponse(BaseModel):
     evaluation_score: float = 0
     passed_exam_count: int = 0
     archived_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class TrainingCourseChangeLogResponse(BaseModel):
+    """培训班课程变更记录响应"""
+
+    id: int
+    training_id: int
+    course_key: Optional[str] = None
+    session_key: Optional[str] = None
+    actor_id: Optional[int] = None
+    actor_name: Optional[str] = None
+    target_type: str
+    action: str
+    source: str
+    batch_id: str
+    course_name: Optional[str] = None
+    session_label: Optional[str] = None
+    summary: Optional[str] = None
+    before_json: Optional[dict] = None
+    after_json: Optional[dict] = None
+    created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)

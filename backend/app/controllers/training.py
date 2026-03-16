@@ -12,6 +12,7 @@ from app.schemas import (
     CheckoutCreate,
     EnrollmentCreate,
     TrainingSkipCourseRequest,
+    TrainingCourseChangeLogResponse,
     TrainingCreate,
     TrainingCheckinQrResponse,
     TrainingEvaluationCreate,
@@ -247,6 +248,9 @@ class TrainingController:
 
     def get_training_histories(self, training_id: int, user_id: Optional[int] = None):
         return self.service.get_training_histories(training_id, user_id)
+
+    def get_training_course_change_logs(self, training_id: int) -> list[TrainingCourseChangeLogResponse]:
+        return self.service.get_training_course_change_logs(training_id)
 
     def get_user_training_histories(self, user_id: int):
         return self.service.get_user_training_histories(user_id)

@@ -68,6 +68,10 @@ export function getSchedule(id) {
   return request.get(`/trainings/${id}/schedule`)
 }
 
+export function getTrainingCourseChangeLogs(id) {
+  return request.get(`/trainings/${id}/course-change-logs`)
+}
+
 export function enroll(id, data) {
   return request.post(`/trainings/${id}/enroll`, data)
 }

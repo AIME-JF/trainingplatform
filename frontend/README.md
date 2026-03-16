@@ -125,6 +125,8 @@ pnpm preview
 
 常见维护位置：
 
+- 课程列表 / 详情：`frontend/src/views/courses/List.vue`、`Detail.vue`
+- 课程创建 / 编辑弹窗：`frontend/src/views/courses/components/CourseEditorModal.vue`
 - 培训管理：`frontend/src/views/training`
 - 考试系统：`frontend/src/views/exam`
 - 试卷详情页：`frontend/src/views/exam/PaperDetail.vue`
@@ -180,4 +182,12 @@ pnpm preview
   - `申请审核`
   - `直接通过`
 - 培训班详情页的“学员名单”标签已内嵌“申请管理”弹层，可直接审核报名申请并填写拒绝理由
+- 课程创建 / 编辑弹窗已支持课程标签远程搜索：
+  - 输入关键字会请求 `/courses/tags`
+  - 输入新标签按回车会直接调用 `/courses/tags` 创建
+- 视频章节上传后会自动读取视频时长并换算课程时长；文档章节仍由表单手填学习时长
+- 课程详情页现在会保存并恢复视频最近播放位置，重新进入课程会跳转到最近学习章节
+- 课程详情页已新增“学习情况”标签页，只有后端返回 `canViewLearningStatus=true` 时才展示
+- 培训班详情页已新增“课程变更记录”标签页，只有后端返回 `canViewCourseChangeLogs=true` 时才展示
+- 培训班状态为 `ended` 时，课程安排区域前端会直接禁用新增、编辑、删除操作
 - 学员端在线考试列表现在会同时展示培训班考试和准入考试，并按考试类型自动进入对应作答 / 成绩页

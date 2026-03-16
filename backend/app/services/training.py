@@ -26,6 +26,7 @@ from app.models import (
     ScheduleItem,
     Training,
     TrainingBase,
+    TrainingCourseChangeLog,
     TrainingCourse,
     TrainingHistory,
     User,
@@ -43,6 +44,7 @@ from app.schemas.training import (
     ScheduleItemResponse,
     TrainingAttendanceSummaryResponse,
     TrainingCourseResponse,
+    TrainingCourseChangeLogResponse,
     TrainingCreate,
     TrainingCurrentSessionResponse,
     TrainingEvaluationCreate,
@@ -57,6 +59,7 @@ from app.schemas.training import (
 )
 from app.schemas.notice import NoticeResponse
 from app.services.batch_import import BatchImportService
+from app.services.training_course_change import TrainingCourseChangeService
 from app.utils.authz import (
     can_manage_training,
     can_update_training,
@@ -98,6 +101,7 @@ class TrainingService:
 
     def __init__(self, db: Session):
         self.db = db
+        self.course_change_service = TrainingCourseChangeService(db)
 
     @staticmethod
     def _is_aware_datetime(value: Optional[datetime]) -> bool:
@@ -147,6 +151,8 @@ class TrainingService:
         changed = False
         scope_context = build_data_scope_context(self.db, current_user_id) if current_user_id else None
         for training in trainings:
+            if self.course_change_service.ensure_course_keys(training.courses or []):
+                changed = True
             if self._refresh_schedule_states(training):
                 changed = True
             if status and (training.status or "upcoming") != status:
@@ -232,7 +238,10 @@ class TrainingService:
             return None
         if current_user_id and not can_view_training(self.db, training, current_user_id):
             return None
+        changed = self.course_change_service.ensure_course_keys(training.courses or [])
         if self._refresh_schedule_states(training):
+            changed = True
+        if changed:
             self.db.commit()
         return self._to_response(training, current_user_id)
 
@@ -250,6 +259,7 @@ class TrainingService:
         ).filter(Training.id == training_id).first()
         if not training:
             return None
+        self.course_change_service.ensure_course_keys(training.courses or [])
 
         update_data = data.model_dump(exclude_unset=True)
         courses = update_data.pop("courses", None)
@@ -289,7 +299,19 @@ class TrainingService:
                 self._bind_admission_exam(training, admission_exam_id)
 
         if courses is not None:
+            self._assert_training_course_editable(training, "修改课程安排")
+            before_courses = self.course_change_service.snapshot_course_entities(training.courses or [])
             self._replace_courses(training.id, courses)
+            self.db.flush()
+            after_courses = self._load_training_courses(training.id)
+            if training.status == "active":
+                self.course_change_service.record_changes(
+                    training.id,
+                    before_courses,
+                    after_courses,
+                    actor_id,
+                    "detail_update",
+                )
             should_refresh_histories = True
 
         changed_user_ids: List[int] = []
@@ -507,9 +529,40 @@ class TrainingService:
         importer = BatchImportService(self.db)
         return importer.import_training_instructors(training_id, file_bytes)
 
-    def import_training_schedule(self, training_id: int, file_bytes: bytes, replace_existing: bool = True) -> dict:
+    def import_training_schedule(
+        self,
+        training_id: int,
+        file_bytes: bytes,
+        replace_existing: bool = True,
+        actor_id: Optional[int] = None,
+    ) -> dict:
+        training = self.db.query(Training).options(
+            joinedload(Training.courses),
+        ).filter(Training.id == training_id).first()
+        if not training:
+            raise ValueError("培训班不存在")
+        self.course_change_service.ensure_course_keys(training.courses or [])
+        self._assert_training_course_editable(training, "导入课表")
+        before_courses = self.course_change_service.snapshot_course_entities(training.courses or [])
         importer = BatchImportService(self.db)
-        return importer.import_training_schedule(training_id, file_bytes, replace_existing=replace_existing)
+        summary = importer.import_training_schedule(
+            training_id,
+            file_bytes,
+            replace_existing=replace_existing,
+            commit=False,
+        )
+        self.db.flush()
+        after_courses = self._load_training_courses(training_id)
+        if training.status == "active":
+            self.course_change_service.record_changes(
+                training_id,
+                before_courses,
+                after_courses,
+                actor_id,
+                "import_schedule",
+            )
+        self.db.commit()
+        return summary
 
     def get_training_students(self, training_id: int, page: int = 1, size: int = 10) -> PaginatedResponse[EnrollmentResponse]:
         """获取培训学员列表"""
@@ -911,8 +964,10 @@ class TrainingService:
 
     def start_session_checkin(self, training_id: int, session_key: str, user_id: int) -> TrainingResponse:
         training, session = self._load_training_session(training_id, session_key)
+        self._assert_training_course_editable(training, "修改课次状态")
         if not self._can_operate_schedule(training, session["course"], session["schedule"], user_id, "start_checkin"):
             raise ValueError("当前用户无权开始该课次签到，或课次状态不允许")
+        before_course = self._snapshot_course_entity(session["course"])
         now = datetime.now().isoformat()
         schedule = session["schedule"]
         schedule["status"] = self.SESSION_CHECKIN_OPEN
@@ -921,6 +976,7 @@ class TrainingService:
         flag_modified(session["course"], "schedules")
         if training.status != "ended":
             training.status = "active"
+        self._record_course_entity_changes(training.id, before_course, session["course"], user_id, "start_checkin")
         self._refresh_training_histories(training_id)
         self.db.commit()
         detail = self.get_training_by_id(training_id, user_id)
@@ -930,11 +986,14 @@ class TrainingService:
 
     def end_session_checkin(self, training_id: int, session_key: str, user_id: int) -> TrainingResponse:
         training, session = self._load_training_session(training_id, session_key)
+        self._assert_training_course_editable(training, "修改课次状态")
         if not self._can_operate_schedule(training, session["course"], session["schedule"], user_id, "end_checkin"):
             raise ValueError("当前用户无权结束该课次签到，或课次状态不允许")
+        before_course = self._snapshot_course_entity(session["course"])
         session["schedule"]["status"] = self.SESSION_CHECKIN_CLOSED
         session["schedule"]["checkin_ended_at"] = datetime.now().isoformat()
         flag_modified(session["course"], "schedules")
+        self._record_course_entity_changes(training.id, before_course, session["course"], user_id, "end_checkin")
         self.db.commit()
         detail = self.get_training_by_id(training_id, user_id)
         if not detail:
@@ -943,11 +1002,14 @@ class TrainingService:
 
     def start_session_checkout(self, training_id: int, session_key: str, user_id: int) -> TrainingResponse:
         training, session = self._load_training_session(training_id, session_key)
+        self._assert_training_course_editable(training, "修改课次状态")
         if not self._can_operate_schedule(training, session["course"], session["schedule"], user_id, "start_checkout"):
             raise ValueError("当前用户无权开始该课次签退，或课次状态不允许")
+        before_course = self._snapshot_course_entity(session["course"])
         session["schedule"]["status"] = self.SESSION_CHECKOUT_OPEN
         session["schedule"]["checkout_started_at"] = datetime.now().isoformat()
         flag_modified(session["course"], "schedules")
+        self._record_course_entity_changes(training.id, before_course, session["course"], user_id, "start_checkout")
         self.db.commit()
         detail = self.get_training_by_id(training_id, user_id)
         if not detail:
@@ -956,14 +1018,17 @@ class TrainingService:
 
     def end_session_checkout(self, training_id: int, session_key: str, user_id: int) -> TrainingResponse:
         training, session = self._load_training_session(training_id, session_key)
+        self._assert_training_course_editable(training, "修改课次状态")
         if not self._can_operate_schedule(training, session["course"], session["schedule"], user_id, "end_checkout"):
             raise ValueError("当前用户无权结束该课次签退，或课次状态不允许")
+        before_course = self._snapshot_course_entity(session["course"])
         now = datetime.now().isoformat()
         schedule = session["schedule"]
         schedule["status"] = self.SESSION_COMPLETED
         schedule["checkout_ended_at"] = now
         schedule["ended_at"] = now
         flag_modified(session["course"], "schedules")
+        self._record_course_entity_changes(training.id, before_course, session["course"], user_id, "end_checkout")
         self._sync_absent_records(training, session_key, session["date"])
         self._refresh_training_histories(training_id)
         self.db.commit()
@@ -974,8 +1039,10 @@ class TrainingService:
 
     def skip_session(self, training_id: int, session_key: str, user_id: int, note: Optional[str] = None) -> TrainingResponse:
         training, session = self._load_training_session(training_id, session_key)
+        self._assert_training_course_editable(training, "修改课次状态")
         if not self._can_operate_schedule(training, session["course"], session["schedule"], user_id, "skip"):
             raise ValueError("当前用户无权跳过该课次，或课次状态不允许")
+        before_course = self._snapshot_course_entity(session["course"])
         now = datetime.now().isoformat()
         schedule = session["schedule"]
         schedule["status"] = self.SESSION_SKIPPED
@@ -984,6 +1051,7 @@ class TrainingService:
         schedule["skip_reason"] = note
         schedule["ended_at"] = now
         flag_modified(session["course"], "schedules")
+        self._record_course_entity_changes(training.id, before_course, session["course"], user_id, "skip_session")
         self._refresh_training_histories(training_id)
         self.db.commit()
         detail = self.get_training_by_id(training_id, user_id)
@@ -1098,6 +1166,17 @@ class TrainingService:
         rows = query.order_by(TrainingHistory.archived_at.desc(), TrainingHistory.id.desc()).all()
         return [self._history_to_response(row) for row in rows]
 
+    def get_training_course_change_logs(self, training_id: int) -> List[TrainingCourseChangeLogResponse]:
+        rows = self.db.query(TrainingCourseChangeLog).options(
+            joinedload(TrainingCourseChangeLog.actor),
+        ).filter(
+            TrainingCourseChangeLog.training_id == training_id,
+        ).order_by(
+            TrainingCourseChangeLog.created_at.desc(),
+            TrainingCourseChangeLog.id.desc(),
+        ).all()
+        return [self._course_change_log_to_response(row) for row in rows]
+
     def get_user_training_histories(self, user_id: int) -> List[TrainingHistoryResponse]:
         """获取某个学员的训历档案"""
         rows = self.db.query(TrainingHistory).options(
@@ -1179,6 +1258,7 @@ class TrainingService:
             payload = self._normalize_course_payload(course)
             self.db.add(TrainingCourse(
                 training_id=training_id,
+                course_key=payload.get("course_key"),
                 name=payload["name"],
                 instructor=payload.get("instructor"),
                 primary_instructor_id=payload.get("primary_instructor_id"),
@@ -1190,6 +1270,7 @@ class TrainingService:
 
     def _normalize_course_payload(self, course: Any) -> Dict[str, Any]:
         payload = course.model_dump() if hasattr(course, "model_dump") else dict(course)
+        course_key = str(payload.get("course_key") or "").strip() or str(uuid.uuid4())
         primary_instructor_id = payload.get("primary_instructor_id")
         instructor_name = (payload.get("instructor") or "").strip() or None
         if not primary_instructor_id and instructor_name:
@@ -1210,6 +1291,7 @@ class TrainingService:
         schedules.sort(key=lambda item: (item.get("date") or "", item.get("time_range") or ""))
 
         return {
+            "course_key": course_key,
             "name": payload["name"],
             "instructor": instructor_name,
             "primary_instructor_id": primary_instructor_id,
@@ -1218,6 +1300,42 @@ class TrainingService:
             "type": payload.get("type") or "theory",
             "schedules": schedules,
         }
+
+    def _load_training_courses(self, training_id: int) -> List[TrainingCourse]:
+        courses = self.db.query(TrainingCourse).options(
+            joinedload(TrainingCourse.primary_instructor),
+        ).filter(
+            TrainingCourse.training_id == training_id,
+        ).order_by(
+            TrainingCourse.id.asc(),
+        ).all()
+        self.course_change_service.ensure_course_keys(courses)
+        return courses
+
+    def _snapshot_course_entity(self, course: TrainingCourse) -> Dict[str, Any]:
+        self.course_change_service.ensure_course_keys([course])
+        return self.course_change_service.snapshot_course_entities([course])[0]
+
+    def _record_course_entity_changes(
+        self,
+        training_id: int,
+        before_course: Dict[str, Any],
+        after_course: TrainingCourse,
+        actor_id: Optional[int],
+        source: str,
+    ) -> None:
+        self.course_change_service.ensure_course_keys([after_course])
+        self.course_change_service.record_changes(
+            training_id,
+            [before_course],
+            [after_course],
+            actor_id,
+            source,
+        )
+
+    def _assert_training_course_editable(self, training: Training, action_text: str) -> None:
+        if (training.status or "upcoming") == "ended":
+            raise ValueError(f"已结班的培训班不能再{action_text}")
 
     def _normalize_schedule_item(self, item: Any) -> Dict[str, Any]:
         raw = item.model_dump() if hasattr(item, "model_dump") else dict(item)
@@ -1556,6 +1674,8 @@ class TrainingService:
             return None
 
     def _refresh_schedule_states(self, training: Training) -> bool:
+        self.course_change_service.ensure_course_keys(training.courses or [])
+        before_courses = self.course_change_service.snapshot_course_entities(training.courses or [])
         deadline_references: List[datetime] = []
         for course in training.courses or []:
             for item in course.schedules or []:
@@ -1589,6 +1709,15 @@ class TrainingService:
             if normalized != (course.schedules or []):
                 course.schedules = normalized
                 changed = True
+        if changed:
+            after_courses = self.course_change_service.snapshot_course_entities(training.courses or [])
+            self.course_change_service.record_changes(
+                training.id,
+                before_courses,
+                after_courses,
+                None,
+                "system_refresh",
+            )
         return changed
 
     def _find_schedule_session(self, training: Training, session_key: str) -> Optional[Dict[str, Any]]:
@@ -1782,6 +1911,7 @@ class TrainingService:
         return TrainingCourseResponse(
             id=course.id,
             training_id=course.training_id,
+            course_key=course.course_key,
             name=course.name,
             instructor=course.instructor,
             primary_instructor_id=course.primary_instructor_id,
@@ -1860,6 +1990,7 @@ class TrainingService:
         return None
 
     def _to_response(self, training: Training, current_user_id: Optional[int] = None) -> TrainingResponse:
+        self.course_change_service.ensure_course_keys(training.courses or [])
         approved_enrollments = [item for item in (training.enrollments or []) if item.status == "approved"]
         student_ids = [item.user_id for item in approved_enrollments]
         group_names = sorted({item.group_name for item in approved_enrollments if item.group_name})
@@ -1955,11 +2086,33 @@ class TrainingService:
             can_manage_training=can_manage_training_directly,
             can_edit_training=can_edit_training,
             can_edit_courses=can_manage_all,
+            can_view_course_change_logs=can_edit_training or can_manage_training_directly,
             can_review_enrollments=can_manage_all,
             current_enrollment_status=current_enrollment_status,
             can_enter_training=current_enrollment_status == "approved",
             created_at=training.created_at,
             updated_at=training.updated_at,
+        )
+
+    def _course_change_log_to_response(self, log: TrainingCourseChangeLog) -> TrainingCourseChangeLogResponse:
+        actor = log.actor if getattr(log, "actor", None) else None
+        return TrainingCourseChangeLogResponse(
+            id=log.id,
+            training_id=log.training_id,
+            course_key=log.course_key,
+            session_key=log.session_key,
+            actor_id=log.actor_id,
+            actor_name=(actor.nickname or actor.username) if actor else None,
+            target_type=log.target_type,
+            action=log.action,
+            source=log.source,
+            batch_id=log.batch_id,
+            course_name=log.course_name,
+            session_label=log.session_label,
+            summary=log.summary,
+            before_json=log.before_json,
+            after_json=log.after_json,
+            created_at=log.created_at,
         )
 
     def _to_list_response(self, training: Training, current_user_id: Optional[int] = None) -> TrainingListResponse:

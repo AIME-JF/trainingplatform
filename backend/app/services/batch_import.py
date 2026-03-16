@@ -266,6 +266,7 @@ class BatchImportService:
         training_id: int,
         file_bytes: bytes,
         replace_existing: bool = True,
+        commit: bool = True,
     ) -> Dict[str, Any]:
         training = self.db.query(Training).filter(Training.id == training_id).first()
         if not training:
@@ -301,7 +302,7 @@ class BatchImportService:
             total_hours = sum(float(item.get("hours", 0) or 0) for item in course["schedules"])
             course["hours"] = round(total_hours, 2)
 
-        imported_courses = list(grouped_courses.values())
+        imported_courses = self._attach_existing_course_metadata(training_id, list(grouped_courses.values()))
         if not replace_existing:
             imported_courses = self._merge_courses(training_id, imported_courses)
 
@@ -313,15 +314,19 @@ class BatchImportService:
             self.db.add(
                 TrainingCourse(
                     training_id=training_id,
+                    course_key=course.get("course_key"),
                     name=course["name"],
                     instructor=course.get("instructor"),
+                    primary_instructor_id=course.get("primary_instructor_id"),
+                    assistant_instructor_ids=course.get("assistant_instructor_ids") or [],
                     hours=course.get("hours") or 0,
                     type=course.get("type") or "theory",
                     schedules=course.get("schedules") or [],
                 )
             )
 
-        self.db.commit()
+        if commit:
+            self.db.commit()
 
         return {
             "training_id": training_id,
@@ -710,13 +715,18 @@ class BatchImportService:
             raise ValueError("课时无效，请检查时间范围")
 
         schedule_item = {
+            "session_id": str(uuid.uuid4()),
             "date": parsed_date,
             "time_range": f"{time_start}~{time_end}",
             "hours": round(hours, 2),
+            "location": self._to_text(row.get("location")),
         }
         course_seed = {
+            "course_key": None,
             "name": course_name,
             "instructor": instructor_name,
+            "primary_instructor_id": self._guess_instructor_id(instructor_name),
+            "assistant_instructor_ids": [],
             "type": course_type,
             "hours": 0,
             "schedules": [],
@@ -727,7 +737,11 @@ class BatchImportService:
     @staticmethod
     def _schedule_exists(existing: List[Dict[str, Any]], target: Dict[str, Any]) -> bool:
         for item in existing:
-            if item.get("date") == target.get("date") and item.get("time_range") == target.get("time_range"):
+            if (
+                item.get("date") == target.get("date")
+                and item.get("time_range") == target.get("time_range")
+                and (item.get("location") or "") == (target.get("location") or "")
+            ):
                 return True
         return False
 
@@ -739,21 +753,18 @@ class BatchImportService:
         merged: Dict[str, Dict[str, Any]] = {}
 
         for course in existing_courses:
-            key = f"{course.name}|{course.instructor or ''}|{course.type or 'theory'}"
-            merged[key] = {
-                "name": course.name,
-                "instructor": course.instructor,
-                "type": course.type or "theory",
-                "hours": float(course.hours or 0),
-                "schedules": list(course.schedules or []),
-            }
+            payload = self._build_course_payload(course)
+            merged[self._course_identity(payload)] = payload
 
         for course in imported_courses:
-            key = f"{course['name']}|{course.get('instructor') or ''}|{course.get('type') or 'theory'}"
+            key = self._course_identity(course)
             if key not in merged:
                 merged[key] = {
+                    "course_key": course.get("course_key") or str(uuid.uuid4()),
                     "name": course["name"],
                     "instructor": course.get("instructor"),
+                    "primary_instructor_id": course.get("primary_instructor_id"),
+                    "assistant_instructor_ids": course.get("assistant_instructor_ids") or [],
                     "type": course.get("type") or "theory",
                     "hours": 0,
                     "schedules": [],
@@ -762,15 +773,130 @@ class BatchImportService:
             target = merged[key]
             for schedule in course.get("schedules") or []:
                 if not self._schedule_exists(target["schedules"], schedule):
-                    target["schedules"].append(schedule)
+                    target["schedules"].append(self._normalize_schedule_payload(schedule))
 
-            target["schedules"].sort(key=lambda x: (x.get("date", ""), x.get("time_range", "")))
+            target["schedules"].sort(key=lambda x: (x.get("date", ""), x.get("time_range", ""), x.get("location") or ""))
             target["hours"] = round(
                 sum(float(item.get("hours", 0) or 0) for item in target["schedules"]),
                 2,
             )
 
         return list(merged.values())
+
+    def _attach_existing_course_metadata(
+        self,
+        training_id: int,
+        imported_courses: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        existing_courses = self.db.query(TrainingCourse).filter(
+            TrainingCourse.training_id == training_id
+        ).all()
+        existing_map: Dict[str, Dict[str, Any]] = {}
+        for course in existing_courses:
+            payload = self._build_course_payload(course)
+            existing_map[self._course_identity(payload)] = payload
+        return [self._merge_course_payload(course, existing_map.get(self._course_identity(course))) for course in imported_courses]
+
+    def _build_course_payload(self, course: TrainingCourse) -> Dict[str, Any]:
+        return {
+            "course_key": course.course_key or str(uuid.uuid4()),
+            "name": course.name,
+            "instructor": course.instructor,
+            "primary_instructor_id": course.primary_instructor_id,
+            "assistant_instructor_ids": list(course.assistant_instructor_ids or []),
+            "type": course.type or "theory",
+            "hours": float(course.hours or 0),
+            "schedules": [self._normalize_schedule_payload(item) for item in (course.schedules or [])],
+        }
+
+    def _merge_course_payload(
+        self,
+        course: Dict[str, Any],
+        existing_course: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        existing_course = existing_course or {}
+        existing_schedule_map = {
+            self._schedule_identity(item): self._normalize_schedule_payload(item)
+            for item in (existing_course.get("schedules") or [])
+        }
+        schedules = [
+            self._merge_schedule_payload(schedule, existing_schedule_map.get(self._schedule_identity(schedule)))
+            for schedule in (course.get("schedules") or [])
+        ]
+        schedules.sort(key=lambda item: (item.get("date") or "", item.get("time_range") or "", item.get("location") or ""))
+        return {
+            "course_key": course.get("course_key") or existing_course.get("course_key") or str(uuid.uuid4()),
+            "name": course["name"],
+            "instructor": course.get("instructor"),
+            "primary_instructor_id": (
+                course.get("primary_instructor_id")
+                or existing_course.get("primary_instructor_id")
+                or self._guess_instructor_id(course.get("instructor"))
+            ),
+            "assistant_instructor_ids": existing_course.get("assistant_instructor_ids") or [],
+            "type": course.get("type") or "theory",
+            "hours": round(sum(float(item.get("hours", 0) or 0) for item in schedules), 2),
+            "schedules": schedules,
+        }
+
+    def _merge_schedule_payload(
+        self,
+        schedule: Dict[str, Any],
+        existing_schedule: Optional[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        normalized = self._normalize_schedule_payload(schedule)
+        if not existing_schedule:
+            return normalized
+        merged = dict(existing_schedule)
+        merged.update({
+            "date": normalized.get("date"),
+            "time_range": normalized.get("time_range"),
+            "hours": normalized.get("hours"),
+            "location": normalized.get("location"),
+        })
+        merged["session_id"] = existing_schedule.get("session_id") or normalized.get("session_id") or str(uuid.uuid4())
+        return merged
+
+    def _normalize_schedule_payload(self, schedule: Dict[str, Any]) -> Dict[str, Any]:
+        raw = dict(schedule or {})
+        return {
+            "session_id": raw.get("session_id") or raw.get("sessionId") or str(uuid.uuid4()),
+            "date": raw.get("date"),
+            "time_range": raw.get("time_range") or raw.get("timeRange") or "",
+            "hours": round(float(raw.get("hours", 0) or 0), 2),
+            "location": self._to_text(raw.get("location")),
+            "status": self._to_text(raw.get("status")) or "pending",
+            "started_at": raw.get("started_at") or raw.get("startedAt"),
+            "checkin_started_at": raw.get("checkin_started_at") or raw.get("checkinStartedAt"),
+            "checkin_ended_at": raw.get("checkin_ended_at") or raw.get("checkinEndedAt"),
+            "checkout_started_at": raw.get("checkout_started_at") or raw.get("checkoutStartedAt"),
+            "checkout_ended_at": raw.get("checkout_ended_at") or raw.get("checkoutEndedAt"),
+            "ended_at": raw.get("ended_at") or raw.get("endedAt"),
+            "skipped_at": raw.get("skipped_at") or raw.get("skippedAt"),
+            "skipped_by": raw.get("skipped_by") or raw.get("skippedBy"),
+            "skip_reason": raw.get("skip_reason") or raw.get("skipReason"),
+        }
+
+    @staticmethod
+    def _course_identity(course: Dict[str, Any]) -> str:
+        return f"{course.get('name') or ''}|{course.get('instructor') or ''}|{course.get('type') or 'theory'}"
+
+    @staticmethod
+    def _schedule_identity(schedule: Dict[str, Any]) -> str:
+        return (
+            f"{schedule.get('date') or ''}|"
+            f"{schedule.get('time_range') or schedule.get('timeRange') or ''}|"
+            f"{schedule.get('location') or ''}"
+        )
+
+    def _guess_instructor_id(self, instructor_name: Any) -> Optional[int]:
+        name = self._to_text(instructor_name)
+        if not name:
+            return None
+        user = self.db.query(User).filter(
+            (User.nickname == name) | (User.username == name)
+        ).first()
+        return user.id if user else None
 
     @staticmethod
     def _normalize_course_type(value: Any) -> str:

@@ -67,6 +67,7 @@ class Training(Base):
     schedule_items = relationship("ScheduleItem", back_populates="training", cascade="all, delete-orphan")
     exam_sessions = relationship("Exam", back_populates="training", foreign_keys="Exam.training_id")
     histories = relationship("TrainingHistory", back_populates="training", cascade="all, delete-orphan")
+    course_change_logs = relationship("TrainingCourseChangeLog", back_populates="training", cascade="all, delete-orphan")
 
 
 class TrainingBase(Base):
@@ -95,6 +96,7 @@ class TrainingCourse(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     training_id = Column(Integer, ForeignKey("trainings.id", ondelete="CASCADE"), nullable=False, comment="培训班ID")
+    course_key = Column(String(36), nullable=True, index=True, comment="稳定课程键")
     name = Column(String(200), nullable=False, comment="课程名称")
     instructor = Column(String(100), nullable=True, comment="主讲教官名称")
     primary_instructor_id = Column(Integer, ForeignKey("users.id"), nullable=True, comment="主讲教官ID")
@@ -102,6 +104,10 @@ class TrainingCourse(Base):
     hours = Column(Float, default=0, comment="课时")
     type = Column(String(50), default="theory", comment="类型: theory/practice")
     schedules = Column(JSON, nullable=True, comment="排课清单，包含课次状态与签到签退生命周期")
+
+    __table_args__ = (
+        UniqueConstraint("training_id", "course_key", name="uq_training_course_key"),
+    )
 
     training = relationship("Training", back_populates="courses")
     primary_instructor = relationship("User", foreign_keys=[primary_instructor_id])
@@ -223,3 +229,32 @@ class TrainingHistory(Base):
 
     training = relationship("Training", back_populates="histories")
     user = relationship("User", foreign_keys=[user_id])
+
+
+class TrainingCourseChangeLog(Base):
+    """培训班课程/课次变更日志"""
+
+    __tablename__ = "training_course_change_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    training_id = Column(Integer, ForeignKey("trainings.id", ondelete="CASCADE"), nullable=False, index=True, comment="培训班ID")
+    course_key = Column(String(36), nullable=True, index=True, comment="稳定课程键")
+    session_key = Column(String(100), nullable=True, index=True, comment="课次键")
+    actor_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True, comment="操作人ID，系统事件为空")
+    target_type = Column(String(20), nullable=False, comment="对象类型: course/session")
+    action = Column(String(30), nullable=False, comment="动作: create/update/delete/status_change")
+    source = Column(String(50), nullable=False, comment="来源: detail_update/import_schedule/system_refresh 等")
+    batch_id = Column(String(36), nullable=False, index=True, comment="同一次操作批次号")
+    course_name = Column(String(200), nullable=True, comment="课程名快照")
+    session_label = Column(String(200), nullable=True, comment="课次标签快照")
+    summary = Column(String(500), nullable=True, comment="变更摘要")
+    before_json = Column(JSON, nullable=True, comment="变更前快照")
+    after_json = Column(JSON, nullable=True, comment="变更后快照")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
+
+    __table_args__ = (
+        Index("ix_training_course_change_logs_training_created", "training_id", "created_at"),
+    )
+
+    training = relationship("Training", back_populates="course_change_logs")
+    actor = relationship("User", foreign_keys=[actor_id])

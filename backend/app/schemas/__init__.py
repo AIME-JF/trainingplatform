@@ -49,7 +49,7 @@ from .training import (
     TrainingAttendanceSummaryResponse,
     TrainingCheckinQrResponse,
     ScheduleItemCreate, ScheduleItemResponse,
-    TrainingExamSummary, TrainingHistoryResponse
+    TrainingExamSummary, TrainingHistoryResponse, TrainingCourseChangeLogResponse
 )
 # 考试相关
 from .exam import (
@@ -142,7 +142,7 @@ __all__ = [
     "CheckinCreate", "CheckoutCreate", "TrainingEvaluationCreate", "CheckinResponse",
     "TrainingAttendanceSummaryResponse", "TrainingCheckinQrResponse",
     "ScheduleItemCreate", "ScheduleItemResponse",
-    "TrainingExamSummary", "TrainingHistoryResponse",
+    "TrainingExamSummary", "TrainingHistoryResponse", "TrainingCourseChangeLogResponse",
     # 考试相关
     "QuestionCreate", "QuestionUpdate", "QuestionResponse", "QuestionBatchCreate",
     "ExamPaperCreate", "ExamPaperUpdate", "ExamPaperResponse", "ExamPaperDetailResponse",
