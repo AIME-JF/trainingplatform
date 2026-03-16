@@ -1,143 +1,116 @@
 <template>
-  <div class="course-detail-page" v-if="localCourse.title">
-    <!-- 面包屑 + 编辑按钮 -->
+  <div v-if="localCourse.title" class="course-detail-page">
     <div class="top-bar">
       <a-breadcrumb>
-        <a-breadcrumb-item @click="$router.push('/courses')" style="cursor:pointer;color:var(--police-primary)">课程中心</a-breadcrumb-item>
+        <a-breadcrumb-item @click="$router.push('/courses')" style="cursor: pointer; color: var(--police-primary)">
+          课程中心
+        </a-breadcrumb-item>
         <a-breadcrumb-item>{{ localCourse.title }}</a-breadcrumb-item>
       </a-breadcrumb>
-      <a-button
-        v-if="authStore.isAdmin || authStore.isInstructor"
-        size="small"
-        @click="openEdit"
-      >
-        <template #icon><EditOutlined /></template>编辑课程
-      </a-button>
-      <a-popconfirm
-        v-if="authStore.isAdmin || authStore.isInstructor"
-        title="确定删除此课程吗？删除后不可恢复。"
-        ok-text="确认删除"
-        cancel-text="取消"
-        @confirm="handleDeleteCourse"
-      >
-        <a-button
-          v-if="authStore.isAdmin || authStore.isInstructor"
-          size="small"
-          danger
-        >
-          <template #icon><DeleteOutlined /></template>删除课程
+      <div class="top-actions">
+        <a-button v-if="authStore.isAdmin || authStore.isInstructor" size="small" @click="editorVisible = true">
+          <template #icon><EditOutlined /></template>编辑课程
         </a-button>
-      </a-popconfirm>
+        <a-popconfirm
+          v-if="authStore.isAdmin || authStore.isInstructor"
+          title="确定删除此课程吗？删除后不可恢复。"
+          ok-text="确认删除"
+          cancel-text="取消"
+          @confirm="handleDeleteCourse"
+        >
+          <a-button size="small" danger>
+            <template #icon><DeleteOutlined /></template>删除课程
+          </a-button>
+        </a-popconfirm>
+      </div>
     </div>
 
+    <CourseEditorModal
+      v-model:open="editorVisible"
+      :course-id="courseId"
+      @success="handleEditorSuccess"
+    />
+
     <a-row :gutter="20">
-      <!-- 左：内容区 + 课程信息 -->
       <a-col :span="16">
-        <!-- 视频课件 -->
-        <div v-if="isVideo" class="video-player-wrap">
-          <div class="video-player" ref="playerWrapRef">
+        <div class="viewer-card">
+          <template v-if="isVideo">
             <video
               ref="videoRef"
               :src="currentVideoUrl"
               class="course-video"
+              controls
               preload="metadata"
-              @play="isPlaying = true"
-              @pause="isPlaying = false"
+              @pause="handleVideoPause"
               @ended="onVideoEnded"
               @timeupdate="onTimeUpdate"
               @loadedmetadata="onMetaLoaded"
-              @error="videoError = true"
             ></video>
-            <div v-if="videoError" class="video-error-mask">
-              <div>⚠️ 视频加载失败，请检查网络连接</div>
-              <div style="font-size:12px;margin-top:8px;opacity:0.7">{{ currentVideoUrl }}</div>
-            </div>
-            <div class="video-click-overlay" @click="togglePlay" @dblclick="enterFullscreen"></div>
-            <transition name="fade">
-              <div v-if="showPlayIcon" class="play-center-icon">{{ isPlaying ? '⏸' : '▶' }}</div>
-            </transition>
-            <div class="chapter-badge-wrap">
-              <div class="chapter-badge">第 {{ currentChapterIdx + 1 }} 章：{{ currentChapter.title }}</div>
-            </div>
-            <div class="video-controls">
-              <div class="controls-left">
-                <button class="ctrl-btn" @click="togglePlay">{{ isPlaying ? '⏸' : '▶' }}</button>
-                <span class="time-display">{{ currentTime }} / {{ totalDuration }}</span>
-              </div>
-              <div class="progress-bar-wrap" @click="seekVideo">
-                <div class="progress-bar-bg">
-                  <div class="progress-bar-fill" :style="{ width: playProgress + '%' }"></div>
-                  <div class="progress-handle" :style="{ left: playProgress + '%' }"></div>
-                </div>
-              </div>
-              <div class="controls-right">
-                <button class="ctrl-btn" @click="toggleMute">{{ isMuted ? '🔇' : '🔊' }}</button>
-                <button class="ctrl-btn" @click="enterFullscreen">⛶ 全屏</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 文档课件 -->
-        <div v-else class="doc-viewer-wrap">
-          <div class="doc-viewer">
-            <div class="doc-header">
-              <div class="doc-icon">📄</div>
-              <div class="doc-info">
+          </template>
+          <template v-else>
+            <div class="doc-toolbar">
+              <div>
                 <div class="doc-title">{{ currentChapter.title || localCourse.title }}</div>
-                <div class="doc-meta">
-                  <a-tag color="blue">PDF 文档</a-tag>
-                  <span>{{ currentChapter.duration || 30 }} 分钟阅读</span>
-                </div>
+                <div class="doc-subtitle">文档章节，建议学习时长 {{ currentChapter.duration || 30 }} 分钟</div>
               </div>
-              <div style="margin-left:auto">
+              <div class="doc-actions">
+                <a-button size="small" @click="markDocProgress">标记已学习</a-button>
                 <a-button size="small" type="primary" ghost :href="currentDocUrl" target="_blank">
                   <template #icon><DownloadOutlined /></template>下载文档
                 </a-button>
               </div>
             </div>
-            <div class="doc-iframe-container">
-              <div v-if="docLoading" class="doc-loading">
-                <a-spin size="large" />
-                <div style="margin-top:12px;color:#888">文档加载中...</div>
-              </div>
-              <div style="position:absolute;right:12px;top:12px;z-index:3" v-if="!docLoading && !docLoadError">
-                <a-button size="small" @click="markDocProgress">标记已学习</a-button>
-              </div>
-              <iframe
-                :src="currentDocUrl"
-                class="doc-iframe"
-                frameborder="0"
-                title="课程文档"
-                @load="docLoading = false"
-                @error="docLoadError = true"
-              ></iframe>
-              <div v-if="docLoadError" class="doc-error">
-                <div>⚠️ 文档加载失败</div>
-                <a :href="currentDocUrl" target="_blank" style="color:var(--police-primary)">↗ 在新标签页中打开文档</a>
-              </div>
-            </div>
-          </div>
+            <iframe :src="currentDocUrl" class="doc-iframe" frameborder="0" title="课程文档"></iframe>
+          </template>
         </div>
 
-        <!-- 课程信息 Tabs -->
-        <a-card :bordered="false" style="margin-top:16px">
+        <a-card :bordered="false" style="margin-top: 16px">
           <a-tabs v-model:activeKey="activeTab">
             <a-tab-pane key="intro" tab="课程简介">
-              <p style="line-height:1.8;color:#444">{{ localCourse.description }}</p>
+              <p class="course-description">{{ localCourse.description || '暂无课程简介' }}</p>
               <div class="meta-grid">
-                <div class="meta-item"><span class="meta-l">主讲教官</span><span>{{ localCourse.instructor || '-' }}</span></div>
-                <div class="meta-item"><span class="meta-l">课程时长</span><span>{{ localCourse.duration }} 分钟</span></div>
-                <div class="meta-item"><span class="meta-l">课件类型</span><span>{{ isVideo ? '🎬 视频课程' : '📄 文档课程' }}</span></div>
-                <div class="meta-item"><span class="meta-l">学员人数</span><span>{{ localCourse.studentCount?.toLocaleString() }} 人</span></div>
+                <div class="meta-item"><span class="meta-label">创建者</span><span>{{ localCourse.createdByName || '-' }}</span></div>
+                <div class="meta-item"><span class="meta-label">主讲教官</span><span>{{ localCourse.instructorName || '-' }}</span></div>
+                <div class="meta-item"><span class="meta-label">课程时长</span><span>{{ localCourse.duration || 0 }} 分钟</span></div>
+                <div class="meta-item"><span class="meta-label">学习人数</span><span>{{ Number(localCourse.studentCount || 0).toLocaleString() }} 人</span></div>
+                <div class="meta-item"><span class="meta-label">课程标签</span><span>{{ (localCourse.tags || []).join('、') || '-' }}</span></div>
+                <div class="meta-item"><span class="meta-label">我的进度</span><span>{{ localCourse.progressPercent || 0 }}%</span></div>
               </div>
             </a-tab-pane>
+
             <a-tab-pane key="notes" tab="笔记">
               <a-textarea v-model:value="noteContent" placeholder="记录学习笔记..." :rows="5" />
-              <a-button type="primary" style="margin-top:8px" :loading="noteSaving" @click="handleSaveNote">
-                {{ notesSaved ? '✓ 已保存' : '保存笔记' }}
+              <a-button type="primary" style="margin-top: 8px" :loading="noteSaving" @click="handleSaveNote">
+                {{ notesSaved ? '已保存' : '保存笔记' }}
               </a-button>
             </a-tab-pane>
+
+            <a-tab-pane v-if="localCourse.canViewLearningStatus" key="learning" tab="学习情况">
+              <a-spin :spinning="learningStatusLoading">
+                <a-table
+                  :data-source="learningStatus"
+                  :columns="learningStatusColumns"
+                  row-key="userId"
+                  :pagination="{ pageSize: 10 }"
+                >
+                  <template #bodyCell="{ column, record }">
+                    <template v-if="column.key === 'progressPercent'">
+                      <div class="learning-progress-cell">
+                        <a-progress :percent="record.progressPercent || 0" size="small" />
+                        <span>{{ record.completedChapterCount || 0 }}/{{ record.chapterCount || 0 }} 章</span>
+                      </div>
+                    </template>
+                    <template v-else-if="column.key === 'lastStudiedChapterTitle'">
+                      {{ record.lastStudiedChapterTitle || '-' }}
+                    </template>
+                    <template v-else-if="column.key === 'lastStudiedAt'">
+                      {{ formatDateTime(record.lastStudiedAt) }}
+                    </template>
+                  </template>
+                </a-table>
+              </a-spin>
+            </a-tab-pane>
+
             <a-tab-pane key="resources" tab="关联资源" v-if="authStore.isAdmin || authStore.isInstructor">
               <div class="resource-bind-toolbar">
                 <a-select
@@ -158,7 +131,7 @@
                       <a-tag v-for="tag in (record.tags || [])" :key="tag">{{ tag }}</a-tag>
                     </a-space>
                   </template>
-                  <template v-if="column.key === 'action'">
+                  <template v-else-if="column.key === 'action'">
                     <a-popconfirm title="确认解绑该资源？" @confirm="removeResource(record.id)">
                       <a-button size="small" danger>解绑</a-button>
                     </a-popconfirm>
@@ -166,17 +139,18 @@
                 </template>
               </a-table>
             </a-tab-pane>
+
             <a-tab-pane key="qa" tab="答疑区">
-              <div class="qa-list" v-if="qaList.length">
-                <div class="qa-item" v-for="q in qaList" :key="q.id">
+              <div v-if="qaList.length" class="qa-list">
+                <div v-for="item in qaList" :key="item.id" class="qa-item">
                   <div class="qa-question">
-                    <a-avatar size="small" style="background:#003087">{{ (q.userName || '?').charAt(0) }}</a-avatar>
-                    <span class="qa-user">{{ q.userName }}</span>
-                    <span class="qa-text">{{ q.question }}</span>
+                    <a-avatar size="small" style="background: #003087">{{ (item.userName || '?').charAt(0) }}</a-avatar>
+                    <span class="qa-user">{{ item.userName }}</span>
+                    <span class="qa-text">{{ item.question }}</span>
                   </div>
-                  <div class="qa-answer" v-if="q.answer">
+                  <div v-if="item.answer" class="qa-answer">
                     <a-tag color="gold" size="small">教官回复</a-tag>
-                    {{ q.answer }}
+                    {{ item.answer }}
                   </div>
                 </div>
               </div>
@@ -186,7 +160,7 @@
                 placeholder="输入你的问题，按回车或点提交..."
                 enter-button="提交"
                 :loading="qaSubmitting"
-                style="margin-top:12px"
+                style="margin-top: 12px"
                 @search="handleQASubmit"
               />
             </a-tab-pane>
@@ -194,383 +168,89 @@
         </a-card>
       </a-col>
 
-      <!-- 右：章节列表 -->
       <a-col :span="8">
-        <a-card :title="isVideo ? '课程章节' : '文档目录'" :bordered="false">
+        <a-card title="课程章节" :bordered="false">
           <div class="chapter-list">
             <div
-              v-for="(ch, idx) in localCourse.chapters"
-              :key="idx"
+              v-for="(chapter, idx) in localCourse.chapters"
+              :key="chapter.id || idx"
               class="chapter-item"
-              :class="{ active: currentChapterIdx === idx, locked: ch.locked }"
-              @click="selectChapter(idx, ch)"
+              :class="{ active: currentChapterIdx === idx, locked: chapter.locked }"
+              @click="selectChapter(idx)"
             >
-              <div class="ch-left">
-                <div class="ch-num">{{ idx + 1 }}</div>
-                <div class="ch-info">
-                  <div class="ch-title">{{ ch.title }}</div>
-                  <div class="ch-meta">{{ ch.duration }}分钟 · {{ isVideo ? '视频' : '阅读' }}</div>
+              <div class="chapter-main">
+                <div class="chapter-index">{{ idx + 1 }}</div>
+                <div class="chapter-info">
+                  <div class="chapter-title">{{ chapter.title }}</div>
+                  <div class="chapter-meta">{{ chapter.duration || 0 }} 分钟 · {{ chapter.contentType === 'document' ? '文档' : '视频' }}</div>
                 </div>
               </div>
-              <div class="ch-right">
-                <a-progress v-if="!ch.locked && ch.progress > 0 && ch.progress < 100" type="circle" :percent="ch.progress" :width="32" />
-                <LockOutlined v-if="ch.locked" style="color:#bbb" />
-                <CheckCircleFilled v-if="ch.progress === 100" style="color:#52c41a;font-size:18px" />
+              <div class="chapter-status">
+                <LockOutlined v-if="chapter.locked" style="color: #bbb" />
+                <CheckCircleFilled v-else-if="chapter.progress >= 100" style="color: #52c41a; font-size: 18px" />
+                <a-progress
+                  v-else-if="chapter.progress > 0"
+                  type="circle"
+                  :percent="chapter.progress"
+                  :width="32"
+                />
               </div>
             </div>
           </div>
         </a-card>
       </a-col>
     </a-row>
-
-    <!-- ─── 编辑课程弹窗 ─── -->
-    <a-modal
-      v-model:open="editVisible"
-      title="编辑课程"
-      :width="700"
-      @ok="saveEdit"
-      :okText="editSaving ? `保存中 ${editUploadPercent}%` : '保存修改'"
-      :confirmLoading="editSaving"
-      cancel-text="取消"
-      :destroy-on-close="true"
-    >
-      <a-tabs v-model:activeKey="editTab">
-        <!-- Tab1: 基本信息 -->
-        <a-tab-pane key="basic" tab="📋 基本信息">
-          <a-form :label-col="{ span: 5 }" style="margin-top:12px;padding-right:8px">
-            <a-form-item label="课程名称" required>
-              <a-input v-model:value="editForm.title" />
-            </a-form-item>
-            <a-form-item label="课程简介">
-              <a-textarea v-model:value="editForm.description" :rows="5" :max-length="500" show-count placeholder="课程简介、学习目标..." />
-            </a-form-item>
-            <a-form-item label="授课教官">
-              <a-select
-                v-model:value="editForm.instructorId"
-                :options="instructorOptions"
-                allow-clear
-                placeholder="请选择教官"
-                style="width:100%"
-              />
-            </a-form-item>
-            <a-form-item label="难度等级">
-              <div style="display:flex;align-items:center;gap:12px">
-                <a-rate v-model:value="editForm.difficulty" :count="5" />
-                <span style="color:#888;font-size:12px">{{ editDifficultyLabel }}</span>
-              </div>
-            </a-form-item>
-            <a-form-item label="课程标签">
-              <a-select v-model:value="editForm.tags" mode="tags" style="width:100%" />
-            </a-form-item>
-            <a-form-item label="是否必修">
-              <a-switch v-model:checked="editForm.isRequired" />
-            </a-form-item>
-          </a-form>
-        </a-tab-pane>
-
-        <!-- Tab2: 章节管理 -->
-        <a-tab-pane key="chapters" tab="📚 章节管理">
-          <div style="margin-top:12px">
-            <div v-for="(ch, idx) in editForm.chapters" :key="idx" class="ch-edit-row">
-              <div class="ch-edit-header">
-                <span class="ch-badge">第 {{ idx + 1 }} 章</span>
-                <a-button
-                  v-if="editForm.chapters.length > 1"
-                  size="small" danger type="text"
-                  @click="editForm.chapters.splice(idx, 1)"
-                >
-                  <template #icon><DeleteOutlined /></template>删除
-                </a-button>
-              </div>
-              <a-row :gutter="10" style="margin-bottom:6px">
-                <a-col :span="16">
-                  <a-input v-model:value="ch.title" placeholder="章节名称" />
-                </a-col>
-                <a-col :span="8">
-                  <a-input-number v-model:value="ch.duration" :min="5" style="width:100%" addon-after="分钟" />
-                </a-col>
-              </a-row>
-              <a-upload-dragger
-                v-model:fileList="ch.fileList"
-                :before-upload="() => false"
-                :max-count="1"
-                accept=".mp4,.pdf,.pptx,.ppt,.doc,.docx"
-                class="chapter-upload"
-              >
-                <p><InboxOutlined style="font-size:22px;color:#003087" /></p>
-                <p style="font-size:12px;margin:2px 0">{{ ch.fileList?.length ? '已选择文件，点击更换' : '点击上传此章节新媒体文件（不上传则保留原文件）' }}</p>
-              </a-upload-dragger>
-            </div>
-            <a-button type="dashed" block @click="editForm.chapters.push({ title: '', duration: 30, fileId: null, fileList: [] })" style="margin-top:12px">
-              <template #icon><PlusOutlined /></template>添加章节
-            </a-button>
-          </div>
-        </a-tab-pane>
-      </a-tabs>
-    </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, reactive, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { LockOutlined, CheckCircleFilled, DownloadOutlined, EditOutlined, DeleteOutlined, InboxOutlined, PlusOutlined } from '@ant-design/icons-vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import { CheckCircleFilled, DeleteOutlined, DownloadOutlined, EditOutlined, LockOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
-import { useAuthStore } from '@/stores/auth'
 import {
-  getCourse, updateChapterProgress,
-  saveCourseNote,
+  bindCourseResource,
   createCourseQA,
-  bindCourseResource, unbindCourseResource,
-  updateCourse as apiUpdateCourse,
   deleteCourse as apiDeleteCourse,
+  getCourse,
+  getCourseLearningStatus,
+  keepaliveChapterProgress,
+  saveCourseNote,
+  unbindCourseResource,
+  updateChapterProgress,
 } from '@/api/course'
 import { getResources } from '@/api/resource'
-import { getUsers } from '@/api/user'
-import { uploadFile } from '@/api/media'
+import { useAuthStore } from '@/stores/auth'
+import CourseEditorModal from './components/CourseEditorModal.vue'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
-const courseId = route.params.id
-
-// 本地可编辑副本
+const courseId = computed(() => route.params.id)
+const editorVisible = ref(false)
+const activeTab = ref('intro')
+const currentChapterIdx = ref(0)
 const localCourse = ref({
   title: '',
-  chapters: [],
-  fileType: 'video',
   description: '',
-  instructor: '',
-  instructorId: undefined,
+  createdByName: '',
+  instructorName: '',
+  tags: [],
   duration: 0,
   studentCount: 0,
-})
-const instructorOptions = ref([])
-const instructorOptionsLoaded = ref(false)
-const instructorOptionsLoading = ref(false)
-
-async function ensureInstructorOptionsLoaded(force = false) {
-  if (instructorOptionsLoading.value) return
-  if (instructorOptionsLoaded.value && !force) return
-
-  instructorOptionsLoading.value = true
-  try {
-    const res = await getUsers({ role: 'instructor', size: -1 })
-    const items = res.items || []
-    instructorOptions.value = items.map(i => ({
-      value: i.id,
-      label: i.nickname || i.username || `教官#${i.id}`,
-    }))
-    instructorOptionsLoaded.value = true
-  } catch (error) {
-    instructorOptions.value = []
-    instructorOptionsLoaded.value = false
-    if (force) {
-      message.warning(error?.message || '暂无权限加载教官候选列表')
-    }
-  } finally {
-    instructorOptionsLoading.value = false
-  }
-}
-
-async function fetchCourse() {
-  const data = await getCourse(courseId)
-  const noteCacheKey = getNoteCacheKey()
-  localCourse.value = {
-    ...data,
-    instructor: data.instructor || data.instructorName || '',
-    chapters: (data.chapters || []).map(ch => ({
-      ...ch,
-      progress: ch.progress || 0,
-      locked: false,
-    })),
-  }
-  noteContent.value = data.note?.content ?? localStorage.getItem(noteCacheKey) ?? ''
-  qaList.value = data.qaList || []
-  courseResources.value = data.resources || []
-  recalcChapterLocks()
-}
-
-onMounted(async () => {
-  try {
-    await fetchCourse()
-  } catch {
-    message.error('加载课程失败')
-  }
+  progressPercent: 0,
+  canViewLearningStatus: false,
+  chapters: [],
 })
 
-// 按当前章节的文件后缀判断类型（不同章节可能是视频或 PDF）
-const currentChapterFileType = computed(() => {
-  const ch = localCourse.value.chapters[currentChapterIdx.value] || {}
-  const url = ch.fileUrl || ch.videoUrl || ch.docUrl || ''
-  if (!url) {
-    // 没有 fileUrl 则回退到课程级别类型
-    return (localCourse.value.fileType || 'video')
-  }
-  return url.toLowerCase().endsWith('.pdf') ? 'doc' : 'video'
-})
-const isVideo = computed(() => currentChapterFileType.value === 'video')
-
-// ─── 章节 ───
-const currentChapterIdx = ref(0)
-const currentChapter = computed(() => localCourse.value.chapters[currentChapterIdx.value] || {})
-
-const selectChapter = async (idx, ch) => {
-  if (ch.locked) return
-
-  const prev = currentChapter.value
-  if (prev?.id && isVideo.value && videoRef.value?.duration) {
-    const percent = Math.min(100, Math.round((videoRef.value.currentTime / videoRef.value.duration) * 100))
-    prev.progress = Math.max(prev.progress || 0, percent)
-    try { await updateChapterProgress(courseId, prev.id, percent) } catch { /* ignore */ }
-  }
-
-  currentChapterIdx.value = idx
-  videoError.value = false
-  docLoading.value = true
-  docLoadError.value = false
-}
-
-// ─── 视频播放器 ───
 const videoRef = ref(null)
-const playerWrapRef = ref(null)
-const isPlaying = ref(false)
-const isMuted = ref(false)
-const playProgress = ref(0)
-const currentTime = ref('00:00')
-const totalDuration = ref('--:--')
-const videoError = ref(false)
-const showPlayIcon = ref(false)
-
-// 无论是视频还是文档，都统一从 fileUrl 取；分开两个 computed 只是模板使用习惯
-const currentVideoUrl = computed(() => currentChapter.value.fileUrl || currentChapter.value.videoUrl || localCourse.value.videoUrl || '')
-const currentDocUrl = computed(() => currentChapter.value.fileUrl || currentChapter.value.docUrl || localCourse.value.docUrl || '')
-
-function recalcChapterLocks() {
-  if (!localCourse.value.chapters?.length) return
-  localCourse.value.chapters = localCourse.value.chapters.map((item, idx, arr) => {
-    if (idx === 0) return { ...item, locked: false }
-    return { ...item, locked: !((arr[idx - 1]?.progress || 0) >= 100) }
-  })
-}
-
-let playIconTimer = null
-const togglePlay = () => {
-  if (!videoRef.value) return
-  if (isPlaying.value) videoRef.value.pause()
-  else videoRef.value.play()
-  showPlayIcon.value = true
-  clearTimeout(playIconTimer)
-  playIconTimer = setTimeout(() => { showPlayIcon.value = false }, 700)
-}
-
-const toggleMute = () => {
-  if (!videoRef.value) return
-  isMuted.value = !isMuted.value
-  videoRef.value.muted = isMuted.value
-}
-
-const formatSeconds = (secs) => {
-  if (!secs || isNaN(secs)) return '00:00'
-  const m = Math.floor(secs / 60).toString().padStart(2, '0')
-  const s = Math.floor(secs % 60).toString().padStart(2, '0')
-  return `${m}:${s}`
-}
-
-const onMetaLoaded = () => {
-  if (!videoRef.value) return
-  totalDuration.value = formatSeconds(videoRef.value.duration)
-  videoError.value = false
-}
-
-const onVideoEnded = async () => {
-  isPlaying.value = false
-  const ch = currentChapter.value
-  if (!ch?.id) return
-  try {
-    await updateChapterProgress(courseId, ch.id, 100)
-    ch.progress = 100
-    recalcChapterLocks()
-  } catch {
-    // ignore
-  }
-}
-
+const pendingSeekSeconds = ref(0)
 let lastProgressAt = 0
-const onTimeUpdate = async () => {
-  if (!videoRef.value) return
-  const video = videoRef.value
-  const total = video.duration || 0
-  playProgress.value = total > 0 ? (video.currentTime / total) * 100 : 0
-  currentTime.value = formatSeconds(video.currentTime)
+let lastPersistSignature = ''
 
-  const now = Date.now()
-  const ch = currentChapter.value
-  if (!ch?.id || total <= 0 || now - lastProgressAt < 5000) return
-
-  lastProgressAt = now
-  const percent = Math.min(100, Math.round((video.currentTime / total) * 100))
-  ch.progress = Math.max(ch.progress || 0, percent)
-  try { await updateChapterProgress(courseId, ch.id, percent) } catch { /* ignore */ }
-}
-
-const seekVideo = (e) => {
-  if (!videoRef.value) return
-  const rect = e.currentTarget.getBoundingClientRect()
-  const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
-  videoRef.value.currentTime = ratio * (videoRef.value.duration || 0)
-}
-
-const markDocProgress = async () => {
-  const ch = currentChapter.value
-  if (!ch?.id) return
-  const nextProgress = Math.max(ch.progress || 0, 100)
-  ch.progress = nextProgress
-  try {
-    await updateChapterProgress(courseId, ch.id, nextProgress)
-    recalcChapterLocks()
-    message.success('已标记本章完成')
-  } catch {
-    message.warning('进度保存失败，请稍后重试')
-  }
-}
-
-const enterFullscreen = () => {
-  const el = playerWrapRef.value || videoRef.value
-  if (el?.requestFullscreen) el.requestFullscreen()
-  else if (el?.webkitRequestFullscreen) el.webkitRequestFullscreen()
-}
-
-watch(currentChapterIdx, () => {
-  // 总是重置报错状态
-  videoError.value = false
-  docLoadError.value = false
-
-  nextTick(() => {
-    if (isVideo.value) {
-      // 新章节是视频：重置视频播放器
-      if (videoRef.value) {
-        videoRef.value.pause()
-        videoRef.value.currentTime = 0
-      }
-      isPlaying.value = false
-      playProgress.value = 0
-      currentTime.value = '00:00'
-      totalDuration.value = '--:--'
-    } else {
-      // 新章节是文档：重置 loading 状态让 iframe 重新加载
-      docLoading.value = true
-    }
-  })
-})
-
-// ─── 文档 ───
-const docLoading = ref(true)
-const docLoadError = ref(false)
-
-// ─── 通用 ───
-const activeTab = ref('intro')
+const noteContent = ref('')
+const noteSaving = ref(false)
 const notesSaved = ref(false)
 const qaList = ref([])
 const qaInput = ref('')
@@ -579,6 +259,15 @@ const qaSubmitting = ref(false)
 const courseResources = ref([])
 const availableResources = ref([])
 const selectedResourceId = ref(undefined)
+const learningStatus = ref([])
+const learningStatusLoading = ref(false)
+const learningStatusLoaded = ref(false)
+
+const currentChapter = computed(() => localCourse.value.chapters[currentChapterIdx.value] || {})
+const isVideo = computed(() => currentChapter.value.contentType !== 'document')
+const currentVideoUrl = computed(() => currentChapter.value.fileUrl || currentChapter.value.videoUrl || '')
+const currentDocUrl = computed(() => currentChapter.value.fileUrl || currentChapter.value.docUrl || '')
+
 const resourceColumns = [
   { title: '标题', dataIndex: 'title', key: 'title' },
   { title: '类型', dataIndex: 'contentType', key: 'contentType', width: 120 },
@@ -586,344 +275,462 @@ const resourceColumns = [
   { title: '标签', key: 'tags' },
   { title: '操作', key: 'action', width: 120 },
 ]
-const resourceOptions = computed(() => (availableResources.value || []).map(r => ({
-  value: r.id,
-  label: `${r.title}（${r.status || '-'}）`,
+const learningStatusColumns = [
+  { title: '学员', dataIndex: 'userName', key: 'userName', width: 140 },
+  { title: '警号', dataIndex: 'policeId', key: 'policeId', width: 120 },
+  { title: '部门', dataIndex: 'departmentName', key: 'departmentName', width: 180 },
+  { title: '课程进度', dataIndex: 'progressPercent', key: 'progressPercent', width: 240 },
+  { title: '最近章节', dataIndex: 'lastStudiedChapterTitle', key: 'lastStudiedChapterTitle' },
+  { title: '最近学习时间', dataIndex: 'lastStudiedAt', key: 'lastStudiedAt', width: 180 },
+]
+const resourceOptions = computed(() => (availableResources.value || []).map((item) => ({
+  value: item.id,
+  label: `${item.title}（${item.status || '-'}）`,
 })))
 
-watch(activeTab, (tab) => {
-  if (tab === 'resources' && (authStore.isAdmin || authStore.isInstructor)) {
-    loadResourceCandidates()
-  }
-})
+function getNoteCacheKey() {
+  return `course_note_${authStore.currentUser?.id || 'guest'}_${courseId.value}`
+}
 
-async function handleQASubmit() {
-  const q = qaInput.value.trim()
-  if (!q) return message.warning('请输入提问内容')
-  qaSubmitting.value = true
+function formatDateTime(value) {
+  if (!value) {
+    return '-'
+  }
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return '-'
+  }
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`
+}
+
+function recalcChapterLocks() {
+  const chapters = localCourse.value.chapters || []
+  chapters.forEach((chapter, idx) => {
+    chapter.locked = idx > 0 && Number(chapters[idx - 1]?.progress || 0) < 100
+  })
+}
+
+function calculateCourseProgress(chapters) {
+  const list = chapters || []
+  if (!list.length) {
+    return 0
+  }
+  const totalWeight = list.reduce((sum, chapter) => sum + Math.max(0, Number(chapter.duration || 0)), 0)
+  if (totalWeight > 0) {
+    const weighted = list.reduce((sum, chapter) => (
+      sum + Math.max(0, Number(chapter.duration || 0)) * Math.min(100, Math.max(0, Number(chapter.progress || 0)))
+    ), 0)
+    return Math.round(weighted / totalWeight)
+  }
+  return Math.round(list.reduce((sum, chapter) => sum + Math.min(100, Math.max(0, Number(chapter.progress || 0))), 0) / list.length)
+}
+
+function resolveChapterIndex(course, chapters) {
+  const previousChapterId = currentChapter.value?.id
+  const preferredChapterId = previousChapterId || course.lastStudiedChapterId || chapters[0]?.id
+  const index = chapters.findIndex((chapter) => chapter.id === preferredChapterId)
+  return index >= 0 ? index : 0
+}
+
+function resetVideoResumeState() {
+  pendingSeekSeconds.value = currentChapter.value?.progress >= 100
+    ? 0
+    : Math.max(0, Number(currentChapter.value?.playbackSeconds || 0))
+  lastProgressAt = 0
+  lastPersistSignature = ''
+  if (videoRef.value && isVideo.value) {
+    videoRef.value.pause()
+  }
+}
+
+async function fetchCourse() {
+  const data = await getCourse(courseId.value)
+  const chapters = (data.chapters || []).map((chapter) => ({
+    ...chapter,
+    progress: Number(chapter.progress || 0),
+    playbackSeconds: Number(chapter.playbackSeconds || 0),
+    locked: false,
+  }))
+  const targetIndex = resolveChapterIndex(data, chapters)
+  if (chapters[targetIndex]?.id === data.lastStudiedChapterId) {
+    chapters[targetIndex].playbackSeconds = Math.max(
+      Number(chapters[targetIndex].playbackSeconds || 0),
+      Number(data.lastPlaybackSeconds || 0),
+    )
+  }
+
+  localCourse.value = {
+    ...data,
+    createdByName: data.createdByName || '',
+    instructorName: data.instructorName || '',
+    progressPercent: Number(data.progressPercent || 0),
+    canViewLearningStatus: !!data.canViewLearningStatus,
+    chapters,
+  }
+  currentChapterIdx.value = targetIndex
+  recalcChapterLocks()
+  resetVideoResumeState()
+  noteContent.value = data.note?.content ?? localStorage.getItem(getNoteCacheKey()) ?? ''
+  qaList.value = data.qaList || []
+  courseResources.value = data.resources || []
+  learningStatusLoaded.value = false
+  if (activeTab.value === 'learning' && localCourse.value.canViewLearningStatus) {
+    loadCourseLearningStatus()
+  }
+}
+
+async function loadCourseLearningStatus() {
+  if (!localCourse.value.canViewLearningStatus || learningStatusLoading.value || learningStatusLoaded.value) {
+    return
+  }
+  learningStatusLoading.value = true
   try {
-    const res = await createCourseQA(courseId, { question: q })
-    qaList.value.unshift(res)
-    qaInput.value = ''
-    message.success('提问已提交')
-  } catch {
-    message.error('提交失败，请稍后重试')
+    learningStatus.value = await getCourseLearningStatus(courseId.value)
+    learningStatusLoaded.value = true
+  } catch (error) {
+    learningStatus.value = []
+    if (error?.response?.status === 404) {
+      localCourse.value.canViewLearningStatus = false
+      if (activeTab.value === 'learning') {
+        activeTab.value = 'intro'
+      }
+      return
+    }
+    message.error(error?.message || '加载学习情况失败')
   } finally {
-    qaSubmitting.value = false
+    learningStatusLoading.value = false
   }
 }
 
 async function loadResourceCandidates() {
-  if (!(authStore.isAdmin || authStore.isInstructor)) return
+  if (!(authStore.isAdmin || authStore.isInstructor)) {
+    return
+  }
   try {
-    const res = await getResources({ page: 1, size: 200, status: 'published' })
-    availableResources.value = res.items || []
+    const response = await getResources({ page: 1, size: 200, status: 'published' })
+    availableResources.value = response.items || []
   } catch {
     availableResources.value = []
   }
 }
 
 async function bindSelectedResource() {
-  if (!selectedResourceId.value) return message.warning('请选择资源')
+  if (!selectedResourceId.value) {
+    message.warning('请选择资源')
+    return
+  }
   try {
-    await bindCourseResource(courseId, { resourceId: selectedResourceId.value, usageType: 'required', sortOrder: 0 })
-    message.success('绑定成功')
+    await bindCourseResource(courseId.value, {
+      resourceId: selectedResourceId.value,
+      usageType: 'required',
+      sortOrder: 0,
+    })
     selectedResourceId.value = undefined
     await fetchCourse()
-  } catch (e) {
-    message.error(e.message || '绑定失败')
+    message.success('绑定成功')
+  } catch (error) {
+    message.error(error?.message || '绑定失败')
   }
 }
 
 async function removeResource(resourceId) {
   try {
-    await unbindCourseResource(courseId, resourceId)
-    message.success('解绑成功')
+    await unbindCourseResource(courseId.value, resourceId)
     await fetchCourse()
-  } catch (e) {
-    message.error(e.message || '解绑失败')
+    message.success('解绑成功')
+  } catch (error) {
+    message.error(error?.message || '解绑失败')
   }
 }
 
-const noteContent = ref('')
-const noteSaving = ref(false)
-
-function getNoteCacheKey() {
-  return `course_note_${authStore.currentUser?.id || 'guest'}_${courseId}`
+async function handleQASubmit() {
+  const question = qaInput.value.trim()
+  if (!question) {
+    message.warning('请输入提问内容')
+    return
+  }
+  qaSubmitting.value = true
+  try {
+    const item = await createCourseQA(courseId.value, { question })
+    qaList.value.unshift(item)
+    qaInput.value = ''
+    message.success('提问已提交')
+  } catch (error) {
+    message.error(error?.message || '提交失败，请稍后重试')
+  } finally {
+    qaSubmitting.value = false
+  }
 }
 
 async function handleSaveNote() {
   noteSaving.value = true
   try {
-    const res = await saveCourseNote(courseId, noteContent.value || '')
-    noteContent.value = res?.content || ''
-    const cacheKey = getNoteCacheKey()
-    localStorage.setItem(cacheKey, noteContent.value)
+    const response = await saveCourseNote(courseId.value, noteContent.value || '')
+    noteContent.value = response?.content || ''
+    localStorage.setItem(getNoteCacheKey(), noteContent.value)
     notesSaved.value = true
-    setTimeout(() => { notesSaved.value = false }, 2000)
-  } catch (e) {
-    const cacheKey = getNoteCacheKey()
-    localStorage.setItem(cacheKey, noteContent.value)
+    setTimeout(() => {
+      notesSaved.value = false
+    }, 2000)
+  } catch (error) {
+    localStorage.setItem(getNoteCacheKey(), noteContent.value)
     notesSaved.value = true
-    setTimeout(() => { notesSaved.value = false }, 2000)
-    message.warning(e.message || '笔记已暂存到本地')
+    setTimeout(() => {
+      notesSaved.value = false
+    }, 2000)
+    message.warning(error?.message || '笔记已暂存到本地')
   } finally {
     noteSaving.value = false
   }
 }
 
-// ─── 编辑弹窗 ───
-const editVisible = ref(false)
-const editTab = ref('basic')
+function buildProgressPayload() {
+  const chapter = currentChapter.value
+  if (!chapter?.id) {
+    return null
+  }
 
-const editForm = reactive({
-  title: '',
-  description: '',
-  instructorId: undefined,
-  difficulty: 3,
-  tags: [],
-  isRequired: false,
-  chapters: [],
-})
-
-const editDifficultyLabel = computed(() => {
-  const labels = ['', '初级', '初中级', '中级', '中高级', '高级']
-  return labels[Math.round(editForm.difficulty)] || ''
-})
-
-const openEdit = async () => {
-  const c = localCourse.value
-  editForm.title = c.title
-  editForm.description = c.description || ''
-  editForm.instructorId = c.instructorId
-  editForm.difficulty = c.difficulty || 3
-  editForm.tags = [...(c.tags || [])]
-  editForm.isRequired = !!c.isRequired
-  editForm.chapters = (c.chapters || []).map(ch => ({
-    title: ch.title,
-    duration: ch.duration || 30,
-    fileId: ch.fileId || null,
-    fileList: [],
-  }))
-  editTab.value = 'basic'
-  editVisible.value = true
-  await ensureInstructorOptionsLoaded(true)
-}
-
-const editSaving = ref(false)
-const editUploadPercent = ref(0)
-let lastEditSubmitAt = 0
-
-const saveEdit = async () => {
-  const now = Date.now()
-  if (editSaving.value || now - lastEditSubmitAt < 800) return
-  lastEditSubmitAt = now
-  if (!editForm.title.trim()) return message.warning('课程名称不能为空')
-  if (editForm.chapters.some(ch => !ch.title.trim())) return message.warning('章节名称不能为空')
-
-  editSaving.value = true
-  try {
-    // 上传新文件并构建章节数据
-    const newChapters = []
-    const uploadTargets = editForm.chapters.filter(ch => ch.fileList?.length > 0).length
-    let uploadedCount = 0
-    editUploadPercent.value = 0
-
-    for (let idx = 0; idx < editForm.chapters.length; idx++) {
-      const ch = editForm.chapters[idx]
-      const existing = localCourse.value.chapters[idx] || {}
-      let fileId = ch.fileId || existing.fileId || null
-
-      if (ch.fileList?.length > 0) {
-        const rawFile = ch.fileList[0].originFileObj || ch.fileList[0]
-        if (rawFile && rawFile.name) {
-          const fileRes = await uploadFile(rawFile, (percent) => {
-            editUploadPercent.value = Math.round(((uploadedCount + percent / 100) / (uploadTargets || 1)) * 100)
-          })
-          fileId = fileRes.id
-          uploadedCount += 1
-          editUploadPercent.value = Math.round((uploadedCount / (uploadTargets || 1)) * 100)
-        }
-      }
-
-      newChapters.push({
-        title: ch.title,
-        sortOrder: idx,
-        duration: ch.duration || 30,
-        fileId,
-      })
+  if (isVideo.value) {
+    const duration = Number(videoRef.value?.duration || 0)
+    const seconds = Math.max(0, Math.floor(Number(videoRef.value?.currentTime || chapter.playbackSeconds || 0)))
+    const progress = duration > 0
+      ? Math.min(100, Math.round((seconds / duration) * 100))
+      : Math.max(0, Number(chapter.progress || 0))
+    return {
+      progress: Math.max(Number(chapter.progress || 0), progress),
+      playbackSeconds: seconds,
     }
+  }
 
-    const courseData = {
-      title: editForm.title,
-      description: editForm.description,
-      instructorId: editForm.instructorId,
-      difficulty: editForm.difficulty,
-      tags: editForm.tags,
-      isRequired: editForm.isRequired,
-      duration: newChapters.reduce((s, c) => s + (Number(c.duration) || 0), 0),
-      chapters: newChapters,
-    }
-
-    await apiUpdateCourse(courseId, courseData)
-
-    await fetchCourse()
-
-    if (currentChapterIdx.value >= localCourse.value.chapters.length) {
-      currentChapterIdx.value = 0
-    }
-
-    editVisible.value = false
-    message.success('课程信息已更新')
-  } catch (e) {
-    message.error(e.message || '保存失败')
-  } finally {
-    editSaving.value = false
-    editUploadPercent.value = 0
+  return {
+    progress: Math.max(0, Number(chapter.progress || 0)),
+    playbackSeconds: Math.max(0, Number(chapter.playbackSeconds || 0)),
   }
 }
 
-const handleDeleteCourse = async () => {
+function applyProgress(payload, response) {
+  const chapter = currentChapter.value
+  if (!chapter?.id) {
+    return
+  }
+  chapter.progress = Math.max(Number(chapter.progress || 0), Number(response?.progress ?? payload.progress ?? 0))
+  chapter.playbackSeconds = Math.max(0, Number(response?.playbackSeconds ?? payload.playbackSeconds ?? 0))
+  localCourse.value.progressPercent = calculateCourseProgress(localCourse.value.chapters)
+  recalcChapterLocks()
+}
+
+async function persistCurrentProgress(options = {}) {
+  const chapter = currentChapter.value
+  const payload = buildProgressPayload()
+  if (!chapter?.id || !payload) {
+    return
+  }
+  if (!options.force && payload.progress <= 0 && payload.playbackSeconds <= 0) {
+    return
+  }
+
+  const signature = `${chapter.id}:${payload.progress}:${payload.playbackSeconds}`
+  if (!options.force && signature === lastPersistSignature) {
+    return
+  }
+  lastPersistSignature = signature
+
   try {
-    await apiDeleteCourse(courseId)
+    if (options.preferKeepalive) {
+      keepaliveChapterProgress(courseId.value, chapter.id, payload)
+      applyProgress(payload)
+      return
+    }
+    const response = await updateChapterProgress(courseId.value, chapter.id, payload)
+    applyProgress(payload, response)
+  } catch {
+    if (!options.preferKeepalive) {
+      throw new Error('保存学习进度失败')
+    }
+  }
+}
+
+async function selectChapter(index) {
+  const chapter = localCourse.value.chapters[index]
+  if (!chapter || chapter.locked || index === currentChapterIdx.value) {
+    return
+  }
+  try {
+    await persistCurrentProgress({ force: true })
+  } catch {
+    message.warning('上一章节进度保存失败，已继续切换章节')
+  }
+  currentChapterIdx.value = index
+  resetVideoResumeState()
+}
+
+function onMetaLoaded() {
+  if (!videoRef.value) {
+    return
+  }
+  const duration = Number(videoRef.value.duration || 0)
+  const seekSeconds = Math.min(
+    Math.max(0, Number(pendingSeekSeconds.value || 0)),
+    Math.max(0, duration - 1),
+  )
+  if (seekSeconds > 0) {
+    videoRef.value.currentTime = seekSeconds
+  }
+  pendingSeekSeconds.value = 0
+}
+
+function handleVideoPause() {
+  persistCurrentProgress().catch(() => {})
+}
+
+async function onVideoEnded() {
+  const chapter = currentChapter.value
+  if (!chapter?.id) {
+    return
+  }
+  chapter.progress = 100
+  chapter.playbackSeconds = Math.floor(Number(videoRef.value?.duration || 0))
+  await persistCurrentProgress({ force: true })
+}
+
+function onTimeUpdate() {
+  if (!videoRef.value || !currentChapter.value?.id) {
+    return
+  }
+  currentChapter.value.playbackSeconds = Math.floor(Number(videoRef.value.currentTime || 0))
+  const now = Date.now()
+  if (now - lastProgressAt < 5000) {
+    return
+  }
+  lastProgressAt = now
+  persistCurrentProgress().catch(() => {})
+}
+
+async function markDocProgress() {
+  const chapter = currentChapter.value
+  if (!chapter?.id) {
+    return
+  }
+  chapter.progress = 100
+  chapter.playbackSeconds = 0
+  try {
+    await persistCurrentProgress({ force: true })
+    message.success('已标记本章完成')
+  } catch (error) {
+    message.warning(error?.message || '进度保存失败，请稍后重试')
+  }
+}
+
+async function handleDeleteCourse() {
+  try {
+    await apiDeleteCourse(courseId.value)
     message.success('课程已删除')
     router.push('/courses')
-  } catch (err) {
-    message.error(err.message || '删除失败')
+  } catch (error) {
+    message.error(error?.message || '删除失败')
   }
 }
+
+async function handleEditorSuccess() {
+  await fetchCourse()
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'hidden') {
+    persistCurrentProgress({ force: true, preferKeepalive: true }).catch(() => {})
+  }
+}
+
+function handleBeforeUnload() {
+  persistCurrentProgress({ force: true, preferKeepalive: true }).catch(() => {})
+}
+
+watch(activeTab, (tab) => {
+  if (tab === 'resources' && (authStore.isAdmin || authStore.isInstructor)) {
+    loadResourceCandidates()
+  }
+  if (tab === 'learning') {
+    loadCourseLearningStatus()
+  }
+})
+
+watch(
+  () => currentChapter.value?.id,
+  () => {
+    resetVideoResumeState()
+  },
+)
+
+onMounted(async () => {
+  try {
+    await fetchCourse()
+  } catch (error) {
+    message.error(error?.message || '加载课程失败')
+  }
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  window.addEventListener('beforeunload', handleBeforeUnload)
+  window.addEventListener('pagehide', handleBeforeUnload)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+  window.removeEventListener('pagehide', handleBeforeUnload)
+})
+
+onBeforeRouteLeave(async () => {
+  try {
+    await persistCurrentProgress({ force: true })
+  } catch {
+    // 路由离开时不阻塞导航。
+  }
+  return true
+})
 </script>
 
 <style scoped>
 .course-detail-page { padding: 0; }
-
-.top-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 16px;
-}
-
-/* ─── 视频播放器 ─── */
-.video-player-wrap { background: #000; border-radius: 8px; overflow: hidden; }
-.video-player { position: relative; }
-.course-video { width: 100%; height: 400px; display: block; object-fit: contain; background: #000; }
-/* 全屏时让视频充满整个屏幕，不再固定 400px */
-.video-player-wrap:fullscreen .course-video,
-.video-player-wrap:-webkit-full-screen .course-video,
-.video-player:fullscreen .course-video,
-.video-player:-webkit-full-screen .course-video {
-  height: 100vh !important;
-  height: 100dvh !important;
-  object-fit: contain !important;
-}
-.video-player-wrap:fullscreen,
-.video-player-wrap:-webkit-full-screen,
-.video-player:fullscreen,
-.video-player:-webkit-full-screen {
-  display: flex;
-  flex-direction: column;
-  background: #000;
-  width: 100vw !important;
-  height: 100vh !important;
-}
-.video-player-wrap:fullscreen .video-controls,
-.video-player-wrap:-webkit-full-screen .video-controls,
-.video-player:fullscreen .video-controls,
-.video-player:-webkit-full-screen .video-controls {
-  flex-shrink: 0;
-}
-.video-click-overlay { position: absolute; top: 0; left: 0; right: 0; bottom: 48px; cursor: pointer; z-index: 2; }
-.video-error-mask { position: absolute; inset: 0; background: linear-gradient(135deg, #001236, #003087); display: flex; flex-direction: column; align-items: center; justify-content: center; color: rgba(255,255,255,0.8); font-size: 15px; z-index: 5; }
-.play-center-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 52px; color: rgba(255,255,255,0.85); background: rgba(0,0,0,0.35); width: 80px; height: 80px; border-radius: 50%; display: flex; align-items: center; justify-content: center; z-index: 3; pointer-events: none; }
-.fade-enter-active { transition: opacity 0.15s; }
-.fade-leave-active { transition: opacity 0.5s; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
-.chapter-badge-wrap { position: absolute; bottom: 60px; left: 14px; z-index: 4; pointer-events: none; }
-.chapter-badge { background: rgba(0,0,0,0.55); color: #fff; padding: 4px 12px; border-radius: 4px; font-size: 13px; backdrop-filter: blur(4px); }
-.video-controls { background: rgba(0,0,0,0.85); padding: 8px 14px; display: flex; align-items: center; gap: 12px; position: relative; z-index: 10; }
-.controls-left { display: flex; align-items: center; gap: 8px; }
-.ctrl-btn { background: transparent; border: none; color: #fff; font-size: 17px; cursor: pointer; padding: 4px 8px; border-radius: 4px; transition: background 0.2s; }
-.ctrl-btn:hover { background: rgba(255,255,255,0.15); }
-.time-display { color: #bbb; font-size: 12px; white-space: nowrap; min-width: 90px; }
-.progress-bar-wrap { flex: 1; padding: 8px 0; cursor: pointer; position: relative; }
-.progress-bar-bg { height: 4px; background: rgba(255,255,255,0.2); border-radius: 2px; position: relative; }
-.progress-bar-fill { height: 100%; background: linear-gradient(90deg, #003087, #c8a84b); border-radius: 2px; transition: width 0.1s linear; }
-.progress-handle { position: absolute; top: 50%; transform: translate(-50%, -50%); width: 12px; height: 12px; border-radius: 50%; background: #c8a84b; transition: left 0.1s linear; pointer-events: none; }
-.controls-right { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
-
-/* ─── 文档查看器 ─── */
-.doc-viewer-wrap { border-radius: 8px; overflow: hidden; border: 1px solid #e8e8e8; }
-.doc-viewer { background: #fff; }
-.doc-header { display: flex; align-items: center; gap: 14px; padding: 16px 20px; background: linear-gradient(135deg, #f0f5ff, #e8f0fe); border-bottom: 1px solid #d0e0ff; }
-.doc-icon { font-size: 40px; }
-.doc-title { font-size: 17px; font-weight: 600; color: #001234; margin-bottom: 4px; }
-.doc-meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #888; }
-.doc-iframe-container { position: relative; height: 520px; background: #f5f5f5; }
-.doc-loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: #f9fafc; z-index: 2; }
-.doc-iframe { width: 100%; height: 100%; border: none; display: block; }
-.doc-error { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; font-size: 15px; color: #888; background: #fafafa; }
-
-/* ─── 通用 ─── */
-.meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+.top-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; }
+.top-actions { display: flex; gap: 8px; }
+.viewer-card { border: 1px solid #e8e8e8; border-radius: 8px; overflow: hidden; background: #fff; }
+.course-video { width: 100%; height: 420px; display: block; background: #000; }
+.doc-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid #eef1f5; background: linear-gradient(135deg, #f8fbff, #edf4ff); }
+.doc-title { font-size: 16px; font-weight: 600; color: #1f2d3d; }
+.doc-subtitle { margin-top: 4px; font-size: 12px; color: #7a8699; }
+.doc-actions { display: flex; gap: 8px; }
+.doc-iframe { width: 100%; height: 560px; display: block; }
+.course-description { line-height: 1.8; color: #444; }
+.meta-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
 .meta-item { display: flex; gap: 8px; font-size: 13px; }
-.meta-l { color: #888; min-width: 60px; }
-.chapter-list { display: flex; flex-direction: column; gap: 8px; max-height: 500px; overflow-y: auto; }
-.chapter-item { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-radius: 6px; cursor: pointer; transition: all 0.2s; border: 1px solid transparent; }
-.chapter-item:hover:not(.locked) { background: #f0f5ff; border-color: #d0e0ff; }
-.chapter-item.active { background: #e8f0fe; border-color: var(--police-primary); }
+.meta-label { min-width: 60px; color: #888; }
+.chapter-list { display: flex; flex-direction: column; gap: 8px; max-height: 640px; overflow-y: auto; }
+.chapter-item { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; border: 1px solid transparent; transition: all 0.2s; cursor: pointer; }
+.chapter-item:hover:not(.locked) { background: #f6f9ff; border-color: #dbe7ff; }
+.chapter-item.active { background: #edf4ff; border-color: var(--police-primary); }
 .chapter-item.locked { opacity: 0.5; cursor: not-allowed; }
-.ch-left { display: flex; align-items: center; gap: 10px; flex: 1; }
-.ch-num { width: 24px; height: 24px; border-radius: 50%; background: var(--police-primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
-.chapter-item.active .ch-num { background: var(--police-gold, #c8a84b); }
-.ch-title { font-size: 13px; font-weight: 500; color: #333; }
-.ch-meta { font-size: 11px; color: #888; }
+.chapter-main { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.chapter-index { width: 26px; height: 26px; border-radius: 50%; background: var(--police-primary); color: #fff; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+.chapter-title { font-size: 13px; font-weight: 600; color: #1f2d3d; }
+.chapter-meta { margin-top: 4px; font-size: 12px; color: #7a8699; }
+.chapter-status { flex-shrink: 0; }
 .qa-list { display: flex; flex-direction: column; gap: 12px; }
 .qa-item { border-left: 3px solid var(--police-primary); padding-left: 12px; }
 .qa-question { display: flex; align-items: center; gap: 8px; }
 .qa-user { font-size: 12px; color: #888; }
 .qa-text { font-size: 13px; color: #333; }
 .qa-answer { margin-top: 6px; font-size: 13px; color: #555; background: #fffbe6; padding: 6px 10px; border-radius: 4px; }
-
-/* ─── 编辑弹窗章节 ─── */
-.ch-edit-row { border: 1px solid #e8e8e8; border-radius: 6px; padding: 12px; margin-bottom: 10px; background: #fafbfc; }
-.ch-edit-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.ch-badge { background: var(--police-primary, #003087); color: #fff; font-size: 11px; font-weight: 600; padding: 2px 10px; border-radius: 10px; }
-.chapter-upload :deep(.ant-upload.ant-upload-drag) { padding: 6px 0; }
+.resource-bind-toolbar { margin-bottom: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.resource-bind-select { flex: 1; min-width: 320px; }
+.learning-progress-cell { min-width: 180px; }
 
 @media (max-width: 768px) {
-  .course-video { height: 240px !important; }
-  .doc-iframe-container { height: 340px !important; }
-  .meta-grid { grid-template-columns: 1fr !important; }
-  .video-controls { flex-wrap: wrap; gap: 8px; justify-content: space-between; }
-  .progress-bar-wrap { width: 100%; order: -1; padding: 4px 0; }
-  .top-bar {
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 8px;
-  }
-  .resource-bind-toolbar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-  .resource-bind-select {
-    width: 100%;
-    min-width: 0;
-  }
-}
-
-.resource-bind-toolbar {
-  margin-bottom: 12px;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.resource-bind-select {
-  flex: 1;
-  min-width: 320px;
+  .top-bar { flex-wrap: wrap; }
+  .top-actions { width: 100%; }
+  .course-video { height: 240px; }
+  .doc-toolbar { flex-direction: column; align-items: flex-start; }
+  .doc-actions { width: 100%; }
+  .doc-iframe { height: 360px; }
+  .meta-grid { grid-template-columns: 1fr; }
+  .resource-bind-select { width: 100%; min-width: 0; }
 }
 </style>

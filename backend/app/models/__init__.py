@@ -7,7 +7,9 @@ from .permission import Permission, role_permissions, department_permissions
 from .department import Department, user_departments
 from .police_type import PoliceType, user_police_types
 from .system import Config, ConfigGroup, ConfigFormat
-from .course import Course, Chapter, CourseNote, CourseProgress, CourseQA
+from .course import (
+    Course, Chapter, CourseNote, CourseProgress, CourseTag, CourseTagRelation, CourseQA
+)
 from .training import (
     Training, TrainingBase, TrainingCourse, Enrollment, CheckinRecord, ScheduleItem, TrainingHistory
 )
@@ -46,7 +48,7 @@ __all__ = [
     "user_police_types",
     "department_permissions",
     # 课程相关
-    "Course", "Chapter", "CourseNote", "CourseProgress", "CourseQA",
+    "Course", "Chapter", "CourseNote", "CourseProgress", "CourseTag", "CourseTagRelation", "CourseQA",
     # 培训相关
     "Training", "TrainingBase", "TrainingCourse", "Enrollment", "CheckinRecord", "ScheduleItem", "TrainingHistory",
     # 考试相关

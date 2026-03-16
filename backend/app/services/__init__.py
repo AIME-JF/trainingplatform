@@ -9,6 +9,7 @@ from .permission import PermissionService
 from .police_type import PoliceTypeService
 from .system import SystemConfigService
 from .course import CourseService
+from .course_progress import CourseProgressService
 from .exam import ExamService
 from .question import QuestionService
 from .training import TrainingService
@@ -27,7 +28,7 @@ from .recommendation import RecommendationService
 __all__ = [
     "AuthService", "UserService", "DepartmentService", "RoleService", "PermissionService",
     "PoliceTypeService", "SystemConfigService",
-    "CourseService", "ExamService", "QuestionService", "TrainingService", "TrainingBaseService",
+    "CourseService", "CourseProgressService", "ExamService", "QuestionService", "TrainingService", "TrainingBaseService",
     "CertificateService", "ProfileService",
     "DashboardService", "ReportService", "AIService", "TalentService",
     "MediaService",

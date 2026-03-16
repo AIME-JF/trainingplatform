@@ -14,6 +14,7 @@ from .resource import ResourceListItemResponse
 
 class ChapterCreate(BaseModel):
     """创建章节"""
+    id: Optional[int] = Field(None, description="章节ID，更新时传递")
     title: str = Field(..., max_length=200, description="章节标题")
     sort_order: int = Field(0, description="排序")
     duration: int = Field(0, description="时长(分钟)")
@@ -46,7 +47,10 @@ class ChapterResponse(BaseModel):
     file_id: Optional[int] = None
     resource_id: Optional[int] = None
     file_url: Optional[str] = None
+    content_type: Optional[str] = None
     progress: int = 0  # 当前用户学习进度(0-100)
+    playback_seconds: int = 0
+    last_studied_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -90,6 +94,8 @@ class CourseResponse(BaseModel):
     category: str
     file_type: str = "video"
     description: Optional[str] = None
+    created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
     instructor_id: Optional[int] = None
     instructor_name: Optional[str] = None
     duration: int = 0
@@ -99,6 +105,14 @@ class CourseResponse(BaseModel):
     is_required: bool = False
     cover_color: Optional[str] = None
     tags: Optional[List[str]] = None
+    progress_percent: int = 0
+    chapter_count: int = 0
+    completed_chapter_count: int = 0
+    last_studied_at: Optional[datetime] = None
+    last_studied_chapter_id: Optional[int] = None
+    last_studied_chapter_title: Optional[str] = None
+    last_playback_seconds: int = 0
+    can_view_learning_status: bool = False
     chapters: List[ChapterResponse] = []
     note: Optional["CourseNoteResponse"] = None
     qa_list: List["CourseQAResponse"] = Field(default_factory=list)
@@ -116,6 +130,7 @@ class CourseListResponse(BaseModel):
     category: str
     file_type: str = "video"
     description: Optional[str] = None
+    created_by: Optional[int] = None
     instructor_id: Optional[int] = None
     instructor_name: Optional[str] = None
     duration: int = 0
@@ -125,9 +140,26 @@ class CourseListResponse(BaseModel):
     is_required: bool = False
     cover_color: Optional[str] = None
     tags: Optional[List[str]] = None
+    progress_percent: int = 0
+    chapter_count: int = 0
+    completed_chapter_count: int = 0
+    last_studied_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CourseTagResponse(BaseModel):
+    """课程标签响应"""
+    id: int
+    name: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CourseTagCreate(BaseModel):
+    """课程标签创建"""
+    name: str = Field(..., min_length=1, max_length=50, description="标签名称")
 
 
 # ========== CourseProgress ==========
@@ -135,6 +167,7 @@ class CourseListResponse(BaseModel):
 class CourseProgressUpdate(BaseModel):
     """更新学习进度"""
     progress: int = Field(..., ge=0, le=100, description="进度0-100")
+    playback_seconds: Optional[int] = Field(None, ge=0, description="最近播放位置(秒)")
 
 
 class CourseNoteUpdate(BaseModel):
@@ -161,9 +194,26 @@ class CourseProgressResponse(BaseModel):
     course_id: int
     chapter_id: Optional[int] = None
     progress: int = 0
+    playback_seconds: int = 0
     last_studied_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class CourseLearningStatusResponse(BaseModel):
+    """课程学习情况响应"""
+    user_id: int
+    username: str
+    user_name: Optional[str] = None
+    police_id: Optional[str] = None
+    department_name: Optional[str] = None
+    progress_percent: int = 0
+    chapter_count: int = 0
+    completed_chapter_count: int = 0
+    last_studied_at: Optional[datetime] = None
+    last_studied_chapter_id: Optional[int] = None
+    last_studied_chapter_title: Optional[str] = None
+    last_playback_seconds: int = 0
 
 
 # ========== CourseQA ==========

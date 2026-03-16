@@ -2,13 +2,14 @@
 工作台服务
 """
 from typing import List, Dict, Any
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import func
 
 from app.models import (
     User, Course, Exam, Training, ExamRecord, Enrollment, CourseProgress
 )
 from app.schemas.dashboard import DashboardResponse
+from app.services.course_progress import CourseProgressService
 from logger import logger
 
 
@@ -85,10 +86,27 @@ class DashboardService:
 
     def _student_dashboard(self, user_id: int) -> DashboardResponse:
         """学员工作台"""
-        # 学习进度
-        progress_count = self.db.query(CourseProgress).filter(
-            CourseProgress.user_id == user_id
-        ).count()
+        course_ids = {
+            course_id
+            for (course_id,) in self.db.query(CourseProgress.course_id).filter(
+                CourseProgress.user_id == user_id
+            ).distinct().all()
+            if course_id is not None
+        }
+        courses = []
+        if course_ids:
+            courses = (
+                self.db.query(Course)
+                .options(selectinload(Course.chapters))
+                .filter(Course.id.in_(course_ids))
+                .all()
+            )
+        summaries = CourseProgressService(self.db).get_user_course_summaries(user_id, courses)
+        progress_count = sum(
+            1
+            for summary in summaries.values()
+            if 0 < summary.progress_percent < 100
+        )
 
         # 考试数
         exam_count = self.db.query(ExamRecord).filter(

@@ -33,7 +33,8 @@ from .course import (
     ChapterCreate, ChapterUpdate, ChapterResponse,
     CourseProgressUpdate, CourseProgressResponse,
     CourseNoteUpdate, CourseNoteResponse,
-    CourseQACreate, CourseQAResponse
+    CourseQACreate, CourseQAResponse,
+    CourseTagCreate, CourseTagResponse, CourseLearningStatusResponse,
 )
 # 培训相关
 from .training import (
@@ -129,7 +130,7 @@ __all__ = [
     "CourseCreate", "CourseUpdate", "CourseResponse", "CourseListResponse",
     "ChapterCreate", "ChapterUpdate", "ChapterResponse",
     "CourseProgressUpdate", "CourseProgressResponse", "CourseNoteUpdate", "CourseNoteResponse",
-    "CourseQACreate", "CourseQAResponse",
+    "CourseQACreate", "CourseQAResponse", "CourseTagCreate", "CourseTagResponse", "CourseLearningStatusResponse",
     # 培训相关
     "TrainingCreate", "TrainingUpdate", "TrainingResponse", "TrainingListResponse",
     "TrainingBaseCreate", "TrainingBaseUpdate", "TrainingBaseResponse",

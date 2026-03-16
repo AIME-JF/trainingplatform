@@ -2,10 +2,11 @@
 个人中心服务
 """
 from typing import Optional, List
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy import func
 
 from app.models import User, CourseProgress, ExamRecord, Certificate, Exam, Course
+from app.services.course_progress import CourseProgressService
 from app.schemas.profile import (
     ProfileUpdate, ProfileResponse, StudyStatsResponse, ExamHistoryResponse
 )
@@ -63,14 +64,25 @@ class ProfileService:
 
     def get_study_stats(self, user_id: int) -> StudyStatsResponse:
         """获取学习统计"""
-        # 课程统计
-        total_progress = self.db.query(CourseProgress).filter(
-            CourseProgress.user_id == user_id
-        ).all()
-
-        course_ids = set(p.course_id for p in total_progress)
-        completed = sum(1 for p in total_progress if p.progress >= 100)
-        in_progress = len(course_ids) - completed
+        # 课程统计按课程聚合，避免按章节最大值误算为整门课完成。
+        course_ids = {
+            course_id
+            for (course_id,) in self.db.query(CourseProgress.course_id).filter(
+                CourseProgress.user_id == user_id
+            ).distinct().all()
+            if course_id is not None
+        }
+        courses = []
+        if course_ids:
+            courses = (
+                self.db.query(Course)
+                .options(selectinload(Course.chapters))
+                .filter(Course.id.in_(course_ids))
+                .all()
+            )
+        summaries = CourseProgressService(self.db).get_user_course_summaries(user_id, courses)
+        completed = sum(1 for summary in summaries.values() if summary.progress_percent >= 100)
+        in_progress = sum(1 for summary in summaries.values() if 0 < summary.progress_percent < 100)
 
         # 考试统计
         exam_count = self.db.query(ExamRecord).filter(
@@ -89,7 +101,7 @@ class ProfileService:
         user = self.db.query(User).filter(User.id == user_id).first()
 
         return StudyStatsResponse(
-            total_courses=len(course_ids),
+            total_courses=len(summaries),
             completed_courses=completed,
             in_progress_courses=in_progress,
             total_study_hours=user.study_hours if user else 0,

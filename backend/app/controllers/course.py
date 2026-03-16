@@ -11,6 +11,7 @@ from app.schemas import (
     CourseProgressUpdate, CourseProgressResponse,
     CourseNoteUpdate, CourseNoteResponse,
     CourseQACreate, CourseQAResponse,
+    CourseTagCreate, CourseTagResponse, CourseLearningStatusResponse,
     PaginatedResponse
 )
 from logger import logger
@@ -24,12 +25,28 @@ class CourseController:
         self.service = CourseService(db)
 
     def get_courses(self, page: int = 1, size: int = 10, search: Optional[str] = None,
-                    category: Optional[str] = None, sort: Optional[str] = None):
+                    category: Optional[str] = None, sort: Optional[str] = None, user_id: Optional[int] = None):
         try:
-            return self.service.get_courses(page, size, search, category, sort)
+            return self.service.get_courses(page, size, search, category, sort, user_id=user_id)
         except Exception as e:
             logger.error(f"获取课程列表异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取课程列表失败")
+
+    def list_course_tags(self, search: Optional[str] = None) -> List[CourseTagResponse]:
+        try:
+            return self.service.list_course_tags(search=search)
+        except Exception as e:
+            logger.error(f"获取课程标签异常: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取课程标签失败")
+
+    def create_course_tag(self, data: CourseTagCreate) -> CourseTagResponse:
+        try:
+            return self.service.create_course_tag(data.name)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        except Exception as e:
+            logger.error(f"创建课程标签异常: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建课程标签失败")
 
     def create_course(self, data: CourseCreate, user_id: int):
         try:
@@ -40,8 +57,8 @@ class CourseController:
             logger.error(f"创建课程异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建课程失败")
 
-    def get_course_by_id(self, course_id: int, user_id: int = None):
-        result = self.service.get_course_by_id(course_id, user_id=user_id)
+    def get_course_by_id(self, course_id: int, user_id: int = None, user_permissions: Optional[List[str]] = None):
+        result = self.service.get_course_by_id(course_id, user_id=user_id, user_permissions=user_permissions or [])
         if not result:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="课程不存在")
         return result
@@ -54,6 +71,8 @@ class CourseController:
             return result
         except HTTPException:
             raise
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
         except Exception as e:
             logger.error(f"更新课程异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新课程失败")
@@ -76,6 +95,8 @@ class CourseController:
     def update_chapter_progress(self, course_id: int, chapter_id: int, user_id: int, data: CourseProgressUpdate):
         try:
             return self.service.update_chapter_progress(course_id, chapter_id, user_id, data)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
         except Exception as e:
             logger.error(f"更新进度异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新进度失败")
@@ -106,3 +127,20 @@ class CourseController:
         except Exception as e:
             logger.error(f"创建答疑提问异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="提出问题失败")
+
+    def get_course_learning_status(
+        self,
+        course_id: int,
+        user_id: int,
+        user_permissions: Optional[List[str]] = None,
+    ) -> List[CourseLearningStatusResponse]:
+        try:
+            result = self.service.get_course_learning_status(course_id, user_id, user_permissions or [])
+            if result is None:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="课程不存在")
+            return result
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"获取课程学习情况异常: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取课程学习情况失败")

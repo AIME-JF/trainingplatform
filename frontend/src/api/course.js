@@ -1,11 +1,21 @@
 import request from './request'
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+
 export function getCourses(params) {
   return request.get('/courses', { params })
 }
 
 export function getCourse(id) {
   return request.get(`/courses/${id}`)
+}
+
+export function getCourseTags(params) {
+  return request.get('/courses/tags', { params })
+}
+
+export function createCourseTag(data) {
+  return request.post('/courses/tags', data)
 }
 
 export function createCourse(data) {
@@ -24,8 +34,29 @@ export function getProgress() {
   return request.get('/courses/progress')
 }
 
-export function updateChapterProgress(courseId, chapterId, progress) {
-  return request.put(`/courses/${courseId}/chapters/${chapterId}/progress`, { progress })
+export function updateChapterProgress(courseId, chapterId, payload) {
+  const body = typeof payload === 'number' ? { progress: payload } : payload
+  return request.put(`/courses/${courseId}/chapters/${chapterId}/progress`, body)
+}
+
+export function keepaliveChapterProgress(courseId, chapterId, payload) {
+  const token = localStorage.getItem('token')
+  const body = typeof payload === 'number'
+    ? { progress: payload }
+    : {
+        progress: payload?.progress ?? 0,
+        playback_seconds: payload?.playbackSeconds ?? payload?.playback_seconds ?? 0,
+      }
+
+  return fetch(`${API_BASE_URL}/courses/${courseId}/chapters/${chapterId}/progress`, {
+    method: 'PUT',
+    keepalive: true,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+  })
 }
 
 export function getCourseNote(courseId) {
@@ -42,6 +73,10 @@ export function getCourseQA(courseId) {
 
 export function createCourseQA(courseId, data) {
   return request.post(`/courses/${courseId}/qa`, data)
+}
+
+export function getCourseLearningStatus(courseId) {
+  return request.get(`/courses/${courseId}/learning-status`)
 }
 
 export function bindCourseResource(courseId, data) {

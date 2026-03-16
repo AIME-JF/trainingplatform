@@ -13,6 +13,7 @@ from app.schemas import (
     CourseProgressUpdate, CourseProgressResponse,
     CourseNoteUpdate, CourseNoteResponse,
     CourseQACreate, CourseQAResponse,
+    CourseTagCreate, CourseTagResponse, CourseLearningStatusResponse,
     CourseResourceBindRequest, ResourceListItemResponse
 )
 from app.controllers import CourseController
@@ -33,7 +34,31 @@ def get_courses(
 ):
     """获取课程列表"""
     controller = CourseController(db)
-    data = controller.get_courses(page, size, search, category, sort)
+    data = controller.get_courses(page, size, search, category, sort, user_id=current_user.user_id)
+    return StandardResponse(data=data)
+
+
+@router.get("/tags", response_model=StandardResponse[List[CourseTagResponse]], summary="课程标签列表")
+def get_course_tags(
+    search: Optional[str] = Query(None),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取课程标签列表"""
+    controller = CourseController(db)
+    data = controller.list_course_tags(search=search)
+    return StandardResponse(data=data)
+
+
+@router.post("/tags", response_model=StandardResponse[CourseTagResponse], summary="创建课程标签")
+def create_course_tag(
+    data: CourseTagCreate,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """创建课程标签"""
+    controller = CourseController(db)
+    data = controller.create_course_tag(data)
     return StandardResponse(data=data)
 
 
@@ -68,7 +93,11 @@ def get_course(
 ):
     """获取课程详情（含当前用户章节进度）"""
     controller = CourseController(db)
-    data = controller.get_course_by_id(course_id, user_id=current_user.user_id)
+    data = controller.get_course_by_id(
+        course_id,
+        user_id=current_user.user_id,
+        user_permissions=current_user.permissions,
+    )
     return StandardResponse(data=data)
 
 
@@ -157,6 +186,26 @@ def create_course_qa(
     """提交课程提问"""
     controller = CourseController(db)
     result = controller.create_course_qa(course_id, current_user.user_id, data)
+    return StandardResponse(data=result)
+
+
+@router.get(
+    "/{course_id}/learning-status",
+    response_model=StandardResponse[List[CourseLearningStatusResponse]],
+    summary="课程学习情况",
+)
+def get_course_learning_status(
+    course_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取课程学习情况"""
+    controller = CourseController(db)
+    result = controller.get_course_learning_status(
+        course_id,
+        current_user.user_id,
+        current_user.permissions,
+    )
     return StandardResponse(data=result)
 
 
