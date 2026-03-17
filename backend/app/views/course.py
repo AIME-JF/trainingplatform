@@ -2,7 +2,7 @@
 课程管理路由
 """
 from typing import Optional, List
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -20,6 +20,26 @@ from app.controllers import CourseController
 from app.services.course import CourseService
 
 router = APIRouter(prefix="/courses", tags=["课程管理"])
+
+
+def _require_course_viewer(db: Session, course_id: int, user_id: int):
+    service = CourseService(db)
+    course = service.get_course_entity(course_id)
+    if not course:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="课程不存在")
+    if not service.can_view_course(course, user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权查看该课程")
+    return course
+
+
+def _require_course_manager(db: Session, course_id: int, user_id: int):
+    service = CourseService(db)
+    course = service.get_course_entity(course_id)
+    if not course:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="课程不存在")
+    if not service.can_manage_course(course, user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权管理该课程")
+    return course
 
 
 @router.get("", response_model=StandardResponse[PaginatedResponse[CourseListResponse]], summary="课程列表")
@@ -92,6 +112,7 @@ def get_course(
     db: Session = Depends(get_db)
 ):
     """获取课程详情（含当前用户章节进度）"""
+    _require_course_viewer(db, course_id, current_user.user_id)
     controller = CourseController(db)
     data = controller.get_course_by_id(
         course_id,
@@ -109,6 +130,7 @@ def update_course(
     db: Session = Depends(get_db)
 ):
     """更新课程"""
+    _require_course_manager(db, course_id, current_user.user_id)
     controller = CourseController(db)
     result = controller.update_course(course_id, data)
     return StandardResponse(data=result)
@@ -121,6 +143,7 @@ def delete_course(
     db: Session = Depends(get_db)
 ):
     """删除课程"""
+    _require_course_manager(db, course_id, current_user.user_id)
     controller = CourseController(db)
     controller.delete_course(course_id)
     return StandardResponse(message="课程已删除")
@@ -136,6 +159,7 @@ def update_chapter_progress(
     db: Session = Depends(get_db)
 ):
     """更新章节学习进度"""
+    _require_course_viewer(db, course_id, current_user.user_id)
     controller = CourseController(db)
     result = controller.update_chapter_progress(course_id, chapter_id, current_user.user_id, data)
     return StandardResponse(data=result)
@@ -148,6 +172,7 @@ def get_course_note(
     db: Session = Depends(get_db)
 ):
     """获取当前用户课程笔记"""
+    _require_course_viewer(db, course_id, current_user.user_id)
     controller = CourseController(db)
     result = controller.get_course_note(course_id, current_user.user_id)
     return StandardResponse(data=result)
@@ -161,9 +186,12 @@ def update_course_note(
     db: Session = Depends(get_db)
 ):
     """保存当前用户课程笔记"""
+    _require_course_viewer(db, course_id, current_user.user_id)
     controller = CourseController(db)
     result = controller.update_course_note(course_id, current_user.user_id, data)
     return StandardResponse(data=result)
+
+
 @router.get("/{course_id}/qa", response_model=StandardResponse[List[CourseQAResponse]], summary="获取课程答疑列表")
 def get_course_qa(
     course_id: int,
@@ -171,6 +199,7 @@ def get_course_qa(
     db: Session = Depends(get_db)
 ):
     """获取课程答疑列表"""
+    _require_course_viewer(db, course_id, current_user.user_id)
     controller = CourseController(db)
     result = controller.get_course_qa(course_id)
     return StandardResponse(data=result)
@@ -184,6 +213,7 @@ def create_course_qa(
     db: Session = Depends(get_db)
 ):
     """提交课程提问"""
+    _require_course_viewer(db, course_id, current_user.user_id)
     controller = CourseController(db)
     result = controller.create_course_qa(course_id, current_user.user_id, data)
     return StandardResponse(data=result)
@@ -200,6 +230,7 @@ def get_course_learning_status(
     db: Session = Depends(get_db)
 ):
     """获取课程学习情况"""
+    _require_course_viewer(db, course_id, current_user.user_id)
     controller = CourseController(db)
     result = controller.get_course_learning_status(
         course_id,
@@ -216,6 +247,7 @@ def add_course_resource(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    _require_course_manager(db, course_id, current_user.user_id)
     service = CourseService(db)
     result = service.add_course_resource(course_id, data)
     return StandardResponse(data=result)
@@ -227,6 +259,7 @@ def list_course_resources(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    _require_course_viewer(db, course_id, current_user.user_id)
     service = CourseService(db)
     result = service.list_course_resources(course_id)
     return StandardResponse(data=result)
@@ -239,6 +272,7 @@ def remove_course_resource(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
+    _require_course_manager(db, course_id, current_user.user_id)
     service = CourseService(db)
     ok = service.remove_course_resource(course_id, resource_id)
     if not ok:

@@ -3,7 +3,7 @@
 """
 
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from sqlalchemy import or_, func as sa_func
 from sqlalchemy.orm import Session, joinedload, selectinload
@@ -11,14 +11,22 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from app.models.course import (
     Course, Chapter, CourseNote, CourseProgress, CourseQA, CourseTag, CourseTagRelation
 )
+from app.models.department import Department
 from app.models.media import MediaFile
 from app.models.resource import Resource, ResourceMediaLink, CourseResourceRef, ResourceTagRelation
+from app.models.role import Role
 from app.models.user import User
 from app.schemas import PaginatedResponse
 from app.schemas.course import (
     ChapterResponse, CourseCreate, CourseLearningStatusResponse, CourseListResponse,
     CourseNoteResponse, CourseNoteUpdate, CourseProgressResponse, CourseProgressUpdate,
     CourseQAResponse, CourseQACreate, CourseResponse, CourseTagResponse, CourseUpdate,
+)
+from app.schemas.exam import (
+    ADMISSION_SCOPE_ALL,
+    ADMISSION_SCOPE_DEPARTMENT,
+    ADMISSION_SCOPE_ROLE,
+    ADMISSION_SCOPE_USER,
 )
 from app.schemas.resource import CourseResourceBindRequest, ResourceListItemResponse
 from app.services.auth import auth_service
@@ -36,6 +44,24 @@ class CourseService:
         self.db = db
         self.progress_service = CourseProgressService(db)
 
+    def get_course_entity(self, course_id: int) -> Optional[Course]:
+        """公开的课程实体读取，用于路由侧做权限判断。"""
+        return self._get_course_entity(course_id)
+
+    def can_view_course(self, course: Optional[Course], user_id: Optional[int]) -> bool:
+        """判断用户是否可查看课程。"""
+        if not course or not user_id:
+            return False
+        current_user = self._get_scope_user(user_id)
+        return self._can_view_course(course, current_user)
+
+    def can_manage_course(self, course: Optional[Course], user_id: Optional[int]) -> bool:
+        """判断用户是否可管理课程。"""
+        if not course or not user_id:
+            return False
+        current_user = self._get_scope_user(user_id)
+        return self._can_manage_course(course, current_user)
+
     def get_courses(
         self,
         page: int = 1,
@@ -47,6 +73,7 @@ class CourseService:
     ) -> PaginatedResponse[CourseListResponse]:
         """获取课程列表"""
         query = self.db.query(Course).options(
+            joinedload(Course.creator),
             joinedload(Course.instructor),
             selectinload(Course.chapters),
             selectinload(Course.tag_relations).joinedload(CourseTagRelation.tag),
@@ -77,14 +104,20 @@ class CourseService:
         else:
             query = query.order_by(Course.created_at.desc())
 
-        total = query.order_by(None).count()
-        if size == -1:
-            courses = query.all()
-        else:
-            skip = (page - 1) * size
-            courses = query.offset(skip).limit(size).all()
+        current_user = self._get_scope_user(user_id) if user_id else None
+        if user_id and not current_user:
+            return PaginatedResponse(page=page, size=0 if size == -1 else size, total=0, items=[])
+        can_manage_all = self._is_admin_user(current_user)
+        courses = query.all()
+        if current_user and not can_manage_all:
+            courses = [course for course in courses if self._can_view_course(course, current_user)]
 
-        progress_map = self.progress_service.get_user_course_summaries(user_id, courses) if user_id else {}
+        total = len(courses)
+        if size != -1:
+            skip = (page - 1) * size
+            courses = courses[skip: skip + size]
+
+        progress_map = self.progress_service.get_user_course_summaries(user_id, courses) if user_id and courses else {}
 
         items = []
         for course in courses:
@@ -105,6 +138,9 @@ class CourseService:
                     difficulty=course.difficulty,
                     is_required=course.is_required,
                     cover_color=course.cover_color,
+                    scope=course.scope,
+                    scope_type=course.scope_type or ADMISSION_SCOPE_ALL,
+                    scope_target_ids=self._normalize_scope_target_ids(course.scope_target_ids),
                     tags=self._course_tags(course),
                     progress_percent=summary.progress_percent if summary else 0,
                     chapter_count=summary.chapter_count if summary else len(course.chapters or []),
@@ -139,6 +175,10 @@ class CourseService:
 
     def create_course(self, data: CourseCreate, user_id: int) -> CourseResponse:
         """创建课程"""
+        scope_type, scope_target_ids, scope_summary = self._prepare_course_scope(
+            data.scope_type,
+            data.scope_target_ids,
+        )
         course = Course(
             title=data.title,
             category=data.category,
@@ -150,6 +190,9 @@ class CourseService:
             difficulty=data.difficulty,
             is_required=data.is_required,
             cover_color=data.cover_color,
+            scope=scope_summary,
+            scope_type=scope_type,
+            scope_target_ids=scope_target_ids,
         )
         self.db.add(course)
         self.db.flush()
@@ -176,6 +219,12 @@ class CourseService:
         course = self._get_course_entity(course_id)
         if not course:
             return None
+        current_user = self._get_scope_user(user_id) if user_id else None
+        if user_id and not current_user:
+            return None
+        if current_user and not self._is_admin_user(current_user):
+            if not self._can_view_course(course, current_user):
+                return None
         return self._to_response(course, user_id=user_id, user_permissions=user_permissions or [])
 
     def update_course(self, course_id: int, data: CourseUpdate) -> Optional[CourseResponse]:
@@ -187,9 +236,20 @@ class CourseService:
         update_data = data.model_dump(exclude_unset=True)
         chapters_data = update_data.pop("chapters", None)
         tags = update_data.pop("tags", None)
+        next_scope_type = update_data.pop("scope_type", course.scope_type or ADMISSION_SCOPE_ALL)
+        next_scope_target_ids = update_data.pop("scope_target_ids", course.scope_target_ids or [])
+        update_data.pop("scope", None)
 
         for field, value in update_data.items():
             setattr(course, field, value)
+
+        scope_type, scope_target_ids, scope_summary = self._prepare_course_scope(
+            next_scope_type,
+            next_scope_target_ids,
+        )
+        course.scope_type = scope_type
+        course.scope_target_ids = scope_target_ids
+        course.scope = scope_summary
 
         if tags is not None:
             self._sync_course_tags(course, tags)
@@ -218,6 +278,18 @@ class CourseService:
     def get_user_progress(self, user_id: int) -> List[CourseProgressResponse]:
         """获取用户学习进度明细"""
         records = self.db.query(CourseProgress).filter(CourseProgress.user_id == user_id).all()
+        current_user = self._get_scope_user(user_id)
+        if not current_user:
+            return []
+        if not self._is_admin_user(current_user) and records:
+            course_ids = {record.course_id for record in records if record.course_id}
+            courses = self.db.query(Course).filter(Course.id.in_(course_ids)).all() if course_ids else []
+            course_map = {course.id: course for course in courses}
+            records = [
+                record
+                for record in records
+                if self._can_view_course(course_map.get(record.course_id), current_user)
+            ]
         return [CourseProgressResponse.model_validate(record) for record in records]
 
     def update_chapter_progress(
@@ -493,6 +565,143 @@ class CourseService:
             .first()
         )
 
+    def _get_scope_user(self, user_id: Optional[int]) -> Optional[User]:
+        if not user_id:
+            return None
+        return self.db.query(User).options(
+            joinedload(User.roles),
+            joinedload(User.departments),
+        ).filter(
+            User.id == user_id,
+            User.is_active == True,
+        ).first()
+
+    def _has_role(self, user: Optional[User], role_code: str) -> bool:
+        if not user or not role_code:
+            return False
+        return any(
+            getattr(role, "is_active", True) and str(role.code or "").strip() == role_code
+            for role in (user.roles or [])
+        )
+
+    def _is_admin_user(self, user: Optional[User]) -> bool:
+        return self._has_role(user, "admin")
+
+    def _normalize_scope_target_ids(self, values: Any) -> List[int]:
+        normalized: List[int] = []
+        seen = set()
+        for raw_item in values or []:
+            try:
+                item = int(raw_item)
+            except (TypeError, ValueError):
+                continue
+            if item <= 0 or item in seen:
+                continue
+            seen.add(item)
+            normalized.append(item)
+        return normalized
+
+    def _build_scope_summary(self, label: str, names: List[str]) -> str:
+        cleaned_names = [str(name).strip() for name in names if str(name or "").strip()]
+        if not cleaned_names:
+            return label
+        if len(cleaned_names) <= 3:
+            return f"{label}：{'、'.join(cleaned_names)}"
+        return f"{label}：{'、'.join(cleaned_names[:3])} 等{len(cleaned_names)}项"
+
+    def _display_user_name(self, user: Optional[User]) -> str:
+        if not user:
+            return ""
+        return str(user.nickname or user.username or user.id)
+
+    def _prepare_course_scope(
+        self,
+        scope_type: Optional[str],
+        scope_target_ids: Any,
+    ) -> tuple[str, List[int], str]:
+        resolved_scope_type = str(scope_type or ADMISSION_SCOPE_ALL).strip() or ADMISSION_SCOPE_ALL
+        target_ids = self._normalize_scope_target_ids(scope_target_ids)
+
+        if resolved_scope_type == ADMISSION_SCOPE_ALL:
+            return ADMISSION_SCOPE_ALL, [], "全体用户"
+
+        if not target_ids:
+            raise ValueError("请至少选择一个可见范围目标")
+
+        if resolved_scope_type == ADMISSION_SCOPE_USER:
+            users = self.db.query(User).filter(
+                User.id.in_(target_ids),
+                User.is_active == True,
+            ).all()
+            user_map = {user.id: user for user in users}
+            ordered_users = [user_map.get(item_id) for item_id in target_ids]
+            if not all(ordered_users):
+                raise ValueError("指定用户中包含无效用户")
+            return (
+                resolved_scope_type,
+                target_ids,
+                self._build_scope_summary("指定用户", [self._display_user_name(user) for user in ordered_users]),
+            )
+
+        if resolved_scope_type == ADMISSION_SCOPE_DEPARTMENT:
+            departments = self.db.query(Department).filter(
+                Department.id.in_(target_ids),
+                Department.is_active == True,
+            ).all()
+            department_map = {department.id: department for department in departments}
+            ordered_departments = [department_map.get(item_id) for item_id in target_ids]
+            if not all(ordered_departments):
+                raise ValueError("指定部门中包含无效部门")
+            return (
+                resolved_scope_type,
+                target_ids,
+                self._build_scope_summary("指定部门", [department.name for department in ordered_departments]),
+            )
+
+        if resolved_scope_type == ADMISSION_SCOPE_ROLE:
+            roles = self.db.query(Role).filter(
+                Role.id.in_(target_ids),
+                Role.is_active == True,
+            ).all()
+            role_map = {role.id: role for role in roles}
+            ordered_roles = [role_map.get(item_id) for item_id in target_ids]
+            if not all(ordered_roles):
+                raise ValueError("指定角色中包含无效角色")
+            return (
+                resolved_scope_type,
+                target_ids,
+                self._build_scope_summary("指定角色", [role.name for role in ordered_roles]),
+            )
+
+        raise ValueError("不支持的可见范围类型")
+
+    def _can_manage_course(self, course: Optional[Course], user: Optional[User]) -> bool:
+        if not course or not user or not user.is_active:
+            return False
+        if self._is_admin_user(user):
+            return True
+        return user.id in {course.created_by, course.instructor_id}
+
+    def _can_view_course(self, course: Optional[Course], user: Optional[User]) -> bool:
+        if not course or not user or not user.is_active:
+            return False
+        if self._can_manage_course(course, user):
+            return True
+
+        scope_type = course.scope_type or ADMISSION_SCOPE_ALL
+        target_ids = set(self._normalize_scope_target_ids(course.scope_target_ids))
+        if scope_type == ADMISSION_SCOPE_ALL:
+            return True
+        if not target_ids:
+            return False
+        if scope_type == ADMISSION_SCOPE_USER:
+            return user.id in target_ids
+        if scope_type == ADMISSION_SCOPE_DEPARTMENT:
+            return any(department.id in target_ids for department in (user.departments or []))
+        if scope_type == ADMISSION_SCOPE_ROLE:
+            return any(role.id in target_ids for role in (user.roles or []))
+        return False
+
     def _sync_course_tags(self, course: Course, tag_names: Optional[List[str]]) -> None:
         if tag_names is None:
             return
@@ -728,6 +937,9 @@ class CourseService:
             difficulty=course.difficulty,
             is_required=course.is_required,
             cover_color=course.cover_color,
+            scope=course.scope,
+            scope_type=course.scope_type or ADMISSION_SCOPE_ALL,
+            scope_target_ids=self._normalize_scope_target_ids(course.scope_target_ids),
             tags=self._course_tags(course),
             progress_percent=progress_summary.progress_percent if progress_summary else 0,
             chapter_count=progress_summary.chapter_count if progress_summary else len(sorted_chapters),

@@ -119,12 +119,13 @@ def get_department_list(
     page: int = Query(1, ge=1, description="页码"),
     size: int = Query(10, ge=-1, description="每页大小，-1 表示全部"),
     parent_id: Optional[int] = Query(None, description="父部门 ID，-1 表示根部门"),
+    search: Optional[str] = Query(None, description="搜索部门名称/编码/描述"),
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     _require_permission(current_user, "GET_DEPARTMENTS")
     controller = DepartmentController(db)
-    result = controller.get_departments(page, size, parent_id)
+    result = controller.get_departments(page, size, parent_id, search)
     return StandardResponse(message="获取部门列表成功", data=result)
 
 

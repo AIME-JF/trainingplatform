@@ -47,9 +47,15 @@ class DepartmentController:
             )
         return department
     
-    def get_departments(self, page: int = 1, size: int = 10, parent_id: Optional[int] = None) -> PaginatedResponse[DepartmentSimpleResponse]:
+    def get_departments(
+        self,
+        page: int = 1,
+        size: int = 10,
+        parent_id: Optional[int] = None,
+        search: Optional[str] = None,
+    ) -> PaginatedResponse[DepartmentSimpleResponse]:
         """获取部门列表"""
-        return self.department_service.get_departments_simple(page, size, parent_id)
+        return self.department_service.get_departments_simple(page, size, parent_id, search)
     
     def get_department_tree(self) -> List[DepartmentResponse]:
         """获取部门树形结构"""

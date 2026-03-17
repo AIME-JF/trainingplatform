@@ -107,6 +107,11 @@ CRITICAL_SCHEMA_REQUIREMENTS: dict[str, tuple[str, ...]] = {
         "locked_at",
         "training_base_id",
     ),
+    "courses": (
+        "scope",
+        "scope_type",
+        "scope_target_ids",
+    ),
     "training_bases": (
         "id",
         "name",

@@ -71,6 +71,20 @@
           <a-form-item label="是否必修">
             <a-switch v-model:checked="form.isRequired" />
           </a-form-item>
+          <a-form-item label="可见范围">
+            <AdmissionScopeSelector
+              v-model:scope-type="form.scopeType"
+              v-model:scope-target-ids="form.scopeTargetIds"
+              :user-role="''"
+              all-hint="全体用户都可以查看该课程。"
+              user-placeholder="请选择可查看课程的用户"
+              department-placeholder="请选择可查看课程的部门"
+              role-placeholder="请选择可查看课程的角色"
+              user-hint="仅选中的用户可以查看该课程。"
+              department-hint="选中部门下的用户可以查看该课程。"
+              role-hint="拥有选中角色的用户可以查看该课程。"
+            />
+          </a-form-item>
         </a-form>
       </div>
 
@@ -173,6 +187,7 @@ import { message } from 'ant-design-vue'
 import { createCourse, createCourseTag, getCourse, getCourseTags, updateCourse } from '@/api/course'
 import { uploadFile } from '@/api/media'
 import { getUsers } from '@/api/user'
+import AdmissionScopeSelector from '@/views/exam/components/AdmissionScopeSelector.vue'
 import { COURSE_CATEGORIES } from '@/mock/courses'
 
 const props = defineProps({
@@ -218,6 +233,8 @@ const form = reactive({
   difficulty: 3,
   tags: [],
   isRequired: false,
+  scopeType: 'all',
+  scopeTargetIds: [],
   chapters: [],
 })
 
@@ -259,6 +276,8 @@ function resetForm() {
   form.difficulty = 3
   form.tags = []
   form.isRequired = false
+  form.scopeType = 'all'
+  form.scopeTargetIds = []
   form.chapters = [createChapter()]
 }
 
@@ -413,6 +432,8 @@ async function loadCourseDetail() {
   form.difficulty = course.difficulty || 3
   form.tags = normalizeTags(course.tags)
   form.isRequired = !!course.isRequired
+  form.scopeType = course.scopeType || 'all'
+  form.scopeTargetIds = Array.isArray(course.scopeTargetIds) ? course.scopeTargetIds.map((item) => Number(item)).filter((item) => Number.isInteger(item) && item > 0) : []
   form.chapters = (course.chapters || [])
     .slice()
     .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
@@ -473,6 +494,10 @@ function goNextStep() {
     message.warning('请选择课程分类')
     return
   }
+  if (form.scopeType !== 'all' && !form.scopeTargetIds.length) {
+    message.warning('请至少选择一个可见范围目标')
+    return
+  }
   currentStep.value = 1
 }
 
@@ -528,6 +553,10 @@ async function handleSubmit() {
     message.warning('每个章节都需要上传文件或保留已有文件')
     return
   }
+  if (form.scopeType !== 'all' && !form.scopeTargetIds.length) {
+    message.warning('请至少选择一个可见范围目标')
+    return
+  }
 
   submitting.value = true
   uploadPercent.value = 0
@@ -577,6 +606,8 @@ async function handleSubmit() {
       difficulty: form.difficulty,
       tags: normalizedTags,
       isRequired: form.isRequired,
+      scopeType: form.scopeType,
+      scopeTargetIds: form.scopeType === 'all' ? [] : form.scopeTargetIds,
       fileType: hasVideo ? 'video' : 'document',
       coverColor: categoryColorMap[form.category] || '#003087',
       duration: totalDuration,

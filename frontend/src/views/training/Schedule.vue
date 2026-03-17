@@ -68,11 +68,11 @@
                  @drop="canEdit ? onDrop($event, day) : null"
             >
               <div v-for="item in getScheduleForDay(day.weekday)" :key="item.id"
-                class="schedule-item" :class="['type-' + item.type, { 'is-draggable': canEdit }]"
+                class="schedule-item" :class="['type-' + item.type, { 'is-draggable': isItemEditable(item), 'is-locked': !isItemEditable(item) }]"
                 :style="{ top: getTopOffset(item.timeStart) + 'px', height: getHeight(item.duration) + 'px' }"
-                :draggable="canEdit"
-                @dragstart="canEdit ? onDragStart($event, item) : null"
-                @click.stop="canEdit ? openEditItem(item) : null"
+                :draggable="isItemEditable(item)"
+                @dragstart="isItemEditable(item) ? onDragStart($event, item) : null"
+                @click.stop="isItemEditable(item) ? openEditItem(item) : null"
               >
                 <div class="si-title">{{ item.title }}</div>
                 <div class="si-meta">{{ item.timeStart }} · {{ item.location }}</div>
@@ -171,9 +171,6 @@
           <a-select v-model:value="editItemForm.type" style="width:100%">
             <a-select-option value="theory">📖 理论课</a-select-option>
             <a-select-option value="skill">🔧 技能课</a-select-option>
-            <a-select-option value="review">📝 复习</a-select-option>
-            <a-select-option value="physical">💪 体能</a-select-option>
-            <a-select-option value="drill">⚠️ 演练</a-select-option>
           </a-select>
         </a-form-item>
       </a-form>
@@ -350,6 +347,7 @@ onMounted(async () => {
 // 追踪调度更新
 const triggerUpdate = ref(0)
 const draggedItem = ref(null)
+const draggedPointerOffsetY = ref(0)
 
 // 动态计算周日期：固定周一至周日 7 天
 const weekDays = computed(() => {
@@ -393,6 +391,163 @@ const weekRange = computed(() => {
 const prevWeek = () => { if (currentWeek.value > 0) currentWeek.value-- }
 const nextWeek = () => currentWeek.value++
 
+const SCHEDULE_START_HOUR = 8
+const MINUTES_PER_HOUR = 60
+const PIXELS_PER_MINUTE = 1.2
+const SCHEDULE_SNAP_MINUTES = 30
+const DEFAULT_DURATION_MINUTES = 180
+const timeSlots = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00']
+const SCHEDULE_TOTAL_MINUTES = timeSlots.length * MINUTES_PER_HOUR
+
+function normalizeText(value) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function parseClockTime(value) {
+  const [hourText = '', minuteText = ''] = String(value || '').split(':')
+  const hour = Number(hourText)
+  const minute = Number(minuteText)
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) {
+    return null
+  }
+  return { hour, minute }
+}
+
+function parseTimeRange(timeRange) {
+  const [startText = '', endText = ''] = String(timeRange || '').split('~').map(item => item.trim())
+  return { startText, endText }
+}
+
+function timeTextToOffsetMinutes(timeText) {
+  const parsed = parseClockTime(timeText)
+  if (!parsed) {
+    return 0
+  }
+  return ((parsed.hour - SCHEDULE_START_HOUR) * MINUTES_PER_HOUR) + parsed.minute
+}
+
+function formatOffsetMinutes(offsetMinutes) {
+  const totalMinutes = (SCHEDULE_START_HOUR * MINUTES_PER_HOUR) + Math.max(0, Math.round(offsetMinutes))
+  const hour = Math.floor(totalMinutes / MINUTES_PER_HOUR)
+  const minute = totalMinutes % MINUTES_PER_HOUR
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+}
+
+function getScheduleDurationMinutes(schedule) {
+  const { startText, endText } = parseTimeRange(schedule?.timeRange)
+  const startOffset = timeTextToOffsetMinutes(startText)
+  const endOffset = timeTextToOffsetMinutes(endText)
+  if (startText && endText && endOffset > startOffset) {
+    return endOffset - startOffset
+  }
+
+  const hours = Number(schedule?.hours || 0)
+  if (Number.isFinite(hours) && hours > 0) {
+    return Math.round(hours * MINUTES_PER_HOUR)
+  }
+
+  return DEFAULT_DURATION_MINUTES
+}
+
+function getScheduleHours(schedule) {
+  return Number((getScheduleDurationMinutes(schedule) / MINUTES_PER_HOUR).toFixed(1))
+}
+
+function mapCourseTypeToItemType(courseType) {
+  return courseType === 'practice' || courseType === 'skill' ? 'skill' : 'theory'
+}
+
+function mapItemTypeToCourseType(itemType) {
+  return itemType === 'skill' ? 'practice' : 'theory'
+}
+
+function getScheduleLocation(schedule, course) {
+  return normalizeText(schedule?.location) || normalizeText(course?.location) || normalizeText(selectedTraining.value?.location)
+}
+
+function isItemEditable(item) {
+  return canEdit.value && Boolean(item?.canEdit)
+}
+
+function clampScheduleOffsetMinutes(offsetMinutes, durationMinutes = 0) {
+  const maxStartMinutes = Math.max(0, SCHEDULE_TOTAL_MINUTES - Math.max(durationMinutes, 0))
+  return Math.max(0, Math.min(Math.round(offsetMinutes), maxStartMinutes))
+}
+
+function snapScheduleOffsetMinutes(offsetMinutes) {
+  return Math.round(offsetMinutes / SCHEDULE_SNAP_MINUTES) * SCHEDULE_SNAP_MINUTES
+}
+
+function syncCourseHours(course) {
+  if (!course || !Array.isArray(course.schedules)) {
+    return
+  }
+  const totalHours = course.schedules.reduce((sum, schedule) => sum + getScheduleHours(schedule), 0)
+  course.hours = Number(totalHours.toFixed(1))
+}
+
+function syncItemFromSchedule(item, course, scheduleRef) {
+  if (!item || !course || !scheduleRef) {
+    return
+  }
+
+  const { startText } = parseTimeRange(scheduleRef.timeRange)
+  const dayMatch = weekDays.value.find(day => day.fullDate === scheduleRef.date)
+
+  item.fullDate = scheduleRef.date
+  item.day = dayMatch?.weekday ?? item.day
+  item.dayName = dayMatch?.name ?? item.dayName
+  item.timeStart = startText || item.timeStart
+  item.duration = getScheduleDurationMinutes(scheduleRef)
+  item.sourceTimeRange = scheduleRef.timeRange || ''
+  item.location = getScheduleLocation(scheduleRef, course)
+  item.title = course.name
+  item.type = mapCourseTypeToItemType(course.type)
+  item.instructor = course.instructor
+}
+
+function applyScheduleMutation(item, changes = {}) {
+  const scheduleState = findScheduleReference(item)
+  if (!scheduleState) {
+    return null
+  }
+
+  const { course, scheduleRef } = scheduleState
+
+  if (Object.prototype.hasOwnProperty.call(changes, 'date')) {
+    scheduleRef.date = changes.date
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, 'timeRange')) {
+    scheduleRef.timeRange = changes.timeRange
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, 'hours')) {
+    scheduleRef.hours = changes.hours
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, 'location')) {
+    scheduleRef.location = changes.location || course.location || null
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, 'title')) {
+    course.name = changes.title
+  }
+  if (Object.prototype.hasOwnProperty.call(changes, 'type')) {
+    course.type = changes.type
+  }
+
+  syncCourseHours(course)
+  syncItemFromSchedule(item, course, scheduleRef)
+  return scheduleState
+}
+
+function updateTrainingDetailCache(detail) {
+  if (!selectedTrainingId.value || !detail) {
+    return
+  }
+  trainingDetailMap.value = {
+    ...trainingDetailMap.value,
+    [selectedTrainingId.value]: detail,
+  }
+}
+
 // 从课程 schedules 中精准解析日程数据
 const currentScheduleItems = computed(() => {
   triggerUpdate.value // 依赖项，用于强制刷新
@@ -409,17 +564,8 @@ const currentScheduleItems = computed(() => {
           const dayMatch = weekDays.value.find(d => d.fullDate === schDateStr)
           
           if (dayMatch) {
-            const timeStart = sch.timeRange ? sch.timeRange.split('~')[0] : '09:00'
-            const timeEnd = sch.timeRange ? sch.timeRange.split('~')[1] : '12:00'
-            
-            let duration = 180
-            if (timeStart && timeEnd) {
-              const [sh, sm] = timeStart.split(':').map(Number)
-              const [eh, em] = timeEnd.split(':').map(Number)
-              duration = (eh - sh) * 60 + (em - sm)
-            } else if (sch.hours) {
-              duration = sch.hours * 60
-            }
+            const { startText } = parseTimeRange(sch.timeRange)
+            const duration = getScheduleDurationMinutes(sch)
             
             items.push({
               id: `${selectedTraining.value.id}-c${cIdx}-s${sIdx}`,
@@ -431,11 +577,15 @@ const currentScheduleItems = computed(() => {
               fullDate: schDateStr,
               sourceTimeRange: sch.timeRange || '',
               title: c.name,
-              type: c.type === 'practice' ? 'skill' : 'theory',
-              timeStart,
+              type: mapCourseTypeToItemType(c.type),
+              timeStart: startText || '09:00',
               duration,
-              location: selectedTraining.value.location,
+              location: getScheduleLocation(sch, c),
               instructor: c.instructor,
+              status: sch.status || 'pending',
+              isExpired: Boolean(sch.isExpired),
+              canEdit: sch.canEdit !== false,
+              canDelete: sch.canDelete !== false,
             })
           }
         })
@@ -448,12 +598,16 @@ const currentScheduleItems = computed(() => {
 
 const getScheduleForDay = (weekday) => currentScheduleItems.value.filter(s => s.day === weekday)
 
-// 连续修正时间轴避免对齐偏差
-const timeSlots = ['08:00', '09:00', '10:00', '11:00', '12:00', '13:00', '14:00', '15:00', '16:00', '17:00', '18:00']
-
 // 拖拽调整逻辑
 function onDragStart(e, item) {
+  if (!isItemEditable(item)) {
+    draggedItem.value = null
+    draggedPointerOffsetY.value = 0
+    return
+  }
   draggedItem.value = item
+  const rect = e.currentTarget?.getBoundingClientRect?.()
+  draggedPointerOffsetY.value = rect ? Math.max(0, e.clientY - rect.top) : 0
   e.dataTransfer.effectAllowed = 'move'
 }
 
@@ -499,58 +653,54 @@ function findScheduleReference(item) {
 async function onDrop(e, targetDay) {
   if (!draggedItem.value) return
   const item = draggedItem.value
-  
-  // 基于容器计算确切的 Y 偏移
-  const rect = e.currentTarget.getBoundingClientRect()
-  const y = e.clientY - rect.top
-  
-  // 将 Y 轴像素反算为分钟 (1.2px = 1min)，并按照 30 分钟刻度吸附吸附
-  let minutes = Math.round(y / 1.2)
-  minutes = Math.round(minutes / 30) * 30
-  
-  const h = Math.floor(minutes / 60) + 8
-  const m = minutes % 60
-  const newStartString = `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`
-  
-  const endTotalMins = minutes + item.duration
-  const endH = Math.floor(endTotalMins / 60) + 8
-  const endM = endTotalMins % 60
-  const newEndString = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}`
-  
-  // 静默更新训练班的排课数据并触发重渲染
-  const scheduleState = findScheduleReference(item)
-  if (!scheduleState) {
+  if (!isItemEditable(item)) {
     draggedItem.value = null
-    message.warning('当前课表数据已更新，请刷新后重试')
-    await refreshCurrentTraining()
+    draggedPointerOffsetY.value = 0
     return
   }
+  
+  const rect = e.currentTarget.getBoundingClientRect()
+  const rawTopPixels = e.clientY - rect.top - draggedPointerOffsetY.value
+  const durationMinutes = item.duration || DEFAULT_DURATION_MINUTES
+  let nextStartMinutes = rawTopPixels / PIXELS_PER_MINUTE
+  nextStartMinutes = snapScheduleOffsetMinutes(nextStartMinutes)
+  nextStartMinutes = clampScheduleOffsetMinutes(nextStartMinutes, durationMinutes)
 
-  const { scheduleRef } = scheduleState
-  scheduleRef.date = targetDay.fullDate
-  scheduleRef.timeRange = `${newStartString}~${newEndString}`
-  item.fullDate = targetDay.fullDate
-  item.timeStart = newStartString
-  item.sourceTimeRange = scheduleRef.timeRange
+  const newStartString = formatOffsetMinutes(nextStartMinutes)
+  const newEndString = formatOffsetMinutes(nextStartMinutes + durationMinutes)
+  const nextTimeRange = `${newStartString}~${newEndString}`
 
-  triggerUpdate.value++
-  draggedItem.value = null
-
-  // 持久化到后端
   try {
-    await submitTrainingUpdate({ courses: selectedTraining.value.courses })
+    const scheduleState = applyScheduleMutation(item, {
+      date: targetDay.fullDate,
+      timeRange: nextTimeRange,
+      hours: Number((durationMinutes / MINUTES_PER_HOUR).toFixed(1)),
+    })
+    if (!scheduleState) {
+      message.warning('当前课表数据已更新，请刷新后重试')
+      await refreshCurrentTraining()
+      return
+    }
+
+    triggerUpdate.value++
+
+    const detail = await submitTrainingUpdate({ courses: selectedTraining.value.courses })
+    updateTrainingDetailCache(detail)
     message.success('课程时段已保存')
   } catch {
+    await refreshCurrentTraining()
     message.error('保存失败，请重试')
+  } finally {
+    draggedItem.value = null
+    draggedPointerOffsetY.value = 0
   }
 }
 
 const getTopOffset = (time) => {
-  const [h, m] = (time || '08:00').split(':').map(Number)
-  return Math.max(0, ((h - 8) * 60 + m) * 1.2)
+  return Math.max(0, timeTextToOffsetMinutes(time) * PIXELS_PER_MINUTE)
 }
 
-const getHeight = (duration) => (duration || 90) * 1.2
+const getHeight = (duration) => (duration || 90) * PIXELS_PER_MINUTE
 
 const statusLabels = { active: '进行中', upcoming: '未开始', ended: '已结束' }
 const statusColors = { active: 'green', upcoming: 'orange', ended: 'default' }
@@ -591,19 +741,18 @@ const editItemComputedHours = computed(() => {
 })
 
 function openEditItem(item) {
+  if (!isItemEditable(item)) {
+    return
+  }
   editItemTarget.value = item
-  const [sh, sm] = (item.timeStart || '09:00').split(':').map(Number)
-  const endMins = sh * 60 + sm + (item.duration || 90)
-  const eh = Math.floor(endMins / 60)
-  const em = endMins % 60
-  const endStr = `${String(eh).padStart(2,'0')}:${String(em).padStart(2,'0')}`
+  const endStr = formatOffsetMinutes(timeTextToOffsetMinutes(item.timeStart || '09:00') + (item.duration || 90))
 
   editItemForm.value = {
     title: item.title,
     timeStartObj: dayjs(`2000-01-01 ${item.timeStart}`),
     timeEndObj: dayjs(`2000-01-01 ${endStr}`),
-    location: item.location || selectedTraining.value?.location || '',
-    type: item.type,
+    location: item.location || '',
+    type: item.type === 'skill' ? 'skill' : 'theory',
   }
   editItemVisible.value = true
 }
@@ -613,8 +762,13 @@ async function saveEditItem() {
   if (!item) return
 
   const form = editItemForm.value
+  const normalizedTitle = normalizeText(form.title)
   if (!form.timeStartObj || !form.timeEndObj) {
     message.warning('请选择上课起止时间')
+    return
+  }
+  if (!normalizedTitle) {
+    message.warning('请输入课程名称')
     return
   }
   const newStart = form.timeStartObj.format('HH:mm')
@@ -623,36 +777,35 @@ async function saveEditItem() {
     message.warning('结束时间不能早于开始时间')
     return
   }
+  const hours = editItemComputedHours.value
+  if (hours <= 0) {
+    message.warning('课时必须大于 0')
+    return
+  }
 
   editItemSaving.value = true
   try {
-    const scheduleState = findScheduleReference(item)
+    const scheduleState = applyScheduleMutation(item, {
+      timeRange: `${newStart}~${newEnd}`,
+      hours,
+      location: normalizeText(form.location),
+      title: normalizedTitle,
+      type: mapItemTypeToCourseType(form.type),
+    })
     if (!scheduleState) {
       message.warning('当前课表数据已更新，请刷新后重试')
       await refreshCurrentTraining()
       return
     }
 
-    const { scheduleRef, course } = scheduleState
-    scheduleRef.timeRange = `${newStart}~${newEnd}`
-    item.timeStart = newStart
-    item.sourceTimeRange = scheduleRef.timeRange
-
-    course.name = form.title
-    course.type = form.type === 'skill' ? 'practice' : 'theory'
-
-    // 更新 location（存在 training 层，需要更新 selectedTraining）
-    if (form.location && form.location !== selectedTraining.value.location) {
-      // location 是每个 schedule-item 展示的字段，这里直接修改视图数据
-      item.location = form.location
-    }
-
     triggerUpdate.value++
 
-    await submitTrainingUpdate({ courses: selectedTraining.value.courses })
+    const detail = await submitTrainingUpdate({ courses: selectedTraining.value.courses })
+    updateTrainingDetailCache(detail)
     message.success('课程安排已保存')
     editItemVisible.value = false
   } catch {
+    await refreshCurrentTraining()
     message.error('保存失败，请重试')
   } finally {
     editItemSaving.value = false
@@ -687,6 +840,7 @@ async function saveEditItem() {
 .schedule-item.is-draggable { cursor: grab; }
 .schedule-item.is-draggable:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); z-index: 5; }
 .schedule-item.is-draggable:active { cursor: grabbing; z-index: 10; opacity: 0.9; }
+.schedule-item.is-locked { cursor: default; opacity: 0.72; }
 .schedule-item.type-theory { background: #e6f4ff; border-left: 3px solid #1890ff; color: #003a8c; }
 .schedule-item.type-skill { background: #f6ffed; border-left: 3px solid #52c41a; color: #135200; }
 .schedule-item.type-review { background: #f9f0ff; border-left: 3px solid #722ed1; color: #391085; }

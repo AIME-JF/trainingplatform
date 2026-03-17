@@ -85,6 +85,15 @@ class TrainingService:
     SESSION_COMPLETED = "completed"
     SESSION_SKIPPED = "skipped"
     SESSION_MISSED = "missed"
+    SESSION_STATUS_LABELS = {
+        SESSION_PENDING: "未开始",
+        SESSION_CHECKIN_OPEN: "签到中",
+        SESSION_CHECKIN_CLOSED: "课程进行中",
+        SESSION_CHECKOUT_OPEN: "签退中",
+        SESSION_COMPLETED: "已完成",
+        SESSION_SKIPPED: "已跳过",
+        SESSION_MISSED: "缺勤",
+    }
     WORKFLOW_STEP_DRAFT = "draft"
     WORKFLOW_STEP_PUBLISHED = "published"
     WORKFLOW_STEP_LOCKED = "locked"
@@ -986,6 +995,10 @@ class TrainingService:
         schedule["checkin_started_at"] = now
         flag_modified(session["course"], "schedules")
         if training.status != "ended":
+            if training.publish_status != "published":
+                self._mark_training_published(training, user_id)
+            if not training.locked_at:
+                self._mark_training_locked(training, user_id)
             training.status = "active"
         self._record_course_entity_changes(training.id, before_course, session["course"], user_id, "start_checkin")
         self._refresh_training_histories(training_id)
@@ -1397,17 +1410,50 @@ class TrainingService:
             return datetime.combine(schedule_date, time_end)
         return datetime.combine(schedule_date, time(23, 59))
 
-    def _is_schedule_editable(self, training: Training, schedule: Dict[str, Any]) -> bool:
+    def _get_schedule_edit_lock_reason(self, training: Training, schedule: Dict[str, Any]) -> Optional[str]:
         if (training.status or "upcoming") == "ended":
-            return False
-        if (schedule.get("status") or self.SESSION_PENDING) != self.SESSION_PENDING:
-            return False
+            return "training_ended"
+
+        status = schedule.get("status") or self.SESSION_PENDING
+        if status != self.SESSION_PENDING:
+            return "status_locked"
+
         deadline = self._resolve_schedule_deadline_from_item(schedule)
         if deadline is None:
-            return False
+            return "invalid_time"
+
         now = self._current_time(deadline)
         normalized_deadline = self._normalize_datetime(deadline, now.tzinfo)
-        return bool(normalized_deadline and now <= normalized_deadline)
+        if not normalized_deadline:
+            return "invalid_time"
+        if now > normalized_deadline:
+            return "expired"
+        return None
+
+    def _get_schedule_status_label(self, status: Optional[str]) -> str:
+        normalized_status = status or self.SESSION_PENDING
+        return self.SESSION_STATUS_LABELS.get(normalized_status, normalized_status)
+
+    def _build_schedule_edit_block_message(
+        self,
+        training: Training,
+        course_name: str,
+        schedule: Dict[str, Any],
+        action: str,
+    ) -> str:
+        reason = self._get_schedule_edit_lock_reason(training, schedule)
+        schedule_label = self._format_schedule_label(schedule)
+        if reason == "training_ended":
+            return f"培训班已结班，不能{action}课次：{course_name} {schedule_label}"
+        if reason == "status_locked":
+            status_label = self._get_schedule_status_label(schedule.get("status"))
+            return f"课次已进入“{status_label}”状态，不能{action}：{course_name} {schedule_label}"
+        if reason == "invalid_time":
+            return f"课次时间无效，不能{action}：{course_name} {schedule_label}"
+        return f"已过课次结束时间，不能{action}：{course_name} {schedule_label}"
+
+    def _is_schedule_editable(self, training: Training, schedule: Dict[str, Any]) -> bool:
+        return self._get_schedule_edit_lock_reason(training, schedule) is None
 
     def _is_schedule_expired(self, training: Training, schedule: Dict[str, Any]) -> bool:
         if (training.status or "upcoming") == "ended":
@@ -1461,9 +1507,7 @@ class TrainingService:
                 if session_id in before_schedule_ids:
                     continue
                 if not self._is_schedule_editable(training, after_schedule):
-                    raise ValueError(
-                        f"已过时间段的课次不能新增：{course_name} {self._format_schedule_label(after_schedule)}"
-                    )
+                    raise ValueError(self._build_schedule_edit_block_message(training, course_name, after_schedule, "新增"))
 
         for before_course in before_courses or []:
             course_name = before_course.get("name") or "未命名课程"
@@ -1475,7 +1519,7 @@ class TrainingService:
                 continue
             after_course = after_map.get(before_course.get("course_key"))
             if after_course is None:
-                raise ValueError(f"课程「{course_name}」包含已过时间段课次，不能删除")
+                raise ValueError(self._build_schedule_edit_block_message(training, course_name, immutable_schedules[0], "删除"))
 
             after_schedule_map = {
                 item.get("session_id"): item
@@ -1486,13 +1530,9 @@ class TrainingService:
                 session_id = before_schedule.get("session_id")
                 after_schedule = after_schedule_map.get(session_id)
                 if after_schedule is None:
-                    raise ValueError(
-                        f"已过时间段的课次不能删除：{course_name} {self._format_schedule_label(before_schedule)}"
-                    )
+                    raise ValueError(self._build_schedule_edit_block_message(training, course_name, before_schedule, "删除"))
                 if after_schedule != before_schedule:
-                    raise ValueError(
-                        f"已过时间段的课次不能编辑：{course_name} {self._format_schedule_label(before_schedule)}"
-                    )
+                    raise ValueError(self._build_schedule_edit_block_message(training, course_name, before_schedule, "编辑"))
 
     def _guess_primary_instructor_id(self, instructor_name: str) -> Optional[int]:
         user = self.db.query(User).filter(

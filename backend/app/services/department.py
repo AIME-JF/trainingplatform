@@ -3,7 +3,7 @@
 """
 from typing import List, Optional
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 from app.models import Department, Permission
 from app.schemas import (
@@ -247,7 +247,13 @@ class DepartmentService:
         logger.info(f"创建部门成功: {department_data.code}")
         return DepartmentSimpleResponse.model_validate(db_department)
     
-    def get_departments_simple(self, page: int = 1, size: int = 10, parent_id: Optional[int] = None) -> PaginatedResponse[DepartmentSimpleResponse]:
+    def get_departments_simple(
+        self,
+        page: int = 1,
+        size: int = 10,
+        parent_id: Optional[int] = None,
+        search: Optional[str] = None,
+    ) -> PaginatedResponse[DepartmentSimpleResponse]:
         """获取部门列表（返回简单响应）"""
         query = self.db.query(Department)
         
@@ -260,6 +266,16 @@ class DepartmentService:
                 # parent_id为具体值时，获取指定parent_id的部门
                 query = query.filter(Department.parent_id == parent_id)
         # parent_id为None时，不添加过滤条件，获取全部部门
+
+        keyword = str(search or "").strip()
+        if keyword:
+            query = query.filter(
+                or_(
+                    Department.name.contains(keyword),
+                    Department.code.contains(keyword),
+                    Department.description.contains(keyword),
+                )
+            )
 
         # 按照部门id排序
         query = query.order_by(Department.id.asc())
@@ -286,6 +302,14 @@ class DepartmentService:
                 count_query = count_query.filter(Department.parent_id.is_(None))
             else:
                 count_query = count_query.filter(Department.parent_id == parent_id)
+        if keyword:
+            count_query = count_query.filter(
+                or_(
+                    Department.name.contains(keyword),
+                    Department.code.contains(keyword),
+                    Department.description.contains(keyword),
+                )
+            )
         
         total = count_query.scalar()
         

@@ -2,6 +2,7 @@
 考试管理服务
 """
 from datetime import datetime
+from math import ceil
 from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session, joinedload, selectinload
@@ -62,6 +63,8 @@ DIMENSION_RULES = {
     "physical": ("体能", "技能", "警械"),
     "ethic": ("道德", "纪律", "作风", "廉政"),
 }
+DEFAULT_EXAM_DURATION = 60
+DEFAULT_PASSING_SCORE_RATIO = 0.6
 
 
 class ExamService:
@@ -306,22 +309,31 @@ class ExamService:
             raise ValueError("关联培训班不存在")
 
         paper = self._get_selectable_paper(data.paper_id, user_id)
+        duration = self._resolve_exam_duration(data.duration, paper.duration)
+        passing_score = self._resolve_create_exam_passing_score(paper, data.passing_score)
+        start_time, end_time = self._validate_exam_configuration(
+            total_score=paper.total_score,
+            duration=duration,
+            passing_score=passing_score,
+            start_time=data.start_time,
+            end_time=data.end_time,
+        )
         exam = Exam(
             paper_id=paper.id,
             title=data.title,
             description=data.description,
-            duration=data.duration or paper.duration or 60,
+            duration=duration,
             total_score=paper.total_score or 0,
-            passing_score=data.passing_score or paper.passing_score or 60,
+            passing_score=passing_score,
             status=data.status,
             type=data.type or paper.type or "formal",
             purpose=data.purpose,
             training_id=data.training_id,
             max_attempts=data.max_attempts,
             allow_makeup=data.allow_makeup,
-            start_time=data.start_time,
-            end_time=data.end_time,
-            published_at=self._current_time(data.start_time, data.end_time),
+            start_time=start_time,
+            end_time=end_time,
+            published_at=self._current_time(start_time, end_time),
             created_by=user_id,
         )
         self.db.add(exam)
@@ -341,22 +353,31 @@ class ExamService:
             data.scope_type,
             data.scope_target_ids,
         )
+        duration = self._resolve_exam_duration(data.duration, paper.duration)
+        passing_score = self._resolve_create_exam_passing_score(paper, data.passing_score)
+        start_time, end_time = self._validate_exam_configuration(
+            total_score=paper.total_score,
+            duration=duration,
+            passing_score=passing_score,
+            start_time=data.start_time,
+            end_time=data.end_time,
+        )
         exam = AdmissionExam(
             paper_id=paper.id,
             title=data.title,
             description=data.description,
-            duration=data.duration or paper.duration or 60,
+            duration=duration,
             total_score=paper.total_score or 0,
-            passing_score=data.passing_score or paper.passing_score or 60,
+            passing_score=passing_score,
             status=data.status,
             type=data.type or paper.type or "formal",
             scope=scope_summary,
             scope_type=scope_type,
             scope_target_ids=scope_target_ids,
             max_attempts=data.max_attempts,
-            start_time=data.start_time,
-            end_time=data.end_time,
-            published_at=self._current_time(data.start_time, data.end_time),
+            start_time=start_time,
+            end_time=end_time,
+            published_at=self._current_time(start_time, end_time),
             created_by=user_id,
         )
         self.db.add(exam)
@@ -749,9 +770,29 @@ class ExamService:
         if paper_id is not None and paper_id != exam.paper_id:
             raise ValueError("考试已发布，不能更换试卷")
 
+        next_start_time = update_data.get("start_time", exam.start_time)
+        next_end_time = update_data.get("end_time", exam.end_time)
+        next_duration = self._resolve_exam_duration(update_data.get("duration"), exam.duration)
+        next_passing_score = self._resolve_existing_exam_passing_score(
+            exam.paper,
+            update_data.get("passing_score"),
+            exam.passing_score,
+        )
+        start_time, end_time = self._validate_exam_configuration(
+            total_score=exam.paper.total_score,
+            duration=next_duration,
+            passing_score=next_passing_score,
+            start_time=next_start_time,
+            end_time=next_end_time,
+        )
+
         for field, value in update_data.items():
             setattr(exam, field, value)
 
+        exam.duration = next_duration
+        exam.passing_score = next_passing_score
+        exam.start_time = start_time
+        exam.end_time = end_time
         exam.total_score = exam.paper.total_score or exam.total_score or 0
         if exam.status in {"active", "ended"} and not exam.published_at:
             exam.published_at = self._current_time(exam.start_time, exam.end_time, exam.published_at)
@@ -765,6 +806,21 @@ class ExamService:
         next_scope_type = update_data.pop("scope_type", exam.scope_type or ADMISSION_SCOPE_ALL)
         next_scope_target_ids = update_data.pop("scope_target_ids", exam.scope_target_ids or [])
         update_data.pop("scope", None)
+        next_start_time = update_data.get("start_time", exam.start_time)
+        next_end_time = update_data.get("end_time", exam.end_time)
+        next_duration = self._resolve_exam_duration(update_data.get("duration"), exam.duration)
+        next_passing_score = self._resolve_existing_exam_passing_score(
+            exam.paper,
+            update_data.get("passing_score"),
+            exam.passing_score,
+        )
+        start_time, end_time = self._validate_exam_configuration(
+            total_score=exam.paper.total_score,
+            duration=next_duration,
+            passing_score=next_passing_score,
+            start_time=next_start_time,
+            end_time=next_end_time,
+        )
 
         for field, value in update_data.items():
             setattr(exam, field, value)
@@ -776,9 +832,75 @@ class ExamService:
         exam.scope_type = scope_type
         exam.scope_target_ids = scope_target_ids
         exam.scope = scope_summary
+        exam.duration = next_duration
+        exam.passing_score = next_passing_score
+        exam.start_time = start_time
+        exam.end_time = end_time
         exam.total_score = exam.paper.total_score or exam.total_score or 0
         if exam.status in {"active", "ended"} and not exam.published_at:
             exam.published_at = self._current_time(exam.start_time, exam.end_time, exam.published_at)
+
+    def _resolve_exam_duration(self, preferred: Optional[int], fallback: Optional[int]) -> int:
+        value = preferred if preferred is not None else fallback
+        return int(value or DEFAULT_EXAM_DURATION)
+
+    def _resolve_create_exam_passing_score(self, paper: ExamPaper, preferred: Optional[int]) -> int:
+        total_score = int(paper.total_score or 0)
+        if total_score <= 0:
+            raise ValueError("试卷总分必须大于0")
+        if preferred is not None:
+            return int(preferred)
+
+        fallback = int(paper.passing_score or 0)
+        if 0 < fallback <= total_score:
+            return fallback
+        return max(1, int(ceil(total_score * DEFAULT_PASSING_SCORE_RATIO)))
+
+    def _resolve_existing_exam_passing_score(
+        self,
+        paper: ExamPaper,
+        preferred: Optional[int],
+        fallback: Optional[int],
+    ) -> int:
+        if preferred is not None:
+            return int(preferred)
+        if fallback is not None:
+            return int(fallback)
+        return self._resolve_create_exam_passing_score(paper, None)
+
+    def _validate_exam_configuration(
+        self,
+        *,
+        total_score: Optional[int],
+        duration: int,
+        passing_score: int,
+        start_time: Optional[datetime],
+        end_time: Optional[datetime],
+    ) -> tuple[Optional[datetime], Optional[datetime]]:
+        resolved_total_score = int(total_score or 0)
+        if resolved_total_score <= 0:
+            raise ValueError("试卷总分必须大于0")
+        if duration < 10:
+            raise ValueError("考试时长不能少于10分钟")
+        if passing_score < 1:
+            raise ValueError("及格分不能小于1分")
+        if passing_score > resolved_total_score:
+            raise ValueError(f"及格分不能超过试卷总分（{resolved_total_score}分）")
+
+        now = self._current_time(start_time, end_time)
+        normalized_start = self._normalize_datetime(start_time, now.tzinfo)
+        normalized_end = self._normalize_datetime(end_time, now.tzinfo)
+        if normalized_start and normalized_end:
+            if normalized_end <= normalized_start:
+                raise ValueError("考试结束时间必须晚于开始时间")
+            window_seconds = (normalized_end - normalized_start).total_seconds()
+            if window_seconds < 600:
+                raise ValueError("考试区间不能短于10分钟")
+            max_duration = max(10, int(window_seconds // 60))
+            if duration > window_seconds / 60:
+                raise ValueError(f"考试时长不能超过考试区间（最多{max_duration}分钟）")
+
+        return normalized_start, normalized_end
 
     def _can_manage_admission_exam(self, user_id: int) -> bool:
         return is_admin_user(self.db, user_id) or is_instructor_user(self.db, user_id)

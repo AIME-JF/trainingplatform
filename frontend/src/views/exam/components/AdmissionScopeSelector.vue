@@ -9,7 +9,7 @@
 
     <div class="scope-content">
       <div v-if="localScopeType === 'all'" class="scope-hint">
-        全体学员都可以参加该准入考试。
+        {{ props.allHint }}
       </div>
 
       <template v-else>
@@ -18,11 +18,12 @@
           mode="multiple"
           allow-clear
           show-search
-          option-filter-prop="label"
+          :filter-option="false"
           style="width: 100%"
           :loading="loadingMap[localScopeType]"
           :options="currentOptions"
           :placeholder="currentPlaceholder"
+          @search="handleSearch"
         />
         <div class="scope-hint">{{ currentHint }}</div>
       </template>
@@ -31,10 +32,12 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
-import { getUsers } from '@/api/user'
-import { getDepartmentList } from '@/api/department'
-import { getRoleList } from '@/api/role'
+import { computed, reactive, ref, watch, onBeforeUnmount } from 'vue'
+import { getUser, getUsers } from '@/api/user'
+import { getDepartmentDetail, getDepartmentList } from '@/api/department'
+import { getRoleDetail, getRoleList } from '@/api/role'
+
+const REMOTE_PAGE_SIZE = 10
 
 const props = defineProps({
   scopeType: {
@@ -44,6 +47,38 @@ const props = defineProps({
   scopeTargetIds: {
     type: Array,
     default: () => [],
+  },
+  userRole: {
+    type: String,
+    default: 'student',
+  },
+  allHint: {
+    type: String,
+    default: '全体学员都可以参加该准入考试。',
+  },
+  userPlaceholder: {
+    type: String,
+    default: '请选择学员',
+  },
+  departmentPlaceholder: {
+    type: String,
+    default: '请选择部门',
+  },
+  rolePlaceholder: {
+    type: String,
+    default: '请选择角色',
+  },
+  userHint: {
+    type: String,
+    default: '仅选中的学员可以参加考试。',
+  },
+  departmentHint: {
+    type: String,
+    default: '选中部门下的学员可以参加考试。',
+  },
+  roleHint: {
+    type: String,
+    default: '拥有选中角色的学员可以参加考试。',
   },
 })
 
@@ -64,23 +99,39 @@ const loadingMap = reactive({
   role: false,
 })
 
-const loadedMap = reactive({
-  user: false,
-  department: false,
-  role: false,
+const selectedOptionMap = reactive({
+  user: [],
+  department: [],
+  role: [],
 })
 
-const currentOptions = computed(() => optionMap[localScopeType.value] || [])
+const requestIdMap = reactive({
+  user: 0,
+  department: 0,
+  role: 0,
+})
+
+const searchTimerMap = {
+  user: null,
+  department: null,
+  role: null,
+}
+
+function getScopedOptions(scopeType) {
+  return mergeOptions(optionMap[scopeType], selectedOptionMap[scopeType])
+}
+
+const currentOptions = computed(() => getScopedOptions(localScopeType.value))
 const currentPlaceholder = computed(() => {
-  if (localScopeType.value === 'user') return '请选择学员'
-  if (localScopeType.value === 'department') return '请选择部门'
-  if (localScopeType.value === 'role') return '请选择角色'
+  if (localScopeType.value === 'user') return props.userPlaceholder
+  if (localScopeType.value === 'department') return props.departmentPlaceholder
+  if (localScopeType.value === 'role') return props.rolePlaceholder
   return ''
 })
 const currentHint = computed(() => {
-  if (localScopeType.value === 'user') return '仅选中的学员可以参加考试。'
-  if (localScopeType.value === 'department') return '选中部门下的学员可以参加考试。'
-  if (localScopeType.value === 'role') return '拥有选中角色的学员可以参加考试。'
+  if (localScopeType.value === 'user') return props.userHint
+  if (localScopeType.value === 'department') return props.departmentHint
+  if (localScopeType.value === 'role') return props.roleHint
   return ''
 })
 
@@ -102,6 +153,25 @@ function normalizeTargetIds(value) {
   return normalized
 }
 
+function normalizeOptions(options) {
+  const normalized = []
+  const seen = new Set()
+  for (const option of options || []) {
+    const value = Number(option?.value)
+    const label = String(option?.label || '').trim()
+    if (!Number.isInteger(value) || value <= 0 || !label || seen.has(value)) {
+      continue
+    }
+    seen.add(value)
+    normalized.push({ value, label })
+  }
+  return normalized
+}
+
+function mergeOptions(primary = [], extra = []) {
+  return normalizeOptions([...(primary || []), ...(extra || [])])
+}
+
 function syncLocalTargetIds(value) {
   const normalized = normalizeTargetIds(value)
   if (JSON.stringify(normalized) !== JSON.stringify(localScopeTargetIds.value)) {
@@ -109,42 +179,162 @@ function syncLocalTargetIds(value) {
   }
 }
 
-async function ensureOptions(scopeType) {
-  if (!['user', 'department', 'role'].includes(scopeType) || loadedMap[scopeType] || loadingMap[scopeType]) {
+function buildUserOption(item) {
+  if (!item?.id) {
+    return null
+  }
+  return {
+    value: item.id,
+    label: item.policeId ? `${item.nickname || item.username}（${item.policeId}）` : (item.nickname || item.username || `用户#${item.id}`),
+  }
+}
+
+function buildDepartmentOption(item) {
+  if (!item?.id) {
+    return null
+  }
+  return {
+    value: item.id,
+    label: item.name || `部门#${item.id}`,
+  }
+}
+
+function buildRoleOption(item) {
+  if (!item?.id) {
+    return null
+  }
+  return {
+    value: item.id,
+    label: item.name || `角色#${item.id}`,
+  }
+}
+
+function findKnownOption(scopeType, id) {
+  const options = getScopedOptions(scopeType)
+  return options.find((item) => item.value === id) || null
+}
+
+function rememberSelectedOptions(scopeType, options) {
+  if (!['user', 'department', 'role'].includes(scopeType)) {
+    return
+  }
+  selectedOptionMap[scopeType] = mergeOptions(selectedOptionMap[scopeType], options)
+}
+
+function rememberCurrentSelections(scopeType, selectedIds) {
+  const options = getScopedOptions(scopeType).filter((item) => selectedIds.includes(item.value))
+  if (options.length) {
+    rememberSelectedOptions(scopeType, options)
+  }
+}
+
+async function fetchOptions(scopeType, keyword = '') {
+  if (!['user', 'department', 'role'].includes(scopeType)) {
     return
   }
 
+  const requestId = requestIdMap[scopeType] + 1
+  requestIdMap[scopeType] = requestId
   loadingMap[scopeType] = true
+
   try {
+    let options = []
+    const normalizedKeyword = String(keyword || '').trim()
+
     if (scopeType === 'user') {
-      const result = await getUsers({ size: -1, role: 'student' })
-      optionMap.user = (result.items || []).map((item) => ({
-        value: item.id,
-        label: item.policeId ? `${item.nickname || item.username}（${item.policeId}）` : (item.nickname || item.username),
-      }))
+      const params = {
+        page: 1,
+        size: REMOTE_PAGE_SIZE,
+        search: normalizedKeyword || undefined,
+      }
+      if (props.userRole) {
+        params.role = props.userRole
+      }
+      const result = await getUsers(params)
+      options = (result.items || []).map(buildUserOption).filter(Boolean)
     }
+
     if (scopeType === 'department') {
-      const result = await getDepartmentList({ size: -1 })
-      optionMap.department = (result.items || []).map((item) => ({
-        value: item.id,
-        label: item.name,
-      }))
+      const result = await getDepartmentList({
+        page: 1,
+        size: REMOTE_PAGE_SIZE,
+        search: normalizedKeyword || undefined,
+      })
+      options = (result.items || []).map(buildDepartmentOption).filter(Boolean)
     }
+
     if (scopeType === 'role') {
-      const result = await getRoleList({ size: -1 })
-      optionMap.role = (result.items || [])
+      const result = await getRoleList({
+        page: 1,
+        size: REMOTE_PAGE_SIZE,
+        name: normalizedKeyword || undefined,
+      })
+      options = (result.items || [])
         .filter((item) => item.isActive !== false)
-        .map((item) => ({
-          value: item.id,
-          label: item.name,
-        }))
+        .map(buildRoleOption)
+        .filter(Boolean)
     }
-    loadedMap[scopeType] = true
+
+    if (requestId !== requestIdMap[scopeType]) {
+      return
+    }
+    optionMap[scopeType] = normalizeOptions(options)
+    rememberCurrentSelections(scopeType, normalizeTargetIds(localScopeTargetIds.value))
   } catch {
-    optionMap[scopeType] = []
+    if (requestId === requestIdMap[scopeType]) {
+      optionMap[scopeType] = []
+    }
   } finally {
-    loadingMap[scopeType] = false
+    if (requestId === requestIdMap[scopeType]) {
+      loadingMap[scopeType] = false
+    }
   }
+}
+
+async function fetchOptionById(scopeType, id) {
+  if (scopeType === 'user') {
+    return buildUserOption(await getUser(id))
+  }
+  if (scopeType === 'department') {
+    return buildDepartmentOption(await getDepartmentDetail(id))
+  }
+  if (scopeType === 'role') {
+    return buildRoleOption(await getRoleDetail(id))
+  }
+  return null
+}
+
+async function ensureSelectedOptions(scopeType, targetIds) {
+  if (!['user', 'department', 'role'].includes(scopeType)) {
+    return
+  }
+
+  const missingIds = normalizeTargetIds(targetIds).filter((id) => !findKnownOption(scopeType, id))
+  if (!missingIds.length) {
+    return
+  }
+
+  const results = await Promise.allSettled(missingIds.map((id) => fetchOptionById(scopeType, id)))
+  const options = results
+    .filter((item) => item.status === 'fulfilled' && item.value)
+    .map((item) => item.value)
+  if (options.length) {
+    rememberSelectedOptions(scopeType, options)
+  }
+}
+
+function handleSearch(value) {
+  const scopeType = localScopeType.value
+  if (!['user', 'department', 'role'].includes(scopeType)) {
+    return
+  }
+
+  if (searchTimerMap[scopeType]) {
+    clearTimeout(searchTimerMap[scopeType])
+  }
+  searchTimerMap[scopeType] = setTimeout(() => {
+    fetchOptions(scopeType, value).catch(() => {})
+  }, 300)
 }
 
 watch(
@@ -162,6 +352,9 @@ watch(
   () => props.scopeTargetIds,
   (value) => {
     syncLocalTargetIds(value)
+    if (['user', 'department', 'role'].includes(localScopeType.value)) {
+      ensureSelectedOptions(localScopeType.value, value).catch(() => {})
+    }
   },
   { immediate: true },
 )
@@ -186,7 +379,8 @@ watch(
       localScopeTargetIds.value = []
       emit('update:scopeTargetIds', [])
     }
-    await ensureOptions(normalized)
+    await ensureSelectedOptions(normalized, localScopeTargetIds.value)
+    await fetchOptions(normalized)
   },
   { immediate: true },
 )
@@ -199,10 +393,22 @@ watch(
       localScopeTargetIds.value = normalized
       return
     }
+    if (['user', 'department', 'role'].includes(localScopeType.value)) {
+      rememberCurrentSelections(localScopeType.value, normalized)
+      ensureSelectedOptions(localScopeType.value, normalized).catch(() => {})
+    }
     emit('update:scopeTargetIds', normalized)
   },
   { deep: true },
 )
+
+onBeforeUnmount(() => {
+  Object.values(searchTimerMap).forEach((timer) => {
+    if (timer) {
+      clearTimeout(timer)
+    }
+  })
+})
 </script>
 
 <style scoped>

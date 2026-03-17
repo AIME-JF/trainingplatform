@@ -2,10 +2,15 @@
 课程管理相关的数据验证模型
 """
 
-from typing import Optional, List
+from typing import Any, Optional, List
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
+from .exam import (
+    ADMISSION_SCOPE_ALL,
+    _normalize_admission_scope_target_ids,
+    _normalize_admission_scope_type,
+)
 from .resource import ResourceListItemResponse
 
 
@@ -67,8 +72,21 @@ class CourseCreate(BaseModel):
     difficulty: int = Field(1, ge=1, le=5, description="难度1-5")
     is_required: bool = Field(False, description="是否必修")
     cover_color: Optional[str] = Field(None, description="封面色")
+    scope: Optional[str] = None
+    scope_type: str = Field(ADMISSION_SCOPE_ALL, description="可见范围类型: all/user/department/role")
+    scope_target_ids: List[int] = Field(default_factory=list, description="可见范围目标ID列表")
     tags: Optional[List[str]] = Field(None, description="标签数组")
     chapters: Optional[List[ChapterCreate]] = Field(None, description="章节列表")
+
+    @field_validator("scope_type", mode="before")
+    @classmethod
+    def validate_scope_type(cls, value: Optional[str]) -> str:
+        return _normalize_admission_scope_type(value) or ADMISSION_SCOPE_ALL
+
+    @field_validator("scope_target_ids", mode="before")
+    @classmethod
+    def validate_scope_target_ids(cls, value: Any) -> List[int]:
+        return _normalize_admission_scope_target_ids(value) or []
 
 
 class CourseUpdate(BaseModel):
@@ -82,8 +100,21 @@ class CourseUpdate(BaseModel):
     difficulty: Optional[int] = Field(None, ge=1, le=5)
     is_required: Optional[bool] = None
     cover_color: Optional[str] = None
+    scope: Optional[str] = None
+    scope_type: Optional[str] = Field(None, description="可见范围类型: all/user/department/role")
+    scope_target_ids: Optional[List[int]] = Field(None, description="可见范围目标ID列表")
     tags: Optional[List[str]] = None
     chapters: Optional[List[ChapterCreate]] = None
+
+    @field_validator("scope_type", mode="before")
+    @classmethod
+    def validate_scope_type(cls, value: Optional[str]) -> Optional[str]:
+        return _normalize_admission_scope_type(value, allow_none=True)
+
+    @field_validator("scope_target_ids", mode="before")
+    @classmethod
+    def validate_scope_target_ids(cls, value: Any) -> Optional[List[int]]:
+        return _normalize_admission_scope_target_ids(value, allow_none=True)
 
 
 # ========== CourseNote / CourseQA (定义在 CourseResponse 之前以避免 forward reference) ==========
@@ -131,6 +162,9 @@ class CourseResponse(BaseModel):
     difficulty: int = 1
     is_required: bool = False
     cover_color: Optional[str] = None
+    scope: Optional[str] = None
+    scope_type: str = ADMISSION_SCOPE_ALL
+    scope_target_ids: List[int] = Field(default_factory=list)
     tags: Optional[List[str]] = None
     progress_percent: int = 0
     chapter_count: int = 0
@@ -166,6 +200,9 @@ class CourseListResponse(BaseModel):
     difficulty: int = 1
     is_required: bool = False
     cover_color: Optional[str] = None
+    scope: Optional[str] = None
+    scope_type: str = ADMISSION_SCOPE_ALL
+    scope_target_ids: List[int] = Field(default_factory=list)
     tags: Optional[List[str]] = None
     progress_percent: int = 0
     chapter_count: int = 0

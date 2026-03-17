@@ -1,7 +1,7 @@
 """
 课程管理相关的数据库模型
 """
-from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Text, Float, UniqueConstraint
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, ForeignKey, Text, Float, UniqueConstraint, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -24,6 +24,9 @@ class Course(Base):
     difficulty = Column(Integer, default=1, comment='难度1-5')
     is_required = Column(Boolean, default=False, comment='是否必修')
     cover_color = Column(String(20), nullable=True, comment='封面色')
+    scope = Column(String(200), nullable=True, comment='可见范围摘要')
+    scope_type = Column(String(30), nullable=False, default='all', comment='可见范围类型: all/user/department/role')
+    scope_target_ids = Column(JSON, nullable=True, comment='可见范围目标ID列表')
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment='创建时间')
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), comment='更新时间')
 

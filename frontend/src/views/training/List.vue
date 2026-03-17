@@ -55,8 +55,8 @@
         <div class="card-top">
           <div class="card-status">
             <a-tag :color="statusColors[training.status]">{{ statusLabels[training.status] }}</a-tag>
-            <a-tag :color="training.publishStatus === 'published' ? 'blue' : 'default'">
-              {{ training.publishStatus === 'published' ? '已发布' : '草稿' }}
+            <a-tag :color="workflowStepColors[getWorkflowStepKey(training)]">
+              {{ workflowStepLabels[getWorkflowStepKey(training)] }}
             </a-tag>
             <a-tag v-if="training.isLocked" color="red">名单已锁定</a-tag>
           </div>
@@ -328,6 +328,20 @@ const authStore = useAuthStore()
 
 const statusLabels = { active: '进行中', upcoming: '未开始', ended: '已结束' }
 const statusColors = { active: 'green', upcoming: 'orange', ended: 'default' }
+const workflowStepLabels = {
+  draft: '草稿阶段',
+  published: '发布招生',
+  locked: '名单锁定',
+  running: '开班进行中',
+  completed: '结班归档',
+}
+const workflowStepColors = {
+  draft: 'default',
+  published: 'blue',
+  locked: 'orange',
+  running: 'processing',
+  completed: 'green',
+}
 const typeLabels = { basic: '基础训练', special: '专项训练', promotion: '晋升培训', online: '线上培训' }
 
 const filterStatus = ref('all')
@@ -404,6 +418,25 @@ function getTrainingStudentIds(training) {
 
 function isMyTraining(training) {
   return !!training.canEnterTraining || getTrainingStudentIds(training).includes(authStore.currentUser?.id)
+}
+
+function getWorkflowStepKey(training) {
+  if (training?.currentStepKey && workflowStepLabels[training.currentStepKey]) {
+    return training.currentStepKey
+  }
+  if (training?.status === 'ended') {
+    return 'completed'
+  }
+  if (training?.status === 'active') {
+    return 'running'
+  }
+  if (training?.isLocked) {
+    return 'locked'
+  }
+  if (training?.publishStatus === 'published') {
+    return 'published'
+  }
+  return 'draft'
 }
 
 function formatWindow(start, end) {
