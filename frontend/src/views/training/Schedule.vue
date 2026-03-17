@@ -188,6 +188,7 @@ import { MOCK_WEEK_SCHEDULE } from '@/mock/schedules'
 import {
   getTrainings,
   getTraining,
+  manageTraining,
   updateTraining,
   importTrainingInstructors,
   importTrainingSchedule,
@@ -200,7 +201,6 @@ const route = useRoute()
 const authStore = useAuthStore()
 
 const isAdmin = computed(() => authStore.isAdmin)
-const canEdit = computed(() => authStore.isAdmin)
 const importingInstructor = ref(false)
 const importingSchedule = ref(false)
 
@@ -243,6 +243,15 @@ const selectedTrainingId = ref(null)
 // 存储详情数据（含 courses）
 const trainingDetailMap = ref({})
 
+const selectedTrainingDetail = computed(() => {
+  if (!selectedTrainingId.value) {
+    return null
+  }
+  return trainingDetailMap.value[selectedTrainingId.value] || null
+})
+
+const canEdit = computed(() => Boolean(selectedTrainingDetail.value?.canEditCourses))
+
 const selectedTraining = computed(() => {
   const base = availableTrainings.value.find(t => t.id === selectedTrainingId.value) || null
   if (!base) return null
@@ -273,6 +282,18 @@ async function refreshCurrentTraining() {
   if (selectedTrainingId.value) {
     await loadTrainingDetail(selectedTrainingId.value)
   }
+}
+
+async function submitTrainingUpdate(payload) {
+  if (!selectedTrainingId.value) {
+    throw new Error('未选择培训班')
+  }
+
+  if (selectedTrainingDetail.value?.canManageTraining) {
+    return manageTraining(selectedTrainingId.value, payload)
+  }
+
+  return updateTraining(selectedTrainingId.value, payload)
 }
 
 async function handleBeforeInstructorImport(file) {
@@ -517,7 +538,7 @@ async function onDrop(e, targetDay) {
 
   // 持久化到后端
   try {
-    await updateTraining(selectedTrainingId.value, { courses: selectedTraining.value.courses })
+    await submitTrainingUpdate({ courses: selectedTraining.value.courses })
     message.success('课程时段已保存')
   } catch {
     message.error('保存失败，请重试')
@@ -628,7 +649,7 @@ async function saveEditItem() {
 
     triggerUpdate.value++
 
-    await updateTraining(selectedTrainingId.value, { courses: selectedTraining.value.courses })
+    await submitTrainingUpdate({ courses: selectedTraining.value.courses })
     message.success('课程安排已保存')
     editItemVisible.value = false
   } catch {
