@@ -33,6 +33,9 @@ class TrainingScheduleItem(BaseModel):
     is_expired: bool = False
     can_edit: bool = False
     can_delete: bool = False
+    edit_lock_reason: Optional[str] = None
+    edit_lock_message: Optional[str] = None
+    delete_lock_message: Optional[str] = None
 
 
 class TrainingSessionActionPermissions(BaseModel):

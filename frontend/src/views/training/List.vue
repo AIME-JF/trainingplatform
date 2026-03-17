@@ -281,9 +281,15 @@
           </a-col>
           <a-col :span="24" v-if="!editingTraining">
             <a-form-item label="学员Excel导入（可选）">
-              <a-upload :before-upload="handleStudentImportBeforeUpload" :show-upload-list="false" accept=".xlsx">
-                <a-button>选择学员名单文件</a-button>
-              </a-upload>
+              <a-space wrap>
+                <a-upload :before-upload="handleStudentImportBeforeUpload" :show-upload-list="false" accept=".xlsx">
+                  <a-button>选择学员名单文件</a-button>
+                </a-upload>
+                <a-button @click="handleDownloadStudentImportTemplate">
+                  <template #icon><DownloadOutlined /></template>下载导入模板
+                </a-button>
+              </a-space>
+              <div class="import-tip">角色固定为学员；未填写密码时默认初始密码为 Police@123456。</div>
               <div v-if="studentImportFileName" class="import-tip">已选择：{{ studentImportFileName }}</div>
             </a-form-item>
           </a-col>
@@ -300,6 +306,7 @@ import { message, Modal } from 'ant-design-vue'
 import dayjs from 'dayjs'
 import {
   CalendarOutlined,
+  DownloadOutlined,
   EnvironmentOutlined,
   PlusOutlined,
   TeamOutlined,
@@ -313,6 +320,7 @@ import {
   endTraining,
   getTrainingBases,
   getTrainings,
+  downloadTrainingStudentImportTemplate,
   importTrainingStudents,
   lockTraining,
   publishTraining,
@@ -322,6 +330,7 @@ import {
 import { getDepartmentList } from '@/api/department'
 import { getUsers, getPoliceTypes } from '@/api/user'
 import { getAdmissionExams } from '@/api/exam'
+import { downloadBlob } from '@/utils/download'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -485,6 +494,16 @@ function handleStudentImportBeforeUpload(file) {
   studentImportFile.value = file
   studentImportFileName.value = file.name
   return false
+}
+
+async function handleDownloadStudentImportTemplate() {
+  if (!canCreateTraining.value) return
+  try {
+    const blob = await downloadTrainingStudentImportTemplate()
+    downloadBlob(blob, '培训班学员导入模板.xlsx')
+  } catch (error) {
+    message.error(error?.message || '下载学员导入模板失败')
+  }
 }
 
 function resetForm() {

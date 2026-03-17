@@ -19,22 +19,12 @@
         </div>
       </div>
       <div class="week-nav">
-        <a-upload
-          v-if="isAdmin"
-          :before-upload="handleBeforeInstructorImport"
-          :show-upload-list="false"
-          accept=".xlsx"
-        >
-          <a-button :loading="importingInstructor">导入教官</a-button>
-        </a-upload>
-        <a-upload
-          v-if="isAdmin"
-          :before-upload="handleBeforeScheduleImport"
-          :show-upload-list="false"
-          accept=".xlsx"
-        >
-          <a-button :loading="importingSchedule">导入课表</a-button>
-        </a-upload>
+        <a-button v-if="canImportInstructors" @click="showInstructorImportModal = true">
+          导入教官
+        </a-button>
+        <a-button v-if="canImportSchedule" @click="showScheduleImportModal = true">
+          导入课次
+        </a-button>
         <a-button @click="prevWeek" :disabled="currentWeek <= 0">‹</a-button>
         <span class="week-label">第 {{ currentWeek + 1 }} 周（{{ weekRange }}）</span>
         <a-button @click="nextWeek">›</a-button>
@@ -175,6 +165,30 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <ExcelImportModal
+      v-model:open="showInstructorImportModal"
+      title="教官导入"
+      :confirm-loading="importingInstructor"
+      :can-submit="canImportInstructors"
+      :can-download-template="canImportInstructors"
+      submit-tooltip="无权导入教官"
+      download-template-tooltip="无权下载教官导入模板"
+      @submit="submitInstructorImport"
+      @download-template="handleDownloadInstructorTemplate"
+    />
+
+    <ExcelImportModal
+      v-model:open="showScheduleImportModal"
+      title="课次导入"
+      :confirm-loading="importingSchedule"
+      :can-submit="canImportSchedule"
+      :can-download-template="canImportSchedule"
+      submit-tooltip="无权导入课次"
+      download-template-tooltip="无权下载课次导入模板"
+      @submit="submitScheduleImport"
+      @download-template="handleDownloadScheduleTemplate"
+    />
   </div>
 </template>
 
@@ -187,19 +201,24 @@ import {
   getTraining,
   manageTraining,
   updateTraining,
+  downloadTrainingInstructorImportTemplate,
+  downloadTrainingSessionImportTemplate,
   importTrainingInstructors,
-  importTrainingSchedule,
+  importTrainingSessions,
 } from '@/api/training'
 import { useAuthStore } from '@/stores/auth'
+import { downloadBlob } from '@/utils/download'
+import ExcelImportModal from '@/views/system/components/ExcelImportModal.vue'
 import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
 
 const route = useRoute()
 const authStore = useAuthStore()
 
-const isAdmin = computed(() => authStore.isAdmin)
 const importingInstructor = ref(false)
 const importingSchedule = ref(false)
+const showInstructorImportModal = ref(false)
+const showScheduleImportModal = ref(false)
 
 const allTrainings = ref([])
 
@@ -248,6 +267,8 @@ const selectedTrainingDetail = computed(() => {
 })
 
 const canEdit = computed(() => Boolean(selectedTrainingDetail.value?.canEditCourses))
+const canImportInstructors = computed(() => Boolean(selectedTrainingDetail.value?.canManageTraining))
+const canImportSchedule = computed(() => Boolean(selectedTrainingDetail.value?.canEditCourses))
 
 const selectedTraining = computed(() => {
   const base = availableTrainings.value.find(t => t.id === selectedTrainingId.value) || null
@@ -293,40 +314,67 @@ async function submitTrainingUpdate(payload) {
   return updateTraining(selectedTrainingId.value, payload)
 }
 
-async function handleBeforeInstructorImport(file) {
-  if (!selectedTrainingId.value) {
-    message.warning('请先选择培训班')
-    return false
+async function handleDownloadInstructorTemplate() {
+  if (!selectedTrainingId.value || !canImportInstructors.value) {
+    return
+  }
+  try {
+    const blob = await downloadTrainingInstructorImportTemplate(selectedTrainingId.value)
+    downloadBlob(blob, '培训班教官导入模板.xlsx')
+  } catch (error) {
+    message.error(error?.message || '下载模板失败')
+  }
+}
+
+async function submitInstructorImport(file) {
+  if (!selectedTrainingId.value || !canImportInstructors.value) {
+    message.warning('无权导入教官')
+    return
   }
   importingInstructor.value = true
   try {
     const result = await importTrainingInstructors(selectedTrainingId.value, file)
     await refreshCurrentTraining()
+    showInstructorImportModal.value = false
     message.success(`教官导入完成：成功 ${result.successRows || 0} 行，新增账号 ${result.createdCount || 0} 个`)
-  } catch (e) {
-    message.error(e?.message || '教官导入失败')
+  } catch (error) {
+    message.error(error?.message || '教官导入失败')
   } finally {
     importingInstructor.value = false
   }
-  return false
 }
 
-async function handleBeforeScheduleImport(file) {
-  if (!selectedTrainingId.value) {
-    message.warning('请先选择培训班')
-    return false
+async function handleDownloadScheduleTemplate() {
+  if (!selectedTrainingId.value || !canImportSchedule.value) {
+    return
+  }
+  try {
+    const blob = await downloadTrainingSessionImportTemplate(selectedTrainingId.value)
+    downloadBlob(blob, '培训班课次导入模板.xlsx')
+  } catch (error) {
+    message.error(error?.message || '下载模板失败')
+  }
+}
+
+async function submitScheduleImport(file) {
+  if (!selectedTrainingId.value || !canImportSchedule.value) {
+    message.warning('无权导入课次')
+    return
   }
   importingSchedule.value = true
   try {
-    const result = await importTrainingSchedule(selectedTrainingId.value, file, true)
+    const result = await importTrainingSessions(selectedTrainingId.value, file)
     await refreshCurrentTraining()
-    message.success(`课表导入完成：课程 ${result.courseCount || 0} 门，课次 ${result.scheduleCount || 0} 条`)
-  } catch (e) {
-    message.error(e?.message || '课表导入失败')
+    showScheduleImportModal.value = false
+    message.success(`课次导入完成：新增课次 ${result.addedSessionCount || 0} 个，跳过 ${result.skippedCount || 0} 行`)
+    if (result?.courseMatchFailureSummary) {
+      message.warning(result.courseMatchFailureSummary, 6)
+    }
+  } catch (error) {
+    message.error(error?.message || '课次导入失败')
   } finally {
     importingSchedule.value = false
   }
-  return false
 }
 
 onMounted(async () => {

@@ -33,6 +33,69 @@ USER_TEMPLATE_HEADERS = [
     "手机号",
     "警号",
     "邮箱",
+    "部门",
+    "警种",
+]
+
+TRAINING_STUDENT_TEMPLATE_HEADERS = [
+    "用户名",
+    "密码",
+    "姓名",
+    "性别",
+    "手机号",
+    "警号",
+    "邮箱",
+    "部门",
+    "警种",
+]
+
+TRAINING_INSTRUCTOR_TEMPLATE_HEADERS = [
+    "用户名",
+    "密码",
+    "姓名",
+    "性别",
+    "手机号",
+    "警号",
+    "邮箱",
+    "部门",
+    "警种",
+]
+
+TRAINING_COURSE_TEMPLATE_HEADERS = [
+    "课程名称",
+    "教官",
+    "课程类型",
+    "地点",
+]
+
+TRAINING_SESSION_TEMPLATE_HEADERS = [
+    "课程名称",
+    "教官",
+    "课程类型",
+    "日期",
+    "开始时间",
+    "结束时间",
+    "地点",
+]
+
+USER_TEMPLATE_SAMPLE_ROWS = [
+    ["【示例】zhangsan", "Police@123456", "张三", "学员", "男", "13800138000", "110001", "zhangsan@example.com", "刑侦总队", "治安"],
+]
+
+TRAINING_STUDENT_TEMPLATE_SAMPLE_ROWS = [
+    ["【示例】student001", "Police@123456", "李四", "男", "13800138001", "110002", "student001@example.com", "治安支队", "治安"],
+]
+
+TRAINING_INSTRUCTOR_TEMPLATE_SAMPLE_ROWS = [
+    ["【示例】instructor001", "Police@123456", "王教官", "男", "13800138002", "210001", "instructor001@example.com", "警务实战教研室", "特警"],
+]
+
+TRAINING_COURSE_TEMPLATE_SAMPLE_ROWS = [
+    ["【示例】警务实战理论", "王教官", "理论", "第一教室"],
+]
+
+TRAINING_SESSION_TEMPLATE_SAMPLE_ROWS = [
+    ["【示例】警务实战理论", "王教官", "理论", "2026-03-18", "09:00", "10:30", "第一教室"],
 ]
 
 DEPARTMENT_TEMPLATE_HEADERS = [
@@ -50,6 +113,14 @@ ROLE_TEMPLATE_HEADERS = [
     "数据范围",
     "状态",
     "描述",
+]
+
+DEPARTMENT_TEMPLATE_SAMPLE_ROWS = [
+    ["【示例】DEPT001", "刑侦总队", "", "是", "启用", "示例部门"],
+]
+
+ROLE_TEMPLATE_SAMPLE_ROWS = [
+    ["【示例】trainer", "示例培训角色", "本部门", "启用", "示例角色"],
 ]
 
 ROLE_DATA_SCOPE_LABELS = {
@@ -125,6 +196,8 @@ class SystemExchangeService(BatchImportService):
         "phone": {"手机号", "手机", "联系电话", "phone", "mobile", "tel"},
         "police_id": {"警号", "警员编号", "编号", "policeid", "badge", "badgeid"},
         "email": {"邮箱", "电子邮箱", "mail", "email"},
+        "department_names": {"部门", "单位", "所属单位", "department", "dept", "organization"},
+        "police_type_names": {"警种", "警种类别", "警务类型", "policetype", "police_type"},
     }
 
     DEPARTMENT_FIELD_ALIASES: Dict[str, set[str]] = {
@@ -151,22 +224,52 @@ class SystemExchangeService(BatchImportService):
     # ===== 模板 =====
 
     def build_user_template(self) -> bytes:
-        instructions = [
-            ("字段", "说明"),
-            ("用户名", "必填，建议与实际登录账号一致，导入更新时默认按用户名匹配"),
-            ("密码", "新用户必填；已存在用户留空则不修改密码"),
-            ("姓名", "选填"),
-            ("角色", "选填，可填角色名称或编码；多个角色可用中文顿号、逗号分隔"),
-            ("性别", "选填，可填 男/女"),
-            ("手机号", "选填，可作为辅助匹配字段"),
-            ("警号", "选填，可作为辅助匹配字段"),
-            ("邮箱", "选填"),
-        ]
-        return self._build_template_bytes("用户导入", USER_TEMPLATE_HEADERS, instructions)
+        return self._build_template_bytes(
+            "用户导入",
+            USER_TEMPLATE_HEADERS,
+            self._build_user_template_instructions(include_role=True),
+            USER_TEMPLATE_SAMPLE_ROWS,
+        )
+
+    def build_training_student_template(self) -> bytes:
+        return self._build_training_user_template(
+            "培训班学员导入",
+            TRAINING_STUDENT_TEMPLATE_HEADERS,
+            "学员",
+            TRAINING_STUDENT_TEMPLATE_SAMPLE_ROWS,
+        )
+
+    def build_training_instructor_template(self) -> bytes:
+        return self._build_training_user_template(
+            "培训班教官导入",
+            TRAINING_INSTRUCTOR_TEMPLATE_HEADERS,
+            "教官",
+            TRAINING_INSTRUCTOR_TEMPLATE_SAMPLE_ROWS,
+        )
+
+    def build_training_course_template(self) -> bytes:
+        return self._build_template_bytes(
+            "培训班课程导入",
+            TRAINING_COURSE_TEMPLATE_HEADERS,
+            self._build_training_course_template_instructions(),
+            TRAINING_COURSE_TEMPLATE_SAMPLE_ROWS,
+        )
+
+    def build_training_session_template(self) -> bytes:
+        return self._build_template_bytes(
+            "培训班课次导入",
+            TRAINING_SESSION_TEMPLATE_HEADERS,
+            self._build_training_session_template_instructions(),
+            TRAINING_SESSION_TEMPLATE_SAMPLE_ROWS,
+        )
+
+    def build_training_schedule_template(self) -> bytes:
+        return self.build_training_session_template()
 
     def build_department_template(self) -> bytes:
         instructions = [
             ("字段", "说明"),
+            ("示例行", "第 2 行为示例数据，导入前请删除或覆盖"),
             ("部门编码", "必填，导入更新时按部门编码匹配"),
             ("部门名称", "必填"),
             ("父级部门编码", "选填，根部门留空；请确保父部门已存在或排在当前行之前"),
@@ -174,23 +277,32 @@ class SystemExchangeService(BatchImportService):
             ("状态", "选填，可填 启用/停用"),
             ("描述", "选填"),
         ]
-        return self._build_template_bytes("部门导入", DEPARTMENT_TEMPLATE_HEADERS, instructions)
+        return self._build_template_bytes("部门导入", DEPARTMENT_TEMPLATE_HEADERS, instructions, DEPARTMENT_TEMPLATE_SAMPLE_ROWS)
 
     def build_role_template(self) -> bytes:
         instructions = [
             ("字段", "说明"),
+            ("示例行", "第 2 行为示例数据，导入前请删除或覆盖"),
             ("角色编码", "必填，导入更新时按角色编码匹配；admin 不支持导入修改"),
             ("角色名称", "必填"),
             ("数据范围", "选填，多个值用逗号分隔，可填 全部/all、本部门/department、本部门及下属部门/department_and_sub、本警种/police_type、本人/self"),
             ("状态", "选填，可填 启用/停用"),
             ("描述", "选填"),
         ]
-        return self._build_template_bytes("角色导入", ROLE_TEMPLATE_HEADERS, instructions)
+        return self._build_template_bytes("角色导入", ROLE_TEMPLATE_HEADERS, instructions, ROLE_TEMPLATE_SAMPLE_ROWS)
 
     # ===== 导出 =====
 
     def export_users(self, search: Optional[str] = None, role_code: Optional[str] = None) -> bytes:
-        query = self.db.query(User).options(joinedload(User.roles)).filter(User.is_active.is_(True))
+        query = (
+            self.db.query(User)
+            .options(
+                joinedload(User.roles),
+                joinedload(User.departments),
+                joinedload(User.police_types),
+            )
+            .filter(User.is_active.is_(True))
+        )
         if role_code:
             query = query.filter(User.roles.any(Role.code == role_code))
         if search:
@@ -212,6 +324,8 @@ class SystemExchangeService(BatchImportService):
                 user.phone or "",
                 user.police_id or "",
                 user.email or "",
+                self._join_related_names(user.departments),
+                self._join_related_names(user.police_types),
             ]
             for user in users
         ]
@@ -401,10 +515,14 @@ class SystemExchangeService(BatchImportService):
         police_id = self._to_text(row.get("police_id"))
         email = self._to_text(row.get("email"))
         role_values = self._split_multi_values(row.get("role"))
+        department_values = self._split_multi_values(row.get("department_names"))
+        police_type_values = self._split_multi_values(row.get("police_type_names"))
 
         if not username:
             raise ValueError("用户名不能为空")
 
+        departments = self._resolve_departments(department_values)
+        police_types = self._resolve_police_types(police_type_values)
         user = self._find_user(police_id=police_id, username=username, phone=phone)
         if user:
             if username != user.username:
@@ -445,6 +563,10 @@ class SystemExchangeService(BatchImportService):
                 roles = self._resolve_roles_by_text(role_values)
                 if self._replace_user_roles(user, roles):
                     updated = True
+            if department_values and self._replace_user_departments(user, departments):
+                updated = True
+            if police_type_values and self._replace_user_police_types(user, police_types):
+                updated = True
 
             self.db.flush()
             return {"created": False, "updated": updated, "password_reset": password_reset}
@@ -472,6 +594,8 @@ class SystemExchangeService(BatchImportService):
             is_active=True,
         )
         new_user.roles = roles
+        new_user.departments = departments
+        new_user.police_types = police_types
         self.db.add(new_user)
         self.db.flush()
         return {"created": True, "updated": True, "password_reset": False}
@@ -609,11 +733,16 @@ class SystemExchangeService(BatchImportService):
         title: str,
         headers: Sequence[str],
         instructions: Sequence[Sequence[str]],
+        sample_rows: Optional[Sequence[Sequence[Any]]] = None,
     ) -> bytes:
         workbook = Workbook()
         sheet = workbook.active
         sheet.title = title
         self._append_headers(sheet, headers)
+        for row in sample_rows or []:
+            sheet.append(list(row))
+        self._style_sheet(sheet)
+        self._autosize_columns(sheet)
 
         help_sheet = workbook.create_sheet("填写说明")
         for row in instructions:
@@ -669,6 +798,88 @@ class SystemExchangeService(BatchImportService):
         return output.getvalue()
 
     # ===== Helper =====
+
+    def _build_user_template_instructions(
+        self,
+        *,
+        include_role: bool,
+        fixed_role_label: Optional[str] = None,
+        allow_default_password: bool = False,
+    ) -> List[tuple[str, str]]:
+        password_hint = (
+            f"新用户选填；留空则使用默认初始密码 {self.DEFAULT_PASSWORD}"
+            if allow_default_password
+            else "新用户必填；已存在用户留空则不修改密码"
+        )
+        instructions: List[tuple[str, str]] = [
+            ("字段", "说明"),
+            ("示例行", "第 2 行为示例数据，导入前请删除或覆盖"),
+            ("用户名", "必填，建议与实际登录账号一致，导入更新时默认按用户名匹配"),
+            ("密码", password_hint),
+            ("姓名", "选填"),
+        ]
+        if include_role:
+            instructions.append(("角色", "选填，可填角色名称或编码；多个角色可用中文顿号、逗号分隔"))
+        elif fixed_role_label:
+            instructions.append(("角色", f"固定为{fixed_role_label}，无需填写"))
+        instructions.extend(
+            [
+                ("性别", "选填，可填 男/女"),
+                ("手机号", "选填，可作为辅助匹配字段"),
+                ("警号", "选填，可作为辅助匹配字段"),
+                ("邮箱", "选填"),
+                ("部门", "选填，多个部门可用中文顿号、逗号分隔；建议填写，避免数据域下不可见"),
+                ("警种", "选填，多个警种可用中文顿号、逗号分隔；建议填写，避免数据域下不可见"),
+            ]
+        )
+        return instructions
+
+    def _build_training_user_template(
+        self,
+        title: str,
+        headers: Sequence[str],
+        fixed_role_label: str,
+        sample_rows: Sequence[Sequence[Any]],
+    ) -> bytes:
+        return self._build_template_bytes(
+            title,
+            headers,
+            self._build_user_template_instructions(
+                include_role=False,
+                fixed_role_label=fixed_role_label,
+                allow_default_password=True,
+            ),
+            sample_rows,
+        )
+
+    @staticmethod
+    def _build_training_course_template_instructions() -> List[tuple[str, str]]:
+        return [
+            ("字段", "说明"),
+            ("示例行", "第 2 行为示例数据，导入前请删除或覆盖"),
+            ("课程名称", "必填；重复课程按“课程名称+教官+课程类型”识别后跳过"),
+            ("教官", "选填；可填写教官姓名或账号"),
+            ("课程类型", "选填；可填 理论/theory 或 实操/技能/practice/skill"),
+            ("地点", "选填；留空时显示为空"),
+        ]
+
+    @staticmethod
+    def _build_training_session_template_instructions() -> List[tuple[str, str]]:
+        return [
+            ("字段", "说明"),
+            ("示例行", "第 2 行为示例数据，导入前请删除或覆盖"),
+            ("课程名称", "必填；用于匹配已存在课程，匹配不到则跳过"),
+            ("教官", "选填；建议与课程上的教官保持一致，便于准确匹配"),
+            ("课程类型", "选填；建议与课程上的类型保持一致，便于准确匹配"),
+            ("日期", "必填；支持 YYYY-MM-DD 或 Excel 日期格式"),
+            ("开始时间", "必填；示例 09:00"),
+            ("结束时间", "必填；示例 11:30"),
+            ("地点", "选填；同一课程下按“日期+开始时间+结束时间+地点”识别重复课次并跳过"),
+        ]
+
+    @staticmethod
+    def _join_related_names(items: Optional[Sequence[Any]]) -> str:
+        return "、".join(str(getattr(item, "name", "") or "") for item in (items or []) if getattr(item, "name", None))
 
     def _resolve_roles_by_text(self, values: List[str]) -> List[Role]:
         lookup: Dict[str, Role] = {}
@@ -749,6 +960,24 @@ class SystemExchangeService(BatchImportService):
         if current_ids == target_ids:
             return False
         user.roles = roles
+        return True
+
+    @staticmethod
+    def _replace_user_departments(user: User, departments: List[Department]) -> bool:
+        current_ids = {department.id for department in user.departments or []}
+        target_ids = {department.id for department in departments}
+        if current_ids == target_ids:
+            return False
+        user.departments = departments
+        return True
+
+    @staticmethod
+    def _replace_user_police_types(user: User, police_types: List[Any]) -> bool:
+        current_ids = {police_type.id for police_type in user.police_types or []}
+        target_ids = {police_type.id for police_type in police_types}
+        if current_ids == target_ids:
+            return False
+        user.police_types = police_types
         return True
 
     @staticmethod

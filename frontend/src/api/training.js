@@ -172,6 +172,37 @@ export function importTrainingStudents(trainingId, file) {
   })
 }
 
+export function downloadTrainingStudentImportTemplate(trainingId) {
+  const url = trainingId
+    ? `/trainings/${trainingId}/import/students/template`
+    : '/trainings/import/students/template'
+  return request.get(url, {
+    responseType: 'blob',
+  })
+}
+
+export function downloadTrainingInstructorImportTemplate(trainingId) {
+  return request.get(`/trainings/${trainingId}/import/instructors/template`, {
+    responseType: 'blob',
+  })
+}
+
+export function downloadTrainingCourseImportTemplate(trainingId) {
+  return request.get(`/trainings/${trainingId}/import/courses/template`, {
+    responseType: 'blob',
+  })
+}
+
+export function downloadTrainingSessionImportTemplate(trainingId) {
+  return request.get(`/trainings/${trainingId}/import/sessions/template`, {
+    responseType: 'blob',
+  })
+}
+
+export function downloadTrainingScheduleImportTemplate(trainingId) {
+  return downloadTrainingSessionImportTemplate(trainingId)
+}
+
 export function importTrainingInstructors(trainingId, file) {
   const formData = new FormData()
   formData.append('file', file)
@@ -180,11 +211,22 @@ export function importTrainingInstructors(trainingId, file) {
   })
 }
 
-export function importTrainingSchedule(trainingId, file, replaceExisting = true) {
+export function importTrainingCourses(trainingId, file) {
   const formData = new FormData()
   formData.append('file', file)
-  formData.append('replace_existing', String(replaceExisting))
-  return request.post(`/trainings/${trainingId}/import/schedule`, formData, {
+  return request.post(`/trainings/${trainingId}/import/courses`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
+}
+
+export function importTrainingSessions(trainingId, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post(`/trainings/${trainingId}/import/sessions`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export function importTrainingSchedule(trainingId, file, replaceExisting = true) {
+  return importTrainingSessions(trainingId, file)
 }

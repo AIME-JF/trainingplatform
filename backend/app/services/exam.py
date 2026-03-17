@@ -847,7 +847,7 @@ class ExamService:
     def _resolve_create_exam_passing_score(self, paper: ExamPaper, preferred: Optional[int]) -> int:
         total_score = int(paper.total_score or 0)
         if total_score <= 0:
-            raise ValueError("试卷总分必须大于0")
+            raise ValueError("试卷满分必须大于0")
         if preferred is not None:
             return int(preferred)
 
@@ -879,13 +879,13 @@ class ExamService:
     ) -> tuple[Optional[datetime], Optional[datetime]]:
         resolved_total_score = int(total_score or 0)
         if resolved_total_score <= 0:
-            raise ValueError("试卷总分必须大于0")
+            raise ValueError("试卷满分必须大于0")
         if duration < 10:
             raise ValueError("考试时长不能少于10分钟")
         if passing_score < 1:
             raise ValueError("及格分不能小于1分")
         if passing_score > resolved_total_score:
-            raise ValueError(f"及格分不能超过试卷总分（{resolved_total_score}分）")
+            raise ValueError(f"及格分不能超过试卷满分（{resolved_total_score}分）")
 
         now = self._current_time(start_time, end_time)
         normalized_start = self._normalize_datetime(start_time, now.tzinfo)
@@ -893,12 +893,6 @@ class ExamService:
         if normalized_start and normalized_end:
             if normalized_end <= normalized_start:
                 raise ValueError("考试结束时间必须晚于开始时间")
-            window_seconds = (normalized_end - normalized_start).total_seconds()
-            if window_seconds < 600:
-                raise ValueError("考试区间不能短于10分钟")
-            max_duration = max(10, int(window_seconds // 60))
-            if duration > window_seconds / 60:
-                raise ValueError(f"考试时长不能超过考试区间（最多{max_duration}分钟）")
 
         return normalized_start, normalized_end
 

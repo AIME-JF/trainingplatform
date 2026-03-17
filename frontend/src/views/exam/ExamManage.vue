@@ -185,7 +185,6 @@
                 value-format="YYYY-MM-DD HH:mm:ss"
                 style="width:100%"
               />
-              <div v-if="durationHelpText" class="form-help">{{ durationHelpText }}</div>
             </a-form-item>
           </a-col>
           <a-col :span="6">
@@ -193,22 +192,23 @@
               <a-input-number
                 v-model:value="form.duration"
                 :min="10"
-                :max="durationInputMax"
+                :max="EXAM_DURATION_LIMIT"
                 style="width:100%"
-                @change="handleDurationEdited"
               />
             </a-form-item>
           </a-col>
           <a-col :span="6">
             <a-form-item label="及格分">
-              <a-input-number
-                v-model:value="form.passingScore"
-                :min="1"
-                :max="currentPaperTotalScore || undefined"
-                style="width:100%"
-                @change="handlePassingScoreEdited"
-              />
-              <div v-if="passingScoreHelpText" class="form-help">{{ passingScoreHelpText }}</div>
+              <div class="passing-score-field">
+                <a-input-number
+                  v-model:value="form.passingScore"
+                  :min="1"
+                  style="width:100%"
+                />
+                <span class="passing-score-total">
+                  满分 {{ currentPaperTotalScore > 0 ? currentPaperTotalScore : '--' }} 分
+                </span>
+              </div>
             </a-form-item>
           </a-col>
           <a-col :span="6">
@@ -275,7 +275,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
@@ -331,9 +331,6 @@ const editingId = ref(null)
 const editingKind = ref('admission')
 const dateRange = ref(null)
 const handledQuickCreateKey = ref('')
-const syncingDerivedFields = ref(false)
-const durationManuallyEdited = ref(false)
-const passingScoreManuallyEdited = ref(false)
 
 const pagination = reactive({ current: 1, pageSize: 10, total: 0 })
 const columns = [
@@ -392,43 +389,9 @@ const currentPaperTotalScore = computed(() => {
   const totalScore = Number(selectedPaperDetail.value?.totalScore || 0)
   return Number.isFinite(totalScore) ? totalScore : 0
 })
-const examWindowMinutes = computed(() => calculateRangeMinutes(dateRange.value))
-const durationInputMax = computed(() => {
-  if (examWindowMinutes.value === null) {
-    return EXAM_DURATION_LIMIT
-  }
-  return Math.max(10, Math.min(EXAM_DURATION_LIMIT, examWindowMinutes.value))
-})
 const passingScoreSuggestion = computed(() => resolvePassingScoreSuggestion(selectedPaperDetail.value))
-const durationHelpText = computed(() => {
-  if (examWindowMinutes.value === null) {
-    return ''
-  }
-  if (examWindowMinutes.value <= 0) {
-    return '结束时间必须晚于开始时间'
-  }
-  if (examWindowMinutes.value < 10) {
-    return `当前考试区间仅 ${examWindowMinutes.value} 分钟，至少需要 10 分钟`
-  }
-  if (examWindowMinutes.value > EXAM_DURATION_LIMIT) {
-    return `当前考试区间 ${examWindowMinutes.value} 分钟，已按系统上限回填 ${EXAM_DURATION_LIMIT} 分钟`
-  }
-  return `已按考试区间自动回填 ${examWindowMinutes.value} 分钟`
-})
-const passingScoreHelpText = computed(() => {
-  if (!selectedPaperDetail.value) {
-    return ''
-  }
-  if (currentPaperTotalScore.value <= 0) {
-    return '当前试卷总分无效，请先检查试卷配置'
-  }
-  return `当前试卷总分 ${currentPaperTotalScore.value} 分，建议及格分 ${passingScoreSuggestion.value} 分`
-})
 
 function resetForm() {
-  syncingDerivedFields.value = false
-  durationManuallyEdited.value = false
-  passingScoreManuallyEdited.value = false
   Object.assign(form, {
     title: '',
     paperId: undefined,
@@ -450,19 +413,6 @@ function resetForm() {
   editingId.value = null
   editingKind.value = activeKind.value
   dateRange.value = null
-}
-
-function calculateRangeMinutes(range) {
-  if (!Array.isArray(range) || range.length !== 2 || !range[0] || !range[1]) {
-    return null
-  }
-  const start = dayjs(range[0])
-  const end = dayjs(range[1])
-  if (!start.isValid() || !end.isValid()) {
-    return null
-  }
-  const diffMinutes = end.diff(start, 'minute', true)
-  return Math.floor(diffMinutes)
 }
 
 function resolvePassingScoreSuggestion(detail) {
@@ -487,35 +437,6 @@ function resolveDefaultDuration(value) {
     return DEFAULT_EXAM_DURATION
   }
   return Math.min(EXAM_DURATION_LIMIT, Math.max(10, Math.floor(numericValue)))
-}
-
-function syncDurationWithDateRange(force = false) {
-  const minutes = examWindowMinutes.value
-  if (minutes === null || minutes <= 0) {
-    return
-  }
-  if (!force && durationManuallyEdited.value) {
-    return
-  }
-  form.duration = Math.min(EXAM_DURATION_LIMIT, Math.max(10, minutes))
-}
-
-function syncPassingScoreWithPaper(force = false) {
-  if (!selectedPaperDetail.value) {
-    return
-  }
-  if (!force && passingScoreManuallyEdited.value) {
-    return
-  }
-  form.passingScore = passingScoreSuggestion.value || form.passingScore
-}
-
-function handleDurationEdited() {
-  durationManuallyEdited.value = true
-}
-
-function handlePassingScoreEdited() {
-  passingScoreManuallyEdited.value = true
 }
 
 function applyRouteKindContext() {
@@ -608,14 +529,9 @@ async function setPaperPreview(paperId, applyDefaults = false) {
     const detail = await getExamPaperDetail(paperId)
     selectedPaperDetail.value = detail
     if (applyDefaults) {
-      syncingDerivedFields.value = true
       form.type = detail.type || 'formal'
-      durationManuallyEdited.value = false
-      passingScoreManuallyEdited.value = false
       form.duration = resolveDefaultDuration(detail.duration)
-      syncDurationWithDateRange(true)
-      syncPassingScoreWithPaper(true)
-      syncingDerivedFields.value = false
+      form.passingScore = passingScoreSuggestion.value || form.passingScore
     }
   } catch (error) {
     selectedPaperDetail.value = null
@@ -637,7 +553,6 @@ async function openEditDrawer(record) {
     const detail = editingKind.value === 'admission'
       ? await getAdmissionExamDetail(record.id)
       : await getExamDetail(record.id)
-    syncingDerivedFields.value = true
     form.title = detail.title
     form.paperId = detail.paperId
     form.description = detail.description || ''
@@ -662,13 +577,8 @@ async function openEditDrawer(record) {
       questionCount: detail.questionCount,
       questions: detail.questions || [],
     }
-    durationManuallyEdited.value = false
-    passingScoreManuallyEdited.value = false
-    await nextTick()
-    syncingDerivedFields.value = false
     drawerVisible.value = true
   } catch (error) {
-    syncingDerivedFields.value = false
     message.error(error.message || '加载考试详情失败')
   }
 }
@@ -706,16 +616,10 @@ async function handleSave() {
     return
   }
   if (dateRange.value?.[0] && dateRange.value?.[1]) {
-    if (examWindowMinutes.value === null || examWindowMinutes.value <= 0) {
+    const startTime = dayjs(dateRange.value[0])
+    const endTime = dayjs(dateRange.value[1])
+    if (!startTime.isValid() || !endTime.isValid() || !endTime.isAfter(startTime)) {
       message.warning('考试结束时间必须晚于开始时间')
-      return
-    }
-    if (examWindowMinutes.value < 10) {
-      message.warning('考试区间不能短于10分钟')
-      return
-    }
-    if (duration > examWindowMinutes.value) {
-      message.warning(`考试时长不能超过考试区间（最多${examWindowMinutes.value}分钟）`)
       return
     }
   }
@@ -724,7 +628,7 @@ async function handleSave() {
     return
   }
   if (passingScore > currentPaperTotalScore.value) {
-    message.warning(`及格分不能超过试卷总分（${currentPaperTotalScore.value}分）`)
+    message.warning(`及格分不能超过试卷满分（${currentPaperTotalScore.value}分）`)
     return
   }
 
@@ -805,14 +709,6 @@ watch(() => route.fullPath, () => {
   filterPurpose.value = 'all'
   initializeFromRoute()
 })
-
-watch(dateRange, () => {
-  if (syncingDerivedFields.value) {
-    return
-  }
-  durationManuallyEdited.value = false
-  syncDurationWithDateRange(true)
-}, { deep: true })
 </script>
 
 <style scoped>
@@ -825,7 +721,8 @@ watch(dateRange, () => {
 .paper-meta { font-size: 12px; color: #8c8c8c; }
 .paper-action-row { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
 .paper-action-tip { font-size: 12px; color: #8c8c8c; }
-.form-help { margin-top: 6px; font-size: 12px; color: #8c8c8c; line-height: 1.5; }
+.passing-score-field { display: flex; align-items: center; gap: 10px; }
+.passing-score-total { flex-shrink: 0; font-size: 12px; color: #8c8c8c; white-space: nowrap; }
 .paper-preview-card { border: 1px solid #e8e8e8; border-radius: 8px; padding: 12px; background: #fafafa; }
 .preview-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 12px; }
 .preview-title { font-size: 15px; font-weight: 600; color: #001234; }

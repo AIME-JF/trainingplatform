@@ -117,16 +117,35 @@
                     <a-radio-button value="timetable">按课表展示</a-radio-button>
                   </a-radio-group>
                 </a-space>
-                <permissions-tooltip
-                  v-if="!authStore.isStudent"
-                  :allowed="canScheduleEdit"
-                  :tips="scheduleEditTooltip"
-                  v-slot="{ disabled }"
-                >
-                  <a-button size="small" type="primary" :disabled="disabled" @click="openCourseModal()">
-                    <template #icon><PlusOutlined /></template>添加课程
-                  </a-button>
-                </permissions-tooltip>
+                <a-space v-if="!authStore.isStudent">
+                  <permissions-tooltip
+                    :allowed="canScheduleEdit"
+                    :tips="scheduleEditTooltip"
+                    v-slot="{ disabled }"
+                  >
+                    <a-button size="small" :disabled="disabled" @click="openCourseImportModal">
+                      导入课程
+                    </a-button>
+                  </permissions-tooltip>
+                  <permissions-tooltip
+                    :allowed="canScheduleEdit"
+                    :tips="scheduleEditTooltip"
+                    v-slot="{ disabled }"
+                  >
+                    <a-button size="small" :disabled="disabled" @click="openScheduleImportModal">
+                      导入课次
+                    </a-button>
+                  </permissions-tooltip>
+                  <permissions-tooltip
+                    :allowed="canScheduleEdit"
+                    :tips="scheduleEditTooltip"
+                    v-slot="{ disabled }"
+                  >
+                    <a-button size="small" type="primary" :disabled="disabled" @click="openCourseModal()">
+                      <template #icon><PlusOutlined /></template>添加课程
+                    </a-button>
+                  </permissions-tooltip>
+                </a-space>
               </div>
 
               <template v-if="scheduleViewMode === 'course'">
@@ -319,6 +338,15 @@
                   >
                     <a-button size="small" :disabled="disabled" @click="openEnrollmentApplicationModal">
                       申请管理<span v-if="pendingEnrollmentCount > 0">（{{ pendingEnrollmentCount }}）</span>
+                    </a-button>
+                  </permissions-tooltip>
+                  <permissions-tooltip
+                    :allowed="canManageStudents"
+                    :tips="trainingManageTooltip"
+                    v-slot="{ disabled }"
+                  >
+                    <a-button size="small" :disabled="disabled" @click="openStudentImportModal">
+                      导入学员
                     </a-button>
                   </permissions-tooltip>
                   <permissions-tooltip
@@ -618,7 +646,7 @@
                     <div>{{ sch.date }} · {{ sch.timeRange }}</div>
                     <div style="color:#666;font-size:12px">
                       地点：{{ sch.location || courseForm.location || '未设置' }} · {{ sch.hours }}课时
-                      <span v-if="sch.canEdit === false || sch.canDelete === false"> · 已过时间段，不可编辑删除</span>
+                      <span v-if="sch.canEdit === false || sch.canDelete === false"> · 当前课次不可编辑删除</span>
                     </div>
                   </div>
                   <a-space size="small">
@@ -762,6 +790,42 @@
         row-key="id"
       />
     </a-modal>
+
+    <ExcelImportModal
+      v-model:open="courseImportDialog.visible"
+      title="课程导入"
+      :confirm-loading="courseImportDialog.submitting"
+      :can-submit="canScheduleEdit"
+      :can-download-template="canScheduleEdit"
+      :submit-tooltip="scheduleEditTooltip"
+      :download-template-tooltip="scheduleEditTooltip"
+      @submit="submitCourseImport"
+      @download-template="handleDownloadCourseImportTemplate"
+    />
+
+    <ExcelImportModal
+      v-model:open="scheduleImportDialog.visible"
+      title="课次导入"
+      :confirm-loading="scheduleImportDialog.submitting"
+      :can-submit="canScheduleEdit"
+      :can-download-template="canScheduleEdit"
+      :submit-tooltip="scheduleEditTooltip"
+      :download-template-tooltip="scheduleEditTooltip"
+      @submit="submitSessionImport"
+      @download-template="handleDownloadSessionImportTemplate"
+    />
+
+    <ExcelImportModal
+      v-model:open="studentImportDialog.visible"
+      title="学员导入"
+      :confirm-loading="studentImportDialog.submitting"
+      :can-submit="canManageStudents"
+      :can-download-template="canManageStudents"
+      :submit-tooltip="trainingManageTooltip"
+      :download-template-tooltip="trainingManageTooltip"
+      @submit="submitStudentImport"
+      @download-template="handleDownloadStudentImportTemplate"
+    />
 
     <!-- ===== 编辑班级信息弹窗 ===== -->
     <a-modal
@@ -961,13 +1025,21 @@ import {
   skipTrainingSession,
   bindTrainingResource,
   unbindTrainingResource,
+  importTrainingStudents,
+  downloadTrainingStudentImportTemplate,
+  importTrainingCourses,
+  downloadTrainingCourseImportTemplate,
+  importTrainingSessions,
+  downloadTrainingSessionImportTemplate,
 } from '@/api/training'
 import { getResources } from '@/api/resource'
 import { getUsers } from '@/api/user'
 import { createNotice as apiCreateNotice, updateNotice as apiUpdateNotice, deleteNotice as apiDeleteNotice } from '@/api/notice'
 import { useAuthStore } from '@/stores/auth'
 import { formatDateTime } from '@/utils/datetime'
+import { downloadBlob } from '@/utils/download'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
+import ExcelImportModal from '@/views/system/components/ExcelImportModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -1025,6 +1097,9 @@ const trainingData = reactive({
 
 const allUserList = ref([])
 const rosterUserList = ref([])
+const studentImportDialog = reactive({ visible: false, submitting: false })
+const courseImportDialog = reactive({ visible: false, submitting: false })
+const scheduleImportDialog = reactive({ visible: false, submitting: false })
 const notices = ref([])
 const courseChangeLogs = ref([])
 const courseChangeLogsLoading = ref(false)
@@ -1330,7 +1405,9 @@ const courseChangeActionColorMap = {
 }
 const courseChangeSourceLabelMap = {
   detailUpdate: '详情修改',
-  importSchedule: '课表导入',
+  importCourse: '课程导入',
+  importSession: '课次导入',
+  importSchedule: '课次导入',
   startCheckin: '开始签到',
   endCheckin: '结束签到',
   startCheckout: '开始签退',
@@ -1354,6 +1431,8 @@ const scheduleRows = computed(() => (trainingData.courses || []).flatMap((course
     scheduleIndex,
     canEdit: !!schedule.canEdit,
     canDelete: !!schedule.canDelete,
+    editLockMessage: schedule.editLockMessage || '',
+    deleteLockMessage: schedule.deleteLockMessage || '',
     instructorText: [
       course.primaryInstructorName || course.instructor || '未指定',
       course.assistantInstructorNames?.length ? `带教：${course.assistantInstructorNames.join('、')}` : '',
@@ -1765,6 +1844,110 @@ async function addSelectedStudents() {
   }
 }
 
+function openStudentImportModal() {
+  if (!canManageStudents.value) return
+  studentImportDialog.visible = true
+}
+
+async function handleDownloadStudentImportTemplate() {
+  if (!canManageStudents.value) return
+  try {
+    const blob = await downloadTrainingStudentImportTemplate(trainingId)
+    downloadBlob(blob, '培训班学员导入模板.xlsx')
+  } catch (error) {
+    message.error(error?.message || '下载模板失败')
+  }
+}
+
+async function submitStudentImport(file) {
+  if (!canManageStudents.value) {
+    message.warning(trainingManageTooltip.value)
+    return
+  }
+  studentImportDialog.submitting = true
+  try {
+    const result = await importTrainingStudents(trainingId, file)
+    message.success(
+      `导入完成：成功 ${result?.successRows || 0} 行，新增账号 ${result?.createdCount || 0} 个，加入培训班 ${result?.enrollmentAdded || 0} 人`
+    )
+    studentImportDialog.visible = false
+    await loadTrainingDetail()
+  } catch (error) {
+    message.error(error?.message || '学员导入失败')
+  } finally {
+    studentImportDialog.submitting = false
+  }
+}
+
+function openCourseImportModal() {
+  if (!canScheduleEdit.value) return
+  courseImportDialog.visible = true
+}
+
+async function handleDownloadCourseImportTemplate() {
+  if (!canScheduleEdit.value) return
+  try {
+    const blob = await downloadTrainingCourseImportTemplate(trainingId)
+    downloadBlob(blob, '培训班课程导入模板.xlsx')
+  } catch (error) {
+    message.error(error?.message || '下载模板失败')
+  }
+}
+
+async function submitCourseImport(file) {
+  if (!canScheduleEdit.value) {
+    message.warning(scheduleEditTooltip.value)
+    return
+  }
+  courseImportDialog.submitting = true
+  try {
+    const result = await importTrainingCourses(trainingId, file)
+    message.success(`课程导入完成：新增课程 ${result?.addedCourseCount || 0} 门，跳过 ${result?.skippedCount || 0} 行`)
+    courseImportDialog.visible = false
+    await loadTrainingDetail()
+  } catch (error) {
+    message.error(error?.message || '课程导入失败')
+  } finally {
+    courseImportDialog.submitting = false
+  }
+}
+
+function openScheduleImportModal() {
+  if (!canScheduleEdit.value) return
+  scheduleImportDialog.visible = true
+}
+
+async function handleDownloadSessionImportTemplate() {
+  if (!canScheduleEdit.value) return
+  try {
+    const blob = await downloadTrainingSessionImportTemplate(trainingId)
+    downloadBlob(blob, '培训班课次导入模板.xlsx')
+  } catch (error) {
+    message.error(error?.message || '下载模板失败')
+  }
+}
+
+async function submitSessionImport(file) {
+  if (!canScheduleEdit.value) {
+    message.warning(scheduleEditTooltip.value)
+    return
+  }
+  scheduleImportDialog.submitting = true
+  try {
+    const result = await importTrainingSessions(trainingId, file)
+    message.success(`课次导入完成：新增课次 ${result?.addedSessionCount || 0} 个，跳过 ${result?.skippedCount || 0} 行`)
+    if (result?.courseMatchFailureSummary) {
+      message.warning(result.courseMatchFailureSummary, 6)
+    }
+    scheduleImportDialog.visible = false
+    await loadTrainingDetail()
+  } catch (error) {
+    message.error(error?.message || '课次导入失败')
+  } finally {
+    scheduleImportDialog.submitting = false
+  }
+}
+
 // ===== 课程 CRUD =====
 
 const showCourseModal = ref(false)
@@ -1876,7 +2059,7 @@ function startEditCourseSchedule(idx) {
   const schedule = courseForm.schedules[idx]
   if (!schedule) return
   if (schedule.canEdit === false) {
-    message.warning('已过时间段的课次不能编辑')
+    message.warning(schedule.editLockMessage || '当前课次不能编辑')
     return
   }
   editingCourseScheduleIdx.value = idx
@@ -1976,7 +2159,7 @@ function removeCourseSchedule(idx) {
   const schedule = courseForm.schedules[idx]
   if (!schedule) return
   if (schedule.canDelete === false) {
-    message.warning('已过时间段的课次不能删除')
+    message.warning(schedule.deleteLockMessage || '当前课次不能删除')
     return
   }
   courseForm.schedules.splice(idx, 1)
@@ -2136,8 +2319,8 @@ async function saveCourse() {
     message.warning('请先完成当前课次编辑')
     return
   }
-  if (!courseForm.name || !courseForm.instructor || courseForm.schedules.length === 0) { 
-    message.warning('请填写课程名称、教官，并至少添加一节排课')
+  if (!courseForm.name || !courseForm.instructor) { 
+    message.warning('请填写课程名称和教官')
     return 
   }
   const courseData = { ...courseForm }

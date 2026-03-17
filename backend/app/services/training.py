@@ -59,6 +59,7 @@ from app.schemas.training import (
 )
 from app.schemas.notice import NoticeResponse
 from app.services.batch_import import BatchImportService
+from app.services.system_exchange import SystemExchangeService
 from app.services.training_course_change import TrainingCourseChangeService
 from app.utils.authz import (
     can_manage_training,
@@ -536,9 +537,62 @@ class TrainingService:
         importer = BatchImportService(self.db)
         return importer.import_training_students(training_id, file_bytes)
 
+    def build_training_student_import_template(self) -> bytes:
+        return SystemExchangeService(self.db).build_training_student_template()
+
+    def build_training_course_import_template(self) -> bytes:
+        return SystemExchangeService(self.db).build_training_course_template()
+
+    def build_training_session_import_template(self) -> bytes:
+        return SystemExchangeService(self.db).build_training_session_template()
+
+    def build_training_instructor_import_template(self) -> bytes:
+        return SystemExchangeService(self.db).build_training_instructor_template()
+
+    def build_training_schedule_import_template(self) -> bytes:
+        return self.build_training_session_import_template()
+
+    def import_training_courses(
+        self,
+        training_id: int,
+        file_bytes: bytes,
+        actor_id: Optional[int] = None,
+    ) -> dict:
+        return self._run_training_course_import(
+            training_id,
+            file_bytes,
+            actor_id,
+            action_text="导入课程",
+            change_source="import_course",
+            importer_action=lambda importer: importer.import_training_courses(
+                training_id,
+                file_bytes,
+                commit=False,
+            ),
+        )
+
     def import_training_instructors(self, training_id: int, file_bytes: bytes) -> dict:
         importer = BatchImportService(self.db)
         return importer.import_training_instructors(training_id, file_bytes)
+
+    def import_training_sessions(
+        self,
+        training_id: int,
+        file_bytes: bytes,
+        actor_id: Optional[int] = None,
+    ) -> dict:
+        return self._run_training_course_import(
+            training_id,
+            file_bytes,
+            actor_id,
+            action_text="导入课次",
+            change_source="import_session",
+            importer_action=lambda importer: importer.import_training_sessions(
+                training_id,
+                file_bytes,
+                commit=False,
+            ),
+        )
 
     def import_training_schedule(
         self,
@@ -547,21 +601,34 @@ class TrainingService:
         replace_existing: bool = True,
         actor_id: Optional[int] = None,
     ) -> dict:
+        summary = self.import_training_sessions(
+            training_id,
+            file_bytes,
+            actor_id=actor_id,
+        )
+        summary["replace_existing"] = False
+        return summary
+
+    def _run_training_course_import(
+        self,
+        training_id: int,
+        file_bytes: bytes,
+        actor_id: Optional[int],
+        *,
+        action_text: str,
+        change_source: str,
+        importer_action,
+    ) -> dict:
         training = self.db.query(Training).options(
             joinedload(Training.courses),
         ).filter(Training.id == training_id).first()
         if not training:
             raise ValueError("培训班不存在")
         self.course_change_service.ensure_course_keys(training.courses or [])
-        self._assert_training_course_editable(training, "导入课表")
+        self._assert_training_course_editable(training, action_text)
         before_courses = self.course_change_service.snapshot_course_entities(training.courses or [])
         importer = BatchImportService(self.db)
-        summary = importer.import_training_schedule(
-            training_id,
-            file_bytes,
-            replace_existing=replace_existing,
-            commit=False,
-        )
+        summary = importer_action(importer)
         self.db.flush()
         after_courses = self._load_training_courses(training_id)
         try:
@@ -579,7 +646,7 @@ class TrainingService:
                 before_courses,
                 after_courses,
                 actor_id,
-                "import_schedule",
+                change_source,
             )
         self.db.commit()
         return summary
@@ -1476,13 +1543,17 @@ class TrainingService:
         item: Any,
     ) -> Dict[str, Any]:
         schedule = self._normalize_schedule_item(item)
-        can_edit = self._is_schedule_editable(training, schedule)
+        edit_lock_reason = self._get_schedule_edit_lock_reason(training, schedule)
+        can_edit = edit_lock_reason is None
         return {
             **schedule,
             "location": schedule.get("location") or course.location,
             "is_expired": self._is_schedule_expired(training, schedule),
             "can_edit": can_edit,
             "can_delete": can_edit,
+            "edit_lock_reason": edit_lock_reason,
+            "edit_lock_message": None if can_edit else self._build_schedule_edit_block_message(training, course.name, schedule, "编辑"),
+            "delete_lock_message": None if can_edit else self._build_schedule_edit_block_message(training, course.name, schedule, "删除"),
         }
 
     def _validate_schedule_mutation_window(

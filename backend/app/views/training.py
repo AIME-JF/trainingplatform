@@ -2,9 +2,11 @@
 培训管理路由
 """
 from datetime import date
+from io import BytesIO
 from typing import List, Optional
 
 from fastapi import APIRouter, Body, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.controllers import TrainingController
@@ -40,6 +42,14 @@ from app.services.training import TrainingService
 from app.utils.authz import can_manage_training, can_update_training, can_view_training, is_admin_user, is_instructor_user
 
 router = APIRouter(prefix="/trainings", tags=["培训管理"])
+
+
+def _excel_response(data: bytes, filename: str) -> StreamingResponse:
+    return StreamingResponse(
+        BytesIO(data),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 def _require_admin(db: Session, user_id: int):
@@ -303,6 +313,70 @@ def get_schedule(
     return StandardResponse(data=data)
 
 
+@router.get("/import/students/template", summary="下载培训班学员导入模板")
+def download_training_student_import_template(
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_permission(db, current_user, "CREATE_TRAINING")
+    _require_admin_or_instructor(db, current_user.user_id)
+    data = TrainingService(db).build_training_student_import_template()
+    return _excel_response(data, "training_students_import_template.xlsx")
+
+
+@router.get("/{training_id}/import/students/template", summary="下载培训班学员导入模板")
+def download_training_student_import_template_for_training(
+    training_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_training_manager(db, training_id, current_user.user_id)
+    data = TrainingService(db).build_training_student_import_template()
+    return _excel_response(data, "training_students_import_template.xlsx")
+
+
+@router.get("/{training_id}/import/instructors/template", summary="下载培训班教官导入模板")
+def download_training_instructor_import_template(
+    training_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_training_manager(db, training_id, current_user.user_id)
+    data = TrainingService(db).build_training_instructor_import_template()
+    return _excel_response(data, "training_instructors_import_template.xlsx")
+
+
+@router.get("/{training_id}/import/courses/template", summary="下载培训班课程导入模板")
+def download_training_course_import_template(
+    training_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_training_manager(db, training_id, current_user.user_id)
+    data = TrainingService(db).build_training_course_import_template()
+    return _excel_response(data, "training_courses_import_template.xlsx")
+
+
+@router.get("/{training_id}/import/sessions/template", summary="下载培训班课次导入模板")
+def download_training_session_import_template(
+    training_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_training_manager(db, training_id, current_user.user_id)
+    data = TrainingService(db).build_training_session_import_template()
+    return _excel_response(data, "training_sessions_import_template.xlsx")
+
+
+@router.get("/{training_id}/import/schedule/template", summary="下载培训班课次导入模板")
+def download_training_schedule_import_template(
+    training_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return download_training_session_import_template(training_id, current_user, db)
+
+
 @router.post("/{training_id}/import/students", response_model=StandardResponse, summary="批量导入学员并自动开户")
 async def import_students(
     training_id: int,
@@ -341,11 +415,10 @@ async def import_instructors(
     return StandardResponse(data=data)
 
 
-@router.post("/{training_id}/import/schedule", response_model=StandardResponse, summary="批量导入课表")
-async def import_schedule(
+@router.post("/{training_id}/import/courses", response_model=StandardResponse, summary="批量导入课程")
+async def import_courses(
     training_id: int,
     file: UploadFile = File(...),
-    replace_existing: bool = Form(True),
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -355,15 +428,48 @@ async def import_schedule(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="导入文件为空")
     service = TrainingService(db)
     try:
-        data = service.import_training_schedule(
+        data = service.import_training_courses(
             training_id,
             file_bytes,
-            replace_existing=replace_existing,
             actor_id=current_user.user_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     return StandardResponse(data=data)
+
+
+@router.post("/{training_id}/import/sessions", response_model=StandardResponse, summary="批量导入课次")
+async def import_sessions(
+    training_id: int,
+    file: UploadFile = File(...),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_training_manager(db, training_id, current_user.user_id)
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="导入文件为空")
+    service = TrainingService(db)
+    try:
+        data = service.import_training_sessions(
+            training_id,
+            file_bytes,
+            actor_id=current_user.user_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return StandardResponse(data=data)
+
+
+@router.post("/{training_id}/import/schedule", response_model=StandardResponse, summary="批量导入课次")
+async def import_schedule(
+    training_id: int,
+    file: UploadFile = File(...),
+    replace_existing: bool = Form(True),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    return await import_sessions(training_id, file, current_user, db)
 
 
 @router.post("/{training_id}/enroll", response_model=StandardResponse[EnrollmentResponse], summary="学员报名")

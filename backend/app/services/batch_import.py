@@ -1,5 +1,5 @@
 """
-Excel批量导入服务（用户底库、培训学员/教官、课表）
+Excel批量导入服务（用户底库、培训学员/教官、课程/课次）
 """
 
 import re
@@ -46,6 +46,7 @@ class BatchImportService:
             "loginname",
             "login",
         },
+        "password": {"密码", "登录密码", "password"},
         "police_id": {
             "警号",
             "警员编号",
@@ -63,15 +64,22 @@ class BatchImportService:
         "role": {"角色", "账号角色", "用户角色", "role", "userrole"},
     }
 
-    SCHEDULE_FIELD_ALIASES: Dict[str, set[str]] = {
+    COURSE_FIELD_ALIASES: Dict[str, set[str]] = {
         "course_name": {"课程名称", "课程", "科目", "课名", "course", "course_name", "title"},
         "instructor_name": {"教官", "授课教官", "讲师", "教师", "instructor", "teacher", "lecturer"},
+        "type": {"课程类型", "类型", "课型", "type"},
+        "location": {"地点", "教室", "上课地点", "location", "classroom"},
+    }
+
+    SESSION_FIELD_ALIASES: Dict[str, set[str]] = {
+        "course_name": {"课程名称", "课程", "科目", "课名", "course", "course_name", "title"},
+        "instructor_name": {"教官", "授课教官", "讲师", "教师", "instructor", "teacher", "lecturer"},
+        "type": {"课程类型", "类型", "课型", "type"},
         "date": {"日期", "上课日期", "课程日期", "date", "day"},
         "time_range": {"时间段", "时段", "上课时间", "time", "time_range", "timerange"},
         "time_start": {"开始时间", "开课时间", "time_start", "start", "starttime"},
         "time_end": {"结束时间", "下课时间", "time_end", "end", "endtime"},
         "hours": {"课时", "学时", "时长", "hours", "hour", "duration"},
-        "type": {"课程类型", "类型", "课型", "type"},
         "location": {"地点", "教室", "上课地点", "location", "classroom"},
     }
 
@@ -260,6 +268,131 @@ class BatchImportService:
         summary["skipped_count"] = len(summary["skipped_rows"])
         return summary
 
+    def import_training_courses(
+        self,
+        training_id: int,
+        file_bytes: bytes,
+        commit: bool = True,
+    ) -> Dict[str, Any]:
+        training = self.db.query(Training).filter(Training.id == training_id).first()
+        if not training:
+            raise ValueError("培训班不存在")
+
+        rows = self._read_excel_rows(file_bytes, self.COURSE_FIELD_ALIASES)
+        if not rows:
+            raise ValueError("Excel文件为空，或缺少可识别的表头")
+
+        existing_courses = self._load_training_course_payloads(training_id)
+        existing_keys = {self._course_identity(course) for course in existing_courses}
+        imported_keys: set[str] = set()
+        appended_courses: List[Dict[str, Any]] = []
+        skipped_rows: List[Dict[str, Any]] = []
+
+        for row_number, row in rows:
+            try:
+                course = self._build_course_entry(row)
+                course_key = self._course_identity(course)
+                if course_key in existing_keys or course_key in imported_keys:
+                    skipped_rows.append({"row": row_number, "reason": "课程已存在，已跳过"})
+                    continue
+                imported_keys.add(course_key)
+                appended_courses.append(course)
+            except Exception as exc:
+                skipped_rows.append({"row": row_number, "reason": str(exc)})
+
+        if appended_courses:
+            self._persist_training_courses(training_id, existing_courses + appended_courses)
+            if commit:
+                self.db.commit()
+        elif commit:
+            self.db.rollback()
+
+        return {
+            "training_id": training_id,
+            "total_rows": len(rows),
+            "added_course_count": len(appended_courses),
+            "course_count": len(appended_courses),
+            "skipped_count": len(skipped_rows),
+            "skipped_rows": skipped_rows,
+            "mode": "append",
+        }
+
+    def import_training_sessions(
+        self,
+        training_id: int,
+        file_bytes: bytes,
+        commit: bool = True,
+    ) -> Dict[str, Any]:
+        training = self.db.query(Training).filter(Training.id == training_id).first()
+        if not training:
+            raise ValueError("培训班不存在")
+
+        rows = self._read_excel_rows(file_bytes, self.SESSION_FIELD_ALIASES)
+        if not rows:
+            raise ValueError("Excel文件为空，或缺少可识别的表头")
+
+        existing_courses = self._load_training_course_payloads(training_id)
+        skipped_rows: List[Dict[str, Any]] = []
+        course_match_failures: List[Dict[str, Any]] = []
+        added_session_count = 0
+
+        for row_number, row in rows:
+            session_seed: Optional[Dict[str, Any]] = None
+            try:
+                session_seed = self._build_session_entry(row)
+                target_course = self._match_training_course(
+                    existing_courses,
+                    session_seed["course_name"],
+                    session_seed["instructor_name"],
+                    session_seed["course_type"],
+                )
+                if target_course is None:
+                    reason = "未找到匹配课程，请先导入课程"
+                    course_match_failures.append(self._build_course_match_failure(row_number, session_seed, reason))
+                    skipped_rows.append({"row": row_number, "reason": reason})
+                    continue
+                if self._schedule_exists(target_course.get("schedules") or [], session_seed["schedule"]):
+                    skipped_rows.append({"row": row_number, "reason": "课次已存在，已跳过"})
+                    continue
+
+                target_course.setdefault("schedules", []).append(session_seed["schedule"])
+                target_course["schedules"].sort(
+                    key=lambda item: (item.get("date") or "", item.get("time_range") or "", item.get("location") or "")
+                )
+                if not target_course.get("location") and session_seed["schedule"].get("location"):
+                    target_course["location"] = session_seed["schedule"].get("location")
+                target_course["hours"] = round(
+                    sum(float(item.get("hours", 0) or 0) for item in target_course.get("schedules") or []),
+                    2,
+                )
+                added_session_count += 1
+            except Exception as exc:
+                reason = str(exc)
+                if self._is_course_match_failure_reason(reason):
+                    if session_seed:
+                        course_match_failures.append(self._build_course_match_failure(row_number, session_seed, reason))
+                skipped_rows.append({"row": row_number, "reason": reason})
+
+        if added_session_count > 0:
+            self._persist_training_courses(training_id, existing_courses)
+            if commit:
+                self.db.commit()
+        elif commit:
+            self.db.rollback()
+
+        return {
+            "training_id": training_id,
+            "total_rows": len(rows),
+            "added_session_count": added_session_count,
+            "schedule_count": added_session_count,
+            "skipped_count": len(skipped_rows),
+            "skipped_rows": skipped_rows,
+            "course_match_failure_count": len(course_match_failures),
+            "course_match_failures": course_match_failures,
+            "course_match_failure_summary": self._summarize_course_match_failures(course_match_failures),
+            "mode": "append",
+        }
+
     def import_training_schedule(
         self,
         training_id: int,
@@ -267,79 +400,13 @@ class BatchImportService:
         replace_existing: bool = True,
         commit: bool = True,
     ) -> Dict[str, Any]:
-        training = self.db.query(Training).filter(Training.id == training_id).first()
-        if not training:
-            raise ValueError("培训班不存在")
-
-        rows = self._read_excel_rows(file_bytes, self.SCHEDULE_FIELD_ALIASES)
-        if not rows:
-            raise ValueError("Excel文件为空，或缺少可识别的表头")
-
-        grouped_courses: Dict[str, Dict[str, Any]] = {}
-        skipped_rows: List[Dict[str, Any]] = []
-        valid_row_count = 0
-
-        for row_number, row in rows:
-            try:
-                course_key, course_seed, schedule_item = self._build_schedule_entry(row)
-                bucket = grouped_courses.get(course_key)
-                if bucket is None:
-                    bucket = course_seed
-                    grouped_courses[course_key] = bucket
-                elif not bucket.get("location") and schedule_item.get("location"):
-                    bucket["location"] = schedule_item.get("location")
-
-                if not self._schedule_exists(bucket["schedules"], schedule_item):
-                    bucket["schedules"].append(schedule_item)
-                valid_row_count += 1
-            except Exception as exc:
-                skipped_rows.append({"row": row_number, "reason": str(exc)})
-
-        if not grouped_courses:
-            raise ValueError("课表导入失败：未解析到有效课程行")
-
-        for course in grouped_courses.values():
-            course["schedules"].sort(key=lambda x: (x["date"], x["time_range"]))
-            total_hours = sum(float(item.get("hours", 0) or 0) for item in course["schedules"])
-            course["hours"] = round(total_hours, 2)
-
-        imported_courses = self._attach_existing_course_metadata(training_id, list(grouped_courses.values()))
-        if not replace_existing:
-            imported_courses = self._merge_courses(training_id, imported_courses)
-
-        self.db.query(TrainingCourse).filter(
-            TrainingCourse.training_id == training_id
-        ).delete(synchronize_session=False)
-
-        for course in imported_courses:
-            self.db.add(
-                TrainingCourse(
-                    training_id=training_id,
-                    course_key=course.get("course_key"),
-                    name=course["name"],
-                    location=course.get("location"),
-                    instructor=course.get("instructor"),
-                    primary_instructor_id=course.get("primary_instructor_id"),
-                    assistant_instructor_ids=course.get("assistant_instructor_ids") or [],
-                    hours=course.get("hours") or 0,
-                    type=course.get("type") or "theory",
-                    schedules=course.get("schedules") or [],
-                )
-            )
-
-        if commit:
-            self.db.commit()
-
-        return {
-            "training_id": training_id,
-            "replace_existing": replace_existing,
-            "total_rows": len(rows),
-            "valid_rows": valid_row_count,
-            "course_count": len(imported_courses),
-            "schedule_count": sum(len(c.get("schedules") or []) for c in imported_courses),
-            "skipped_count": len(skipped_rows),
-            "skipped_rows": skipped_rows,
-        }
+        summary = self.import_training_sessions(
+            training_id,
+            file_bytes,
+            commit=commit,
+        )
+        summary["replace_existing"] = False
+        return summary
 
     # ===== Row Parsing =====
 
@@ -386,7 +453,7 @@ class BatchImportService:
                 row[key] = value
                 has_value = True
 
-            if has_value:
+            if has_value and not self._is_example_row(row):
                 results.append((row_index, row))
 
         return results
@@ -411,6 +478,14 @@ class BatchImportService:
             return value.strip()
         return value
 
+    @staticmethod
+    def _is_example_row(row: Dict[str, Any]) -> bool:
+        for value in row.values():
+            text = str(value or "").strip()
+            if text:
+                return text.startswith("【示例】") or text.startswith("__EXAMPLE__")
+        return False
+
     # ===== User Upsert =====
 
     def _upsert_user_from_row(
@@ -421,6 +496,7 @@ class BatchImportService:
     ) -> Dict[str, Any]:
         name = self._to_text(row.get("name"))
         username = self._to_text(row.get("username"))
+        password = self._to_text(row.get("password"))
         police_id = self._to_text(row.get("police_id"))
         phone = self._normalize_phone(row.get("phone"))
         email = self._to_text(row.get("email"))
@@ -477,7 +553,7 @@ class BatchImportService:
 
         new_user = User(
             username=final_username,
-            password_hash=auth_service.get_password_hash(self.DEFAULT_PASSWORD),
+            password_hash=auth_service.get_password_hash(password or self.DEFAULT_PASSWORD),
             nickname=nickname,
             gender=gender,
             phone=phone,
@@ -683,19 +759,34 @@ class BatchImportService:
             result.append(text)
         return result
 
-    # ===== Schedule Import Helpers =====
+    # ===== Course / Session Import Helpers =====
 
-    def _build_schedule_entry(
-        self,
-        row: Dict[str, Any],
-    ) -> Tuple[str, Dict[str, Any], Dict[str, Any]]:
+    def _build_course_entry(self, row: Dict[str, Any]) -> Dict[str, Any]:
         course_name = self._to_text(row.get("course_name"))
         if not course_name:
             raise ValueError("缺少课程名称")
 
         instructor_name = self._to_text(row.get("instructor_name"))
-        course_type = self._normalize_course_type(row.get("type"))
+        course_type = self._parse_optional_course_type(row.get("type"))
+        return {
+            "course_key": str(uuid.uuid4()),
+            "name": course_name,
+            "location": self._to_text(row.get("location")),
+            "instructor": instructor_name,
+            "primary_instructor_id": self._guess_instructor_id(instructor_name),
+            "assistant_instructor_ids": [],
+            "type": course_type,
+            "hours": 0,
+            "schedules": [],
+        }
 
+    def _build_session_entry(self, row: Dict[str, Any]) -> Dict[str, Any]:
+        course_name = self._to_text(row.get("course_name"))
+        if not course_name:
+            raise ValueError("缺少课程名称")
+
+        instructor_name = self._to_text(row.get("instructor_name"))
+        course_type = self._parse_optional_course_type(row.get("type"))
         parsed_date = self._parse_date(row.get("date"))
         if not parsed_date:
             raise ValueError("缺少有效上课日期")
@@ -706,36 +797,161 @@ class BatchImportService:
             range_start, range_end = self._parse_time_range(row.get("time_range"))
             time_start = time_start or range_start
             time_end = time_end or range_end
-
         if not time_start or not time_end:
-            raise ValueError("缺少有效上课时间（开始/结束）")
+            raise ValueError("缺少有效开始时间或结束时间")
 
         hours = self._parse_float(row.get("hours"))
         if hours is None or hours <= 0:
             hours = self._calc_hours(time_start, time_end)
         if hours <= 0:
-            raise ValueError("课时无效，请检查时间范围")
+            raise ValueError("课次时间无效，请检查开始和结束时间")
 
-        schedule_item = {
-            "session_id": str(uuid.uuid4()),
-            "date": parsed_date,
-            "time_range": f"{time_start}~{time_end}",
-            "hours": round(hours, 2),
-            "location": self._to_text(row.get("location")),
+        return {
+            "course_name": course_name,
+            "instructor_name": instructor_name,
+            "course_type": course_type,
+            "schedule": {
+                "session_id": str(uuid.uuid4()),
+                "date": parsed_date,
+                "time_range": f"{time_start}~{time_end}",
+                "hours": round(hours, 2),
+                "location": self._to_text(row.get("location")),
+            },
         }
-        course_seed = {
-            "course_key": None,
-            "name": course_name,
-            "location": self._to_text(row.get("location")),
-            "instructor": instructor_name,
-            "primary_instructor_id": self._guess_instructor_id(instructor_name),
-            "assistant_instructor_ids": [],
-            "type": course_type,
-            "hours": 0,
-            "schedules": [],
+
+    def _load_training_course_payloads(self, training_id: int) -> List[Dict[str, Any]]:
+        existing_courses = self.db.query(TrainingCourse).filter(
+            TrainingCourse.training_id == training_id
+        ).order_by(TrainingCourse.id.asc()).all()
+        return [self._build_course_payload(course) for course in existing_courses]
+
+    def _persist_training_courses(self, training_id: int, courses: List[Dict[str, Any]]) -> None:
+        existing_rows = self.db.query(TrainingCourse).filter(
+            TrainingCourse.training_id == training_id
+        ).order_by(TrainingCourse.id.asc()).all()
+        row_by_key: Dict[str, TrainingCourse] = {}
+        row_by_identity: Dict[str, TrainingCourse] = {}
+        payload_by_row_id: Dict[int, Dict[str, Any]] = {}
+
+        for row in existing_rows:
+            existing_payload = self._build_course_payload(row)
+            payload_by_row_id[row.id] = existing_payload
+            course_key = str(row.course_key or existing_payload.get("course_key") or "").strip()
+            if course_key:
+                row_by_key[course_key] = row
+            row_by_identity[self._course_identity(existing_payload)] = row
+
+        for course in courses:
+            raw_course_key = str(course.get("course_key") or "").strip()
+            existing_row = row_by_key.get(raw_course_key) if raw_course_key else None
+            if existing_row is None:
+                existing_row = row_by_identity.get(self._course_identity(course))
+
+            existing_payload = payload_by_row_id.get(existing_row.id) if existing_row else None
+            payload = self._merge_course_payload(course, existing_payload)
+            if existing_row is None:
+                existing_row = TrainingCourse(training_id=training_id)
+                self.db.add(existing_row)
+
+            self._apply_course_payload(existing_row, payload)
+            if existing_row.id is not None:
+                payload_by_row_id[existing_row.id] = payload
+            course_key = str(payload.get("course_key") or "").strip()
+            if course_key:
+                row_by_key[course_key] = existing_row
+            row_by_identity[self._course_identity(payload)] = existing_row
+
+    @staticmethod
+    def _apply_course_payload(course: TrainingCourse, payload: Dict[str, Any]) -> None:
+        course.course_key = payload.get("course_key")
+        course.name = payload["name"]
+        course.location = payload.get("location")
+        course.instructor = payload.get("instructor")
+        course.primary_instructor_id = payload.get("primary_instructor_id")
+        course.assistant_instructor_ids = payload.get("assistant_instructor_ids") or []
+        course.hours = payload.get("hours") or 0
+        course.type = payload.get("type") or "theory"
+        course.schedules = payload.get("schedules") or []
+
+    def _match_training_course(
+        self,
+        existing_courses: List[Dict[str, Any]],
+        course_name: str,
+        instructor_name: Optional[str],
+        course_type: Optional[str],
+    ) -> Optional[Dict[str, Any]]:
+        normalized_name = self._normalize_identity_text(course_name)
+        candidates = [
+            course for course in existing_courses
+            if self._normalize_identity_text(course.get("name")) == normalized_name
+        ]
+        if not candidates:
+            return None
+
+        if instructor_name:
+            normalized_instructor = self._normalize_identity_text(instructor_name)
+            instructor_candidates = [
+                course for course in candidates
+                if self._normalize_identity_text(course.get("instructor")) == normalized_instructor
+            ]
+            if not instructor_candidates:
+                raise ValueError("未找到匹配课程，请检查课程名称与教官是否一致")
+            candidates = instructor_candidates
+
+        if course_type:
+            type_candidates = [course for course in candidates if (course.get("type") or "theory") == course_type]
+            if not type_candidates:
+                raise ValueError("未找到匹配课程，请检查课程名称与课程类型是否一致")
+            candidates = type_candidates
+
+        if len(candidates) == 1:
+            return candidates[0]
+        if len(candidates) > 1:
+            raise ValueError("匹配到多门同名课程，请补充教官或课程类型")
+        return None
+
+    @staticmethod
+    def _normalize_identity_text(value: Any) -> str:
+        return str(value or "").strip().lower()
+
+    @staticmethod
+    def _is_course_match_failure_reason(reason: str) -> bool:
+        text = str(reason or "").strip()
+        return (
+            "未找到匹配课程" in text
+            or "课程名称与教官是否一致" in text
+            or "课程名称与课程类型是否一致" in text
+            or "匹配到多门同名课程" in text
+        )
+
+    def _build_course_match_failure(
+        self,
+        row_number: int,
+        session_seed: Dict[str, Any],
+        reason: str,
+    ) -> Dict[str, Any]:
+        return {
+            "row": row_number,
+            "course_name": session_seed.get("course_name") or "",
+            "instructor_name": session_seed.get("instructor_name") or "",
+            "course_type": self._format_course_type_label(session_seed.get("course_type")),
+            "reason": reason,
         }
-        key = f"{course_name}|{instructor_name or ''}|{course_type}"
-        return key, course_seed, schedule_item
+
+    def _summarize_course_match_failures(self, failures: List[Dict[str, Any]]) -> Optional[str]:
+        if not failures:
+            return None
+        preview = []
+        for item in failures[:3]:
+            course_name = item.get("course_name") or "未填写课程名称"
+            instructor_name = item.get("instructor_name") or "未填写教官"
+            course_type = item.get("course_type") or "未填写课程类型"
+            preview.append(
+                f"第 {item.get('row') or '-'} 行：课程={course_name}，教官={instructor_name}，类型={course_type}"
+            )
+        remaining = len(failures) - len(preview)
+        suffix = f"；其余 {remaining} 行请继续核对课程、教官和课程类型" if remaining > 0 else ""
+        return f"有 {len(failures)} 行课次未匹配到课程并已跳过：{'；'.join(preview)}{suffix}"
 
     @staticmethod
     def _schedule_exists(existing: List[Dict[str, Any]], target: Dict[str, Any]) -> bool:
@@ -747,58 +963,6 @@ class BatchImportService:
             ):
                 return True
         return False
-
-    def _merge_courses(self, training_id: int, imported_courses: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        existing_courses = self.db.query(TrainingCourse).filter(
-            TrainingCourse.training_id == training_id
-        ).all()
-
-        merged: Dict[str, Dict[str, Any]] = {}
-
-        for course in existing_courses:
-            payload = self._build_course_payload(course)
-            merged[self._course_identity(payload)] = payload
-
-        for course in imported_courses:
-            key = self._course_identity(course)
-            if key not in merged:
-                merged[key] = {
-                    "course_key": course.get("course_key") or str(uuid.uuid4()),
-                    "name": course["name"],
-                    "instructor": course.get("instructor"),
-                    "primary_instructor_id": course.get("primary_instructor_id"),
-                    "assistant_instructor_ids": course.get("assistant_instructor_ids") or [],
-                    "type": course.get("type") or "theory",
-                    "hours": 0,
-                    "schedules": [],
-                }
-
-            target = merged[key]
-            for schedule in course.get("schedules") or []:
-                if not self._schedule_exists(target["schedules"], schedule):
-                    target["schedules"].append(self._normalize_schedule_payload(schedule))
-
-            target["schedules"].sort(key=lambda x: (x.get("date", ""), x.get("time_range", ""), x.get("location") or ""))
-            target["hours"] = round(
-                sum(float(item.get("hours", 0) or 0) for item in target["schedules"]),
-                2,
-            )
-
-        return list(merged.values())
-
-    def _attach_existing_course_metadata(
-        self,
-        training_id: int,
-        imported_courses: List[Dict[str, Any]],
-    ) -> List[Dict[str, Any]]:
-        existing_courses = self.db.query(TrainingCourse).filter(
-            TrainingCourse.training_id == training_id
-        ).all()
-        existing_map: Dict[str, Dict[str, Any]] = {}
-        for course in existing_courses:
-            payload = self._build_course_payload(course)
-            existing_map[self._course_identity(payload)] = payload
-        return [self._merge_course_payload(course, existing_map.get(self._course_identity(course))) for course in imported_courses]
 
     def _build_course_payload(self, course: TrainingCourse) -> Dict[str, Any]:
         return {
@@ -884,7 +1048,11 @@ class BatchImportService:
 
     @staticmethod
     def _course_identity(course: Dict[str, Any]) -> str:
-        return f"{course.get('name') or ''}|{course.get('instructor') or ''}|{course.get('type') or 'theory'}"
+        return (
+            f"{str(course.get('name') or '').strip().lower()}|"
+            f"{str(course.get('instructor') or '').strip().lower()}|"
+            f"{str(course.get('type') or 'theory').strip().lower()}"
+        )
 
     @staticmethod
     def _schedule_identity(schedule: Dict[str, Any]) -> str:
@@ -908,6 +1076,20 @@ class BatchImportService:
         text = str(value or "").strip().lower()
         practice_values = {"实践", "实操", "技能", "practice", "skill"}
         return "practice" if text in practice_values else "theory"
+
+    def _parse_optional_course_type(self, value: Any) -> Optional[str]:
+        text = str(value or "").strip()
+        if not text:
+            return None
+        return self._normalize_course_type(text)
+
+    @staticmethod
+    def _format_course_type_label(value: Optional[str]) -> str:
+        if value == "practice":
+            return "技能课"
+        if value == "theory":
+            return "理论课"
+        return ""
 
     @staticmethod
     def _parse_date(value: Any) -> Optional[str]:
