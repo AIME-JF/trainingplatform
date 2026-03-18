@@ -1998,6 +1998,7 @@ class TrainingService:
 
         step_order = ["draft", "published", "locked", "running", "completed"]
         current_index = step_order.index(current)
+        display_index = current_index + 1 if current_index < step_order.index("running") else current_index
         steps = []
         labels = {
             "draft": "草稿",
@@ -2008,9 +2009,9 @@ class TrainingService:
         }
         for index, key in enumerate(step_order):
             status = "wait"
-            if index < current_index:
+            if index < display_index:
                 status = "finish"
-            elif index == current_index:
+            elif index == display_index:
                 status = "process"
             steps.append(TrainingWorkflowStepResponse(
                 key=key,

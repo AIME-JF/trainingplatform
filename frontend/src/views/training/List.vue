@@ -126,175 +126,223 @@
 
     <a-modal
       v-model:open="showCreateModal"
-      :title="editingTraining ? '编辑培训班' : '新建培训班'"
-      width="760px"
-      @ok="handleSubmitTraining"
+      width="860px"
+      :footer="null"
       @cancel="resetForm"
-      ok-text="确认保存"
-      cancel-text="取消"
     >
-      <a-form :model="trainingForm" layout="vertical" style="margin-top:16px">
-        <a-row :gutter="16">
-          <a-col :span="24">
-            <a-form-item label="培训班名称" required>
-              <a-input v-model:value="trainingForm.name" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="8">
-            <a-form-item label="培训类型" required>
-              <a-select v-model:value="trainingForm.type">
-                <a-select-option value="basic">基础训练</a-select-option>
-                <a-select-option value="special">专项训练</a-select-option>
-                <a-select-option value="promotion">晋升培训</a-select-option>
-                <a-select-option value="online">线上培训</a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-          <a-col :span="8">
-            <a-form-item label="班级容量" required>
-              <a-input-number v-model:value="trainingForm.capacity" :min="5" :max="500" style="width:100%" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="8">
-            <a-form-item label="班次编号">
-              <a-input v-model:value="trainingForm.classCode" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="开始日期" required>
-              <a-date-picker v-model:value="trainingFormDates[0]" style="width:100%" format="YYYY-MM-DD" @change="(_, s) => trainingForm.startDate = s" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="结束日期" required>
-              <a-date-picker v-model:value="trainingFormDates[1]" style="width:100%" format="YYYY-MM-DD" @change="(_, s) => trainingForm.endDate = s" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="24">
-            <a-form-item label="报名窗口">
-              <a-range-picker
-                v-model:value="enrollmentWindow"
-                show-time
-                format="YYYY-MM-DD HH:mm:ss"
-                value-format="YYYY-MM-DD HH:mm:ss"
-                style="width:100%"
-                @change="handleWindowChange"
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="警种">
-              <a-select v-model:value="trainingForm.policeTypeId" allow-clear placeholder="可选，仅用于数据域管理">
-                <a-select-option v-for="item in policeTypeOptions" :key="item.id" :value="item.id">
-                  {{ item.name }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="部门">
-              <a-select v-model:value="trainingForm.departmentId" allow-clear placeholder="可选，可被培训基地自动带出">
-                <a-select-option v-for="item in departmentOptions" :key="item.id" :value="item.id">
-                  {{ item.name }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-          <a-col :span="24">
-            <a-form-item label="地点来源">
-              <a-space>
-                <a-checkbox :checked="locationSourceMode === 'base'" @change="() => setLocationSourceMode('base')">
-                  培训基地
-                </a-checkbox>
-                <a-checkbox :checked="locationSourceMode === 'manual'" @change="() => setLocationSourceMode('manual')">
-                  手动输入
-                </a-checkbox>
-              </a-space>
-            </a-form-item>
-          </a-col>
-          <a-col :span="24" v-if="locationSourceMode === 'base'">
-            <a-form-item label="培训基地" required>
-              <a-select
-                v-model:value="trainingForm.trainingBaseId"
-                allow-clear
-                show-search
-                option-filter-prop="label"
-                placeholder="选择培训基地"
-                @change="onTrainingBaseChange"
-              >
-                <a-select-option
-                  v-for="item in trainingBaseOptions"
-                  :key="item.id"
-                  :value="item.id"
-                  :label="`${item.name} ${item.location}`"
-                >
-                  {{ item.name }} / {{ item.location }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-          <a-col :span="24">
-            <a-form-item :label="locationSourceMode === 'base' ? '培训地点（自动带出）' : '培训地点'" required>
-              <a-input v-model:value="trainingForm.location" :disabled="locationSourceMode === 'base'" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="主管教官">
-              <a-select
-                v-model:value="trainingForm.instructorId"
-                show-search
-                option-filter-prop="label"
-                @change="onInstructorChange"
-              >
-                <a-select-option
-                  v-for="inst in instructorList"
-                  :key="inst.userId"
-                  :value="inst.userId"
-                  :label="inst.name"
-                >
-                  {{ inst.name }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="准入考试">
-              <a-select v-model:value="trainingForm.admissionExamId" allow-clear placeholder="可选，报名需先通过">
-                <a-select-option v-for="exam in admissionExamOptions" :key="exam.id" :value="exam.id">
-                  {{ exam.title }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="报名方式">
-              <a-radio-group v-model:value="trainingForm.enrollmentRequiresApproval">
-                <a-radio :value="true">申请审核</a-radio>
-                <a-radio :value="false">直接通过</a-radio>
-              </a-radio-group>
-            </a-form-item>
-          </a-col>
-          <a-col :span="24">
-            <a-form-item label="培训简介">
-              <a-textarea v-model:value="trainingForm.description" :rows="3" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="24" v-if="!editingTraining">
-            <a-form-item label="学员Excel导入（可选）">
-              <a-space wrap>
-                <a-upload :before-upload="handleStudentImportBeforeUpload" :show-upload-list="false" accept=".xlsx">
-                  <a-button>选择学员名单文件</a-button>
-                </a-upload>
-                <a-button @click="handleDownloadStudentImportTemplate">
-                  <template #icon><DownloadOutlined /></template>下载导入模板
-                </a-button>
-              </a-space>
-              <div class="import-tip">角色固定为学员；未填写密码时默认初始密码为 Police@123456。</div>
-              <div v-if="studentImportFileName" class="import-tip">已选择：{{ studentImportFileName }}</div>
-            </a-form-item>
-          </a-col>
-        </a-row>
-      </a-form>
+      <div class="create-training-modal">
+        <div class="wizard-head">
+          <div>
+            <div class="wizard-kicker">{{ editingTraining ? '编辑模式' : '快速建班' }}</div>
+            <div class="wizard-title">{{ editingTraining ? '先核对基础信息，再补充招生和扩展配置' : '按 3 步完成建班，先填关键项，扩展项后置' }}</div>
+          </div>
+          <div class="wizard-badge">第 {{ createWizardStep + 1 }}/{{ createWizardItems.length }} 步</div>
+        </div>
+
+        <a-steps :current="createWizardStep" :items="createWizardItems" size="small" class="wizard-steps" />
+
+        <a-form :model="trainingForm" layout="vertical" class="wizard-form">
+          <div v-show="createWizardStep === 0">
+            <div class="wizard-section-title">先完成班级骨架，后续再补充细节</div>
+            <a-row :gutter="16">
+              <a-col :span="24">
+                <a-form-item label="培训班名称" required>
+                  <a-input v-model:value="trainingForm.name" placeholder="例如：2026 年春季刑侦骨干培训班" />
+                </a-form-item>
+              </a-col>
+              <a-col :span="8">
+                <a-form-item label="培训类型" required>
+                  <a-select v-model:value="trainingForm.type">
+                    <a-select-option value="basic">基础训练</a-select-option>
+                    <a-select-option value="special">专项训练</a-select-option>
+                    <a-select-option value="promotion">晋升培训</a-select-option>
+                    <a-select-option value="online">线上培训</a-select-option>
+                  </a-select>
+                </a-form-item>
+              </a-col>
+              <a-col :span="8">
+                <a-form-item label="班级容量" required>
+                  <a-input-number v-model:value="trainingForm.capacity" :min="5" :max="500" style="width:100%" />
+                </a-form-item>
+              </a-col>
+              <a-col :span="8">
+                <a-form-item label="班次编号">
+                  <a-input v-model:value="trainingForm.classCode" placeholder="可选" />
+                </a-form-item>
+              </a-col>
+              <a-col :span="12">
+                <a-form-item label="开始日期" required>
+                  <a-date-picker v-model:value="trainingFormDates[0]" style="width:100%" format="YYYY-MM-DD" @change="(_, s) => trainingForm.startDate = s" />
+                </a-form-item>
+              </a-col>
+              <a-col :span="12">
+                <a-form-item label="结束日期" required>
+                  <a-date-picker v-model:value="trainingFormDates[1]" style="width:100%" format="YYYY-MM-DD" @change="(_, s) => trainingForm.endDate = s" />
+                </a-form-item>
+              </a-col>
+              <a-col :span="12">
+                <a-form-item label="主管教官">
+                  <a-select
+                    v-model:value="trainingForm.instructorId"
+                    show-search
+                    option-filter-prop="label"
+                    placeholder="建议先指定班主任"
+                    @change="onInstructorChange"
+                  >
+                    <a-select-option
+                      v-for="inst in instructorList"
+                      :key="inst.userId"
+                      :value="inst.userId"
+                      :label="inst.name"
+                    >
+                      {{ inst.name }}
+                    </a-select-option>
+                  </a-select>
+                </a-form-item>
+              </a-col>
+              <a-col :span="12">
+                <a-form-item label="地点来源">
+                  <a-space>
+                    <a-checkbox :checked="locationSourceMode === 'base'" @change="() => setLocationSourceMode('base')">
+                      培训基地
+                    </a-checkbox>
+                    <a-checkbox :checked="locationSourceMode === 'manual'" @change="() => setLocationSourceMode('manual')">
+                      手动输入
+                    </a-checkbox>
+                  </a-space>
+                </a-form-item>
+              </a-col>
+              <a-col :span="24" v-if="locationSourceMode === 'base'">
+                <a-form-item label="培训基地" required>
+                  <a-select
+                    v-model:value="trainingForm.trainingBaseId"
+                    allow-clear
+                    show-search
+                    option-filter-prop="label"
+                    placeholder="选择培训基地"
+                    @change="onTrainingBaseChange"
+                  >
+                    <a-select-option
+                      v-for="item in trainingBaseOptions"
+                      :key="item.id"
+                      :value="item.id"
+                      :label="`${item.name} ${item.location}`"
+                    >
+                      {{ item.name }} / {{ item.location }}
+                    </a-select-option>
+                  </a-select>
+                </a-form-item>
+              </a-col>
+              <a-col :span="24">
+                <a-form-item :label="locationSourceMode === 'base' ? '培训地点（自动带出）' : '培训地点'" required>
+                  <a-input v-model:value="trainingForm.location" :disabled="locationSourceMode === 'base'" placeholder="请输入培训地点" />
+                </a-form-item>
+              </a-col>
+            </a-row>
+          </div>
+
+          <div v-show="createWizardStep === 1">
+            <div class="wizard-section-title">配置招生规则，这一步决定学员如何进入培训班</div>
+            <a-row :gutter="16">
+              <a-col :span="12">
+                <a-form-item label="报名方式">
+                  <a-radio-group v-model:value="trainingForm.enrollmentRequiresApproval">
+                    <a-radio :value="true">申请审核</a-radio>
+                    <a-radio :value="false">直接通过</a-radio>
+                  </a-radio-group>
+                </a-form-item>
+              </a-col>
+              <a-col :span="12">
+                <a-form-item label="准入考试">
+                  <a-select v-model:value="trainingForm.admissionExamId" allow-clear placeholder="可选，报名需先通过">
+                    <a-select-option v-for="exam in admissionExamOptions" :key="exam.id" :value="exam.id">
+                      {{ exam.title }}
+                    </a-select-option>
+                  </a-select>
+                </a-form-item>
+              </a-col>
+              <a-col :span="24">
+                <a-form-item label="报名窗口">
+                  <a-range-picker
+                    v-model:value="enrollmentWindow"
+                    show-time
+                    format="YYYY-MM-DD HH:mm:ss"
+                    value-format="YYYY-MM-DD HH:mm:ss"
+                    style="width:100%"
+                    @change="handleWindowChange"
+                  />
+                </a-form-item>
+              </a-col>
+              <a-col :span="24">
+                <a-alert
+                  type="info"
+                  show-icon
+                  message="这些配置后续仍可在培训班详情里修改，不需要一次性想全。"
+                />
+              </a-col>
+            </a-row>
+          </div>
+
+          <div v-show="createWizardStep === 2">
+            <div class="wizard-section-title">补充扩展信息，创建完成后即可去详情页继续排课和导入学员</div>
+            <a-row :gutter="16">
+              <a-col :span="12">
+                <a-form-item label="警种">
+                  <a-select v-model:value="trainingForm.policeTypeId" allow-clear placeholder="可选，仅用于数据域管理">
+                    <a-select-option v-for="item in policeTypeOptions" :key="item.id" :value="item.id">
+                      {{ item.name }}
+                    </a-select-option>
+                  </a-select>
+                </a-form-item>
+              </a-col>
+              <a-col :span="12">
+                <a-form-item label="部门">
+                  <a-select v-model:value="trainingForm.departmentId" allow-clear placeholder="可选，可被培训基地自动带出">
+                    <a-select-option v-for="item in departmentOptions" :key="item.id" :value="item.id">
+                      {{ item.name }}
+                    </a-select-option>
+                  </a-select>
+                </a-form-item>
+              </a-col>
+              <a-col :span="24">
+                <a-form-item label="培训简介">
+                  <a-textarea v-model:value="trainingForm.description" :rows="4" placeholder="说明培训目标、适用对象和组织安排" />
+                </a-form-item>
+              </a-col>
+              <a-col :span="24" v-if="!editingTraining">
+                <a-form-item label="学员 Excel 导入（可选）">
+                  <div class="wizard-upload-box">
+                    <a-space wrap>
+                      <a-upload :before-upload="handleStudentImportBeforeUpload" :show-upload-list="false" accept=".xlsx">
+                        <a-button>选择学员名单文件</a-button>
+                      </a-upload>
+                      <a-button @click="handleDownloadStudentImportTemplate">
+                        <template #icon><DownloadOutlined /></template>下载导入模板
+                      </a-button>
+                    </a-space>
+                    <div class="import-tip">角色固定为学员；未填写密码时默认初始密码为 Police@123456。</div>
+                    <div v-if="studentImportFileName" class="import-tip">已选择：{{ studentImportFileName }}</div>
+                  </div>
+                </a-form-item>
+              </a-col>
+            </a-row>
+          </div>
+        </a-form>
+
+        <div class="wizard-footer">
+          <div class="wizard-footer-tip">{{ createWizardHelp }}</div>
+          <a-space>
+            <a-button @click="resetForm">取消</a-button>
+            <a-button v-if="createWizardStep > 0" @click="createWizardStep -= 1">上一步</a-button>
+            <a-button v-if="createWizardStep < createWizardItems.length - 1" type="primary" @click="goNextCreateStep">
+              下一步
+            </a-button>
+            <a-button v-else type="primary" @click="handleSubmitTraining">
+              {{ editingTraining ? '保存培训班' : '创建培训班' }}
+            </a-button>
+          </a-space>
+        </div>
+      </div>
     </a-modal>
   </div>
 </template>
@@ -372,7 +420,22 @@ const studentImportFileName = ref('')
 const trainingFormDates = ref([null, null])
 const enrollmentWindow = ref([])
 const locationSourceMode = ref('manual')
+const createWizardStep = ref(0)
 const canCreateTraining = computed(() => authStore.hasPermission('CREATE_TRAINING'))
+const createWizardItems = [
+  { title: '基础信息', description: '班级名称、时间、地点' },
+  { title: '招生设置', description: '报名方式、准入考试' },
+  { title: '扩展配置', description: '数据域、简介、学员导入' },
+]
+const createWizardHelp = computed(() => {
+  if (createWizardStep.value === 0) {
+    return '先把培训班名称、时间和地点定下来，先能创建，再补细节。'
+  }
+  if (createWizardStep.value === 1) {
+    return '这一步决定学员如何进入培训班，没想好也可以先留空。'
+  }
+  return '创建完成后，建议立即进入详情页继续导入学员、添加课程和安排课次。'
+})
 
 const trainingForm = reactive({
   name: '',
@@ -532,12 +595,14 @@ function resetForm() {
   editingTraining.value = null
   studentImportFile.value = null
   studentImportFileName.value = ''
+  createWizardStep.value = 0
   showCreateModal.value = false
 }
 
 function openCreateModal() {
   if (!canCreateTraining.value) return
   resetForm()
+  createWizardStep.value = 0
   showCreateModal.value = true
   ensureInstructorOptionsLoaded(true)
 }
@@ -572,8 +637,34 @@ function openEditModal(training) {
     training.enrollmentStartAt || null,
     training.enrollmentEndAt || null,
   ].filter(Boolean)
+  createWizardStep.value = 0
   showCreateModal.value = true
   ensureInstructorOptionsLoaded(true)
+}
+
+function validateCreateStep(step) {
+  if (step !== 0) {
+    return true
+  }
+  const hasLocation = locationSourceMode.value === 'base'
+    ? Boolean(trainingForm.trainingBaseId && trainingForm.location)
+    : Boolean(trainingForm.location)
+  if (!trainingForm.name || !trainingForm.startDate || !trainingForm.endDate || !hasLocation) {
+    message.warning('请先完成基础信息中的必填项')
+    return false
+  }
+  if (dayjs(trainingForm.endDate).isBefore(dayjs(trainingForm.startDate), 'day')) {
+    message.warning('结束日期不能早于开始日期')
+    return false
+  }
+  return true
+}
+
+function goNextCreateStep() {
+  if (!validateCreateStep(createWizardStep.value)) {
+    return
+  }
+  createWizardStep.value += 1
 }
 
 async function fetchTrainings() {
@@ -648,6 +739,7 @@ async function fetchTrainingBaseOptions() {
 
 async function handleSubmitTraining() {
   if (!canCreateTraining.value) return
+  if (!validateCreateStep(0)) return
   const hasLocation = locationSourceMode.value === 'base'
     ? Boolean(trainingForm.trainingBaseId && trainingForm.location)
     : Boolean(trainingForm.location)
@@ -810,6 +902,17 @@ onMounted(() => {
 .extra-info { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #777; margin-top: 12px; }
 .card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .import-tip { margin-top: 8px; color: #666; font-size: 12px; }
+.create-training-modal { display: flex; flex-direction: column; gap: 18px; }
+.wizard-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.wizard-kicker { font-size: 12px; font-weight: 600; color: #1677ff; letter-spacing: 0.08em; text-transform: uppercase; }
+.wizard-title { margin-top: 6px; font-size: 18px; font-weight: 700; color: #0f172a; }
+.wizard-badge { padding: 6px 12px; border-radius: 999px; background: #eff6ff; color: #1d4ed8; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.wizard-steps { margin-bottom: 4px; }
+.wizard-form { margin-top: 4px; }
+.wizard-section-title { margin-bottom: 16px; font-size: 14px; font-weight: 600; color: #334155; }
+.wizard-upload-box { padding: 12px 14px; border: 1px dashed #cbd5e1; border-radius: 10px; background: #f8fafc; }
+.wizard-footer { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding-top: 8px; border-top: 1px solid #f1f5f9; }
+.wizard-footer-tip { color: #64748b; font-size: 12px; line-height: 1.6; }
 
 @media (max-width: 1200px) {
   .training-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -819,5 +922,8 @@ onMounted(() => {
   .training-cards { grid-template-columns: 1fr; }
   .card-grid { grid-template-columns: 1fr; }
   .page-header { flex-direction: column; }
+  .wizard-head,
+  .wizard-footer { flex-direction: column; align-items: stretch; }
+  .wizard-badge { align-self: flex-start; }
 }
 </style>
