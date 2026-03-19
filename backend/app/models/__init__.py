@@ -20,6 +20,7 @@ from .exam import (
     Exam, ExamQuestion, ExamRecord,
 )
 from .ai_task import AITask
+from .personal_training_plan_snapshot import PersonalTrainingPlanSnapshot
 from .certificate import Certificate
 from .media import MediaFile
 from .notice import Notice
@@ -58,6 +59,7 @@ __all__ = [
     "AdmissionExam", "AdmissionExamRecord",
     "Exam", "ExamQuestion", "ExamRecord",
     "AITask",
+    "PersonalTrainingPlanSnapshot",
     # 证书
     "Certificate",
     # 文件

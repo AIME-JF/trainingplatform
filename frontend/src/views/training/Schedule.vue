@@ -25,6 +25,9 @@
         <a-button v-if="canImportSchedule" @click="showScheduleImportModal = true">
           导入课次
         </a-button>
+        <a-button v-if="selectedTrainingId && canImportSchedule" type="primary" ghost @click="openAiSchedule">
+          AI建议排课
+        </a-button>
         <a-button @click="prevWeek" :disabled="currentWeek <= 0">‹</a-button>
         <span class="week-label">第 {{ currentWeek + 1 }} 周（{{ weekRange }}）</span>
         <a-button @click="nextWeek">›</a-button>
@@ -194,7 +197,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { MOCK_WEEK_SCHEDULE } from '@/mock/schedules'
 import {
   getTrainings,
@@ -213,6 +216,7 @@ import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 
 const importingInstructor = ref(false)
@@ -293,6 +297,13 @@ async function loadTrainingDetail(id) {
 async function onTrainingChange() {
   currentWeek.value = 0
   await loadTrainingDetail(selectedTrainingId.value)
+}
+
+function openAiSchedule() {
+  if (!selectedTrainingId.value) {
+    return
+  }
+  router.push({ name: 'AiScheduleTask', params: { id: selectedTrainingId.value } })
 }
 
 async function refreshCurrentTraining() {

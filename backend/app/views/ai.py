@@ -10,6 +10,9 @@ from app.controllers import AIController
 from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.schemas import (
+    AIPersonalTrainingTaskCreateRequest,
+    AIPersonalTrainingTaskDetailResponse,
+    AIPersonalTrainingTaskUpdateRequest,
     AIPaperAssemblyTaskCreateRequest,
     AIPaperAssemblyTaskDetailResponse,
     AIPaperGenerationTaskCreateRequest,
@@ -18,6 +21,9 @@ from app.schemas import (
     AIQuestionTaskCreateRequest,
     AIQuestionTaskDetailResponse,
     AIQuestionTaskUpdateRequest,
+    AIScheduleTaskCreateRequest,
+    AIScheduleTaskDetailResponse,
+    AIScheduleTaskUpdateRequest,
     AITaskSummaryResponse,
     PaginatedResponse,
     StandardResponse,
@@ -279,4 +285,160 @@ def confirm_paper_generation_task(
     _require_admin_or_instructor(db, current_user.user_id)
     controller = AIController(db)
     result = controller.confirm_paper_generation_task(task_id, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.get(
+    "/schedule-tasks",
+    response_model=StandardResponse[PaginatedResponse[AITaskSummaryResponse]],
+    summary="AI 排课任务列表",
+)
+def list_schedule_tasks(
+    page: int = Query(1, ge=1),
+    size: int = Query(10, ge=-1),
+    status_value: Optional[str] = Query(None, alias="status"),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = AIController(db)
+    data = controller.list_schedule_tasks(page, size, status_value, current_user.user_id)
+    return StandardResponse(data=data)
+
+
+@router.post(
+    "/schedule-tasks",
+    response_model=StandardResponse[AIScheduleTaskDetailResponse],
+    summary="创建 AI 排课任务",
+)
+def create_schedule_task(
+    data: AIScheduleTaskCreateRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = AIController(db)
+    result = controller.create_schedule_task(data, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.get(
+    "/schedule-tasks/{task_id}",
+    response_model=StandardResponse[AIScheduleTaskDetailResponse],
+    summary="AI 排课任务详情",
+)
+def get_schedule_task_detail(
+    task_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = AIController(db)
+    data = controller.get_schedule_task_detail(task_id, current_user.user_id)
+    return StandardResponse(data=data)
+
+
+@router.put(
+    "/schedule-tasks/{task_id}/result",
+    response_model=StandardResponse[AIScheduleTaskDetailResponse],
+    summary="更新 AI 排课任务结果",
+)
+def update_schedule_task(
+    task_id: int,
+    data: AIScheduleTaskUpdateRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = AIController(db)
+    result = controller.update_schedule_task(task_id, data, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.post(
+    "/schedule-tasks/{task_id}/confirm",
+    response_model=StandardResponse[AIScheduleTaskDetailResponse],
+    summary="确认 AI 排课任务",
+)
+def confirm_schedule_task(
+    task_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = AIController(db)
+    result = controller.confirm_schedule_task(task_id, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.get(
+    "/personal-training-tasks",
+    response_model=StandardResponse[PaginatedResponse[AITaskSummaryResponse]],
+    summary="AI 个训任务列表",
+)
+def list_personal_training_tasks(
+    page: int = Query(1, ge=1),
+    size: int = Query(10, ge=-1),
+    status_value: Optional[str] = Query(None, alias="status"),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = AIController(db)
+    data = controller.list_personal_training_tasks(page, size, status_value, current_user.user_id)
+    return StandardResponse(data=data)
+
+
+@router.post(
+    "/personal-training-tasks",
+    response_model=StandardResponse[AIPersonalTrainingTaskDetailResponse],
+    summary="创建 AI 个训任务",
+)
+def create_personal_training_task(
+    data: AIPersonalTrainingTaskCreateRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = AIController(db)
+    result = controller.create_personal_training_task(data, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.get(
+    "/personal-training-tasks/{task_id}",
+    response_model=StandardResponse[AIPersonalTrainingTaskDetailResponse],
+    summary="AI 个训任务详情",
+)
+def get_personal_training_task_detail(
+    task_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = AIController(db)
+    data = controller.get_personal_training_task_detail(task_id, current_user.user_id)
+    return StandardResponse(data=data)
+
+
+@router.put(
+    "/personal-training-tasks/{task_id}/result",
+    response_model=StandardResponse[AIPersonalTrainingTaskDetailResponse],
+    summary="更新 AI 个训任务结果",
+)
+def update_personal_training_task(
+    task_id: int,
+    data: AIPersonalTrainingTaskUpdateRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = AIController(db)
+    result = controller.update_personal_training_task(task_id, data, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.post(
+    "/personal-training-tasks/{task_id}/confirm",
+    response_model=StandardResponse[AIPersonalTrainingTaskDetailResponse],
+    summary="确认 AI 个训任务",
+)
+def confirm_personal_training_task(
+    task_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = AIController(db)
+    result = controller.confirm_personal_training_task(task_id, current_user.user_id)
     return StandardResponse(data=result)

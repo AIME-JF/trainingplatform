@@ -1,0 +1,369 @@
+"""
+训练域 AI 任务服务
+"""
+from datetime import datetime
+from typing import List, Optional
+
+from sqlalchemy.orm import Session
+
+from app.models import AITask, Training, User
+from app.schemas import (
+    AIPersonalTrainingPlan,
+    AIPersonalTrainingPortrait,
+    AIPersonalTrainingTaskCreateRequest,
+    AIPersonalTrainingTaskDetailResponse,
+    AIPersonalTrainingTaskUpdateRequest,
+    AIScheduleConflictItem,
+    AISchedulePlan,
+    AIScheduleTaskCreateRequest,
+    AIScheduleTaskDetailResponse,
+    AIScheduleTaskUpdateRequest,
+    AITaskSummaryResponse,
+    PaginatedResponse,
+)
+from app.services.personal_training_plan_agent import PersonalTrainingPlanAgentService
+from app.services.schedule_agent import ScheduleAgentService
+from app.utils.authz import can_manage_training
+
+
+class TrainingAIService:
+    """排课与个训任务管理服务"""
+
+    SCHEDULE_TASK_TYPE = "schedule_generation"
+    PERSONAL_TRAINING_TASK_TYPE = "personal_training_plan_generation"
+
+    def __init__(self, db: Session):
+        self.db = db
+        self.schedule_agent = ScheduleAgentService(db)
+        self.personal_plan_agent = PersonalTrainingPlanAgentService(db)
+
+    def list_schedule_tasks(
+        self,
+        page: int,
+        size: int,
+        status: Optional[str],
+        current_user_id: int,
+    ) -> PaginatedResponse[AITaskSummaryResponse]:
+        return self._list_tasks(self.SCHEDULE_TASK_TYPE, page, size, status, current_user_id)
+
+    def list_personal_training_tasks(
+        self,
+        page: int,
+        size: int,
+        status: Optional[str],
+        current_user_id: int,
+    ) -> PaginatedResponse[AITaskSummaryResponse]:
+        return self._list_tasks(self.PERSONAL_TRAINING_TASK_TYPE, page, size, status, current_user_id, allow_target_user=True)
+
+    def get_schedule_task_detail(self, task_id: int, current_user_id: int) -> AIScheduleTaskDetailResponse:
+        task = self._get_task_or_raise(task_id, self.SCHEDULE_TASK_TYPE, current_user_id)
+        return self._to_schedule_task_detail(task)
+
+    def get_personal_training_task_detail(self, task_id: int, current_user_id: int) -> AIPersonalTrainingTaskDetailResponse:
+        task = self._get_task_or_raise(task_id, self.PERSONAL_TRAINING_TASK_TYPE, current_user_id, allow_target_user=True)
+        return self._to_personal_training_task_detail(task)
+
+    def create_schedule_task(
+        self,
+        data: AIScheduleTaskCreateRequest,
+        current_user_id: int,
+    ) -> AIScheduleTaskDetailResponse:
+        training = self.schedule_agent._load_training_or_raise(data.training_id)  # noqa: SLF001
+        self.schedule_agent._ensure_manage_permission(training, current_user_id)  # noqa: SLF001
+        task = self._create_task_entity(
+            data.task_name,
+            self.SCHEDULE_TASK_TYPE,
+            self._build_schedule_request_payload(data),
+            current_user_id,
+        )
+        try:
+            task.result_payload = self.schedule_agent.build_task_result(data, current_user_id)
+            self._mark_task_completed(task)
+        except Exception as exc:
+            self._mark_task_failed(task, str(exc))
+            raise
+        finally:
+            self.db.commit()
+        return self.get_schedule_task_detail(task.id, current_user_id)
+
+    def create_personal_training_task(
+        self,
+        data: AIPersonalTrainingTaskCreateRequest,
+        current_user_id: int,
+    ) -> AIPersonalTrainingTaskDetailResponse:
+        training = self.personal_plan_agent.portrait_aggregator._load_training_or_raise(data.training_id)  # noqa: SLF001
+        self.personal_plan_agent.portrait_aggregator._load_user_or_raise(data.target_user_id)  # noqa: SLF001
+        self.personal_plan_agent.portrait_aggregator._ensure_access(training, data.target_user_id, current_user_id)  # noqa: SLF001
+        task = self._create_task_entity(
+            data.task_name,
+            self.PERSONAL_TRAINING_TASK_TYPE,
+            self._build_personal_request_payload(data),
+            current_user_id,
+        )
+        try:
+            task.result_payload = self.personal_plan_agent.build_task_result(data, current_user_id)
+            self._mark_task_completed(task)
+        except Exception as exc:
+            self._mark_task_failed(task, str(exc))
+            raise
+        finally:
+            self.db.commit()
+        return self.get_personal_training_task_detail(task.id, current_user_id)
+
+    def update_schedule_task(
+        self,
+        task_id: int,
+        data: AIScheduleTaskUpdateRequest,
+        current_user_id: int,
+    ) -> AIScheduleTaskDetailResponse:
+        task = self._get_task_or_raise(task_id, self.SCHEDULE_TASK_TYPE, current_user_id)
+        self._ensure_task_editable(task)
+        data = self.schedule_agent.validate_task_update(task, data, current_user_id)
+        request_payload = AIScheduleTaskCreateRequest.model_validate(task.request_payload or {})
+        main_plan_payload = data.main_plan.model_dump(mode="json")
+        training = self.db.query(Training).filter(Training.id == request_payload.training_id).first()
+        recalculated_conflicts = []
+        if training:
+            self.schedule_agent._normalize_plan_courses(main_plan_payload.get("courses") or [])  # noqa: SLF001
+            recalculated_conflicts = self.schedule_agent._validate_plan_courses(  # noqa: SLF001
+                training,
+                main_plan_payload.get("courses") or [],
+                request_payload.constraint_payload,
+            )
+            main_plan_payload["metrics"] = self.schedule_agent._build_plan_metrics(  # noqa: SLF001
+                main_plan_payload.get("courses") or []
+            ).model_dump(mode="json")
+            main_plan_payload["summary"] = self.schedule_agent._build_plan_summary(  # noqa: SLF001
+                training,
+                request_payload,
+                AISchedulePlan.model_validate(main_plan_payload).metrics,
+                recalculated_conflicts,
+            )
+        if data.task_name:
+            task.task_name = data.task_name
+        task.result_payload = {
+            "main_plan": main_plan_payload,
+            "alternative_plans": [item.model_dump(mode="json") for item in data.alternative_plans],
+            "conflicts": [item.model_dump(mode="json") for item in (recalculated_conflicts or data.conflicts)],
+            "explanation": data.explanation,
+        }
+        self.db.commit()
+        return self.get_schedule_task_detail(task_id, current_user_id)
+
+    def update_personal_training_task(
+        self,
+        task_id: int,
+        data: AIPersonalTrainingTaskUpdateRequest,
+        current_user_id: int,
+    ) -> AIPersonalTrainingTaskDetailResponse:
+        task = self._get_task_or_raise(task_id, self.PERSONAL_TRAINING_TASK_TYPE, current_user_id)
+        self._ensure_task_editable(task)
+        data = self.personal_plan_agent.validate_task_update(task, data, current_user_id)
+        if data.task_name:
+            task.task_name = data.task_name
+        task.result_payload = {
+            "portrait": data.portrait.model_dump(mode="json"),
+            "plan": data.plan.model_dump(mode="json"),
+            "confirmed_snapshot_id": (task.result_payload or {}).get("confirmed_snapshot_id"),
+        }
+        self.db.commit()
+        return self.get_personal_training_task_detail(task_id, current_user_id)
+
+    def confirm_schedule_task(self, task_id: int, current_user_id: int) -> AIScheduleTaskDetailResponse:
+        task = self._get_task_or_raise(task_id, self.SCHEDULE_TASK_TYPE, current_user_id)
+        self._ensure_task_confirmable(task)
+        self.schedule_agent.confirm_task(task, current_user_id)
+        task.status = "confirmed"
+        task.confirmed_at = datetime.now()
+        self.db.commit()
+        return self.get_schedule_task_detail(task_id, current_user_id)
+
+    def confirm_personal_training_task(self, task_id: int, current_user_id: int) -> AIPersonalTrainingTaskDetailResponse:
+        task = self._get_task_or_raise(task_id, self.PERSONAL_TRAINING_TASK_TYPE, current_user_id)
+        self._ensure_task_confirmable(task)
+        snapshot = self.personal_plan_agent.confirm_task(task, current_user_id)
+        task.status = "confirmed"
+        task.confirmed_at = datetime.now()
+        task.result_payload = {
+            **(task.result_payload or {}),
+            "confirmed_snapshot_id": snapshot.id,
+        }
+        self.db.commit()
+        return self.get_personal_training_task_detail(task_id, current_user_id)
+
+    def _list_tasks(
+        self,
+        task_type: str,
+        page: int,
+        size: int,
+        status: Optional[str],
+        current_user_id: int,
+        allow_target_user: bool = False,
+    ) -> PaginatedResponse[AITaskSummaryResponse]:
+        query = self.db.query(AITask).filter(AITask.task_type == task_type).order_by(AITask.created_at.desc(), AITask.id.desc())
+        tasks = query.all()
+        filtered = [
+            item for item in tasks
+            if self._can_access_task(item, current_user_id, allow_target_user=allow_target_user)
+            and (not status or item.status == status)
+        ]
+        total = len(filtered)
+        if size != -1:
+            start = (page - 1) * size
+            filtered = filtered[start:start + size]
+        return PaginatedResponse(
+            page=page,
+            size=size if size != -1 else total,
+            total=total,
+            items=[self._to_task_summary(item) for item in filtered],
+        )
+
+    def _create_task_entity(
+        self,
+        task_name: str,
+        task_type: str,
+        request_payload: dict,
+        current_user_id: int,
+    ) -> AITask:
+        task = AITask(
+            task_name=task_name,
+            task_type=task_type,
+            status="processing",
+            request_payload=request_payload,
+            created_by=current_user_id,
+            started_at=datetime.now(),
+        )
+        self.db.add(task)
+        self.db.flush()
+        return task
+
+    def _mark_task_completed(self, task: AITask) -> None:
+        task.status = "completed"
+        task.completed_at = datetime.now()
+        task.error_message = None
+
+    def _mark_task_failed(self, task: AITask, error_message: str) -> None:
+        task.status = "failed"
+        task.completed_at = datetime.now()
+        task.error_message = error_message
+
+    def _get_task_or_raise(
+        self,
+        task_id: int,
+        task_type: str,
+        current_user_id: int,
+        allow_target_user: bool = False,
+    ) -> AITask:
+        task = self.db.query(AITask).filter(
+            AITask.id == task_id,
+            AITask.task_type == task_type,
+        ).first()
+        if not task or not self._can_access_task(task, current_user_id, allow_target_user=allow_target_user):
+            raise ValueError("任务不存在")
+        return task
+
+    def _can_access_task(self, task: AITask, current_user_id: int, allow_target_user: bool = False) -> bool:
+        if task.created_by == current_user_id:
+            return True
+
+        request_payload = task.request_payload or {}
+        training_id = int(request_payload.get("training_id") or 0)
+        if training_id:
+            training = self.db.query(Training).filter(Training.id == training_id).first()
+            if training and can_manage_training(self.db, training, current_user_id):
+                return True
+
+        if not allow_target_user or task.status != "confirmed":
+            return False
+        return int(request_payload.get("target_user_id") or 0) == current_user_id
+
+    def _ensure_task_editable(self, task: AITask) -> None:
+        if task.status == "confirmed":
+            raise ValueError("任务已确认完成，不能继续编辑")
+        if task.status != "completed":
+            raise ValueError("任务未完成，暂不能编辑结果")
+
+    def _ensure_task_confirmable(self, task: AITask) -> None:
+        if task.status == "confirmed":
+            raise ValueError("任务已确认完成")
+        if task.status != "completed":
+            raise ValueError("任务未完成，不能确认")
+
+    def _build_schedule_request_payload(self, data: AIScheduleTaskCreateRequest) -> dict:
+        training = self.db.query(Training).filter(Training.id == data.training_id).first()
+        payload = data.model_dump(mode="json")
+        payload["training_name"] = training.name if training else None
+        return payload
+
+    def _build_personal_request_payload(self, data: AIPersonalTrainingTaskCreateRequest) -> dict:
+        training = self.db.query(Training).filter(Training.id == data.training_id).first()
+        user = self.db.query(User).filter(User.id == data.target_user_id).first()
+        payload = data.model_dump(mode="json")
+        payload["training_name"] = training.name if training else None
+        payload["target_user_name"] = (user.nickname or user.username) if user else None
+        return payload
+
+    def _to_task_summary(self, task: AITask) -> AITaskSummaryResponse:
+        request_payload = task.request_payload or {}
+        result_payload = task.result_payload or {}
+        paper_payload = result_payload.get("paper_draft") or {}
+        summary_text = None
+        item_count = 0
+        confirmed_snapshot_id = result_payload.get("confirmed_snapshot_id")
+
+        if task.task_type == self.SCHEDULE_TASK_TYPE:
+            main_plan = result_payload.get("main_plan") or {}
+            metrics = main_plan.get("metrics") or {}
+            item_count = int(metrics.get("total_sessions") or 0)
+            summary_text = main_plan.get("summary") or result_payload.get("explanation")
+        elif task.task_type == self.PERSONAL_TRAINING_TASK_TYPE:
+            plan = result_payload.get("plan") or {}
+            item_count = len(plan.get("actions") or [])
+            summary_text = plan.get("summary")
+
+        return AITaskSummaryResponse(
+            id=task.id,
+            task_name=task.task_name,
+            task_type=task.task_type,
+            status=task.status,
+            item_count=item_count,
+            paper_title=paper_payload.get("title"),
+            training_id=request_payload.get("training_id"),
+            training_name=request_payload.get("training_name"),
+            target_user_id=request_payload.get("target_user_id"),
+            target_user_name=request_payload.get("target_user_name"),
+            summary_text=summary_text,
+            created_by=task.created_by,
+            confirmed_question_ids=list(task.confirmed_question_ids or []),
+            confirmed_paper_id=task.confirmed_paper_id,
+            confirmed_snapshot_id=confirmed_snapshot_id,
+            created_at=task.created_at,
+            completed_at=task.completed_at,
+            confirmed_at=task.confirmed_at,
+            updated_at=task.updated_at,
+        )
+
+    def _to_schedule_task_detail(self, task: AITask) -> AIScheduleTaskDetailResponse:
+        result_payload = task.result_payload or {}
+        main_plan_payload = result_payload.get("main_plan")
+        return AIScheduleTaskDetailResponse(
+            **self._to_task_summary(task).model_dump(),
+            request_payload=AIScheduleTaskCreateRequest.model_validate(task.request_payload or {}),
+            main_plan=AISchedulePlan.model_validate(main_plan_payload) if main_plan_payload else None,
+            alternative_plans=[AISchedulePlan.model_validate(item) for item in (result_payload.get("alternative_plans") or [])],
+            conflicts=[AIScheduleConflictItem.model_validate(item) for item in (result_payload.get("conflicts") or [])],
+            explanation=result_payload.get("explanation"),
+            error_message=task.error_message,
+        )
+
+    def _to_personal_training_task_detail(self, task: AITask) -> AIPersonalTrainingTaskDetailResponse:
+        result_payload = task.result_payload or {}
+        portrait_payload = result_payload.get("portrait")
+        plan_payload = result_payload.get("plan")
+        return AIPersonalTrainingTaskDetailResponse(
+            **self._to_task_summary(task).model_dump(),
+            request_payload=AIPersonalTrainingTaskCreateRequest.model_validate(task.request_payload or {}),
+            portrait=AIPersonalTrainingPortrait.model_validate(portrait_payload) if portrait_payload else None,
+            plan=AIPersonalTrainingPlan.model_validate(plan_payload) if plan_payload else None,
+            error_message=task.error_message,
+        )

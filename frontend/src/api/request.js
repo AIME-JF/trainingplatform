@@ -23,6 +23,36 @@ function convertKeys(obj, converter) {
   return obj
 }
 
+function extractErrorMessage(payload) {
+  if (!payload) {
+    return ''
+  }
+  if (typeof payload === 'string') {
+    return payload
+  }
+  if (Array.isArray(payload)) {
+    return payload.map((item) => extractErrorMessage(item)).filter(Boolean).join('；')
+  }
+  if (typeof payload === 'object') {
+    if (typeof payload.detail === 'string') {
+      return payload.detail
+    }
+    if (Array.isArray(payload.detail)) {
+      return extractErrorMessage(payload.detail)
+    }
+    if (typeof payload.message === 'string') {
+      return payload.message
+    }
+    if (Array.isArray(payload.errors)) {
+      return extractErrorMessage(payload.errors)
+    }
+    if (Array.isArray(payload.loc) && typeof payload.msg === 'string') {
+      return `${payload.loc.join('.')}：${payload.msg}`
+    }
+  }
+  return ''
+}
+
 const request = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
   timeout: 15000,
@@ -73,6 +103,10 @@ request.interceptors.response.use(
         localStorage.removeItem('token')
         localStorage.removeItem('userInfo')
         router.push('/login')
+      }
+      const message = extractErrorMessage(error.response.data)
+      if (message) {
+        return Promise.reject(new Error(message))
       }
     }
     return Promise.reject(error)

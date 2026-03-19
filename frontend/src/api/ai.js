@@ -59,3 +59,43 @@ export function updateAiPaperGenerationTaskResult(taskId, data) {
 export function confirmAiPaperGenerationTask(taskId) {
   return request.post(`/ai/paper-generation-tasks/${taskId}/confirm`)
 }
+
+export function getAiScheduleTasks(params) {
+  return request.get('/ai/schedule-tasks', { params })
+}
+
+export function createAiScheduleTask(data) {
+  return request.post('/ai/schedule-tasks', data)
+}
+
+export function getAiScheduleTaskDetail(taskId) {
+  return request.get(`/ai/schedule-tasks/${taskId}`)
+}
+
+export function updateAiScheduleTaskResult(taskId, data) {
+  return request.put(`/ai/schedule-tasks/${taskId}/result`, data)
+}
+
+export function confirmAiScheduleTask(taskId) {
+  return request.post(`/ai/schedule-tasks/${taskId}/confirm`)
+}
+
+export function getAiPersonalTrainingTasks(params) {
+  return request.get('/ai/personal-training-tasks', { params })
+}
+
+export function createAiPersonalTrainingTask(data) {
+  return request.post('/ai/personal-training-tasks', data)
+}
+
+export function getAiPersonalTrainingTaskDetail(taskId) {
+  return request.get(`/ai/personal-training-tasks/${taskId}`)
+}
+
+export function updateAiPersonalTrainingTaskResult(taskId, data) {
+  return request.put(`/ai/personal-training-tasks/${taskId}/result`, data)
+}
+
+export function confirmAiPersonalTrainingTask(taskId) {
+  return request.post(`/ai/personal-training-tasks/${taskId}/confirm`)
+}

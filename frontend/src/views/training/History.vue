@@ -5,7 +5,12 @@
         <h2>{{ authStore.isStudent ? '我的训历' : '培训训历' }}</h2>
         <p class="page-sub">{{ trainingName }}</p>
       </div>
-      <a-button @click="$router.back()">返回</a-button>
+      <a-space>
+        <a-button v-if="authStore.isStudent && trainingId" type="primary" ghost @click="openAiPersonalPlan(authStore.currentUser?.id)">
+          AI个训方案
+        </a-button>
+        <a-button @click="$router.back()">返回</a-button>
+      </a-space>
     </div>
 
     <a-card :bordered="false">
@@ -17,6 +22,9 @@
           <template v-if="column.key === 'attendanceRate'">
             <a-progress :percent="Math.round(record.attendanceRate || 0)" size="small" />
           </template>
+          <template v-if="column.key === 'action'">
+            <a-button type="link" @click="openAiPersonalPlan(record.userId)">生成个训方案</a-button>
+          </template>
         </template>
       </a-table>
     </a-card>
@@ -25,12 +33,13 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { getTraining, getTrainingHistories } from '@/api/training'
 import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
+const router = useRouter()
 const authStore = useAuthStore()
 const trainingId = route.params.id
 
@@ -48,8 +57,22 @@ const columns = computed(() => {
     { title: '评课均分', dataIndex: 'evaluationScore', key: 'evaluationScore', width: 100 },
     { title: '通过考试', dataIndex: 'passedExamCount', key: 'passedExamCount', width: 100 },
   ]
+  if (!authStore.isStudent) {
+    base.push({ title: '操作', key: 'action', width: 140 })
+  }
   return authStore.isStudent ? base.filter(item => !['userNickname', 'policeId', 'departments'].includes(item.key)) : base
 })
+
+function openAiPersonalPlan(userId) {
+  if (!trainingId || !userId) {
+    return
+  }
+  router.push({
+    name: 'AiPersonalTrainingTask',
+    params: { id: trainingId },
+    query: { userId },
+  })
+}
 
 async function loadData() {
   try {

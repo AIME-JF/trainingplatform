@@ -5,13 +5,17 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.schemas import (
+    AIPersonalTrainingTaskCreateRequest,
+    AIPersonalTrainingTaskUpdateRequest,
     AIPaperAssemblyTaskCreateRequest,
     AIPaperGenerationTaskCreateRequest,
     AIPaperTaskUpdateRequest,
     AIQuestionTaskCreateRequest,
     AIQuestionTaskUpdateRequest,
+    AIScheduleTaskCreateRequest,
+    AIScheduleTaskUpdateRequest,
 )
-from app.services import AIService
+from app.services import AIService, TrainingAIService
 from logger import logger
 
 
@@ -21,6 +25,7 @@ class AIController:
     def __init__(self, db: Session):
         self.db = db
         self.service = AIService(db)
+        self.training_ai_service = TrainingAIService(db)
 
     def list_question_tasks(self, page: int, size: int, status_value: str | None, current_user_id: int):
         try:
@@ -145,4 +150,90 @@ class AIController:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
         except Exception as exc:
             logger.error("确认 AI 自动生成试卷任务异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="确认任务失败")
+
+    def list_schedule_tasks(self, page: int, size: int, status_value: str | None, current_user_id: int):
+        try:
+            return self.training_ai_service.list_schedule_tasks(page, size, status_value, current_user_id)
+        except Exception as exc:
+            logger.error("获取 AI 排课任务列表异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取任务列表失败")
+
+    def get_schedule_task_detail(self, task_id: int, current_user_id: int):
+        try:
+            return self.training_ai_service.get_schedule_task_detail(task_id, current_user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+        except Exception as exc:
+            logger.error("获取 AI 排课任务详情异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取任务详情失败")
+
+    def create_schedule_task(self, data: AIScheduleTaskCreateRequest, current_user_id: int):
+        try:
+            return self.training_ai_service.create_schedule_task(data, current_user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("创建 AI 排课任务异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建任务失败")
+
+    def update_schedule_task(self, task_id: int, data: AIScheduleTaskUpdateRequest, current_user_id: int):
+        try:
+            return self.training_ai_service.update_schedule_task(task_id, data, current_user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("更新 AI 排课任务异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新任务失败")
+
+    def confirm_schedule_task(self, task_id: int, current_user_id: int):
+        try:
+            return self.training_ai_service.confirm_schedule_task(task_id, current_user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("确认 AI 排课任务异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="确认任务失败")
+
+    def list_personal_training_tasks(self, page: int, size: int, status_value: str | None, current_user_id: int):
+        try:
+            return self.training_ai_service.list_personal_training_tasks(page, size, status_value, current_user_id)
+        except Exception as exc:
+            logger.error("获取 AI 个训任务列表异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取任务列表失败")
+
+    def get_personal_training_task_detail(self, task_id: int, current_user_id: int):
+        try:
+            return self.training_ai_service.get_personal_training_task_detail(task_id, current_user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+        except Exception as exc:
+            logger.error("获取 AI 个训任务详情异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取任务详情失败")
+
+    def create_personal_training_task(self, data: AIPersonalTrainingTaskCreateRequest, current_user_id: int):
+        try:
+            return self.training_ai_service.create_personal_training_task(data, current_user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("创建 AI 个训任务异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建任务失败")
+
+    def update_personal_training_task(self, task_id: int, data: AIPersonalTrainingTaskUpdateRequest, current_user_id: int):
+        try:
+            return self.training_ai_service.update_personal_training_task(task_id, data, current_user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("更新 AI 个训任务异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新任务失败")
+
+    def confirm_personal_training_task(self, task_id: int, current_user_id: int):
+        try:
+            return self.training_ai_service.confirm_personal_training_task(task_id, current_user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("确认 AI 个训任务异常: %s", exc)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="确认任务失败")

@@ -138,6 +138,12 @@ const router = createRouter({
           meta: { title: '周训练计划', anyPermissions: TRAINING_SCHEDULE_PAGE_PERMISSIONS },
         },
         {
+          path: 'training/ai-schedule/:id?',
+          name: 'AiScheduleTask',
+          component: () => import('../views/training/AiScheduleTask.vue'),
+          meta: { title: 'AI排课建议', anyPermissions: TRAINING_SCHEDULE_PAGE_PERMISSIONS },
+        },
+        {
           path: 'training/board',
           name: 'TrainingBoard',
           component: () => import('../views/training/Board.vue'),
@@ -166,6 +172,12 @@ const router = createRouter({
           name: 'TrainingHistory',
           component: () => import('../views/training/History.vue'),
           meta: { title: '培训训历', anyPermissions: TRAINING_PAGE_PERMISSIONS },
+        },
+        {
+          path: 'training/:id/ai-personal',
+          name: 'AiPersonalTrainingTask',
+          component: () => import('../views/training/AiPersonalTrainingTask.vue'),
+          meta: { title: 'AI个训方案', anyPermissions: TRAINING_PAGE_PERMISSIONS },
         },
         {
           path: 'resource/library',

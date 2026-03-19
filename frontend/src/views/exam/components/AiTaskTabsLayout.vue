@@ -5,7 +5,10 @@
         <h2>{{ title }}</h2>
         <p class="page-sub">{{ subtitle }}</p>
       </div>
-      <a-tag color="blue">{{ tagText }}</a-tag>
+      <div class="page-header-actions">
+        <slot name="header-extra" />
+        <a-tag color="blue">{{ tagText }}</a-tag>
+      </div>
     </div>
 
     <a-tabs :active-key="activeTab" class="task-tabs" @update:activeKey="emit('update:activeTab', $event)">
@@ -91,6 +94,13 @@ const emit = defineEmits(['update:activeTab', 'refresh-tasks', 'select-task'])
   align-items: flex-start;
   gap: 16px;
   margin-bottom: 20px;
+}
+
+.page-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
 .page-header h2 {

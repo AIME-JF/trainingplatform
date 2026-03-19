@@ -77,9 +77,17 @@ from .ai import (
     AIQuestionTaskCreateRequest, AIQuestionTaskUpdateRequest,
     AIPaperAssemblyTaskCreateRequest, AIPaperAssemblyTypeConfig,
     AIPaperGenerationTaskCreateRequest, AIPaperTaskUpdateRequest,
+    AIScheduleTaskCreateRequest, AIScheduleTaskConstraintPayload,
+    AIScheduleTaskUpdateRequest, AISchedulePlan, AISchedulePlanMetrics,
+    AIScheduleConflictItem, AIScheduleUnavailableSlot,
+    AIPersonalTrainingTaskCreateRequest, AIPersonalTrainingTaskUpdateRequest,
+    AIPersonalTrainingPortrait, AIPersonalTrainingPortraitTag,
+    AIPersonalTrainingPortraitEvidence, AIPersonalTrainingPlan,
+    AIPersonalTrainingAction, AIPersonalTrainingResourceRecommendation,
     AITaskQuestionDraft, AITaskPaperDraft, AITaskSummaryResponse,
     AIQuestionTaskDetailResponse, AIPaperAssemblyTaskDetailResponse,
-    AIPaperGenerationTaskDetailResponse
+    AIPaperGenerationTaskDetailResponse, AIScheduleTaskDetailResponse,
+    AIPersonalTrainingTaskDetailResponse
 )
 # 人才库
 from .talent import TalentResponse, TalentStatsResponse
@@ -164,9 +172,17 @@ __all__ = [
     "AIQuestionTaskCreateRequest", "AIQuestionTaskUpdateRequest",
     "AIPaperAssemblyTaskCreateRequest", "AIPaperAssemblyTypeConfig",
     "AIPaperGenerationTaskCreateRequest", "AIPaperTaskUpdateRequest",
+    "AIScheduleTaskCreateRequest", "AIScheduleTaskConstraintPayload",
+    "AIScheduleTaskUpdateRequest", "AISchedulePlan", "AISchedulePlanMetrics",
+    "AIScheduleConflictItem", "AIScheduleUnavailableSlot",
+    "AIPersonalTrainingTaskCreateRequest", "AIPersonalTrainingTaskUpdateRequest",
+    "AIPersonalTrainingPortrait", "AIPersonalTrainingPortraitTag",
+    "AIPersonalTrainingPortraitEvidence", "AIPersonalTrainingPlan",
+    "AIPersonalTrainingAction", "AIPersonalTrainingResourceRecommendation",
     "AITaskQuestionDraft", "AITaskPaperDraft", "AITaskSummaryResponse",
     "AIQuestionTaskDetailResponse", "AIPaperAssemblyTaskDetailResponse",
-    "AIPaperGenerationTaskDetailResponse",
+    "AIPaperGenerationTaskDetailResponse", "AIScheduleTaskDetailResponse",
+    "AIPersonalTrainingTaskDetailResponse",
     # 人才库
     "TalentResponse", "TalentStatsResponse",
     # 文件管理
