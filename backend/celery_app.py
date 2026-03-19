@@ -9,7 +9,7 @@ celery_app = Celery(
     "police_training",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
-    include=[]
+    include=["app.tasks.ai_question"]
 )
 
 # Celery配置

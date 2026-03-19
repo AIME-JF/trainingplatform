@@ -229,6 +229,11 @@ export const appMenuConfig = [
         label: '部门管理',
         anyPermissions: DEPARTMENT_MANAGE_PAGE_PERMISSIONS,
       },
+      {
+        key: '/system/configs',
+        label: '配置管理',
+        roles: ['admin'],
+      },
     ],
   },
 ]

@@ -20,6 +20,7 @@ from .report import router as report_router
 from .resource import router as resource_router
 from .review import router as review_router
 from .role import router as role_router
+from .system import router as system_router
 from .talent import router as talent_router
 from .training import router as training_router
 from .training_base import router as training_base_router
@@ -44,6 +45,7 @@ all_routers = [
     user_router,
     notice_router,
     role_router,
+    system_router,
     department_router,
     permission_router,
     resource_router,
@@ -71,6 +73,7 @@ __all__ = [
     "user_router",
     "notice_router",
     "role_router",
+    "system_router",
     "department_router",
     "permission_router",
     "resource_router",

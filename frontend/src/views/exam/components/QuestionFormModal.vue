@@ -13,10 +13,10 @@
       <a-row :gutter="16">
         <a-col :span="8">
           <a-form-item label="题型" required>
-            <a-select v-model:value="form.type" @change="handleTypeChange">
-              <a-select-option value="single">单选题</a-select-option>
-              <a-select-option value="multi">多选题</a-select-option>
-              <a-select-option value="judge">判断题</a-select-option>
+            <a-select v-model:value="form.type" :disabled="typeOptions.length === 1" @change="handleTypeChange">
+              <a-select-option v-for="item in typeOptions" :key="item.value" :value="item.value">
+                {{ item.label }}
+              </a-select-option>
             </a-select>
           </a-form-item>
         </a-col>
@@ -106,7 +106,7 @@
 </template>
 
 <script setup>
-import { reactive, watch } from 'vue'
+import { computed, reactive, watch } from 'vue'
 import { message } from 'ant-design-vue'
 
 const props = defineProps({
@@ -115,6 +115,7 @@ const props = defineProps({
   confirmText: { type: String, default: '保存' },
   question: { type: Object, default: null },
   policeTypeOptions: { type: Array, default: () => [] },
+  allowedTypes: { type: Array, default: () => ['single', 'multi', 'judge'] },
 })
 
 const emit = defineEmits(['update:open', 'submit'])
@@ -126,6 +127,18 @@ const difficultyLabels = {
   4: '4级',
   5: '5级',
 }
+const allTypeOptions = [
+  { value: 'single', label: '单选题' },
+  { value: 'multi', label: '多选题' },
+  { value: 'judge', label: '判断题' },
+]
+const typeOptions = computed(() => {
+  const allowedTypes = Array.isArray(props.allowedTypes) ? props.allowedTypes : []
+  if (!allowedTypes.length) {
+    return allTypeOptions
+  }
+  return allTypeOptions.filter((item) => allowedTypes.includes(item.value))
+})
 
 function createDefaultForm() {
   return {
@@ -153,24 +166,26 @@ function createDefaultForm() {
 const form = reactive(createDefaultForm())
 
 function resetForm(question = null) {
+  const allowedTypes = typeOptions.value.map((item) => item.value)
+  const resolvedType = allowedTypes.includes(question?.type) ? question?.type : (allowedTypes[0] || 'single')
   const next = createDefaultForm()
   Object.assign(next, {
     tempId: question?.tempId || question?.id || `draft-${Date.now()}`,
     sourceQuestionId: question?.sourceQuestionId || question?.source_question_id,
     origin: question?.origin || 'manual',
-    type: question?.type || 'single',
+    type: resolvedType,
     difficulty: Number(question?.difficulty || 3),
     score: Number(question?.score || 2),
     content: question?.content || '',
     knowledgePoint: question?.knowledgePoint || question?.knowledge_point || '',
     policeTypeId: question?.policeTypeId || question?.police_type_id,
-    options: normalizeOptions(question?.type || 'single', question?.options),
+    options: normalizeOptions(resolvedType, question?.options),
     explanation: question?.explanation || '',
   })
-  next.answer = question?.type === 'multi'
+  next.answer = resolvedType === 'multi'
     ? 'A'
     : normalizeSingleAnswer(question?.answer)
-  next.answerMulti = question?.type === 'multi'
+  next.answerMulti = resolvedType === 'multi'
     ? normalizeMultiAnswer(question?.answer)
     : []
   Object.assign(form, next)
@@ -276,6 +291,16 @@ watch(
     }
   },
   { immediate: true }
+)
+
+watch(
+  () => props.allowedTypes,
+  () => {
+    if (props.open) {
+      resetForm(props.question)
+    }
+  },
+  { deep: true }
 )
 </script>
 

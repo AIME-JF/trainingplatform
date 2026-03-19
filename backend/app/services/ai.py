@@ -33,6 +33,8 @@ class AIService:
     QUESTION_TASK_TYPE = "question_generation"
     PAPER_ASSEMBLY_TASK_TYPE = "paper_assembly"
     PAPER_GENERATION_TASK_TYPE = "paper_generation"
+    QUESTION_TASK_MAX_COUNT = 20
+    SUPPORTED_QUESTION_TYPES = ("single", "multi", "judge")
     QUESTION_TYPE_ORDER = {
         "single": 0,
         "multi": 1,
@@ -100,17 +102,25 @@ class AIService:
         data: AIQuestionTaskCreateRequest,
         current_user_id: int,
     ) -> AIQuestionTaskDetailResponse:
-        task = self._create_task_entity(data.task_name, self.QUESTION_TASK_TYPE, data.model_dump(mode="python"), current_user_id)
-        try:
-            questions = self._simulate_question_task_result(data)
-            task.result_payload = {
-                "questions": [item.model_dump(mode="python") for item in questions],
-            }
-            self._mark_task_completed(task)
-        except Exception as exc:
-            self._mark_task_failed(task, str(exc))
-            logger.error("AI 智能出题任务失败: %s", exc)
+        normalized_data = self._normalize_question_task_request(data)
+        task = self._create_task_entity(
+            normalized_data.task_name,
+            self.QUESTION_TASK_TYPE,
+            normalized_data.model_dump(mode="python"),
+            current_user_id,
+            status="pending",
+        )
         self.db.commit()
+        self.db.refresh(task)
+
+        try:
+            from app.tasks.ai_question import schedule_question_task
+
+            schedule_question_task(preferred_task_id=task.id, db=self.db)
+            self.db.refresh(task)
+        except Exception as exc:
+            logger.error("调度 AI 智能出题任务失败: %s", exc)
+
         return self.get_question_task_detail(task.id, current_user_id)
 
     def create_paper_assembly_task(
@@ -156,6 +166,7 @@ class AIService:
         if data.task_name:
             task.task_name = data.task_name
         sorted_questions = self._sort_question_drafts(data.questions)
+        self._validate_question_task_result(task, sorted_questions)
         task.result_payload = {
             "questions": [self._sanitize_question_draft(item).model_dump(mode="python") for item in sorted_questions],
         }
@@ -203,6 +214,7 @@ class AIService:
         ]
         if not questions:
             raise ValueError("任务结果中没有可确认的题目")
+        self._validate_question_task_result(task, questions)
 
         created_ids = [self._persist_question_draft(item, current_user_id).id for item in questions]
         task.confirmed_question_ids = created_ids
@@ -297,14 +309,22 @@ class AIService:
             items=items,
         )
 
-    def _create_task_entity(self, task_name: str, task_type: str, request_payload: dict, current_user_id: int) -> AITask:
+    def _create_task_entity(
+        self,
+        task_name: str,
+        task_type: str,
+        request_payload: dict,
+        current_user_id: int,
+        status: str = "processing",
+    ) -> AITask:
+        started_at = datetime.now() if status == "processing" else None
         task = AITask(
             task_name=task_name,
             task_type=task_type,
-            status="processing",
+            status=status,
             request_payload=request_payload,
             created_by=current_user_id,
-            started_at=datetime.now(),
+            started_at=started_at,
         )
         self.db.add(task)
         self.db.flush()
@@ -404,27 +424,62 @@ class AIService:
         paper_payload = result_payload.get("paper_draft") or {}
         return len(paper_payload.get("questions", []) or [])
 
-    def _simulate_question_task_result(self, data: AIQuestionTaskCreateRequest) -> List[AITaskQuestionDraft]:
-        question_types = data.question_types or ["single", "multi", "judge"]
-        knowledge_points = data.knowledge_points or [data.topic]
-        questions: List[AITaskQuestionDraft] = []
-        for index in range(data.question_count):
-            question_type = question_types[index % len(question_types)]
-            knowledge_point = knowledge_points[index % len(knowledge_points)]
-            questions.append(
-                self._build_generated_question_draft(
-                    index=index,
-                    question_type=question_type,
-                    topic=data.topic,
-                    knowledge_point=knowledge_point,
-                    difficulty=data.difficulty,
-                    police_type_id=data.police_type_id,
-                    score=data.score,
-                    source_text=data.source_text,
-                    requirements=data.requirements,
-                )
-            )
-        return self._sort_question_drafts(questions)
+    def _normalize_question_task_request(self, data: AIQuestionTaskCreateRequest) -> AIQuestionTaskCreateRequest:
+        question_count = int(data.question_count or 0)
+        if question_count < 1 or question_count > self.QUESTION_TASK_MAX_COUNT:
+            raise ValueError(f"AI 智能出题任务最多生成 {self.QUESTION_TASK_MAX_COUNT} 道题目")
+
+        question_types = []
+        for item in data.question_types or []:
+            normalized_item = str(item).strip()
+            if normalized_item and normalized_item not in question_types:
+                question_types.append(normalized_item)
+
+        if not question_types:
+            question_types = ["single"]
+        if len(question_types) != 1:
+            raise ValueError("AI 智能出题每次只能选择一种题型")
+
+        invalid_types = [item for item in question_types if item not in self.SUPPORTED_QUESTION_TYPES]
+        if invalid_types:
+            raise ValueError("AI 智能出题仅支持 single、multi、judge 三种题型")
+
+        knowledge_points = []
+        for item in data.knowledge_points or []:
+            normalized_item = str(item).strip()
+            if normalized_item and normalized_item not in knowledge_points:
+                knowledge_points.append(normalized_item)
+
+        task_name = str(data.task_name or "").strip()
+        topic = str(data.topic or "").strip()
+        if not task_name or not topic:
+            raise ValueError("请填写任务名称和出题主题")
+
+        payload = data.model_dump(mode="python")
+        payload["task_name"] = task_name
+        payload["topic"] = topic
+        payload["source_text"] = (data.source_text or "").strip() or None
+        payload["requirements"] = (data.requirements or "").strip() or None
+        payload["question_count"] = question_count
+        payload["question_types"] = question_types
+        payload["knowledge_points"] = knowledge_points
+        return AIQuestionTaskCreateRequest.model_validate(payload)
+
+    def _validate_question_task_result(self, task: AITask, questions: List[AITaskQuestionDraft]) -> None:
+        request_payload = task.request_payload or {}
+        allowed_types = [
+            str(item).strip()
+            for item in (request_payload.get("question_types") or [])
+            if str(item).strip()
+        ] or ["single", "multi", "judge"]
+
+        if len(questions) > self.QUESTION_TASK_MAX_COUNT and int(request_payload.get("question_count") or 0) <= self.QUESTION_TASK_MAX_COUNT:
+            raise ValueError(f"AI 智能出题任务最多保留 {self.QUESTION_TASK_MAX_COUNT} 道题目")
+
+        invalid_questions = [item.type for item in questions if item.type not in allowed_types]
+        if invalid_questions:
+            allowed_type_names = "、".join(allowed_types)
+            raise ValueError(f"当前任务仅允许题型：{allowed_type_names}")
 
     def _simulate_paper_assembly_result(self, data: AIPaperAssemblyTaskCreateRequest) -> AITaskPaperDraft:
         type_configs = data.type_configs or list(self.DEFAULT_TYPE_CONFIGS)

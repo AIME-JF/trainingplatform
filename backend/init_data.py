@@ -4,9 +4,10 @@
 from datetime import datetime, date
 from sqlalchemy.orm import Session
 from app.database import engine, init_db
-from app.models import User, Role, Permission, Department, PoliceType, user_roles, role_permissions
-from app.models.system import Config, ConfigGroup, ConfigFormat, SystemMeta
+from app.models import User, Role, Permission, Department, PoliceType
+from app.models.system import SystemMeta
 from app.services.auth import auth_service
+from app.services.system import SystemConfigService
 from app.utils.permission_group import infer_permission_group
 from logger import logger
 
@@ -431,6 +432,18 @@ def init_users():
         raise
 
 
+def init_system_configs():
+    """初始化系统配置数据。"""
+    try:
+        with Session(engine) as db:
+            service = SystemConfigService(db)
+            groups = service.sync_initial_config_groups(replace_existing=False)
+            logger.info(f"系统配置初始化完成，共同步 {len(groups)} 个配置组")
+    except Exception as e:
+        logger.error(f"初始化系统配置失败: {e}")
+        raise
+
+
 def is_db_initialized():
     """检查数据库是否已初始化"""
     with Session(engine) as db:
@@ -456,6 +469,7 @@ def main():
         logger.info("开始初始化数据库...")
 
         init_db()
+        init_system_configs()
 
         if is_db_initialized():
             logger.info("数据库已初始化，跳过种子数据初始化")

@@ -95,6 +95,30 @@ class SystemConfigController:
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"删除配置组失败: {str(e)}"
             )
+
+    def reset_config_group(self, group_id: int) -> ConfigGroupDetailResponse:
+        """重置配置组"""
+        try:
+            result = self.service.reset_config_group(group_id)
+            if not result:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="配置组不存在"
+                )
+            return result
+        except HTTPException:
+            raise
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e)
+            )
+        except Exception as e:
+            logger.error(f"重置配置组失败: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"重置配置组失败: {str(e)}"
+            )
     
     # 配置相关方法
     def create_config(self, config_data: ConfigCreate) -> ConfigResponse:

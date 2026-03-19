@@ -73,6 +73,8 @@ class AIController:
     def create_question_task(self, data: AIQuestionTaskCreateRequest, current_user_id: int):
         try:
             return self.service.create_question_task(data, current_user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
         except Exception as exc:
             logger.error("创建 AI 智能出题任务异常: %s", exc)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建任务失败")

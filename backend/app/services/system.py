@@ -2,10 +2,9 @@
 系统配置服务
 """
 import json
-from typing import Optional, List, Any, Dict, cast
+from typing import Optional, List, Any, cast
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import and_
-from app.database import SessionLocal
 from app.models.system import Config, ConfigGroup, ConfigFormat
 from app.schemas.system import (
     ConfigCreate, ConfigUpdate, ConfigResponse,
@@ -14,6 +13,7 @@ from app.schemas.system import (
 )
 from app.schemas.response import PaginatedResponse
 from app.database import get_redis
+from app.utils.system_initial_configs import get_initial_config_group, list_initial_config_groups
 from logger import logger
 
 
@@ -113,6 +113,68 @@ class SystemConfigService:
         
         logger.info(f"删除配置组成功: {db_group.group_name}")
         return True
+
+    def sync_initial_config_groups(self, replace_existing: bool = False) -> List[ConfigGroupDetailResponse]:
+        """同步初始化配置组模板到数据库。"""
+        synced_group_ids: List[int] = []
+
+        for group_definition in list_initial_config_groups():
+            group_key = str(group_definition["group_key"])
+            db_group = self.db.query(ConfigGroup).options(
+                joinedload(ConfigGroup.configs)
+            ).filter(ConfigGroup.group_key == group_key).first()
+
+            is_new_group = db_group is None
+            if is_new_group:
+                db_group = ConfigGroup(
+                    group_name=str(group_definition["group_name"]),
+                    group_key=group_key,
+                    group_description=group_definition.get("group_description"),
+                )
+                self.db.add(db_group)
+                self.db.flush()
+
+            self._sync_group_from_definition(
+                cast(ConfigGroup, db_group),
+                group_definition,
+                replace_existing=replace_existing,
+                update_group_meta=is_new_group or replace_existing,
+            )
+            synced_group_ids.append(cast(ConfigGroup, db_group).id)
+
+        self.db.commit()
+        if synced_group_ids:
+            self.refresh_config_cache()
+
+        results: List[ConfigGroupDetailResponse] = []
+        for group_id in synced_group_ids:
+            group_detail = self.get_config_group_by_id(group_id)
+            if group_detail:
+                results.append(group_detail)
+        return results
+
+    def reset_config_group(self, group_id: int) -> Optional[ConfigGroupDetailResponse]:
+        """按初始化模板重置配置组。"""
+        db_group = self.db.query(ConfigGroup).options(
+            joinedload(ConfigGroup.configs)
+        ).filter(ConfigGroup.id == group_id).first()
+        if not db_group:
+            return None
+
+        group_definition = get_initial_config_group(str(db_group.group_key))
+        if not group_definition:
+            raise ValueError(f"配置组 {db_group.group_key} 没有可用的初始化模板")
+
+        self._sync_group_from_definition(db_group, group_definition, replace_existing=True, update_group_meta=True)
+        self.db.commit()
+        self.refresh_config_cache()
+
+        result = self.get_config_group_by_id(group_id)
+        if result is None:
+            raise ValueError("配置组重置成功后读取详情失败")
+
+        logger.info(f"重置配置组成功: {db_group.group_key}")
+        return result
     
     # 配置相关方法
     def create_config(self, config_data: ConfigCreate) -> ConfigResponse:
@@ -347,6 +409,61 @@ class SystemConfigService:
             logger.debug("清除所有配置缓存")
         except Exception as e:
             logger.error(f"清除配置缓存失败: {str(e)}")
+
+    def _sync_group_from_definition(
+        self,
+        db_group: ConfigGroup,
+        group_definition: dict[str, Any],
+        *,
+        replace_existing: bool,
+        update_group_meta: bool,
+    ) -> None:
+        """按模板同步单个配置组。"""
+        if update_group_meta:
+            db_group.group_name = str(group_definition["group_name"])
+            db_group.group_description = group_definition.get("group_description")
+
+        existing_configs = {
+            str(config.config_key): config
+            for config in list(db_group.configs or [])
+        }
+        definition_keys = set()
+
+        for config_definition in cast(List[dict[str, Any]], group_definition.get("configs", [])):
+            config_key = str(config_definition["config_key"])
+            definition_keys.add(config_key)
+
+            db_config = existing_configs.get(config_key)
+            if db_config is None:
+                self.db.add(
+                    Config(
+                        config_name=str(config_definition["config_name"]),
+                        config_key=config_key,
+                        config_description=config_definition.get("config_description"),
+                        config_format=cast(ConfigFormat, config_definition["config_format"]),
+                        config_value=config_definition.get("config_value"),
+                        is_required=bool(config_definition.get("is_required", False)),
+                        is_public=bool(config_definition.get("is_public", False)),
+                        group_id=db_group.id,
+                    )
+                )
+                continue
+
+            if not replace_existing:
+                continue
+
+            db_config.config_name = str(config_definition["config_name"])
+            db_config.config_description = config_definition.get("config_description")
+            db_config.config_format = cast(ConfigFormat, config_definition["config_format"])
+            db_config.config_value = config_definition.get("config_value")
+            db_config.is_required = bool(config_definition.get("is_required", False))
+            db_config.is_public = bool(config_definition.get("is_public", False))
+            db_config.group_id = db_group.id
+
+        if replace_existing:
+            for config_key, db_config in existing_configs.items():
+                if config_key not in definition_keys:
+                    self.db.delete(db_config)
 
 
 # 全局配置获取函数

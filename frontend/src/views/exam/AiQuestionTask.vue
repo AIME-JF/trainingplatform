@@ -2,7 +2,7 @@
   <ai-task-tabs-layout
     v-model:active-tab="activeTab"
     title="AI 智能出题"
-    subtitle="填写信息后创建任务，后端完成模拟出题，你可调整题目后确认入库"
+    subtitle="填写信息后创建任务，系统会按队列异步调用 AI 生成题目，你可调整题目后确认入库"
     :task-list="taskList"
     :task-loading="taskLoading"
     :active-task-id="activeTask?.id || null"
@@ -12,70 +12,72 @@
     @select-task="selectTask"
   >
     <template #create>
-      <a-form layout="vertical">
-        <a-form-item label="任务名称" required>
-          <a-input v-model:value="taskForm.taskName" placeholder="例：刑侦基础训练出题任务" />
-        </a-form-item>
-        <a-form-item label="出题主题" required>
-          <a-input v-model:value="taskForm.topic" placeholder="例：刑事侦查程序规范" />
-        </a-form-item>
-        <a-form-item label="参考文本">
-          <a-textarea v-model:value="taskForm.sourceText" :rows="5" :maxlength="2000" show-count />
-        </a-form-item>
-        <a-form-item label="知识点">
-          <a-textarea v-model:value="knowledgePointsText" :rows="3" placeholder="每行一个知识点" />
-        </a-form-item>
-        <a-row :gutter="12">
-          <a-col :span="12">
-            <a-form-item label="题目数量">
-              <a-input-number v-model:value="taskForm.questionCount" :min="1" :max="50" style="width:100%" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="默认分值">
-              <a-input-number v-model:value="taskForm.score" :min="1" :max="20" style="width:100%" />
-            </a-form-item>
-          </a-col>
-        </a-row>
-        <a-form-item label="题型范围">
-          <a-checkbox-group v-model:value="taskForm.questionTypes">
-            <a-checkbox value="single">单选题</a-checkbox>
-            <a-checkbox value="multi">多选题</a-checkbox>
-            <a-checkbox value="judge">判断题</a-checkbox>
-          </a-checkbox-group>
-        </a-form-item>
-        <a-row :gutter="12">
-          <a-col :span="12">
-            <a-form-item label="整体难度">
-              <a-select v-model:value="taskForm.difficulty">
-                <a-select-option v-for="level in [1, 2, 3, 4, 5]" :key="level" :value="level">
-                  {{ difficultyLabels[level] }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="警种">
-              <a-select v-model:value="taskForm.policeTypeId" allow-clear placeholder="可选">
-                <a-select-option v-for="item in policeTypeOptions" :key="item.id" :value="item.id">
-                  {{ item.name }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-        </a-row>
-        <a-form-item label="补充要求">
-          <a-textarea v-model:value="taskForm.requirements" :rows="3" :maxlength="1000" show-count />
-        </a-form-item>
-        <permissions-tooltip
-          :allowed="canCreateTaskPermission"
-          tips="需要 CREATE_AI_QUESTION_TASK 权限"
-          block
-          v-slot="{ disabled }"
-        >
-          <a-button type="primary" block :loading="creating" :disabled="disabled" @click="handleCreateTask">创建任务</a-button>
-        </permissions-tooltip>
-      </a-form>
+      <div class="create-form-wrap">
+        <a-form layout="vertical">
+          <a-form-item label="任务名称" required>
+            <a-input v-model:value="taskForm.taskName" placeholder="例：刑侦基础训练出题任务" />
+          </a-form-item>
+          <a-form-item label="出题主题" required>
+            <a-input v-model:value="taskForm.topic" placeholder="例：刑事侦查程序规范" />
+          </a-form-item>
+          <a-form-item label="参考文本">
+            <a-textarea v-model:value="taskForm.sourceText" :rows="5" :maxlength="2000" show-count />
+          </a-form-item>
+          <a-form-item label="知识点">
+            <a-textarea v-model:value="knowledgePointsText" :rows="3" placeholder="每行一个知识点" />
+          </a-form-item>
+          <a-row :gutter="12">
+            <a-col :span="12">
+              <a-form-item label="题目数量">
+                <a-input-number v-model:value="taskForm.questionCount" :min="1" :max="20" style="width:100%" />
+              </a-form-item>
+            </a-col>
+            <a-col :span="12">
+              <a-form-item label="默认分值">
+                <a-input-number v-model:value="taskForm.score" :min="1" :max="20" style="width:100%" />
+              </a-form-item>
+            </a-col>
+          </a-row>
+          <a-form-item label="题型">
+            <a-select v-model:value="selectedQuestionType" placeholder="请选择题型">
+              <a-select-option v-for="item in questionTypeOptions" :key="item.value" :value="item.value">
+                {{ item.label }}
+              </a-select-option>
+            </a-select>
+          </a-form-item>
+          <a-row :gutter="12">
+            <a-col :span="12">
+              <a-form-item label="整体难度">
+                <a-select v-model:value="taskForm.difficulty">
+                  <a-select-option v-for="level in [1, 2, 3, 4, 5]" :key="level" :value="level">
+                    {{ difficultyLabels[level] }}
+                  </a-select-option>
+                </a-select>
+              </a-form-item>
+            </a-col>
+            <a-col :span="12">
+              <a-form-item label="警种">
+                <a-select v-model:value="taskForm.policeTypeId" allow-clear placeholder="可选">
+                  <a-select-option v-for="item in policeTypeOptions" :key="item.id" :value="item.id">
+                    {{ item.name }}
+                  </a-select-option>
+                </a-select>
+              </a-form-item>
+            </a-col>
+          </a-row>
+          <a-form-item label="补充要求">
+            <a-textarea v-model:value="taskForm.requirements" :rows="3" :maxlength="1000" show-count />
+          </a-form-item>
+          <permissions-tooltip
+            :allowed="canCreateTaskPermission"
+            tips="需要 CREATE_AI_QUESTION_TASK 权限"
+            block
+            v-slot="{ disabled }"
+          >
+            <a-button type="primary" block :loading="creating" :disabled="disabled" @click="handleCreateTask">创建任务</a-button>
+          </permissions-tooltip>
+        </a-form>
+      </div>
     </template>
 
     <template #task-description="{ item }">
@@ -131,7 +133,7 @@
           <div class="detail-section-title">任务请求</div>
           <a-descriptions :column="2" size="small" bordered>
             <a-descriptions-item label="知识点">{{ activeTask.requestPayload.knowledgePoints?.join('、') || '未设置' }}</a-descriptions-item>
-            <a-descriptions-item label="题型">{{ activeTask.requestPayload.questionTypes?.join('、') || '未设置' }}</a-descriptions-item>
+            <a-descriptions-item label="题型">{{ formatQuestionTypes(activeTask.requestPayload.questionTypes) }}</a-descriptions-item>
             <a-descriptions-item label="题目数量">{{ activeTask.requestPayload.questionCount }}</a-descriptions-item>
             <a-descriptions-item label="默认分值">{{ activeTask.requestPayload.score }}</a-descriptions-item>
           </a-descriptions>
@@ -183,6 +185,7 @@
     :title="editingQuestionIndex === -1 ? '新增题目' : '编辑题目'"
     :question="editingQuestion"
     :police-type-options="policeTypeOptions"
+    :allowed-types="questionModalAllowedTypes"
     @submit="handleSubmitQuestion"
   />
 </template>
@@ -209,8 +212,14 @@ const authStore = useAuthStore()
 const difficultyLabels = { 1: '1级', 2: '2级', 3: '3级', 4: '4级', 5: '5级' }
 const typeLabels = { single: '单选题', multi: '多选题', judge: '判断题' }
 const typeColors = { single: 'blue', multi: 'purple', judge: 'orange' }
-const statusLabels = { pending: '待处理', processing: '处理中', completed: '已完成', confirmed: '已确认', failed: '处理失败' }
+const statusLabels = { pending: '排队中', processing: '处理中', completed: '已完成', confirmed: '已确认', failed: '处理失败' }
 const statusColors = { pending: 'default', processing: 'processing', completed: 'blue', confirmed: 'green', failed: 'red' }
+const DEFAULT_QUESTION_TYPE = 'single'
+const questionTypeOptions = [
+  { value: 'single', label: '单选题' },
+  { value: 'multi', label: '多选题' },
+  { value: 'judge', label: '判断题' },
+]
 
 const creating = ref(false)
 const saving = ref(false)
@@ -230,7 +239,7 @@ const taskForm = reactive({
   topic: '',
   sourceText: '',
   questionCount: 10,
-  questionTypes: ['single', 'multi', 'judge'],
+  questionTypes: [DEFAULT_QUESTION_TYPE],
   difficulty: 3,
   policeTypeId: undefined,
   score: 2,
@@ -240,7 +249,16 @@ const taskForm = reactive({
 const canCreateTaskPermission = computed(() => authStore.hasPermission('CREATE_AI_QUESTION_TASK'))
 const canUpdateTaskPermission = computed(() => authStore.hasPermission('UPDATE_AI_QUESTION_TASK'))
 const canConfirmTaskPermission = computed(() => authStore.hasPermission('CONFIRM_AI_QUESTION_TASK'))
-const canEditTask = computed(() => activeTask.value?.status === 'completed' && canUpdateTaskPermission.value)
+const selectedQuestionType = computed({
+  get: () => taskForm.questionTypes?.[0] || DEFAULT_QUESTION_TYPE,
+  set: (value) => {
+    taskForm.questionTypes = value ? [value] : [DEFAULT_QUESTION_TYPE]
+  },
+})
+const questionModalAllowedTypes = computed(() => {
+  const types = activeTask.value?.requestPayload?.questionTypes?.filter((item) => typeLabels[item]) || []
+  return types.length ? types : [selectedQuestionType.value]
+})
 
 function parseKnowledgePoints() {
   return knowledgePointsText.value
@@ -255,13 +273,18 @@ function resetTaskForm() {
     topic: '',
     sourceText: '',
     questionCount: 10,
-    questionTypes: ['single', 'multi', 'judge'],
+    questionTypes: [DEFAULT_QUESTION_TYPE],
     difficulty: 3,
     policeTypeId: undefined,
     score: 2,
     requirements: '',
   })
   knowledgePointsText.value = ''
+}
+
+function formatQuestionTypes(types = []) {
+  const labels = (types || []).map((item) => typeLabels[item] || item).filter(Boolean)
+  return labels.length ? labels.join('、') : '未设置'
 }
 
 async function loadPoliceTypeOptions() {
@@ -314,6 +337,7 @@ async function handleCreateTask() {
   try {
     const result = await createAiQuestionTask({
       ...taskForm,
+      questionTypes: [...taskForm.questionTypes],
       knowledgePoints: parseKnowledgePoints(),
     })
     message.success('任务已创建')
@@ -339,6 +363,7 @@ function openCreateQuestion() {
   if (!canUpdateTaskPermission.value) return
   editingQuestion.value = {
     origin: 'manual',
+    type: questionModalAllowedTypes.value[0] || 'single',
     difficulty: 3,
     score: 2,
   }
@@ -420,6 +445,11 @@ onMounted(() => {
   align-items: flex-start;
   gap: 16px;
   margin-bottom: 16px;
+}
+
+.create-form-wrap {
+  width: 100%;
+  max-width: 880px;
 }
 
 .detail-title {

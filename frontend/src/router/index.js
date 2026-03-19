@@ -270,6 +270,12 @@ const router = createRouter({
           meta: { title: '部门管理', anyPermissions: DEPARTMENT_MANAGE_PAGE_PERMISSIONS },
         },
         {
+          path: 'system/configs',
+          name: 'ConfigManage',
+          component: () => import('../views/system/ConfigManage.vue'),
+          meta: { title: '配置管理', roles: ['admin'] },
+        },
+        {
           path: 'profile',
           name: 'Profile',
           component: () => import('../views/profile/Index.vue'),
@@ -343,6 +349,18 @@ function hasAllPermissions(permissionList) {
   return list.every((permission) => permissions.includes(permission))
 }
 
+function hasAllowedRole(roleList) {
+  const list = Array.isArray(roleList)
+    ? roleList.filter(Boolean)
+    : [roleList].filter(Boolean)
+  if (!list.length) return true
+
+  const user = getCachedUser()
+  const roleCodes = Array.isArray(user?.roleCodes) ? user.roleCodes : []
+  const activeRoles = new Set([user?.role, ...roleCodes].filter(Boolean))
+  return list.some((role) => activeRoles.has(role))
+}
+
 router.beforeEach((to) => {
   const token = localStorage.getItem('token')
   if (to.meta.requiresAuth && !token) {
@@ -361,11 +379,8 @@ router.beforeEach((to) => {
   if (to.meta.allPermissions && !hasAllPermissions(to.meta.allPermissions)) {
     return '/'
   }
-  if (to.meta.roles) {
-    const userRole = getCachedUser()?.role
-    if (userRole && !to.meta.roles.includes(userRole)) {
-      return '/'
-    }
+  if (to.meta.roles && !hasAllowedRole(to.meta.roles)) {
+    return '/'
   }
   return true
 })

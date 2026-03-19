@@ -245,7 +245,13 @@ const currentPageTitle = computed(() => {
 function hasMenuAccess(item) {
   const anyPermissions = item.anyPermissions || []
   const allPermissions = item.allPermissions || []
-  return authStore.hasAnyPermission(anyPermissions) && authStore.hasAllPermissions(allPermissions)
+  const roleList = Array.isArray(item.roles) ? item.roles.filter(Boolean) : []
+  const currentRoleCodes = Array.isArray(authStore.currentUser?.roleCodes)
+    ? authStore.currentUser.roleCodes
+    : []
+  const activeRoles = [authStore.currentUser?.role, ...currentRoleCodes].filter(Boolean)
+  const roleAllowed = !roleList.length || roleList.some((role) => activeRoles.includes(role))
+  return roleAllowed && authStore.hasAnyPermission(anyPermissions) && authStore.hasAllPermissions(allPermissions)
 }
 
 function filterMenuItems(items) {
@@ -321,6 +327,7 @@ function getSelectedMenuKeyByPath(path) {
   if (path.startsWith('/system/users')) return '/system/users'
   if (path.startsWith('/system/roles')) return '/system/roles'
   if (path.startsWith('/system/departments')) return '/system/departments'
+  if (path.startsWith('/system/configs')) return '/system/configs'
   if (path.startsWith('/profile')) return '/profile'
   return path
 }
