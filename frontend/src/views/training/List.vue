@@ -337,7 +337,7 @@
             <a-button v-if="createWizardStep < createWizardItems.length - 1" type="primary" @click="goNextCreateStep">
               下一步
             </a-button>
-            <a-button v-else type="primary" @click="handleSubmitTraining">
+            <a-button v-else type="primary" :loading="submitTrainingLoading" :disabled="submitTrainingLoading" @click="handleSubmitTraining">
               {{ editingTraining ? '保存培训班' : '创建培训班' }}
             </a-button>
           </a-space>
@@ -417,6 +417,7 @@ const showCreateModal = ref(false)
 const editingTraining = ref(null)
 const studentImportFile = ref(null)
 const studentImportFileName = ref('')
+const submitTrainingLoading = ref(false)
 const trainingFormDates = ref([null, null])
 const enrollmentWindow = ref([])
 const locationSourceMode = ref('manual')
@@ -570,6 +571,7 @@ async function handleDownloadStudentImportTemplate() {
 }
 
 function resetForm() {
+  submitTrainingLoading.value = false
   Object.assign(trainingForm, {
     name: '',
     type: 'basic',
@@ -738,6 +740,7 @@ async function fetchTrainingBaseOptions() {
 }
 
 async function handleSubmitTraining() {
+  if (submitTrainingLoading.value) return
   if (!canCreateTraining.value) return
   if (!validateCreateStep(0)) return
   const hasLocation = locationSourceMode.value === 'base'
@@ -767,6 +770,7 @@ async function handleSubmitTraining() {
     admissionExamId: trainingForm.admissionExamId || undefined,
   }
 
+  submitTrainingLoading.value = true
   try {
     if (editingTraining.value) {
       await updateTraining(editingTraining.value.id, payload)
@@ -784,6 +788,8 @@ async function handleSubmitTraining() {
     fetchTrainings()
   } catch (error) {
     message.error(error.message || '操作失败')
+  } finally {
+    submitTrainingLoading.value = false
   }
 }
 
