@@ -12,6 +12,26 @@ from .notice import NoticeResponse
 from .resource import ResourceListItemResponse
 
 
+class TrainingScheduleRuleWindow(BaseModel):
+    """培训班排课时间窗口"""
+
+    label: Optional[str] = Field(None, max_length=50, description="时间段标签")
+    start_time: str = Field(..., description="开始时间 HH:MM")
+    end_time: str = Field(..., description="结束时间 HH:MM")
+
+
+class TrainingScheduleRuleConfig(BaseModel):
+    """培训班排课规则配置"""
+
+    lesson_unit_minutes: int = Field(40, ge=20, le=180, description="单课时分钟数")
+    break_minutes: int = Field(10, ge=0, le=60, description="课间休息分钟数")
+    max_units_per_session: int = Field(3, ge=1, le=12, description="单节最多课时")
+    daily_max_units: int = Field(6, ge=1, le=24, description="单日最多课时")
+    preferred_planning_mode: str = Field("fill_workdays", description="默认排课方式")
+    split_strategy: str = Field("balanced", description="拆分策略")
+    teaching_windows: List[TrainingScheduleRuleWindow] = Field(default_factory=list, description="可排课时间段")
+
+
 class TrainingScheduleItem(BaseModel):
     """课程排课条目"""
 
@@ -187,6 +207,7 @@ class TrainingCreate(BaseModel):
     enrollment_start_at: Optional[datetime] = None
     enrollment_end_at: Optional[datetime] = None
     admission_exam_id: Optional[int] = None
+    schedule_rule_config: Optional[TrainingScheduleRuleConfig] = Field(None, description="排课规则配置")
     courses: List[TrainingCourseCreate] = Field(default_factory=list)
 
 
@@ -220,6 +241,7 @@ class TrainingUpdate(BaseModel):
     enrollment_start_at: Optional[datetime] = None
     enrollment_end_at: Optional[datetime] = None
     admission_exam_id: Optional[int] = None
+    schedule_rule_config: Optional[TrainingScheduleRuleConfig] = Field(None, description="排课规则配置")
     courses: Optional[List[TrainingCourseCreate]] = None
     student_ids: Optional[List[int]] = None
     roster_assignments: Optional[List[TrainingRosterAssignment]] = None
@@ -353,6 +375,7 @@ class TrainingResponse(BaseModel):
     admission_exam_title: Optional[str] = None
     group_names: List[str] = Field(default_factory=list)
     cadre_count: int = 0
+    schedule_rule_config: TrainingScheduleRuleConfig = Field(default_factory=TrainingScheduleRuleConfig)
     courses: List[TrainingCourseResponse] = Field(default_factory=list)
     exam_sessions: List[TrainingExamSummary] = Field(default_factory=list)
     checkin_records: List[CheckinResponse] = Field(default_factory=list)
@@ -416,7 +439,13 @@ class TrainingListResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class TrainingStatsResponse(BaseModel):
+    """培训班统计响应"""
 
+    total: int = 0
+    published: int = 0
+    active: int = 0
+    locked: int = 0
 
 
 class TrainingAttendanceSummaryResponse(BaseModel):

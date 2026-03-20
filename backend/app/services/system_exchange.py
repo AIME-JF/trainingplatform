@@ -65,6 +65,7 @@ TRAINING_COURSE_TEMPLATE_HEADERS = [
     "课程名称",
     "教官",
     "课程类型",
+    "课时",
     "地点",
 ]
 
@@ -91,7 +92,7 @@ TRAINING_INSTRUCTOR_TEMPLATE_SAMPLE_ROWS = [
 ]
 
 TRAINING_COURSE_TEMPLATE_SAMPLE_ROWS = [
-    ["【示例】警务实战理论", "王教官", "理论", "第一教室"],
+    ["【示例】警务实战理论", "王教官", "理论", 12, "第一教室"],
 ]
 
 TRAINING_SESSION_TEMPLATE_SAMPLE_ROWS = [
@@ -860,6 +861,7 @@ class SystemExchangeService(BatchImportService):
             ("课程名称", "必填；重复课程按“课程名称+教官+课程类型”识别后跳过"),
             ("教官", "选填；可填写教官姓名或账号"),
             ("课程类型", "选填；可填 理论/theory 或 实操/技能/practice/skill"),
+            ("课时", "选填；在 AI 排课任务选择“按课时排”时必填，会作为课程计划课时使用"),
             ("地点", "选填；留空时显示为空"),
         ]
 

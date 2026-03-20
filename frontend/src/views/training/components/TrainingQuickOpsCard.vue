@@ -20,6 +20,15 @@
       <a-button @click="$emit('view-schedule')">
         <template #icon><CalendarOutlined /></template>查看日程
       </a-button>
+      <permissions-tooltip
+        v-if="!isStudent"
+        :allowed="canAiSchedule"
+        :tips="aiScheduleTooltip"
+        block
+        v-slot="{ disabled }"
+      >
+        <a-button :disabled="disabled" @click="$emit('open-ai-schedule')">AI排课建议</a-button>
+      </permissions-tooltip>
       <a-button @click="$emit('change-tab', 'schedule')">课程安排</a-button>
       <a-button v-if="!isStudent" @click="$emit('change-tab', 'students')">学员名单</a-button>
       <a-button @click="$emit('change-tab', 'exams')">考试安排</a-button>
@@ -58,11 +67,13 @@ defineProps({
   isStudent: { type: Boolean, default: false },
   isEnrolled: { type: Boolean, default: false },
   canEdit: { type: Boolean, default: false },
+  canAiSchedule: { type: Boolean, default: false },
   canExportStudents: { type: Boolean, default: false },
   trainingManageTooltip: { type: String, default: '' },
+  aiScheduleTooltip: { type: String, default: '' },
 })
 
-defineEmits(['global-checkin', 'view-schedule', 'change-tab', 'open-edit', 'export-students'])
+defineEmits(['global-checkin', 'view-schedule', 'open-ai-schedule', 'change-tab', 'open-edit', 'export-students'])
 </script>
 
 <style scoped>

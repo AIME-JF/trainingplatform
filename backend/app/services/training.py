@@ -51,7 +51,9 @@ from app.schemas.training import (
     TrainingExamSummary,
     TrainingHistoryResponse,
     TrainingListResponse,
+    TrainingStatsResponse,
     TrainingResponse,
+    TrainingScheduleRuleConfig,
     TrainingSessionActionPermissions,
     TrainingSkipCourseRequest,
     TrainingUpdate,
@@ -61,6 +63,7 @@ from app.schemas.notice import NoticeResponse
 from app.services.batch_import import BatchImportService
 from app.services.system_exchange import SystemExchangeService
 from app.services.training_course_change import TrainingCourseChangeService
+from app.services.training_schedule_rule import TrainingScheduleRuleService
 from app.utils.authz import (
     can_manage_training,
     can_update_training,
@@ -108,6 +111,7 @@ class TrainingService:
         WORKFLOW_STEP_RUNNING: "开班进行中",
         WORKFLOW_STEP_COMPLETED: "结班归档",
     }
+    TRAINING_STATUS_VALUES = {"upcoming", "active", "ended"}
 
     def __init__(self, db: Session):
         self.db = db
@@ -142,6 +146,44 @@ class TrainingService:
         current_user_id: Optional[int] = None,
     ) -> PaginatedResponse[TrainingListResponse]:
         """获取培训列表"""
+        trainings = self._collect_visible_trainings(
+            status=status,
+            training_type=training_type,
+            search=search,
+            current_user_id=current_user_id,
+        )
+        items = [self._to_list_response(training, current_user_id) for training in trainings]
+
+        total = len(items)
+        if size != -1:
+            skip = (page - 1) * size
+            items = items[skip: skip + size]
+
+        return PaginatedResponse(
+            page=page,
+            size=size if size != -1 else total,
+            total=total,
+            items=items,
+        )
+
+    def get_training_stats(self, current_user_id: Optional[int] = None) -> TrainingStatsResponse:
+        """获取培训班统计"""
+        trainings = self._collect_visible_trainings(current_user_id=current_user_id)
+        return TrainingStatsResponse(
+            total=len(trainings),
+            published=sum(1 for item in trainings if (item.publish_status or "draft") == "published"),
+            active=sum(1 for item in trainings if (item.status or "upcoming") == "active"),
+            locked=sum(1 for item in trainings if item.locked_at is not None),
+        )
+
+    def _collect_visible_trainings(
+        self,
+        status: Optional[str] = None,
+        training_type: Optional[str] = None,
+        search: Optional[str] = None,
+        current_user_id: Optional[int] = None,
+    ) -> List[Training]:
+        status_filters = self._normalize_training_status_filters(status)
         query = self.db.query(Training).options(
             joinedload(Training.department),
             joinedload(Training.instructor),
@@ -157,7 +199,7 @@ class TrainingService:
             query = query.filter(Training.name.contains(search))
 
         trainings = query.order_by(Training.created_at.desc()).all()
-        items: List[TrainingListResponse] = []
+        visible_trainings: List[Training] = []
         changed = False
         scope_context = build_data_scope_context(self.db, current_user_id) if current_user_id else None
         for training in trainings:
@@ -165,26 +207,29 @@ class TrainingService:
                 changed = True
             if self._refresh_schedule_states(training):
                 changed = True
-            if status and (training.status or "upcoming") != status:
+            if status_filters and (training.status or "upcoming") not in status_filters:
                 continue
             if scope_context and not can_view_training_with_context(scope_context, training):
                 continue
-            items.append(self._to_list_response(training, current_user_id))
+            visible_trainings.append(training)
 
         if changed:
             self.db.commit()
 
-        total = len(items)
-        if size != -1:
-            skip = (page - 1) * size
-            items = items[skip: skip + size]
+        return visible_trainings
 
-        return PaginatedResponse(
-            page=page,
-            size=size if size != -1 else total,
-            total=total,
-            items=items,
-        )
+    def _normalize_training_status_filters(self, status: Optional[str]) -> List[str]:
+        if not status:
+            return []
+        normalized: List[str] = []
+        for item in str(status).split(","):
+            value = item.strip()
+            if not value or value in normalized:
+                continue
+            if value not in self.TRAINING_STATUS_VALUES:
+                continue
+            normalized.append(value)
+        return normalized
 
     def create_training(self, data: TrainingCreate, user_id: int) -> TrainingResponse:
         """创建培训班"""
@@ -204,6 +249,9 @@ class TrainingService:
             enrollment_requires_approval=bool(data.enrollment_requires_approval),
             enrollment_start_at=data.enrollment_start_at,
             enrollment_end_at=data.enrollment_end_at,
+            schedule_rule_config=TrainingScheduleRuleService.normalize_rule_config(
+                data.schedule_rule_config.model_dump(mode="json") if data.schedule_rule_config else None
+            ),
             published_at=self._current_time(data.enrollment_start_at, data.enrollment_end_at)
             if data.publish_status == "published" else None,
             published_by=user_id if data.publish_status == "published" else None,
@@ -282,6 +330,9 @@ class TrainingService:
         admission_exam_id = None
         if "admission_exam_id" in update_data:
             admission_exam_id = update_data.pop("admission_exam_id")
+        schedule_rule_config = _UNSET
+        if "schedule_rule_config" in update_data:
+            schedule_rule_config = update_data.pop("schedule_rule_config")
 
         if student_ids is not None and training.locked_at:
             raise ValueError("班次名单已锁定，不能再调整学员名单")
@@ -302,6 +353,11 @@ class TrainingService:
 
         for field, value in update_data.items():
             setattr(training, field, value)
+
+        if schedule_rule_config is not _UNSET:
+            training.schedule_rule_config = TrainingScheduleRuleService.normalize_rule_config(
+                schedule_rule_config
+            )
 
         if admission_exam_id is not None:
             training.admission_exam_id = None
@@ -1382,6 +1438,7 @@ class TrainingService:
             for item in (payload.get("schedules") or [])
         ]
         schedules.sort(key=lambda item: (item.get("date") or "", item.get("time_range") or ""))
+        planned_hours = self._normalize_course_hours(payload.get("hours"))
 
         return {
             "course_key": course_key,
@@ -1390,7 +1447,7 @@ class TrainingService:
             "instructor": instructor_name,
             "primary_instructor_id": primary_instructor_id,
             "assistant_instructor_ids": sorted(set(assistant_instructor_ids)),
-            "hours": payload.get("hours") or sum(float(item.get("hours", 0) or 0) for item in schedules),
+            "hours": planned_hours if planned_hours is not None else 0,
             "type": payload.get("type") or "theory",
             "schedules": schedules,
         }
@@ -1437,6 +1494,15 @@ class TrainingService:
             return None
         text = str(value).strip()
         return text or None
+
+    @staticmethod
+    def _normalize_course_hours(value: Any) -> Optional[float]:
+        if value in (None, ""):
+            return None
+        try:
+            return round(max(float(value), 0), 2)
+        except (TypeError, ValueError):
+            return None
 
     def _normalize_schedule_item(self, item: Any) -> Dict[str, Any]:
         raw = item.model_dump() if hasattr(item, "model_dump") else dict(item)
@@ -2282,6 +2348,7 @@ class TrainingService:
         checkin_records = self._get_detail_checkin_records(training.id, current_user_id, can_manage_all)
         notices = self._list_training_notices(training.id)
         resources = self.list_training_resources(training.id)
+        schedule_rule_config = self._resolve_training_schedule_rule_config(training)
 
         return TrainingResponse(
             id=training.id,
@@ -2319,6 +2386,7 @@ class TrainingService:
             admission_exam_title=training.admission_exam.title if training.admission_exam else None,
             group_names=group_names,
             cadre_count=cadre_count,
+            schedule_rule_config=schedule_rule_config,
             courses=courses,
             exam_sessions=sorted(exam_sessions, key=lambda item: item.start_time.isoformat() if item.start_time else ""),
             checkin_records=checkin_records,
@@ -2337,6 +2405,11 @@ class TrainingService:
             can_enter_training=current_enrollment_status == "approved",
             created_at=training.created_at,
             updated_at=training.updated_at,
+        )
+
+    def _resolve_training_schedule_rule_config(self, training: Training) -> TrainingScheduleRuleConfig:
+        return TrainingScheduleRuleConfig.model_validate(
+            TrainingScheduleRuleService.resolve_effective_rule_config(training.schedule_rule_config)
         )
 
     def _course_change_log_to_response(self, log: TrainingCourseChangeLog) -> TrainingCourseChangeLogResponse:

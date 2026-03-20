@@ -99,6 +99,88 @@ INITIAL_CONFIG_GROUPS = [
             },
         ],
     },
+    {
+        "group_name": "培训排课默认规则",
+        "group_key": "training_schedule",
+        "group_description": "培训班排课的系统默认规则模板",
+        "configs": [
+            {
+                "config_name": "单课时分钟数",
+                "config_key": "lesson_unit_minutes",
+                "config_description": "默认一个课时对应多少分钟",
+                "config_format": ConfigFormat.INTEGER,
+                "config_value": 40,
+                "is_required": True,
+                "is_public": False,
+            },
+            {
+                "config_name": "课间休息分钟数",
+                "config_key": "break_minutes",
+                "config_description": "相邻两个课时之间的默认休息分钟数",
+                "config_format": ConfigFormat.INTEGER,
+                "config_value": 10,
+                "is_required": True,
+                "is_public": False,
+            },
+            {
+                "config_name": "单节最多课时",
+                "config_key": "max_units_per_session",
+                "config_description": "一节课默认最多可连续安排的课时数",
+                "config_format": ConfigFormat.INTEGER,
+                "config_value": 3,
+                "is_required": True,
+                "is_public": False,
+            },
+            {
+                "config_name": "单日最多课时",
+                "config_key": "daily_max_units",
+                "config_description": "培训班单日默认最多安排的课时数",
+                "config_format": ConfigFormat.INTEGER,
+                "config_value": 6,
+                "is_required": True,
+                "is_public": False,
+            },
+            {
+                "config_name": "默认排课方式",
+                "config_key": "preferred_planning_mode",
+                "config_description": "新建培训班和 AI 排课默认采用的排课方式",
+                "config_format": ConfigFormat.SELECT,
+                "config_value": {
+                    "selected": "fill_workdays",
+                    "options": [
+                        {"label": "排满工作日", "value": "fill_workdays"},
+                        {"label": "排满", "value": "fill_all_days"},
+                        {"label": "按课时排", "value": "by_hours"},
+                    ],
+                },
+                "is_required": True,
+                "is_public": False,
+            },
+            {
+                "config_name": "拆分策略",
+                "config_key": "split_strategy",
+                "config_description": "默认连续课时拆分策略",
+                "config_format": ConfigFormat.SELECT,
+                "config_value": {
+                    "selected": "balanced",
+                    "options": [
+                        {"label": "尽量平分", "value": "balanced"},
+                    ],
+                },
+                "is_required": True,
+                "is_public": False,
+            },
+            {
+                "config_name": "可排课时间段",
+                "config_key": "teaching_windows",
+                "config_description": "每行一个时间段，格式如：上午|08:30-12:30",
+                "config_format": ConfigFormat.LONG_TEXT,
+                "config_value": "上午|08:30-12:30\n下午|14:00-17:30",
+                "is_required": True,
+                "is_public": False,
+            },
+        ],
+    },
 ]
 
 

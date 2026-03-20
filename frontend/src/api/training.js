@@ -4,6 +4,10 @@ export function getTrainings(params) {
   return request.get('/trainings', { params })
 }
 
+export function getTrainingStats() {
+  return request.get('/trainings/stats')
+}
+
 export function getTraining(id) {
   return request.get(`/trainings/${id}`)
 }

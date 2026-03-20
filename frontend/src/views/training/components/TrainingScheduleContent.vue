@@ -9,9 +9,18 @@
             <a-radio-button value="timetable">按课表展示</a-radio-button>
           </a-radio-group>
         </a-space>
-        <div class="section-helper">建议先添加课程，再补课次或导入课次模板。课程可以先保存，时间后补。</div>
+        <div class="section-helper">建议先补课程计划课时。AI 排课任务支持排满、排满工作日、按课时排三种方式，其中按课时排会使用计划课时。</div>
       </div>
       <a-space v-if="!isStudent">
+        <permissions-tooltip
+          :allowed="canScheduleEdit"
+          :tips="scheduleEditTooltip"
+          v-slot="{ disabled }"
+        >
+          <a-button size="small" :disabled="disabled" @click="$emit('open-ai-schedule')">
+            AI排课建议
+          </a-button>
+        </permissions-tooltip>
         <permissions-tooltip
           :allowed="canScheduleEdit"
           :tips="scheduleEditTooltip"
@@ -53,7 +62,9 @@
               / 带教：{{ c.assistantInstructorNames.join('、') }}
             </template>
           </div>
-          <div class="ci-time" v-if="c.schedules?.length">{{ c.schedules.length }} 个课次 · {{ c.hours }} 课时</div>
+          <div class="ci-time">{{ getCoursePlanLabel(c) }}</div>
+          <div class="ci-time" v-if="c.schedules?.length">已排 {{ c.schedules.length }} 个课次 · {{ getScheduledHours(c) }} 课时</div>
+          <div class="ci-time" v-else>暂未排课</div>
           <div class="ci-time">地点：{{ c.location || '未设置' }}</div>
         </div>
         <div class="ci-right">
@@ -169,6 +180,7 @@ defineProps({
 
 defineEmits([
   'update:scheduleViewMode',
+  'open-ai-schedule',
   'open-course-import',
   'open-schedule-import',
   'add-course',
@@ -185,6 +197,27 @@ defineEmits([
 ])
 
 const courseSessionButtonRefs = ref({})
+
+function normalizeCourseHours(value) {
+  const numeric = Number(value || 0)
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return 0
+  }
+  return Number(numeric.toFixed(1))
+}
+
+function getScheduledHours(course) {
+  const total = (course?.schedules || []).reduce((sum, item) => sum + Number(item?.hours || 0), 0)
+  return normalizeCourseHours(total)
+}
+
+function getCoursePlanLabel(course) {
+  const plannedHours = normalizeCourseHours(course?.hours)
+  if (plannedHours > 0) {
+    return `计划 ${plannedHours} 课时 · 可用于AI按课时排`
+  }
+  return '计划课时未设置 · 如需AI按课时排请先补齐'
+}
 
 function setCourseSessionButtonRef(el, idx) {
   if (el) {

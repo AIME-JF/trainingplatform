@@ -65,6 +65,7 @@ DIMENSION_RULES = {
 }
 DEFAULT_EXAM_DURATION = 60
 DEFAULT_PASSING_SCORE_RATIO = 0.6
+EXAM_STATUS_VALUES = {"upcoming", "active", "ended"}
 
 
 class ExamService:
@@ -228,6 +229,7 @@ class ExamService:
         current_user_id: Optional[int] = None,
     ) -> PaginatedResponse[ExamResponse]:
         """获取培训班内考试列表"""
+        status_filters = self._normalize_exam_status_filters(status)
         query = self.db.query(Exam).options(
             joinedload(Exam.paper).joinedload(ExamPaper.paper_questions),
             joinedload(Exam.training),
@@ -250,7 +252,7 @@ class ExamService:
         for exam in exams:
             if self._refresh_exam_status(exam):
                 changed = True
-            if status and (exam.status or "upcoming") != status:
+            if status_filters and (exam.status or "upcoming") not in status_filters:
                 continue
             if scope_context and not self._can_view_training_exam_with_context(scope_context, exam):
                 continue
@@ -271,6 +273,7 @@ class ExamService:
         current_user_id: Optional[int] = None,
     ) -> PaginatedResponse[AdmissionExamResponse]:
         """获取独立准入考试列表"""
+        status_filters = self._normalize_exam_status_filters(status)
         current_user = self._get_admission_scope_user(current_user_id)
         can_manage_all = bool(current_user_id and self._can_manage_admission_exam(current_user_id))
         query = self.db.query(AdmissionExam).options(
@@ -290,7 +293,7 @@ class ExamService:
         for exam in exams:
             if self._refresh_exam_status(exam):
                 changed = True
-            if status and (exam.status or "upcoming") != status:
+            if status_filters and (exam.status or "upcoming") not in status_filters:
                 continue
             if current_user_id and not can_manage_all:
                 if not current_user or not self._can_view_admission_exam(exam, current_user):
@@ -301,6 +304,19 @@ class ExamService:
             self.db.commit()
 
         return self._paginate(items, page, size)
+
+    def _normalize_exam_status_filters(self, status: Optional[str]) -> List[str]:
+        if not status:
+            return []
+        normalized: List[str] = []
+        for item in str(status).split(","):
+            value = item.strip()
+            if not value or value in normalized:
+                continue
+            if value not in EXAM_STATUS_VALUES:
+                continue
+            normalized.append(value)
+        return normalized
 
     def create_exam(self, data: ExamCreate, user_id: int) -> ExamResponse:
         """创建培训班内考试"""

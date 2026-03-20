@@ -28,8 +28,14 @@
 
     <a-card :bordered="false" style="margin-bottom:16px">
       <a-space wrap>
-        <a-select v-model:value="filterStatus" style="width:120px">
-          <a-select-option value="all">全部状态</a-select-option>
+        <a-select
+          v-model:value="filterStatus"
+          mode="multiple"
+          allow-clear
+          :max-tag-count="2"
+          placeholder="培训状态"
+          style="width:220px"
+        >
           <a-select-option value="active">进行中</a-select-option>
           <a-select-option value="upcoming">未开始</a-select-option>
           <a-select-option value="ended">已结束</a-select-option>
@@ -348,7 +354,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, onMounted } from 'vue'
+import { computed, reactive, ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import dayjs from 'dayjs'
@@ -367,6 +373,7 @@ import {
   deleteTraining,
   endTraining,
   getTrainingBases,
+  getTrainingStats,
   getTrainings,
   downloadTrainingStudentImportTemplate,
   importTrainingStudents,
@@ -401,14 +408,25 @@ const workflowStepColors = {
 }
 const typeLabels = { basic: '基础训练', special: '专项训练', promotion: '晋升培训', online: '线上培训' }
 
-const filterStatus = ref('all')
+function buildEmptyTrainingStats() {
+  return {
+    total: 0,
+    published: 0,
+    active: 0,
+    locked: 0,
+  }
+}
+
+const filterStatus = ref(['upcoming', 'active'])
 const filterType = ref('all')
 const filterPublish = ref('all')
 const searchText = ref('')
 const trainingList = ref([])
+const trainingStats = ref(buildEmptyTrainingStats())
 const instructorList = ref([])
 const instructorOptionsLoaded = ref(false)
 const instructorOptionsLoading = ref(false)
+const trainingFormLookupsLoading = ref(false)
 const admissionExamOptions = ref([])
 const trainingBaseOptions = ref([])
 const departmentOptions = ref([])
@@ -459,19 +477,16 @@ const trainingForm = reactive({
 })
 
 const stats = computed(() => [
-  { label: '全部培训班', value: trainingList.value.length, color: '#003087' },
-  { label: '已发布', value: trainingList.value.filter(item => item.publishStatus === 'published').length, color: '#1677ff' },
-  { label: '进行中', value: trainingList.value.filter(item => item.status === 'active').length, color: '#52c41a' },
-  { label: '已锁定', value: trainingList.value.filter(item => item.isLocked).length, color: '#ff4d4f' },
+  { label: '全部培训班', value: trainingStats.value.total, color: '#003087' },
+  { label: '已发布', value: trainingStats.value.published, color: '#1677ff' },
+  { label: '进行中', value: trainingStats.value.active, color: '#52c41a' },
+  { label: '已锁定', value: trainingStats.value.locked, color: '#ff4d4f' },
 ])
 
 const filteredTrainings = computed(() => {
   let list = [...trainingList.value]
   if (authStore.isStudent) {
     list = list.filter(item => item.publishStatus === 'published' && (isMyTraining(item) || item.status !== 'ended'))
-  }
-  if (filterStatus.value !== 'all') {
-    list = list.filter(item => item.status === filterStatus.value)
   }
   if (filterPublish.value !== 'all') {
     list = list.filter(item => item.publishStatus === filterPublish.value)
@@ -484,6 +499,13 @@ const filteredTrainings = computed(() => {
   }
   return list
 })
+
+function buildStatusFilterParam() {
+  if (!Array.isArray(filterStatus.value) || !filterStatus.value.length) {
+    return undefined
+  }
+  return filterStatus.value.filter(Boolean).join(',')
+}
 
 function getTrainingStudentIds(training) {
   return training?.studentIds || []
@@ -607,6 +629,7 @@ function openCreateModal() {
   createWizardStep.value = 0
   showCreateModal.value = true
   ensureInstructorOptionsLoaded(true)
+  ensureTrainingFormLookupsLoaded()
 }
 
 function openEditModal(training) {
@@ -642,6 +665,7 @@ function openEditModal(training) {
   createWizardStep.value = 0
   showCreateModal.value = true
   ensureInstructorOptionsLoaded(true)
+  ensureTrainingFormLookupsLoaded()
 }
 
 function validateCreateStep(step) {
@@ -671,11 +695,31 @@ function goNextCreateStep() {
 
 async function fetchTrainings() {
   try {
-    const result = await getTrainings({ size: -1 })
+    const result = await getTrainings({
+      size: -1,
+      status: buildStatusFilterParam(),
+    })
     trainingList.value = result.items || result || []
   } catch (error) {
     message.error(error.message || '加载培训班失败')
   }
+}
+
+async function fetchTrainingStats() {
+  try {
+    const result = await getTrainingStats()
+    trainingStats.value = {
+      ...buildEmptyTrainingStats(),
+      ...(result || {}),
+    }
+  } catch (error) {
+    trainingStats.value = buildEmptyTrainingStats()
+    message.error(error.message || '加载培训班统计失败')
+  }
+}
+
+async function refreshTrainingData() {
+  await Promise.all([fetchTrainings(), fetchTrainingStats()])
 }
 
 async function ensureInstructorOptionsLoaded(force = false) {
@@ -704,9 +748,16 @@ async function ensureInstructorOptionsLoaded(force = false) {
 
 async function fetchAdmissionExams() {
   try {
-    const result = await getAdmissionExams({ size: 200, status: 'upcoming' })
-    const activeResult = await getAdmissionExams({ size: 200, status: 'active' })
-    admissionExamOptions.value = [...(result.items || []), ...(activeResult.items || [])]
+    const result = await getAdmissionExams({ size: 200, status: 'upcoming,active' })
+    const items = result.items || []
+    const dedupedItems = []
+    const seenIds = new Set()
+    for (const item of items) {
+      if (!item?.id || seenIds.has(item.id)) continue
+      seenIds.add(item.id)
+      dedupedItems.push(item)
+    }
+    admissionExamOptions.value = dedupedItems
   } catch {
     admissionExamOptions.value = []
   }
@@ -736,6 +787,30 @@ async function fetchTrainingBaseOptions() {
     trainingBaseOptions.value = result.items || []
   } catch {
     trainingBaseOptions.value = []
+  }
+}
+
+async function ensureTrainingFormLookupsLoaded() {
+  if (trainingFormLookupsLoading.value) return
+  const tasks = []
+  if (!admissionExamOptions.value.length) {
+    tasks.push(fetchAdmissionExams())
+  }
+  if (!departmentOptions.value.length) {
+    tasks.push(fetchDepartments())
+  }
+  if (!policeTypeOptions.value.length) {
+    tasks.push(fetchPoliceTypeOptions())
+  }
+  if (!trainingBaseOptions.value.length) {
+    tasks.push(fetchTrainingBaseOptions())
+  }
+  if (!tasks.length) return
+  trainingFormLookupsLoading.value = true
+  try {
+    await Promise.all(tasks)
+  } finally {
+    trainingFormLookupsLoading.value = false
   }
 }
 
@@ -785,7 +860,7 @@ async function handleSubmitTraining() {
       }
     }
     resetForm()
-    fetchTrainings()
+    await refreshTrainingData()
   } catch (error) {
     message.error(error.message || '操作失败')
   } finally {
@@ -802,7 +877,7 @@ function handleDelete(training) {
       try {
         await deleteTraining(training.id)
         message.success('已删除')
-        fetchTrainings()
+        await refreshTrainingData()
       } catch (error) {
         message.error(error.message || '删除失败')
       }
@@ -814,7 +889,7 @@ async function handlePublish(training) {
   try {
     await publishTraining(training.id)
     message.success('培训班已发布')
-    fetchTrainings()
+    await refreshTrainingData()
   } catch (error) {
     message.error(error.message || '发布失败')
   }
@@ -824,7 +899,7 @@ async function handleLock(training) {
   try {
     await lockTraining(training.id)
     message.success('名单已锁定')
-    fetchTrainings()
+    await refreshTrainingData()
   } catch (error) {
     message.error(error.message || '锁定失败')
   }
@@ -834,7 +909,7 @@ async function handleStart(training) {
   try {
     await startTraining(training.id)
     message.success('已开班')
-    fetchTrainings()
+    await refreshTrainingData()
   } catch (error) {
     message.error(error.message || '开班失败')
   }
@@ -844,7 +919,7 @@ async function handleEnd(training) {
   try {
     await endTraining(training.id)
     message.success('已结班')
-    fetchTrainings()
+    await refreshTrainingData()
   } catch (error) {
     message.error(error.message || '结班失败')
   }
@@ -879,14 +954,15 @@ function goHistory(training) {
 }
 
 onMounted(() => {
-  fetchTrainings()
-  if (!authStore.isStudent && canCreateTraining.value) {
-    fetchAdmissionExams()
-    fetchDepartments()
-    fetchPoliceTypeOptions()
-    fetchTrainingBaseOptions()
-  }
+  refreshTrainingData()
 })
+
+watch(
+  () => (Array.isArray(filterStatus.value) ? [...filterStatus.value] : []),
+  () => {
+    fetchTrainings()
+  },
+)
 </script>
 
 <style scoped>

@@ -22,8 +22,11 @@ from app.schemas import (
     PaginatedResponse,
 )
 from app.services.personal_training_plan_agent import PersonalTrainingPlanAgentService
+from app.services.ai_schedule_config_parser import AIScheduleConfigParserService
 from app.services.schedule_agent import ScheduleAgentService
+from app.services.training_schedule_rule import TrainingScheduleRuleService
 from app.utils.authz import can_manage_training
+from logger import logger
 
 
 class TrainingAIService:
@@ -35,6 +38,7 @@ class TrainingAIService:
     def __init__(self, db: Session):
         self.db = db
         self.schedule_agent = ScheduleAgentService(db)
+        self.schedule_config_parser = AIScheduleConfigParserService()
         self.personal_plan_agent = PersonalTrainingPlanAgentService(db)
 
     def list_schedule_tasks(
@@ -75,16 +79,52 @@ class TrainingAIService:
             self.SCHEDULE_TASK_TYPE,
             self._build_schedule_request_payload(data),
             current_user_id,
+            status="pending",
         )
+        self.db.commit()
+        self.db.refresh(task)
+
         try:
-            task.result_payload = self.schedule_agent.build_task_result(data, current_user_id)
-            self._mark_task_completed(task)
+            from app.tasks.ai_schedule import schedule_ai_schedule_task
+
+            schedule_ai_schedule_task(preferred_task_id=task.id, db=self.db)
+            self.db.refresh(task)
         except Exception as exc:
-            self._mark_task_failed(task, str(exc))
-            raise
-        finally:
-            self.db.commit()
+            logger.error("调度 AI 排课任务失败: %s", exc)
         return self.get_schedule_task_detail(task.id, current_user_id)
+
+    def execute_schedule_task(self, task_id: int) -> None:
+        task = self.db.query(AITask).filter(
+            AITask.id == task_id,
+            AITask.task_type == self.SCHEDULE_TASK_TYPE,
+        ).first()
+        if not task:
+            raise ValueError("任务不存在")
+        if task.status in {"completed", "confirmed", "failed"}:
+            return
+
+        request_payload = AIScheduleTaskCreateRequest.model_validate(task.request_payload or {})
+        training = self.schedule_agent._load_training_or_raise(request_payload.training_id)  # noqa: SLF001
+        self.schedule_agent._ensure_manage_permission(training, task.created_by)  # noqa: SLF001
+
+        if task.status != "processing":
+            task.status = "processing"
+            task.started_at = task.started_at or datetime.now()
+            task.completed_at = None
+            task.error_message = None
+            self.db.commit()
+
+        parser_result = self.schedule_config_parser.parse_task_request(training, request_payload)
+        effective_request = parser_result["request"]
+        task.task_name = effective_request.task_name
+        task.request_payload = self._build_schedule_request_payload(effective_request)
+        task.result_payload = {
+            **self.schedule_agent.build_task_result(effective_request, task.created_by),
+            "parse_summary": parser_result.get("summary"),
+            "parse_warnings": parser_result.get("warnings") or [],
+        }
+        self._mark_task_completed(task)
+        self.db.commit()
 
     def create_personal_training_task(
         self,
@@ -124,20 +164,25 @@ class TrainingAIService:
         training = self.db.query(Training).filter(Training.id == request_payload.training_id).first()
         recalculated_conflicts = []
         if training:
-            self.schedule_agent._normalize_plan_courses(main_plan_payload.get("courses") or [])  # noqa: SLF001
+            rule_config = self.schedule_agent._resolve_rule_config(training, request_payload)  # noqa: SLF001
+            self.schedule_agent._normalize_plan_courses(main_plan_payload.get("courses") or [], rule_config)  # noqa: SLF001
             recalculated_conflicts = self.schedule_agent._validate_plan_courses(  # noqa: SLF001
                 training,
                 main_plan_payload.get("courses") or [],
                 request_payload.constraint_payload,
+                request_payload.planning_mode,
+                rule_config,
             )
             main_plan_payload["metrics"] = self.schedule_agent._build_plan_metrics(  # noqa: SLF001
-                main_plan_payload.get("courses") or []
+                main_plan_payload.get("courses") or [],
+                rule_config,
             ).model_dump(mode="json")
             main_plan_payload["summary"] = self.schedule_agent._build_plan_summary(  # noqa: SLF001
                 training,
                 request_payload,
                 AISchedulePlan.model_validate(main_plan_payload).metrics,
                 recalculated_conflicts,
+                rule_config,
             )
         if data.task_name:
             task.task_name = data.task_name
@@ -146,6 +191,8 @@ class TrainingAIService:
             "alternative_plans": [item.model_dump(mode="json") for item in data.alternative_plans],
             "conflicts": [item.model_dump(mode="json") for item in (recalculated_conflicts or data.conflicts)],
             "explanation": data.explanation,
+            "parse_summary": (task.result_payload or {}).get("parse_summary"),
+            "parse_warnings": list((task.result_payload or {}).get("parse_warnings") or []),
         }
         self.db.commit()
         return self.get_schedule_task_detail(task_id, current_user_id)
@@ -224,14 +271,15 @@ class TrainingAIService:
         task_type: str,
         request_payload: dict,
         current_user_id: int,
+        status: str = "processing",
     ) -> AITask:
         task = AITask(
             task_name=task_name,
             task_type=task_type,
-            status="processing",
+            status=status,
             request_payload=request_payload,
             created_by=current_user_id,
-            started_at=datetime.now(),
+            started_at=datetime.now() if status == "processing" else None,
         )
         self.db.add(task)
         self.db.flush()
@@ -346,13 +394,22 @@ class TrainingAIService:
     def _to_schedule_task_detail(self, task: AITask) -> AIScheduleTaskDetailResponse:
         result_payload = task.result_payload or {}
         main_plan_payload = result_payload.get("main_plan")
+        request_payload = AIScheduleTaskCreateRequest.model_validate(task.request_payload or {})
+        training = self.schedule_agent._load_training_or_raise(request_payload.training_id)  # noqa: SLF001
+        effective_rule_config = TrainingScheduleRuleService.resolve_effective_rule_config(
+            training.schedule_rule_config,
+            request_payload.schedule_rule_override.model_dump(mode="json") if request_payload.schedule_rule_override else None,
+        )
         return AIScheduleTaskDetailResponse(
             **self._to_task_summary(task).model_dump(),
-            request_payload=AIScheduleTaskCreateRequest.model_validate(task.request_payload or {}),
+            request_payload=request_payload,
             main_plan=AISchedulePlan.model_validate(main_plan_payload) if main_plan_payload else None,
             alternative_plans=[AISchedulePlan.model_validate(item) for item in (result_payload.get("alternative_plans") or [])],
             conflicts=[AIScheduleConflictItem.model_validate(item) for item in (result_payload.get("conflicts") or [])],
             explanation=result_payload.get("explanation"),
+            parse_summary=result_payload.get("parse_summary"),
+            parse_warnings=list(result_payload.get("parse_warnings") or []),
+            effective_rule_config=effective_rule_config,
             error_message=task.error_message,
         )
 

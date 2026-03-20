@@ -39,8 +39,10 @@ from .course import (
 # 培训相关
 from .training import (
     TrainingCreate, TrainingUpdate, TrainingResponse, TrainingListResponse,
+    TrainingStatsResponse,
     TrainingBaseCreate, TrainingBaseUpdate, TrainingBaseResponse,
     TrainingCourseCreate, TrainingCourseResponse,
+    TrainingScheduleRuleWindow, TrainingScheduleRuleConfig,
     TrainingScheduleItem, TrainingSessionActionPermissions, TrainingCurrentSessionResponse,
     TrainingWorkflowStepResponse, TrainingWorkflowActionRequest, TrainingSkipCourseRequest,
     EnrollmentCreate, EnrollmentResponse,
@@ -140,9 +142,10 @@ __all__ = [
     "CourseProgressUpdate", "CourseProgressResponse", "CourseNoteUpdate", "CourseNoteResponse",
     "CourseQACreate", "CourseQAResponse", "CourseTagCreate", "CourseTagResponse", "CourseLearningStatusResponse",
     # 培训相关
-    "TrainingCreate", "TrainingUpdate", "TrainingResponse", "TrainingListResponse",
+    "TrainingCreate", "TrainingUpdate", "TrainingResponse", "TrainingListResponse", "TrainingStatsResponse",
     "TrainingBaseCreate", "TrainingBaseUpdate", "TrainingBaseResponse",
     "TrainingCourseCreate", "TrainingCourseResponse",
+    "TrainingScheduleRuleWindow", "TrainingScheduleRuleConfig",
     "TrainingScheduleItem", "TrainingSessionActionPermissions", "TrainingCurrentSessionResponse",
     "TrainingWorkflowStepResponse", "TrainingWorkflowActionRequest", "TrainingSkipCourseRequest",
     "EnrollmentCreate", "EnrollmentResponse",

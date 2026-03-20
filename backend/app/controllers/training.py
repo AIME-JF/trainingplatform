@@ -45,6 +45,13 @@ class TrainingController:
             logger.error("获取培训列表异常: %s", exc)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取培训列表失败")
 
+    def get_training_stats(self, current_user_id: Optional[int] = None):
+        try:
+            return self.service.get_training_stats(current_user_id)
+        except Exception as exc:
+            logger.error("获取培训统计异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取培训统计失败")
+
     def create_training(self, data: TrainingCreate, user_id: int):
         try:
             return self.service.create_training(data, user_id)

@@ -68,6 +68,7 @@ class BatchImportService:
         "course_name": {"课程名称", "课程", "科目", "课名", "course", "course_name", "title"},
         "instructor_name": {"教官", "授课教官", "讲师", "教师", "instructor", "teacher", "lecturer"},
         "type": {"课程类型", "类型", "课型", "type"},
+        "hours": {"课时", "学时", "时长", "hours", "hour", "duration"},
         "location": {"地点", "教室", "上课地点", "location", "classroom"},
     }
 
@@ -361,10 +362,6 @@ class BatchImportService:
                 )
                 if not target_course.get("location") and session_seed["schedule"].get("location"):
                     target_course["location"] = session_seed["schedule"].get("location")
-                target_course["hours"] = round(
-                    sum(float(item.get("hours", 0) or 0) for item in target_course.get("schedules") or []),
-                    2,
-                )
                 added_session_count += 1
             except Exception as exc:
                 reason = str(exc)
@@ -768,6 +765,12 @@ class BatchImportService:
 
         instructor_name = self._to_text(row.get("instructor_name"))
         course_type = self._parse_optional_course_type(row.get("type"))
+        hours = self._parse_float(row.get("hours"))
+        raw_hours = row.get("hours")
+        if raw_hours not in (None, "") and hours is None:
+            raise ValueError("课时格式无效")
+        if hours is not None and hours < 0:
+            raise ValueError("课时不能小于 0")
         return {
             "course_key": str(uuid.uuid4()),
             "name": course_name,
@@ -776,7 +779,7 @@ class BatchImportService:
             "primary_instructor_id": self._guess_instructor_id(instructor_name),
             "assistant_instructor_ids": [],
             "type": course_type,
-            "hours": 0,
+            "hours": round(hours or 0, 2),
             "schedules": [],
         }
 
@@ -992,6 +995,8 @@ class BatchImportService:
             for schedule in (course.get("schedules") or [])
         ]
         schedules.sort(key=lambda item: (item.get("date") or "", item.get("time_range") or "", item.get("location") or ""))
+        course_hours = self._normalize_course_hours(course.get("hours"))
+        existing_hours = self._normalize_course_hours(existing_course.get("hours"))
         return {
             "course_key": course.get("course_key") or existing_course.get("course_key") or str(uuid.uuid4()),
             "name": course["name"],
@@ -1004,7 +1009,7 @@ class BatchImportService:
             ),
             "assistant_instructor_ids": existing_course.get("assistant_instructor_ids") or [],
             "type": course.get("type") or "theory",
-            "hours": round(sum(float(item.get("hours", 0) or 0) for item in schedules), 2),
+            "hours": course_hours if course_hours is not None else (existing_hours or 0),
             "schedules": schedules,
         }
 
@@ -1025,6 +1030,15 @@ class BatchImportService:
         })
         merged["session_id"] = existing_schedule.get("session_id") or normalized.get("session_id") or str(uuid.uuid4())
         return merged
+
+    @staticmethod
+    def _normalize_course_hours(value: Any) -> Optional[float]:
+        if value in (None, ""):
+            return None
+        try:
+            return round(max(float(value), 0), 2)
+        except Exception:
+            return None
 
     def _normalize_schedule_payload(self, schedule: Dict[str, Any]) -> Dict[str, Any]:
         raw = dict(schedule or {})

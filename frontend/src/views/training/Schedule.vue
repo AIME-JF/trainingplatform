@@ -508,10 +508,6 @@ function getScheduleDurationMinutes(schedule) {
   return DEFAULT_DURATION_MINUTES
 }
 
-function getScheduleHours(schedule) {
-  return Number((getScheduleDurationMinutes(schedule) / MINUTES_PER_HOUR).toFixed(1))
-}
-
 function mapCourseTypeToItemType(courseType) {
   return courseType === 'practice' || courseType === 'skill' ? 'skill' : 'theory'
 }
@@ -535,14 +531,6 @@ function clampScheduleOffsetMinutes(offsetMinutes, durationMinutes = 0) {
 
 function snapScheduleOffsetMinutes(offsetMinutes) {
   return Math.round(offsetMinutes / SCHEDULE_SNAP_MINUTES) * SCHEDULE_SNAP_MINUTES
-}
-
-function syncCourseHours(course) {
-  if (!course || !Array.isArray(course.schedules)) {
-    return
-  }
-  const totalHours = course.schedules.reduce((sum, schedule) => sum + getScheduleHours(schedule), 0)
-  course.hours = Number(totalHours.toFixed(1))
 }
 
 function syncItemFromSchedule(item, course, scheduleRef) {
@@ -592,7 +580,6 @@ function applyScheduleMutation(item, changes = {}) {
     course.type = changes.type
   }
 
-  syncCourseHours(course)
   syncItemFromSchedule(item, course, scheduleRef)
   return scheduleState
 }

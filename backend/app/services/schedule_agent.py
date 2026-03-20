@@ -3,6 +3,7 @@
 """
 from copy import deepcopy
 from datetime import date, datetime, time, timedelta
+import math
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
@@ -20,6 +21,7 @@ from app.schemas import (
 )
 from app.services.training import TrainingService
 from app.services.training_course_change import TrainingCourseChangeService
+from app.services.training_schedule_rule import TrainingScheduleRuleService
 from app.utils.authz import can_manage_training
 
 
@@ -27,6 +29,13 @@ class ScheduleAgentService:
     """基于规则的排课建议服务"""
 
     SLOT_STARTS = ["09:00", "14:00", "19:00"]
+    DEFAULT_SESSION_HOURS = 3.0
+    PLANNING_MODE_LABELS = {
+        "auto": "按课程计划自动判断",
+        "fill_all_days": "排满",
+        "fill_workdays": "排满工作日",
+        "by_hours": "按课时排",
+    }
     IMMUTABLE_STATUSES = {"checkin_open", "checkin_closed", "checkout_open", "completed", "skipped", "missed"}
     LIFECYCLE_FIELDS = (
         "started_at",
@@ -48,15 +57,16 @@ class ScheduleAgentService:
         self._ensure_manage_permission(training, current_user_id)
         self.course_change_service.ensure_course_keys(training.courses or [])
         self.db.flush()
+        rule_config = self._resolve_rule_config(training, data)
 
-        template_courses, units, base_conflicts = self._prepare_plan_materials(training, data)
+        template_courses, units, base_conflicts = self._prepare_plan_materials(training, data, rule_config)
         plans: List[AISchedulePlan] = []
         plan_conflict_map: Dict[str, List[AIScheduleConflictItem]] = {}
         for plan_index in range(3):
             plan_courses = deepcopy(template_courses)
             conflicts = [AIScheduleConflictItem.model_validate(item) for item in base_conflicts]
-            conflicts.extend(self._assign_units_to_courses(training, plan_courses, units, data, plan_index))
-            metrics = self._build_plan_metrics(plan_courses)
+            conflicts.extend(self._assign_units_to_courses(training, plan_courses, units, data, plan_index, rule_config))
+            metrics = self._build_plan_metrics(plan_courses, rule_config)
             title = "主方案" if plan_index == 0 else f"备选方案{'AB'[plan_index - 1]}"
             plan_id = f"plan-{plan_index + 1}"
             plan_conflict_map[plan_id] = conflicts
@@ -64,7 +74,7 @@ class ScheduleAgentService:
                 AISchedulePlan(
                     plan_id=plan_id,
                     title=title,
-                    summary=self._build_plan_summary(training, data, metrics, conflicts),
+                    summary=self._build_plan_summary(training, data, metrics, conflicts, rule_config),
                     score=self._build_plan_score(metrics, conflicts),
                     courses=plan_courses,
                     metrics=metrics,
@@ -76,17 +86,24 @@ class ScheduleAgentService:
         conflicts: List[dict] = []
         if main_plan:
             main_plan_payload = main_plan.model_dump(mode="json")
-            self._normalize_plan_courses(main_plan_payload.get("courses") or [])
-            main_plan_payload["metrics"] = self._build_plan_metrics(main_plan_payload.get("courses") or []).model_dump(mode="json")
+            self._normalize_plan_courses(main_plan_payload.get("courses") or [], rule_config)
+            main_plan_payload["metrics"] = self._build_plan_metrics(main_plan_payload.get("courses") or [], rule_config).model_dump(mode="json")
             merged_conflicts = self._merge_conflicts(
                 plan_conflict_map.get(main_plan.plan_id) or [],
-                self._validate_plan_courses(training, main_plan_payload.get("courses") or [], data.constraint_payload),
+                self._validate_plan_courses(
+                    training,
+                    main_plan_payload.get("courses") or [],
+                    data.constraint_payload,
+                    data.planning_mode,
+                    rule_config,
+                ),
             )
             main_plan_payload["summary"] = self._build_plan_summary(
                 training,
                 data,
                 AISchedulePlanMetrics.model_validate(main_plan_payload.get("metrics") or {}),
                 merged_conflicts,
+                rule_config,
             )
             main_plan_payload["score"] = self._build_plan_score(
                 AISchedulePlanMetrics.model_validate(main_plan_payload.get("metrics") or {}),
@@ -94,7 +111,7 @@ class ScheduleAgentService:
             )
             main_plan = AISchedulePlan.model_validate(main_plan_payload)
             conflicts = [item.model_dump(mode="json") for item in merged_conflicts]
-        explanation = self._build_explanation(training, data, main_plan, conflicts)
+        explanation = self._build_explanation(training, data, main_plan, conflicts, rule_config)
 
         return {
             "main_plan": main_plan.model_dump(mode="json") if main_plan else None,
@@ -112,9 +129,16 @@ class ScheduleAgentService:
         training = self._load_training_or_raise(int((task.request_payload or {}).get("training_id") or 0))
         self._ensure_manage_permission(training, current_user_id)
         request_payload = AIScheduleTaskCreateRequest.model_validate(task.request_payload or {})
+        rule_config = self._resolve_rule_config(training, request_payload)
         main_plan_payload = data.main_plan.model_dump(mode="json")
-        self._normalize_plan_courses(main_plan_payload.get("courses") or [])
-        conflicts = self._validate_plan_courses(training, main_plan_payload.get("courses") or [], request_payload.constraint_payload)
+        self._normalize_plan_courses(main_plan_payload.get("courses") or [], rule_config)
+        conflicts = self._validate_plan_courses(
+            training,
+            main_plan_payload.get("courses") or [],
+            request_payload.constraint_payload,
+            request_payload.planning_mode,
+            rule_config,
+        )
         if any(item.severity == "error" for item in conflicts):
             raise ValueError("；".join(item.message for item in conflicts[:3]) or "排课方案存在冲突，不能保存")
         return data.model_copy(update={"main_plan": AISchedulePlan.model_validate(main_plan_payload)})
@@ -127,10 +151,17 @@ class ScheduleAgentService:
             raise ValueError("任务结果中没有可应用的排课方案")
 
         request_payload = AIScheduleTaskCreateRequest.model_validate(task.request_payload or {})
+        rule_config = self._resolve_rule_config(training, request_payload)
         main_plan_payload = deepcopy(main_plan_payload)
-        self._normalize_plan_courses(main_plan_payload.get("courses") or [])
+        self._normalize_plan_courses(main_plan_payload.get("courses") or [], rule_config)
         main_plan = AISchedulePlan.model_validate(main_plan_payload)
-        conflicts = self._validate_plan_courses(training, main_plan_payload.get("courses") or [], request_payload.constraint_payload)
+        conflicts = self._validate_plan_courses(
+            training,
+            main_plan_payload.get("courses") or [],
+            request_payload.constraint_payload,
+            request_payload.planning_mode,
+            rule_config,
+        )
         if any(item.severity == "error" for item in conflicts):
             raise ValueError("当前主方案仍存在硬冲突，请调整后再确认")
 
@@ -161,6 +192,7 @@ class ScheduleAgentService:
         self,
         training: Training,
         data: AIScheduleTaskCreateRequest,
+        rule_config: dict[str, Any],
     ) -> tuple[List[dict], List[dict], List[dict]]:
         normalized_courses = self.course_change_service.snapshot_course_entities(training.courses or [])
         original_course_map = {
@@ -170,8 +202,12 @@ class ScheduleAgentService:
 
         template_courses: List[dict] = []
         units: List[dict] = []
-        planning_dates = {item.isoformat() for item in self._resolve_planning_dates(training, data)}
+        planning_date_list = self._resolve_planning_dates(training, data)
+        planning_dates = {item.isoformat() for item in planning_date_list}
         fixed_course_keys = set(data.constraint_payload.fixed_course_keys or [])
+        planning_mode = self._resolve_planning_mode(data.planning_mode)
+        if planning_mode == "by_hours":
+            self._ensure_by_hours_courses_ready(normalized_courses, data.scope_type)
 
         for course_data in normalized_courses:
             course_key = course_data.get("course_key") or f"course-{uuid4()}"
@@ -186,11 +222,10 @@ class ScheduleAgentService:
                 if self._is_schedule_locked(course_key, raw_schedule, data, planning_dates, fixed_course_keys):
                     template_course["schedules"].append(deepcopy(schedule))
                     continue
-                units.append(self._build_plan_unit(template_course, schedule))
+                units.append(self._build_plan_unit(template_course, schedule, rule_config=rule_config))
 
             if not existing_schedules and self._should_schedule_empty_course(data.scope_type):
-                for hours in self._split_hours(float(course_data.get("hours") or 0) or 3):
-                    units.append(self._build_plan_unit(template_course, None, hours))
+                units.extend(self._build_empty_course_units(template_course, planning_date_list, planning_mode, rule_config))
 
             template_courses.append(template_course)
 
@@ -198,6 +233,54 @@ class ScheduleAgentService:
 
     def _should_schedule_empty_course(self, scope_type: str) -> bool:
         return scope_type in {"all", "current_week", "unscheduled"}
+
+    def _build_empty_course_units(self, course: dict, planning_dates: List[date], planning_mode: str, rule_config: dict[str, Any]) -> List[dict]:
+        effective_mode = self._resolve_course_generation_mode(course, planning_mode)
+        declared_hours = self._normalize_course_hours(course.get("hours"))
+        if effective_mode == "by_hours":
+            return [
+                self._build_plan_unit(course, None, rule_config=rule_config, fallback_hours=hours)
+                for hours in self._split_hours(declared_hours, rule_config)
+            ]
+
+        target_dates = self._resolve_fill_target_dates(planning_dates, effective_mode)
+        default_fill_units = self._resolve_default_fill_units(rule_config)
+        return [
+            self._build_plan_unit(
+                course,
+                None,
+                fallback_hours=default_fill_units,
+                candidate_dates=[target_date],
+                rule_config=rule_config,
+            )
+            for target_date in target_dates
+        ]
+
+    def _ensure_by_hours_courses_ready(self, courses: List[dict], scope_type: str) -> None:
+        if not self._should_schedule_empty_course(scope_type):
+            return
+        missing_hours_courses = [
+            f"“{course.get('name') or '未命名课程'}”"
+            for course in (courses or [])
+            if not (course.get("schedules") or [])
+            and self._normalize_course_hours(course.get("hours")) <= 0
+        ]
+        if not missing_hours_courses:
+            return
+        preview = "、".join(missing_hours_courses[:3])
+        suffix = f" 等 {len(missing_hours_courses)} 门课程" if len(missing_hours_courses) > 3 else ""
+        raise ValueError(f"当前排课方式为“按课时排”，以下课程未设置计划课时：{preview}{suffix}。请先补充计划课时或改用排满模式")
+
+    def _resolve_course_generation_mode(self, course: dict, planning_mode: str) -> str:
+        mode = self._resolve_planning_mode(planning_mode)
+        if mode != "auto":
+            return mode
+        return "by_hours" if self._normalize_course_hours(course.get("hours")) > 0 else "fill_workdays"
+
+    def _resolve_fill_target_dates(self, planning_dates: List[date], planning_mode: str) -> List[date]:
+        if planning_mode == "fill_all_days":
+            return list(planning_dates)
+        return [item for item in planning_dates if self._is_workday(item)] or list(planning_dates)
 
     def _build_raw_schedule_map(self, course: Optional[TrainingCourse]) -> Dict[str, dict]:
         raw_map: Dict[str, dict] = {}
@@ -241,8 +324,15 @@ class ScheduleAgentService:
         course: dict,
         schedule: Optional[dict],
         fallback_hours: Optional[float] = None,
+        candidate_dates: Optional[List[date]] = None,
+        rule_config: Optional[dict[str, Any]] = None,
     ) -> dict:
-        minutes = self._resolve_duration_minutes(schedule, fallback_hours or float(course.get("hours") or 0) or 3)
+        minutes = self._resolve_duration_minutes(
+            schedule,
+            fallback_hours or float(course.get("hours") or 0) or self._resolve_default_fill_units(rule_config or {}),
+            rule_config,
+        )
+        unit_count = self._resolve_schedule_hours(schedule or {"hours": fallback_hours}, rule_config)
         return {
             "course_key": course.get("course_key"),
             "course_name": course.get("name"),
@@ -251,8 +341,9 @@ class ScheduleAgentService:
             "location": (schedule or {}).get("location") or course.get("location"),
             "primary_instructor_id": course.get("primary_instructor_id"),
             "session_id": (schedule or {}).get("session_id") or f"ai-session-{uuid4()}",
-            "hours": round(minutes / 60, 1),
+            "hours": unit_count,
             "minutes": minutes,
+            "candidate_dates": [item.isoformat() for item in (candidate_dates or [])],
             "source_schedule": deepcopy(schedule) if schedule else None,
         }
 
@@ -279,6 +370,7 @@ class ScheduleAgentService:
         units: List[dict],
         data: AIScheduleTaskCreateRequest,
         plan_index: int,
+        rule_config: dict[str, Any],
     ) -> List[AIScheduleConflictItem]:
         planning_dates = self._resolve_planning_dates(training, data)
         if not planning_dates:
@@ -292,21 +384,16 @@ class ScheduleAgentService:
             ]
 
         date_sequence = planning_dates[plan_index:] + planning_dates[:plan_index]
-        slot_sequence = self.SLOT_STARTS[plan_index:] + self.SLOT_STARTS[:plan_index]
         course_map = {item.get("course_key"): item for item in plan_courses}
-        occupied = self._build_occupied_index(training, plan_courses, data.constraint_payload)
+        occupied = self._build_occupied_index(training, plan_courses, data.constraint_payload, rule_config)
         conflicts: List[AIScheduleConflictItem] = []
 
         for unit in units:
             placed = False
-            for target_date in date_sequence:
+            for target_date in self._resolve_unit_candidate_dates(unit, date_sequence):
                 if self._day_hours(occupied, target_date) + unit["hours"] > data.constraint_payload.daily_max_hours + 1e-6:
                     continue
-                for slot_start in slot_sequence:
-                    slot_range = self._build_slot_range(slot_start, unit["minutes"])
-                    if not slot_range:
-                        continue
-                    start_minutes, end_minutes, time_range = slot_range
+                for start_minutes, end_minutes, time_range in self._build_slot_candidates(rule_config, unit["hours"], plan_index):
                     if self._has_overlap(occupied, target_date, start_minutes, end_minutes):
                         continue
 
@@ -322,7 +409,7 @@ class ScheduleAgentService:
                     if not target_course:
                         continue
                     target_course.setdefault("schedules", []).append(schedule_item)
-                    self._append_occupied(occupied, target_date, start_minutes, end_minutes, unit)
+                    self._append_occupied(occupied, target_date, start_minutes, end_minutes, {"course_key": unit.get("course_key"), "unit_count": unit["hours"]})
                     placed = True
                     break
                 if placed:
@@ -342,7 +429,7 @@ class ScheduleAgentService:
 
         for course in plan_courses:
             course["schedules"] = self._sort_schedules(course.get("schedules") or [])
-            course["hours"] = round(sum(self._resolve_schedule_hours(item) for item in course["schedules"]), 1)
+            course["hours"] = self._normalize_course_hours(course.get("hours"))
         return conflicts
 
     def _validate_plan_courses(
@@ -350,12 +437,15 @@ class ScheduleAgentService:
         training: Training,
         courses: List[dict],
         constraint_payload: AIScheduleTaskConstraintPayload,
+        planning_mode: str = "auto",
+        rule_config: Optional[dict[str, Any]] = None,
     ) -> List[AIScheduleConflictItem]:
         conflicts: List[AIScheduleConflictItem] = []
         immutable_sessions = self._build_immutable_session_map(training)
         occupied: Dict[str, List[dict]] = {}
         exam_blocks = self._build_exam_blocks(training, constraint_payload)
         global_daily_hours: Dict[str, float] = {}
+        effective_planning_mode = self._resolve_planning_mode(planning_mode)
         course_map = {item.get("course_key"): item for item in courses}
         original_course_map = {
             (course.course_key or f"course-{course.id}"): course
@@ -405,7 +495,7 @@ class ScheduleAgentService:
 
                 start_minutes = self._time_to_minutes(start_time)
                 end_minutes = self._time_to_minutes(end_time)
-                schedule_hours = self._resolve_schedule_hours(schedule)
+                schedule_hours = self._resolve_schedule_hours(schedule, rule_config)
                 planned_total_hours += schedule_hours
                 global_daily_hours[schedule_date.isoformat()] = global_daily_hours.get(schedule_date.isoformat(), 0) + schedule_hours
                 for block in exam_blocks.get(schedule_date.isoformat(), []):
@@ -441,28 +531,29 @@ class ScheduleAgentService:
                     {"course_key": course_key},
                 )
 
-            original_course = original_course_map.get(course_key)
-            expected_hours = self._resolve_expected_course_hours(original_course)
-            if expected_hours > planned_total_hours + 1e-6:
-                conflicts.append(
-                    AIScheduleConflictItem(
-                        severity="error",
-                        conflict_type="course_hours_insufficient",
-                        course_key=course_key,
-                        message=f"课程“{course.get('name') or '未命名课程'}”当前仅排入 {planned_total_hours:.1f} / {expected_hours:.1f} 课时",
-                        suggestion="请补齐缺失课次后再保存或确认",
+            if self._should_validate_course_hours(effective_planning_mode):
+                original_course = original_course_map.get(course_key)
+                expected_hours = self._resolve_expected_course_hours(original_course, rule_config)
+                if expected_hours > 0 and expected_hours > planned_total_hours + 1e-6:
+                    conflicts.append(
+                        AIScheduleConflictItem(
+                            severity="error",
+                            conflict_type="course_hours_insufficient",
+                            course_key=course_key,
+                            message=f"课程“{course.get('name') or '未命名课程'}”当前仅排入 {planned_total_hours:.1f} / {expected_hours:.1f} 课时",
+                            suggestion="请补齐缺失课次后再保存或确认",
+                        )
                     )
-                )
-            elif planned_total_hours > expected_hours + 1e-6:
-                conflicts.append(
-                    AIScheduleConflictItem(
-                        severity="warning",
-                        conflict_type="course_hours_exceeded",
-                        course_key=course_key,
-                        message=f"课程“{course.get('name') or '未命名课程'}”当前排入 {planned_total_hours:.1f} 课时，高于原计划 {expected_hours:.1f} 课时",
-                        suggestion="请确认是否需要额外延长该课程时长",
+                elif expected_hours > 0 and planned_total_hours > expected_hours + 1e-6:
+                    conflicts.append(
+                        AIScheduleConflictItem(
+                            severity="warning",
+                            conflict_type="course_hours_exceeded",
+                            course_key=course_key,
+                            message=f"课程“{course.get('name') or '未命名课程'}”当前排入 {planned_total_hours:.1f} 课时，高于原计划 {expected_hours:.1f} 课时",
+                            suggestion="请确认是否需要额外延长该课程时长",
+                        )
                     )
-                )
 
         for date_key, hours in global_daily_hours.items():
             if hours > constraint_payload.daily_max_hours + 1e-6:
@@ -547,6 +638,7 @@ class ScheduleAgentService:
         training: Training,
         plan_courses: List[dict],
         constraint_payload: AIScheduleTaskConstraintPayload,
+        rule_config: Optional[dict[str, Any]] = None,
     ) -> Dict[str, List[dict]]:
         occupied: Dict[str, List[dict]] = {}
         for course in plan_courses:
@@ -560,7 +652,7 @@ class ScheduleAgentService:
                     schedule_date,
                     self._time_to_minutes(start_time),
                     self._time_to_minutes(end_time),
-                    {"course_key": course.get("course_key")},
+                    {"course_key": course.get("course_key"), "unit_count": self._resolve_schedule_hours(schedule, rule_config)},
                 )
         for date_key, blocks in self._build_exam_blocks(training, constraint_payload).items():
             occupied.setdefault(date_key, []).extend(blocks)
@@ -640,6 +732,7 @@ class ScheduleAgentService:
         data: AIScheduleTaskCreateRequest,
         metrics: AISchedulePlanMetrics,
         conflicts: List[AIScheduleConflictItem],
+        rule_config: dict[str, Any],
     ) -> str:
         goal_labels = {
             "balanced": "均衡排课",
@@ -647,8 +740,14 @@ class ScheduleAgentService:
             "theory_first": "优先理论",
             "exam_intensive": "考前强化",
         }
+        planning_mode_label = self.PLANNING_MODE_LABELS.get(
+            self._resolve_planning_mode(data.planning_mode),
+            self.PLANNING_MODE_LABELS["auto"],
+        )
         return (
             f"针对培训班“{training.name}”按“{goal_labels.get(data.goal, data.goal)}”生成，"
+            f"排课方式为“{planning_mode_label}”，"
+            f"采用 {rule_config.get('lesson_unit_minutes')} 分钟/课时、课间 {rule_config.get('break_minutes')} 分钟规则，"
             f"共覆盖 {metrics.total_sessions} 个课次、{metrics.covered_days} 天、{metrics.total_hours:.1f} 课时，"
             f"当前冲突 {len(conflicts)} 项。"
         )
@@ -659,12 +758,19 @@ class ScheduleAgentService:
         data: AIScheduleTaskCreateRequest,
         main_plan: Optional[AISchedulePlan],
         conflicts: List[dict],
+        rule_config: dict[str, Any],
     ) -> str:
         if not main_plan:
             return "未生成有效排课方案。"
         hard_conflicts = sum(1 for item in conflicts if item.get("severity") == "error")
+        planning_mode_label = self.PLANNING_MODE_LABELS.get(
+            self._resolve_planning_mode(data.planning_mode),
+            self.PLANNING_MODE_LABELS["auto"],
+        )
         return (
             f"本次排课基于培训周期、现有不可改课次、考试时段与单日最大课时进行约束生成。"
+            f"当前排课方式为“{planning_mode_label}”，单课时 {rule_config.get('lesson_unit_minutes')} 分钟，"
+            f"课间休息 {rule_config.get('break_minutes')} 分钟，单节最多 {rule_config.get('max_units_per_session')} 课时。"
             f"主方案为 {main_plan.metrics.total_sessions} 个课次、{main_plan.metrics.total_hours:.1f} 课时，"
             f"理论课 {main_plan.metrics.theory_hours:.1f} 课时，实操课 {main_plan.metrics.practice_hours:.1f} 课时。"
             f"当前硬冲突 {hard_conflicts} 项，范围为 {data.scope_type}。"
@@ -676,7 +782,7 @@ class ScheduleAgentService:
         score = 100 - error_count * 25 - warning_count * 8 - max(metrics.instructor_load_index - 1.5, 0) * 10
         return max(0, round(score, 1))
 
-    def _build_plan_metrics(self, courses: List[dict]) -> AISchedulePlanMetrics:
+    def _build_plan_metrics(self, courses: List[dict], rule_config: Optional[dict[str, Any]] = None) -> AISchedulePlanMetrics:
         total_sessions = 0
         total_hours = 0.0
         theory_hours = 0.0
@@ -689,7 +795,7 @@ class ScheduleAgentService:
             instructor_key = str(course.get("primary_instructor_id") or course.get("instructor") or "unknown")
             for schedule in course.get("schedules") or []:
                 total_sessions += 1
-                hours = self._resolve_schedule_hours(schedule)
+                hours = self._resolve_schedule_hours(schedule, rule_config)
                 total_hours += hours
                 if course_type == "practice":
                     practice_hours += hours
@@ -712,36 +818,50 @@ class ScheduleAgentService:
             instructor_load_index=overload_index,
         )
 
-    def _resolve_expected_course_hours(self, course: Optional[TrainingCourse]) -> float:
+    def _resolve_expected_course_hours(self, course: Optional[TrainingCourse], rule_config: Optional[dict[str, Any]] = None) -> float:
         if not course:
             return 0.0
-        declared_hours = float(getattr(course, "hours", 0) or 0)
-        scheduled_hours = round(sum(self._resolve_schedule_hours(item or {}) for item in (course.schedules or [])), 1)
+        declared_hours = self._normalize_course_hours(getattr(course, "hours", 0))
+        if declared_hours <= 0:
+            return 0.0
+        scheduled_hours = round(sum(self._resolve_schedule_hours(item or {}, rule_config) for item in (course.schedules or [])), 1)
         return max(declared_hours, scheduled_hours)
 
-    def _normalize_plan_courses(self, courses: List[dict]) -> List[dict]:
+    def _normalize_plan_courses(self, courses: List[dict], rule_config: Optional[dict[str, Any]] = None) -> List[dict]:
         for course in courses or []:
             schedules = course.get("schedules") or []
             for schedule in schedules:
-                schedule["hours"] = self._resolve_schedule_hours(schedule)
-            course["hours"] = round(sum(self._resolve_schedule_hours(item) for item in schedules), 1)
+                schedule["hours"] = self._resolve_schedule_hours(schedule, rule_config)
+            course["hours"] = self._normalize_course_hours(course.get("hours"))
         return courses
 
-    def _resolve_schedule_hours(self, schedule: dict) -> float:
+    def _resolve_schedule_hours(self, schedule: dict, rule_config: Optional[dict[str, Any]] = None) -> float:
+        try:
+            declared_units = float(schedule.get("hours") or 0)
+        except (TypeError, ValueError):
+            declared_units = 0.0
+        if declared_units > 0:
+            return round(declared_units, 1)
         start_time, end_time = self._parse_time_range(schedule.get("time_range"))
         if start_time and end_time and end_time > start_time:
-            return round((self._time_to_minutes(end_time) - self._time_to_minutes(start_time)) / 60, 1)
-        return round(float(schedule.get("hours") or 0), 1)
+            diff_minutes = self._time_to_minutes(end_time) - self._time_to_minutes(start_time)
+            return self._minutes_to_units(diff_minutes, rule_config)
+        return 0.0
 
-    def _resolve_duration_minutes(self, schedule: Optional[dict], fallback_hours: float) -> int:
+    def _resolve_duration_minutes(
+        self,
+        schedule: Optional[dict],
+        fallback_hours: float,
+        rule_config: Optional[dict[str, Any]] = None,
+    ) -> int:
         if schedule:
             start_time, end_time = self._parse_time_range(schedule.get("time_range"))
             if start_time and end_time and end_time > start_time:
                 return self._time_to_minutes(end_time) - self._time_to_minutes(start_time)
-            hours = float(schedule.get("hours") or 0)
+            hours = self._resolve_schedule_hours(schedule, rule_config)
             if hours > 0:
-                return int(round(hours * 60))
-        return int(round(max(fallback_hours, 1) * 60))
+                return self._units_to_minutes(hours, rule_config)
+        return self._units_to_minutes(max(fallback_hours, 1), rule_config)
 
     def _build_slot_range(self, start_text: str, duration_minutes: int) -> Optional[tuple[int, int, str]]:
         start_value = self._parse_clock(start_text)
@@ -767,7 +887,7 @@ class ScheduleAgentService:
         })
 
     def _day_hours(self, occupied: Dict[str, List[dict]], target_date: date) -> float:
-        return round(sum((item["end"] - item["start"]) / 60 for item in occupied.get(target_date.isoformat(), []) if item.get("course_key")), 1)
+        return round(sum(float(item.get("unit_count") or 0) for item in occupied.get(target_date.isoformat(), []) if item.get("course_key")), 1)
 
     def _has_overlap(
         self,
@@ -803,16 +923,59 @@ class ScheduleAgentService:
             f"{schedule.get('location') or ''}|{schedule.get('hours') or 0}"
         )
 
-    def _split_hours(self, hours: float) -> List[float]:
+    def _split_hours(self, hours: float, rule_config: Optional[dict[str, Any]] = None) -> List[float]:
         remaining = max(hours, 0)
         if remaining <= 0:
-            return [3]
+            return [float(self._resolve_default_fill_units(rule_config or {}))]
+        max_units_per_session = max(1, int((rule_config or {}).get("max_units_per_session") or 3))
+        rounded_total = round(remaining)
+        if abs(remaining - rounded_total) <= 1e-6:
+            session_count = max(1, math.ceil(rounded_total / max_units_per_session))
+            base = rounded_total // session_count
+            remainder = rounded_total % session_count
+            return [
+                float(base + (1 if index < remainder else 0))
+                for index in range(session_count)
+                if base + (1 if index < remainder else 0) > 0
+            ]
         result: List[float] = []
-        while remaining > 3:
-            result.append(3)
-            remaining -= 3
+        while remaining > max_units_per_session:
+            result.append(float(max_units_per_session))
+            remaining -= max_units_per_session
         result.append(round(max(remaining, 1), 1))
         return result
+
+    def _resolve_unit_candidate_dates(self, unit: dict, default_dates: List[date]) -> List[date]:
+        candidate_date_values = {
+            str(item).strip()
+            for item in (unit.get("candidate_dates") or [])
+            if str(item).strip()
+        }
+        if not candidate_date_values:
+            return default_dates
+        return [item for item in default_dates if item.isoformat() in candidate_date_values]
+
+    @staticmethod
+    def _is_workday(target_date: date) -> bool:
+        return target_date.weekday() < 5
+
+    @staticmethod
+    def _resolve_planning_mode(value: Any) -> str:
+        mode = str(value or "auto").strip()
+        if mode in {"fill_all_days", "fill_workdays", "by_hours", "auto"}:
+            return mode
+        return "auto"
+
+    @staticmethod
+    def _should_validate_course_hours(planning_mode: str) -> bool:
+        return planning_mode in {"auto", "by_hours"}
+
+    @staticmethod
+    def _normalize_course_hours(value: Any) -> float:
+        try:
+            return round(max(float(value or 0), 0), 1)
+        except (TypeError, ValueError):
+            return 0.0
 
     def _parse_date(self, value: Any) -> Optional[date]:
         if isinstance(value, date):
@@ -845,3 +1008,91 @@ class ScheduleAgentService:
 
     def _format_clock(self, minutes: int) -> str:
         return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+    def _resolve_rule_config(self, training: Training, data: AIScheduleTaskCreateRequest) -> dict[str, Any]:
+        override = data.schedule_rule_override.model_dump(mode="json") if data.schedule_rule_override else None
+        return TrainingScheduleRuleService.resolve_effective_rule_config(training.schedule_rule_config, override)
+
+    def _units_to_minutes(self, hours: float, rule_config: Optional[dict[str, Any]] = None) -> int:
+        if not rule_config:
+            return int(round(max(hours, 1) * 60))
+        lesson_unit_minutes = max(int(rule_config.get("lesson_unit_minutes") or 40), 1)
+        break_minutes = max(int(rule_config.get("break_minutes") or 0), 0)
+        if hours <= 0:
+            return lesson_unit_minutes
+        if abs(hours - round(hours)) <= 1e-6:
+            unit_count = int(round(hours))
+            return lesson_unit_minutes * unit_count + break_minutes * max(unit_count - 1, 0)
+        return int(round(hours * lesson_unit_minutes + break_minutes * max(hours - 1, 0)))
+
+    def _minutes_to_units(self, duration_minutes: int, rule_config: Optional[dict[str, Any]] = None) -> float:
+        if duration_minutes <= 0:
+            return 0.0
+        if not rule_config:
+            return round(duration_minutes / 60, 1)
+        lesson_unit_minutes = max(int(rule_config.get("lesson_unit_minutes") or 40), 1)
+        break_minutes = max(int(rule_config.get("break_minutes") or 0), 0)
+        if duration_minutes <= lesson_unit_minutes or break_minutes <= 0:
+            return round(duration_minutes / lesson_unit_minutes, 1)
+        exact_units = (duration_minutes + break_minutes) / (lesson_unit_minutes + break_minutes)
+        rounded_units = round(exact_units)
+        if abs(exact_units - rounded_units) <= 0.05:
+            return float(rounded_units)
+        return round(exact_units, 1)
+
+    def _resolve_default_fill_units(self, rule_config: dict[str, Any]) -> int:
+        max_units_per_session = max(1, int(rule_config.get("max_units_per_session") or 3))
+        daily_max_units = max(1, int(rule_config.get("daily_max_units") or max_units_per_session))
+        window_capacity = max(self._compute_window_capacity_units(item, rule_config) for item in (rule_config.get("teaching_windows") or [{}]))
+        return max(1, min(max_units_per_session, daily_max_units, window_capacity))
+
+    def _compute_window_capacity_units(self, window: dict[str, Any], rule_config: dict[str, Any]) -> int:
+        start_minutes = self._parse_clock(window.get("start_time") or "")
+        end_minutes = self._parse_clock(window.get("end_time") or "")
+        if start_minutes is None or end_minutes is None or end_minutes <= start_minutes:
+            return 1
+        lesson_unit_minutes = max(int(rule_config.get("lesson_unit_minutes") or 40), 1)
+        break_minutes = max(int(rule_config.get("break_minutes") or 0), 0)
+        step = lesson_unit_minutes + break_minutes
+        total_minutes = end_minutes - start_minutes
+        if total_minutes < lesson_unit_minutes:
+            return 1
+        return max(1, 1 + max(total_minutes - lesson_unit_minutes, 0) // max(step, 1))
+
+    def _build_slot_candidates(
+        self,
+        rule_config: dict[str, Any],
+        unit_count: float,
+        plan_index: int,
+    ) -> List[tuple[int, int, str]]:
+        duration_minutes = self._units_to_minutes(unit_count, rule_config)
+        windows = list(rule_config.get("teaching_windows") or [])
+        if not windows:
+            windows = [{"start_time": item, "end_time": self._format_clock((self._parse_clock(item) or 0) + duration_minutes)} for item in self.SLOT_STARTS]
+        windows = windows[plan_index:] + windows[:plan_index]
+        lesson_unit_minutes = max(int(rule_config.get("lesson_unit_minutes") or 40), 1)
+        break_minutes = max(int(rule_config.get("break_minutes") or 0), 0)
+        step = max(lesson_unit_minutes + break_minutes, 1)
+        slots: List[tuple[int, int, str]] = []
+        for window in windows:
+            start_minutes = self._parse_clock(window.get("start_time") or "")
+            end_minutes = self._parse_clock(window.get("end_time") or "")
+            if start_minutes is None or end_minutes is None or end_minutes <= start_minutes:
+                continue
+            latest_start = end_minutes - duration_minutes
+            if latest_start < start_minutes:
+                continue
+            candidate_starts = list(range(start_minutes, latest_start + 1, step))
+            if candidate_starts:
+                rotate_offset = plan_index % len(candidate_starts)
+                candidate_starts = candidate_starts[rotate_offset:] + candidate_starts[:rotate_offset]
+            for candidate_start in candidate_starts:
+                candidate_end = candidate_start + duration_minutes
+                slots.append(
+                    (
+                        candidate_start,
+                        candidate_end,
+                        f"{self._format_clock(candidate_start)}~{self._format_clock(candidate_end)}",
+                    )
+                )
+        return slots

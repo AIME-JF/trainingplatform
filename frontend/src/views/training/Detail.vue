@@ -76,6 +76,7 @@
                 :schedule-status-color-map="scheduleStatusColorMap"
                 :schedule-status-label-map="scheduleStatusLabelMap"
                 @update:scheduleViewMode="scheduleViewMode = $event"
+                @open-ai-schedule="openAiScheduleTask"
                 @open-course-import="openCourseImportModal"
                 @open-schedule-import="openScheduleImportModal"
                 @add-course="openCourseModal()"
@@ -89,6 +90,16 @@
                 @start-session-checkout="handleStartSessionCheckout"
                 @end-session-checkout="handleEndSessionCheckout"
                 @skip-current-session="handleSkipCurrentSession"
+              />
+            </a-tab-pane>
+
+            <a-tab-pane key="scheduleRules" tab="排课规则" v-if="!authStore.isStudent">
+              <TrainingScheduleRuleContent
+                :schedule-rule-config="trainingData.scheduleRuleConfig"
+                :can-edit="canScheduleEdit"
+                :edit-tooltip="scheduleEditTooltip"
+                :saving="scheduleRuleSaving"
+                @save="saveScheduleRuleConfig"
               />
             </a-tab-pane>
 
@@ -153,10 +164,13 @@
             :is-student="authStore.isStudent"
             :is-enrolled="isEnrolled"
             :can-edit="canEdit"
+            :can-ai-schedule="canScheduleEdit"
             :can-export-students="canExportStudents"
             :training-manage-tooltip="trainingManageTooltip"
+            :ai-schedule-tooltip="scheduleEditTooltip"
             @global-checkin="handleGlobalCheckin"
             @view-schedule="$router.push('/training/schedule/' + trainingData.id)"
+            @open-ai-schedule="openAiScheduleTask"
             @change-tab="activeTab = $event"
             @open-edit="openEditModal"
             @export-students="exportMsg"
@@ -189,7 +203,7 @@
         <div class="course-modal-head">
           <div>
             <div class="course-modal-kicker">{{ editingCourseIdx !== null ? '编辑课程' : '添加课程' }}</div>
-            <div class="course-modal-title">课程只维护名称、教官、地点等基础信息</div>
+            <div class="course-modal-title">课程维护基础信息与计划课时</div>
           </div>
         </div>
 
@@ -197,7 +211,7 @@
           <a-alert
             type="info"
             show-icon
-            message="课次请通过课程卡片上的“编辑课次”单独维护，这里只保存课程基础信息。"
+            message="计划课时用于 AI 排课任务的“按课时排”模式；如果选择排满或排满工作日，则不会按这里的课时限制生成。"
             style="margin-bottom:16px"
           />
           <a-form-item label="课程名称" required>
@@ -206,6 +220,30 @@
           <a-form-item label="课程地点">
             <a-input v-model:value="courseForm.location" placeholder="请输入课程地点" />
           </a-form-item>
+          <a-row :gutter="12">
+            <a-col :span="12">
+              <a-form-item
+                label="计划课时"
+                extra="用于 AI 的“按课时排”模式；如果不填，仍可在 AI 任务中选择排满或排满工作日。"
+              >
+                <a-input-number
+                  v-model:value="courseForm.hours"
+                  :min="0"
+                  :step="0.5"
+                  :precision="1"
+                  style="width:100%"
+                />
+              </a-form-item>
+            </a-col>
+            <a-col :span="12">
+              <a-form-item label="课程类型">
+                <a-radio-group v-model:value="courseForm.type">
+                  <a-radio value="theory">理论课</a-radio>
+                  <a-radio value="practice">实操课</a-radio>
+                </a-radio-group>
+              </a-form-item>
+            </a-col>
+          </a-row>
           <a-row :gutter="12">
             <a-col :span="12">
               <a-form-item label="授课教官" required>
@@ -250,12 +288,6 @@
               </a-form-item>
             </a-col>
           </a-row>
-          <a-form-item label="课程类型">
-            <a-radio-group v-model:value="courseForm.type">
-              <a-radio value="theory">理论课</a-radio>
-              <a-radio value="practice">实操课</a-radio>
-            </a-radio-group>
-          </a-form-item>
         </a-form>
 
         <div class="wizard-footer">
@@ -295,8 +327,12 @@
             <span class="summary-value">{{ courseForm.instructor || '未指定' }}</span>
           </div>
           <div class="summary-item">
-            <span class="summary-label">总课时</span>
-            <span class="summary-value">{{ courseForm.hours || 0 }} 课时</span>
+            <span class="summary-label">计划课时状态</span>
+            <span class="summary-value">{{ courseHoursStatusLabel }}</span>
+          </div>
+          <div class="summary-item">
+            <span class="summary-label">计划/已排课时</span>
+            <span class="summary-value">{{ courseForm.hours || 0 }} / {{ courseFormScheduledHours }} 课时</span>
           </div>
         </div>
         <a-form layout="vertical" style="margin-top:12px">
@@ -371,7 +407,7 @@
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="课时数(自动计算)">
+            <a-form-item label="课时数(按排课规则换算)">
               <a-input-number :value="scheduleModalHours" :min="0" disabled style="width:100%" />
             </a-form-item>
           </a-col>
@@ -676,6 +712,7 @@ import { downloadBlob } from '@/utils/download'
 import ExcelImportModal from '@/views/system/components/ExcelImportModal.vue'
 import TrainingOverviewContent from './components/TrainingOverviewContent.vue'
 import TrainingScheduleContent from './components/TrainingScheduleContent.vue'
+import TrainingScheduleRuleContent from './components/TrainingScheduleRuleContent.vue'
 import TrainingExamsContent from './components/TrainingExamsContent.vue'
 import TrainingStudentsContent from './components/TrainingStudentsContent.vue'
 import TrainingCourseChangeLogsContent from './components/TrainingCourseChangeLogsContent.vue'
@@ -729,6 +766,15 @@ const trainingData = reactive({
   instructorName: '',
   description: '',
   enrollmentRequiresApproval: true,
+  scheduleRuleConfig: {
+    lessonUnitMinutes: 40,
+    breakMinutes: 10,
+    maxUnitsPerSession: 3,
+    dailyMaxUnits: 6,
+    preferredPlanningMode: 'fill_workdays',
+    splitStrategy: 'balanced',
+    teachingWindows: [],
+  },
   courses: [],
   studentIds: [],
   students: [],
@@ -798,6 +844,15 @@ function syncTrainingRoster(students = [], studentIds = []) {
 function applyTrainingDetail(data) {
   const normalizedStudents = data.students || []
   const normalizedStudentIds = data.studentIds || normalizedStudents.map((item) => item.userId).filter((item) => item != null)
+  const incomingScheduleRuleConfig = data.scheduleRuleConfig || {
+    lessonUnitMinutes: 40,
+    breakMinutes: 10,
+    maxUnitsPerSession: 3,
+    dailyMaxUnits: 6,
+    preferredPlanningMode: 'fill_workdays',
+    splitStrategy: 'balanced',
+    teachingWindows: [],
+  }
   Object.assign(trainingData, data, {
     progressPercent: data.progressPercent || 0,
     instructorId: data.instructorId || null,
@@ -809,6 +864,11 @@ function applyTrainingDetail(data) {
         ...schedule,
         timeRange: schedule.timeRange || schedule.time_range || '',
         sessionId: schedule.sessionId || schedule.session_id,
+        hours: calculateScheduleUnitsFromTimeRange(
+          schedule.timeRange || schedule.time_range || '',
+          schedule.hours,
+          incomingScheduleRuleConfig
+        ),
       })),
     })),
     studentIds: normalizedStudentIds,
@@ -816,6 +876,7 @@ function applyTrainingDetail(data) {
     enrolledCount: data.enrolledCount ?? normalizedStudentIds.length,
     enrolled: data.enrolledCount ?? normalizedStudentIds.length,
     enrollmentRequiresApproval: data.enrollmentRequiresApproval !== false,
+    scheduleRuleConfig: incomingScheduleRuleConfig,
     checkinRecords: normalizeCheckinRecords(data.checkinRecords || []),
     workflowSteps: data.workflowSteps || [],
     currentStepKey: data.currentStepKey || 'draft',
@@ -1569,6 +1630,14 @@ function goTrainingExamManage() {
   })
 }
 
+function openAiScheduleTask() {
+  if (!canScheduleEdit.value) {
+    message.warning(scheduleEditTooltip.value)
+    return
+  }
+  router.push({ name: 'AiScheduleTask', params: { id: trainingData.id } })
+}
+
 function quickCreateTrainingExam() {
   if (!canQuickCreateExam.value) return
   router.push({
@@ -2029,15 +2098,71 @@ const scheduleForm = reactive({
   date: null,
   location: '',
 })
-const courseModalFooterTip = computed(() => '课程先保存下来，后续随时都可以通过“编辑课次”继续补排。')
+const courseFormScheduledHours = computed(() => roundCourseHours(courseForm.schedules.reduce((sum, sch) => sum + Number(sch.hours || 0), 0)))
+const courseHoursStatusLabel = computed(() => {
+  const plannedHours = Number(courseForm.hours || 0)
+  if (plannedHours > 0) {
+    return `${plannedHours} 课时，可用于AI按课时排`
+  }
+  return '未设置，如需AI按课时排请先补齐'
+})
+const courseModalFooterTip = computed(() => {
+  if (Number(courseForm.hours || 0) > 0) {
+    return `当前已设置计划课时 ${courseForm.hours || 0}，在 AI 任务选择“按课时排”时会按此值生成建议。`
+  }
+  return '当前未设置计划课时；如果后续 AI 任务选择“按课时排”，请先补充计划课时。'
+})
 
 function onInstructorChange(userId) {
   const inst = instructorList.value.find(i => i.userId == userId)
   if (inst) courseForm.instructor = inst.name
 }
 
-function calcTotalHours() {
-  courseForm.hours = Math.round(courseForm.schedules.reduce((sum, sch) => sum + (sch.hours || 0), 0))
+function roundCourseHours(value) {
+  const numeric = Number(value || 0)
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return 0
+  }
+  return Number(numeric.toFixed(1))
+}
+
+function getActiveScheduleRuleConfig(ruleConfig = null) {
+  const config = ruleConfig || trainingData.scheduleRuleConfig || {}
+  return {
+    lessonUnitMinutes: Math.max(1, Number(config.lessonUnitMinutes || config.lesson_unit_minutes || 40)),
+    breakMinutes: Math.max(0, Number(config.breakMinutes || config.break_minutes || 10)),
+  }
+}
+
+function calculateScheduleUnitsFromDuration(durationMinutes, ruleConfig = null) {
+  if (!Number.isFinite(Number(durationMinutes)) || Number(durationMinutes) <= 0) {
+    return 0
+  }
+  const { lessonUnitMinutes, breakMinutes } = getActiveScheduleRuleConfig(ruleConfig)
+  if (durationMinutes <= lessonUnitMinutes || breakMinutes <= 0) {
+    return roundCourseHours(durationMinutes / lessonUnitMinutes)
+  }
+  const exactUnits = (durationMinutes + breakMinutes) / (lessonUnitMinutes + breakMinutes)
+  const roundedUnits = Math.round(exactUnits)
+  if (Math.abs(exactUnits - roundedUnits) <= 0.05) {
+    return roundCourseHours(roundedUnits)
+  }
+  return roundCourseHours(exactUnits)
+}
+
+function calculateScheduleUnitsFromTimeRange(timeRange, fallbackHours = 0, ruleConfig = null) {
+  const explicitHours = roundCourseHours(fallbackHours)
+  if (explicitHours > 0) {
+    return explicitHours
+  }
+  if (!timeRange || !String(timeRange).includes('~')) {
+    return 0
+  }
+  const [startText = '', endText = ''] = String(timeRange).split('~')
+  const start = dayjs(`2000-01-01 ${startText.trim()}`)
+  const end = dayjs(`2000-01-01 ${endText.trim()}`)
+  const diffMinutes = end.diff(start, 'minute')
+  return calculateScheduleUnitsFromDuration(diffMinutes, ruleConfig)
 }
 
 function sortCourseSchedules(schedules) {
@@ -2056,10 +2181,10 @@ function buildScheduleTimePayload(rangeValue) {
   const endText = rangeValue[1].format('HH:mm')
   const start = dayjs(`2000-01-01 ${startText}`)
   const end = dayjs(`2000-01-01 ${endText}`)
-  const diffMs = end.diff(start)
+  const diffMinutes = end.diff(start, 'minute')
   return {
     timeRange: `${startText}~${endText}`,
-    hours: diffMs > 0 ? Math.round(diffMs / (1000 * 60 * 60)) : 0,
+    hours: calculateScheduleUnitsFromDuration(diffMinutes),
   }
 }
 
@@ -2121,29 +2246,30 @@ function hydrateCourseForm(course) {
     instructor: c.instructor,
     instructorId: (c.primaryInstructorId || inst?.userId) ?? null,
     assistantInstructorIds: c.assistantInstructorIds || [],
-    hours: c.hours,
+    hours: roundCourseHours(c.hours),
     type: c.type,
     schedules: c.schedules || [],
   })
 
   if (courseForm.schedules.length === 0) {
     if (c.dates && c.timeRange) {
-      let hrs = 0
-      const [st, ed] = c.timeRange.split('~')
-      if (st && ed) {
-        const diff = dayjs(`2000-01-01 ${ed}`).diff(dayjs(`2000-01-01 ${st}`))
-        if (diff > 0) hrs = Number((diff / (1000 * 60 * 60)).toFixed(1))
-      }
+      const hrs = calculateScheduleUnitsFromTimeRange(c.timeRange, c.hours)
       c.dates.forEach((d) => {
         courseForm.schedules.push({ date: d, timeRange: c.timeRange, hours: hrs, location: c.location || '' })
       })
     } else if (c.date && c.timeRange) {
-      courseForm.schedules.push({ date: c.date, timeRange: c.timeRange, hours: c.hours, location: c.location || '' })
+      courseForm.schedules.push({
+        date: c.date,
+        timeRange: c.timeRange,
+        hours: calculateScheduleUnitsFromTimeRange(c.timeRange, c.hours),
+        location: c.location || '',
+      })
     } else if (c.startTime && c.endTime) {
+      const timeRange = `${dayjs(c.startTime).format('HH:mm')}~${dayjs(c.endTime).format('HH:mm')}`
       courseForm.schedules.push({
         date: dayjs(c.startTime).format('YYYY-MM-DD'),
-        timeRange: `${dayjs(c.startTime).format('HH:mm')}~${dayjs(c.endTime).format('HH:mm')}`,
-        hours: c.hours,
+        timeRange,
+        hours: calculateScheduleUnitsFromTimeRange(timeRange, c.hours),
         location: c.location || '',
       })
     }
@@ -2173,6 +2299,12 @@ function validateCourseBasicInfo(showMessage = true) {
     }
     return false
   }
+  if (Number(courseForm.hours || 0) < 0) {
+    if (showMessage) {
+      message.warning('计划课时不能小于 0')
+    }
+    return false
+  }
   return true
 }
 
@@ -2198,7 +2330,6 @@ function removeCourseSchedule(idx) {
     return
   }
   courseForm.schedules.splice(idx, 1)
-  calcTotalHours()
 }
 
 function openCourseModal(idx = null) {
@@ -2349,7 +2480,6 @@ async function saveSchedule() {
     targetCourse.schedules.push(schedulePayload)
   }
   sortCourseSchedules(targetCourse.schedules)
-  targetCourse.hours = Math.round(targetCourse.schedules.reduce((sum, item) => sum + (item.hours || 0), 0))
 
   try {
     await submitTrainingUpdate({ courses: nextCourses })
@@ -2377,7 +2507,7 @@ async function saveCourseSessions() {
     return
   }
   targetCourse.schedules = JSON.parse(JSON.stringify(courseForm.schedules || []))
-  targetCourse.hours = courseForm.hours || 0
+  targetCourse.hours = roundCourseHours(courseForm.hours)
   try {
     await submitTrainingUpdate({ courses: nextCourses })
     message.success('课次已保存')
@@ -2394,6 +2524,7 @@ async function saveCourse() {
     return
   }
   const courseData = { ...courseForm }
+  courseData.hours = roundCourseHours(courseForm.hours)
   courseData.primaryInstructorId = courseForm.instructorId
   delete courseData.instructorId
   const nextCourses = [...trainingData.courses]
@@ -2443,7 +2574,6 @@ function removeSchedule(record) {
       const { nextCourses, targetCourse } = getMutableCoursePayload(record.courseIndex)
       if (!targetCourse) return
       targetCourse.schedules = targetCourse.schedules.filter((item) => item.sessionId !== record.sessionId)
-      targetCourse.hours = Math.round(targetCourse.schedules.reduce((sum, item) => sum + (item.hours || 0), 0))
       if (targetCourse.schedules.length > 0) {
         nextCourses.splice(record.courseIndex, 1, targetCourse)
       } else {
@@ -2469,6 +2599,7 @@ const editForm = reactive({
   capacity: trainingData.capacity, status: trainingData.status, description: trainingData.description || '',
   enrollmentRequiresApproval: true,
 })
+const scheduleRuleSaving = ref(false)
 
 function syncEditFormFromTraining() {
   editForm.name = trainingData.name
@@ -2508,6 +2639,20 @@ async function saveClassInfo() {
     await loadTrainingDetail()
   } catch {
     message.error('班级信息更新失败')
+  }
+}
+
+async function saveScheduleRuleConfig(payload) {
+  if (!canScheduleEdit.value) return
+  scheduleRuleSaving.value = true
+  try {
+    await submitTrainingUpdate({ scheduleRuleConfig: payload })
+    message.success('排课规则已更新')
+    await loadTrainingDetail()
+  } catch {
+    message.error('排课规则更新失败')
+  } finally {
+    scheduleRuleSaving.value = false
   }
 }
 
@@ -2701,7 +2846,7 @@ function exportMsg() {
 .course-modal-title { margin-top: 6px; font-size: 18px; font-weight: 700; color: #0f172a; }
 .course-session-header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 12px; }
 .course-session-list-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; }
-.course-session-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
+.course-session-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
 .summary-item { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 10px; border: 1px solid #e2e8f0; background: #f8fafc; }
 .summary-label { font-size: 12px; color: #64748b; }
 .summary-value { font-size: 14px; font-weight: 600; color: #111827; }

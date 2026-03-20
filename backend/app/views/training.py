@@ -31,6 +31,7 @@ from app.schemas import (
     TrainingEvaluationCreate,
     TrainingHistoryResponse,
     TrainingListResponse,
+    TrainingStatsResponse,
     TrainingResourceBindRequest,
     TrainingResponse,
     TrainingRosterAssignment,
@@ -147,6 +148,16 @@ def get_trainings(
 ):
     controller = TrainingController(db)
     data = controller.get_trainings(page, size, status, type, search, current_user.user_id)
+    return StandardResponse(data=data)
+
+
+@router.get("/stats", response_model=StandardResponse[TrainingStatsResponse], summary="培训统计")
+def get_training_stats(
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = TrainingController(db)
+    data = controller.get_training_stats(current_user.user_id)
     return StandardResponse(data=data)
 
 

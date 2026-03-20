@@ -7,7 +7,7 @@ from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .training import TrainingCourseCreate
+from .training import TrainingCourseCreate, TrainingScheduleRuleConfig
 
 
 AITaskType = Literal[
@@ -132,10 +132,16 @@ class AIScheduleTaskCreateRequest(BaseModel):
 
     task_name: str = Field(..., max_length=200, description="任务名称")
     training_id: int = Field(..., description="培训班 ID")
+    natural_language_prompt: Optional[str] = Field(None, max_length=4000, description="自然语言排课要求")
     scope_type: Literal["all", "current_week", "unscheduled"] = Field("all", description="排课范围")
     scope_start_date: Optional[DateType] = Field(None, description="指定周起始日期")
     goal: Literal["balanced", "practice_first", "theory_first", "exam_intensive"] = Field("balanced", description="排课目标")
+    planning_mode: Literal["auto", "fill_all_days", "fill_workdays", "by_hours"] = Field(
+        "auto",
+        description="排课方式: auto/fill_all_days/fill_workdays/by_hours",
+    )
     constraint_payload: AIScheduleTaskConstraintPayload = Field(default_factory=AIScheduleTaskConstraintPayload, description="排课约束")
+    schedule_rule_override: Optional[TrainingScheduleRuleConfig] = Field(None, description="任务级排课规则覆盖")
     notes: Optional[str] = Field(None, max_length=1000, description="补充说明")
 
 
@@ -347,6 +353,9 @@ class AIScheduleTaskDetailResponse(AITaskSummaryResponse):
     alternative_plans: List[AISchedulePlan] = Field(default_factory=list)
     conflicts: List[AIScheduleConflictItem] = Field(default_factory=list)
     explanation: Optional[str] = None
+    parse_summary: Optional[str] = None
+    parse_warnings: List[str] = Field(default_factory=list)
+    effective_rule_config: Optional[TrainingScheduleRuleConfig] = None
     error_message: Optional[str] = None
 
 
