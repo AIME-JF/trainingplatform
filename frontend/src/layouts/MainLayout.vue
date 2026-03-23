@@ -5,7 +5,8 @@
       v-model:collapsed="collapsed"
       :trigger="null"
       collapsible
-      width="220"
+      :width="SIDEBAR_WIDTH"
+      :collapsed-width="COLLAPSED_SIDEBAR_WIDTH"
       class="sidebar"
     >
       <!-- Logo区域 -->
@@ -75,7 +76,7 @@
       </a-menu>
     </a-drawer>
 
-    <a-layout>
+    <a-layout class="main-shell" :style="mainShellStyle">
       <!-- 顶部导航栏 -->
       <a-layout-header class="topbar">
         <div class="topbar-left">
@@ -201,6 +202,9 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 
+const SIDEBAR_WIDTH = 220
+const COLLAPSED_SIDEBAR_WIDTH = 80
+
 const collapsed = ref(false)
 const mobileDrawerOpen = ref(false)
 const selectedKeys = ref([])
@@ -211,6 +215,16 @@ const isMobile = ref(window.innerWidth <= 768)
 const isMounted = ref(false)
 
 const isImmersiveRoute = computed(() => route.path.startsWith('/resource/recommend'))
+const desktopSidebarWidth = computed(() => {
+  if (isMobile.value) {
+    return 0
+  }
+  return collapsed.value ? COLLAPSED_SIDEBAR_WIDTH : SIDEBAR_WIDTH
+})
+const mainShellStyle = computed(() => ({
+  marginLeft: `${desktopSidebarWidth.value}px`,
+  width: `calc(100% - ${desktopSidebarWidth.value}px)`,
+}))
 
 function updateAppVh() {
   const vh = window.innerHeight * 0.01
@@ -382,6 +396,8 @@ function handleLogout() {
 <style scoped>
 .main-layout {
   min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 /* 侧边栏 */
@@ -389,6 +405,19 @@ function handleLogout() {
   background: var(--police-sidebar-bg) !important;
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.2);
   overflow: hidden;
+  position: fixed;
+  inset: 0 auto 0 0;
+  height: 100vh;
+  z-index: 120;
+  transition: width 0.2s ease;
+}
+
+.main-shell {
+  min-width: 0;
+  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
+  transition: margin-left 0.2s ease;
 }
 
 .sidebar-logo {
@@ -468,9 +497,9 @@ function handleLogout() {
   justify-content: space-between;
   padding: 0 20px;
   box-shadow: 0 1px 4px rgba(0, 48, 135, 0.1);
-  position: sticky;
-  top: 0;
+  position: relative;
   z-index: 100;
+  flex-shrink: 0;
 }
 
 .topbar-left {
@@ -550,9 +579,13 @@ function handleLogout() {
 
 /* 内容区 */
 .content-area {
+  flex: 1;
   padding: 24px;
   background: var(--police-bg);
-  min-height: calc(var(--app-vh, 1vh) * 100 - 64px);
+  min-height: 0;
+  height: calc(var(--app-vh, 1vh) * 100 - 64px);
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .content-area.immersive-content {

@@ -56,6 +56,8 @@
     padding-bottom: 76px !important;
     /* 留出底部导航空间 */
     min-height: calc(var(--app-vh, 1vh) * 100 - 52px - 64px) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
   }
 
   .content-area.immersive-content {
