@@ -1379,10 +1379,10 @@ const preparationAction = computed(() => {
     return {
       title: '继续安排课次',
       description: coursesWithoutSessionsCount.value === courseCount.value
-        ? '课程已经有了，但还没有具体上课时间，建议先补课次。'
-        : `还有 ${coursesWithoutSessionsCount.value} 门课程未安排课次，建议继续补齐。`,
-      buttonText: '去安排课次',
-      onClick: startCourseSessionGuide,
+        ? '课程已经有了，但还没有具体上课时间，建议先用智能排课生成建议方案。'
+        : `还有 ${coursesWithoutSessionsCount.value} 门课程未安排课次，建议先用智能排课补齐。`,
+      buttonText: '去智能排课',
+      onClick: () => openAiScheduleTask({ openTour: true }),
       type: 'primary',
       allowed: canScheduleEdit.value,
       tooltip: scheduleEditTooltip.value,
@@ -1630,12 +1630,13 @@ function goTrainingExamManage() {
   })
 }
 
-function openAiScheduleTask() {
+function openAiScheduleTask(options = {}) {
   if (!canScheduleEdit.value) {
     message.warning(scheduleEditTooltip.value)
     return
   }
-  router.push({ name: 'AiScheduleTask', params: { id: trainingData.id } })
+  const query = options.openTour ? { tour: 'smart-schedule' } : undefined
+  router.push({ name: 'AiScheduleTask', params: { id: trainingData.id }, query })
 }
 
 function quickCreateTrainingExam() {

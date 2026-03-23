@@ -22,6 +22,7 @@ from app.schemas import (
     AIQuestionTaskDetailResponse,
     AIQuestionTaskUpdateRequest,
     AIScheduleTaskCreateRequest,
+    AIScheduleParsePreviewResponse,
     AIScheduleTaskDetailResponse,
     AIScheduleTaskUpdateRequest,
     AITaskSummaryResponse,
@@ -303,6 +304,21 @@ def list_schedule_tasks(
     controller = AIController(db)
     data = controller.list_schedule_tasks(page, size, status_value, current_user.user_id)
     return StandardResponse(data=data)
+
+
+@router.post(
+    "/schedule-tasks/preview",
+    response_model=StandardResponse[AIScheduleParsePreviewResponse],
+    summary="预览 AI 排课解析结果",
+)
+def preview_schedule_task(
+    data: AIScheduleTaskCreateRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = AIController(db)
+    result = controller.preview_schedule_task(data, current_user.user_id)
+    return StandardResponse(data=result)
 
 
 @router.post(

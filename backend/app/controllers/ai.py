@@ -13,6 +13,7 @@ from app.schemas import (
     AIQuestionTaskCreateRequest,
     AIQuestionTaskUpdateRequest,
     AIScheduleTaskCreateRequest,
+    AIScheduleParsePreviewResponse,
     AIScheduleTaskUpdateRequest,
 )
 from app.services import AIService, TrainingAIService
@@ -176,6 +177,15 @@ class AIController:
         except Exception as exc:
             logger.error("创建 AI 排课任务异常: %s", exc)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建任务失败")
+
+    def preview_schedule_task(self, data: AIScheduleTaskCreateRequest, current_user_id: int) -> AIScheduleParsePreviewResponse:
+        try:
+            return self.training_ai_service.preview_schedule_task(data, current_user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("预览 AI 排课任务解析结果异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="预览排课规则失败")
 
     def update_schedule_task(self, task_id: int, data: AIScheduleTaskUpdateRequest, current_user_id: int):
         try:

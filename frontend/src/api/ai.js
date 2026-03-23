@@ -64,6 +64,10 @@ export function getAiScheduleTasks(params) {
   return request.get('/ai/schedule-tasks', { params })
 }
 
+export function previewAiScheduleTask(data) {
+  return request.post('/ai/schedule-tasks/preview', data)
+}
+
 export function createAiScheduleTask(data) {
   return request.post('/ai/schedule-tasks', data)
 }

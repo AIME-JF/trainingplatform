@@ -1,51 +1,50 @@
 # 警务训练平台后端
 
-本文档面向后端开发与运维，描述 `backend/` 服务的真实结构、启动流程、环境变量、迁移策略和当前业务边界。
+本文档面向 `backend/` 目录的开发与运维，描述当前代码中的真实目录结构、启动流程、环境变量、迁移策略和业务边界。
 
 ## 服务定位
 
 后端服务基于 FastAPI，负责以下能力：
 
 - JWT 登录鉴权与权限解析
-- 用户、角色、部门、权限、警种管理
-- 课程、培训、考试、证书、公告、个人中心
+- 用户、角色、部门、权限、警种、培训基地、系统配置管理
+- 课程、培训、考试、证书、公告、个人中心、数据看板
 - 资源上传、资源库、推荐流、审核工作流
-- 报表导出、人才库、AI 任务化出题与组卷
+- AI 任务流：智能出题、自动组卷、自动生成试卷、排课建议、个训方案
 - PostgreSQL、Redis、MinIO、Celery 的集成
 
 ## 当前核心业务模型
 
 ### 考试域
 
-当前考试域已经拆成五层：
+当前考试域已经拆成四层：
 
 - `Question`：统一题库
 - `ExamPaper`：独立试卷实体，维护题目快照与试卷状态
 - `AdmissionExam`：独立准入考试，不直接隶属培训班
 - `Exam`：培训班内考试，必须关联 `training_id`
-- `AITask`：AI 智能出题、AI 自动组卷、AI 自动生成试卷任务
 
 对应业务规则：
 
-- 试卷有独立状态流：`draft -> published -> archived`
-- 试卷发布后不能再修改题目；已被考试引用的试卷不能删除
-- 考试和准入考试创建时都只关联 `paper_id`
-- 只有已发布试卷才能被准入考试和培训班考试选择
-- 考试一旦创建，即视为已发布，后续不可更换试卷
-- 培训班通过 `admission_exam_id` 绑定准入考试
-- 学员报名该培训班时，如果配置了准入考试，必须先有该考试的通过记录
-- 培训班内考试的参试范围由 `training_id` 决定，不再使用 `scope`
-- 准入考试的适用范围由 `scope_type` 与 `scope_target_ids` 决定，`scope` 仅保留展示摘要
-- 准入考试支持 4 种范围类型：`all`、`user`、`department`、`role`
-- 准入考试的列表、详情和交卷接口都会按适用范围做后端校验；范围外学员不可见、不可参加、不可提交
+- 试卷状态流：`draft -> published -> archived`
+- 试卷发布后不可再修改题目；已被考试引用的试卷不能删除
+- 准入考试和培训班考试都只关联 `paper_id`
+- 只有已发布试卷才能创建准入考试和培训班考试
+- 准入考试范围由 `scope_type + scope_target_ids` 控制，支持 `all`、`user`、`department`、`role`
+- 准入考试列表、详情、交卷都会按适用范围做后端校验
+- 培训班报名时，如果绑定了 `admission_exam_id`，必须先有通过记录
 
 ### AI 任务域
 
-当前 AI 能力已统一收敛为任务流，而不是同步生成接口：
+统一任务表：`AITask`
 
-- `question_generation`：AI 智能出题
-- `paper_assembly`：AI 自动组卷
-- `paper_generation`：AI 自动生成试卷
+当前任务类型：
+
+- `question_generation`
+- `paper_assembly`
+- `paper_generation`
+- `schedule_generation`
+- `personal_training_plan_generation`
 
 统一任务状态：
 
@@ -55,61 +54,112 @@
 - `confirmed`
 - `failed`
 
-统一任务流程：
+当前实现差异：
 
-- 创建任务
-- 后端模拟生成结果
-- 查看任务详情
-- 编辑题目 / 试卷草稿
-- 确认写入题库 / 卷库
+- `AI 智能出题`
+  - 创建任务后写入 `AITask`
+  - 通过 `app.tasks.ai_question` 进入 Celery 队列
+  - 真正调用模型生成题目
+  - 每次仅允许一种题型，最多 20 题
+- `AI 排课建议`
+  - 创建任务后写入 `AITask`
+  - 通过 `app.tasks.ai_schedule` 进入 Celery 队列
+  - 生成主方案、备选方案、冲突清单
+  - 确认后直接回写培训班课程与课次
+- `AI 自动组卷`
+  - 也是任务化接口
+  - 但创建任务时同步生成试卷草稿
+  - 会优先复用现有题库题目，不足时再按规则补草稿题
+- `AI 自动生成试卷`
+  - 也是任务化接口
+  - 但创建任务时同步生成试卷草稿
+  - 当前是规则 / 模拟生成，不走 Celery
+- `AI 个训方案`
+  - 创建任务时同步生成画像与方案
+  - 确认后写入 `PersonalTrainingPlanSnapshot`
+  - 同一培训班、同一学员按 `version_no` 递增保存快照
+
+AI 运行时配置：
+
+- AI 智能出题和 AI 排课自然语言解析读取系统配置组 `ai`
+- 支持 `openai` 与 `ollama`
+- 如果 AI 排课自然语言解析未配置模型或调用失败，会自动退化到规则兜底解析
 
 ### 培训域
 
-当前培训域已经具备以下主链路：
+当前培训域主链路如下：
 
-- 培训基地：独立 `TrainingBase` 模型，培训班可通过 `training_base_id` 关联
-- 培训班流程：草稿 -> 发布招生 -> 锁定名单 -> 开班进行中 -> 结班归档
-- 培训班流程接口已做严格顺序校验；如果提前执行“锁定名单”或“开班”，必须显式传入 `skip_steps` 才会自动补齐并锁定被跳过环节
-- 培训班报名模式：支持 `enrollment_requires_approval`
-  - `true`：报名后进入 `pending`，需班主任 / 管理员审批
-  - `false`：报名后直接写入 `approved`
-- 培训班详情：步骤条、当前课次、课程安排、考试安排、资源绑定
-- 培训班详情页可直接查看待审核报名申请，审批通过 / 拒绝仍走统一报名接口
-- 课程安排：主讲教官 1 人 + 带教教官多人
-- 课次状态流：未开始 -> 签到中 -> 课程进行中（签到窗口已结束） -> 签退中 -> 已完成 / 已跳过 / 已错过
+- 培训基地：独立 `TrainingBase` 模型
+- 培训班流程：发布招生 -> 锁定名单 -> 开班 -> 结班
+- 培训班报名模式：`enrollment_requires_approval`
+  - `true`：报名进入 `pending`
+  - `false`：报名直接通过
+- 培训班数据归属：`department_id`、`police_type_id`、`training_base_id`、`created_by`
+- 课次状态流：
+  - `pending`
+  - `checkin_open`
+  - `checkin_closed`
+  - `checkout_open`
+  - `completed`
+  - `skipped`
+  - `missed`
 - 培训班开班后，课程和课次的任何变更都会写入 `TrainingCourseChangeLog`
-  - 来源包括详情页改课、课表导入、开始 / 结束签到、开始 / 结束签退、跳过课次、系统自动刷新为 `missed`
-  - 记录内容包括课程 / 课次摘要、操作人、前后快照、批次号
-- 已结班培训班禁止再修改课程安排和课次状态，后端会直接拒绝
-- 培训训历：根据报名、签到、考试记录汇总归档
-- 数据归属字段：`department_id`、`police_type_id`、`training_base_id`、`created_by`
+- 培训班支持 `schedule_rule_config`
+  - AI 排课、手工排课、课时换算共用这套规则
+  - 系统默认值来自系统配置组 `training_schedule`
+- AI 排课任务支持：
+  - 自然语言要求解析
+  - 任务级规则覆盖
+  - 固定课程键锁定
+  - 主方案 / 备选方案 / 冲突清单
+- AI 个训任务支持：
+  - 按学员画像生成目标、动作、资源推荐
+  - 确认后落版本化快照
+
+批量导入接口：
+
+- 培训学员导入
+- 培训教官导入
+- 培训课程导入
+- 培训课次导入
+- `/import/schedule` 目前是 `/import/sessions` 的兼容别名
 
 ### 课程域
 
 当前课程域的关键规则如下：
 
-- 课程标签已独立成 `CourseTag` / `CourseTagRelation`
-- 标签接口支持：
-  - `GET /api/v1/courses/tags`：按关键字搜索课程标签
-  - `POST /api/v1/courses/tags`：直接创建课程标签
-- 课程章节更新会尽量保留原章节 ID，避免编辑课程后打断已有学习进度
-- 课程总进度统一由 `CourseProgressService` 聚合：
+- 课程标签已独立成 `CourseTag / CourseTagRelation`
+- 课程支持可见范围：
+  - `all`
+  - `user`
+  - `department`
+  - `role`
+- 课程总进度由 `CourseProgressService` 聚合：
   - 按章节时长加权
-  - 课程列表、课程详情、个人中心、工作台共用同一口径
+  - 列表、详情、工作台、个人中心共用
 - 视频学习进度会持久化 `playback_seconds`
-  - 章节进度接口会保存最近播放秒数
-  - 课程详情接口会返回最近学习章节和最近播放位置
 - 课程学习情况接口：`GET /api/v1/courses/{course_id}/learning-status`
   - 仅课程创建者、课程主讲教官，或具备 `GET_COURSE_LEARNING_STATUS` 权限的用户可查看
-  - 返回学员、整门课进度、已完成章节数、最近学习时间、最近播放位置
+- 课程可绑定资源，详情会返回绑定资源列表
+
+### 系统配置域
+
+当前系统配置走独立配置组与配置项模型：
+
+- 配置组接口：`/api/v1/system/config-groups*`
+- 配置项接口：`/api/v1/system/configs*`
+- 当前核心初始化配置组：
+  - `ai`
+  - `training_schedule`
+- `init_data.py` 会执行配置模板同步，并刷新 Redis 缓存
+- 所有系统配置接口目前都只允许 `admin` 使用
 
 ### 数据范围域
 
-当前系统已经把“功能权限”和“数据范围”拆开：
+当前系统把“功能权限”和“数据范围”拆开：
 
-- 功能权限：仍由角色权限码与部门权限决定
+- 功能权限：由角色权限码与部门权限决定
 - 数据范围：由角色上的 `data_scopes` 决定
-- 对象级控制：当前已接入 `User`、`Training`、`TrainingBase`、`Question`、`ExamPaper`、`Exam`
 
 支持的数据范围值：
 
@@ -119,20 +169,20 @@
 - `police_type`
 - `self`
 
+当前已接入对象级范围控制：
+
+- `User`
+- `Training`
+- `TrainingBase`
+- `Question`
+- `ExamPaper`
+- `Exam`
+
 当前内置角色默认范围：
 
 - `admin`：`all`
 - `instructor`：`department_and_sub + police_type + self`
 - `student`：`department + police_type + self`
-
-当前对象级规则：
-
-- 用户：按“部门或警种任一命中即可”控制，且本人永远可见
-- 培训班：如果同时配置了部门和警种，则必须同时满足；`created_by` 和 `instructor_id` 同时计入“本人”
-- 培训基地：按部门范围控制；`created_by` 计入“本人”
-- 题目：按 `police_type_id` 控制；`created_by` 计入“本人”
-- 试卷：按题目所属警种与创建人范围控制；无权用户不可见试卷列表，也不可读取试卷详情
-- 培训班考试：按所属培训班的数据范围控制；无权用户不可见考试列表或考试详情
 
 ## 技术栈
 
@@ -140,7 +190,7 @@
 | --- | --- |
 | Web 框架 | FastAPI |
 | ORM | SQLAlchemy 2 |
-| 配置 | pydantic-settings + python-dotenv |
+| 配置 | pydantic-settings、python-dotenv |
 | 数据库 | PostgreSQL |
 | 迁移 | Alembic |
 | 缓存 / 队列 | Redis、Celery |
@@ -149,7 +199,7 @@
 | 密码加密 | passlib[bcrypt] |
 | 日志 | Loguru |
 | Excel 导入导出 | openpyxl |
-| AI | OpenAI 兼容客户端 |
+| AI | OpenAI 兼容客户端、Ollama |
 
 ## 目录结构
 
@@ -159,50 +209,51 @@ backend/
 │   ├── __init__.py              # FastAPI 应用实例、startup / shutdown
 │   ├── views/                   # 路由层
 │   ├── controllers/             # 控制器层
-│   ├── services/                # 业务层
+│   ├── services/                # 业务层、AI 服务
+│   ├── tasks/                   # Celery 任务
 │   ├── models/                  # SQLAlchemy 模型
 │   ├── schemas/                 # Pydantic 模型
 │   ├── middleware/              # 鉴权、日志、异常处理
 │   ├── database/                # 数据库、Redis、自动迁移
-│   ├── tasks/                   # Celery 任务
-│   └── utils/                   # 工具函数与授权判断
+│   └── utils/                   # 初始化配置、权限辅助等
 ├── alembic/                     # 数据库迁移版本
 ├── data/                        # 本地数据目录
 ├── docker/                      # 容器启动脚本
 ├── tests/                       # 现有测试脚本
 ├── main.py                      # uvicorn 启动入口
 ├── config.py                    # Settings 定义
-├── migrate.py                   # 迁移管理脚本
-├── init_data.py                 # 种子数据初始化
+├── migrate.py                   # Alembic 管理脚本
+├── init_data.py                 # 种子数据与系统配置初始化
 └── celery_app.py                # Celery 实例
 ```
 
 ## 路由组成
 
-已注册业务路由来自 `app/views/*.py`，当前包括：
+已注册业务模块来自 `app/views/*.py`，当前包括：
 
 - `auth`
 - `dashboard`
-- `courses`
-- `exams`
-- `questions`
-- `trainings`
-- `certificates`
+- `course`
+- `exam`
+- `question`
+- `training`
+- `training-base`
+- `certificate`
 - `profile`
 - `report`
 - `ai`
 - `talent`
-- `police-types`
+- `police-type`
 - `media`
-- `users`
-- `notices`
-- `roles`
-- `departments`
-- `permissions`
-- `training-bases`
-- `resources`
-- `reviews`
-- `resources/recommendations`
+- `user`
+- `notice`
+- `role`
+- `system`
+- `department`
+- `permission`
+- `resource`
+- `review`
+- `recommendation`
 
 统一前缀为 `settings.API_V1_STR`，默认 `/api/v1`。
 
@@ -222,76 +273,16 @@ uvicorn.run("app:app", host="0.0.0.0", port=8001)
 
 应用启动时会依次执行：
 
-1. 如果 `AUTO_MIGRATE_ON_STARTUP=True`，先尝试执行 Alembic 自动迁移
-2. 对关键表结构做兼容性校验；发现“版本号已是 head，但列缺失”的坏状态会直接阻断启动
-3. 调用 `init_db()`，仅补齐仍缺失的表，不负责已有表的字段升级
+1. 如果 `AUTO_MIGRATE_ON_STARTUP=True`，先尝试自动迁移
+2. 对关键表结构做兼容性校验
+3. 调用 `init_db()`，仅补齐缺失表，不负责历史字段升级
 4. 测试 Redis 连接
 
 注意：
 
-- 这些步骤不会执行 `init_data.py`
-- 首次初始化种子数据仍需手动运行 `python init_data.py`
-- 自动迁移不会再对“已有业务表但无版本记录”的旧库直接 `stamp head`
-- 新增权限码、`admin` 权限回填和内置角色 `data_scopes` 修正，统一通过 Alembic 数据迁移下发
-- 空库初始化应通过建表 + `init_data.py` 完成，再 `stamp head`；不要把历史增量迁移链直接当作空库 bootstrap 方案
-
-## 环境变量
-
-推荐从 `backend/.env.example` 复制为 `backend/.env` 后再修改。
-
-### 核心配置
-
-| 变量 | 说明 | 默认值 |
-| --- | --- | --- |
-| `PROJECT_NAME` | 项目名称 | `警务训练平台` |
-| `VERSION` | 应用版本 | `1.0.0` |
-| `DEBUG` | 调试模式 | `true` |
-| `API_V1_STR` | API 前缀 | `/api/v1` |
-| `AUTO_MIGRATE_ON_STARTUP` | 启动时自动检查迁移 | `true` |
-
-### 数据库配置
-
-| 变量 | 说明 |
-| --- | --- |
-| `DATABASE_URL` | PostgreSQL 连接串 |
-| `DATABASE_ECHO` | 是否打印 SQL |
-
-### Redis 配置
-
-| 变量 | 说明 |
-| --- | --- |
-| `REDIS_HOST` | Redis 主机 |
-| `REDIS_PORT` | Redis 端口 |
-| `REDIS_PASSWORD` | Redis 密码，可为空 |
-| `REDIS_DB` | Redis DB 编号 |
-
-### MinIO 配置
-
-| 变量 | 说明 |
-| --- | --- |
-| `MINIO_PUBLIC_URL` | 对外访问文件的基础地址 |
-| `MINIO_ENDPOINT` | MinIO 内部连接地址 |
-| `MINIO_ACCESS_KEY` | MinIO 账号 |
-| `MINIO_SECRET_KEY` | MinIO 密码 |
-| `MINIO_SECURE` | 是否启用 HTTPS |
-| `MINIO_BUCKET` | 存储桶名称 |
-
-### Celery 配置
-
-| 变量 | 说明 |
-| --- | --- |
-| `CELERY_BROKER_URL` | Broker 地址 |
-| `CELERY_RESULT_BACKEND` | 结果存储地址 |
-
-### 鉴权与 AI 配置
-
-| 变量 | 说明 |
-| --- | --- |
-| `SECRET_KEY` | JWT 签名密钥 |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | Token 过期时间，默认 30 天 |
-| `LLM_BASE_URL` | 大模型服务地址 |
-| `LLM_API_KEY` | 大模型密钥 |
-| `LLM_MODEL` | 使用的大模型名称 |
+- 这些步骤不会自动执行 `init_data.py`
+- 本地首次初始化仍需手动运行 `python init_data.py`
+- 自动迁移不能替代 Alembic 历史迁移链
 
 ## 本地启动
 
@@ -312,23 +303,18 @@ pip install -r requirements.txt
 Copy-Item .env.example .env
 ```
 
-然后根据本机环境修改：
+说明：
 
-- `DATABASE_URL`
-- `REDIS_*`
-- `MINIO_*`
-- `SECRET_KEY`
-- `LLM_*`
+- `config.py` 会先加载 `.env`
+- 如果存在 `.env.dev`，会在 `.env` 之上继续覆盖
 
-### 3. 迁移数据库
+### 3. 执行迁移
 
 ```powershell
 python migrate.py upgrade
 ```
 
-如果数据库曾被历史版本错误 `stamp head`，先拉取最新兼容迁移后再执行本命令。
-
-### 4. 初始化种子数据
+### 4. 初始化种子数据与系统配置
 
 ```powershell
 python init_data.py
@@ -349,6 +335,20 @@ python main.py
 
 ## Celery 与后台任务
 
+### 当前注册到 Celery 的任务
+
+`celery_app.py` 当前只显式注册了两类任务：
+
+- `app.tasks.ai_question`
+- `app.tasks.ai_schedule`
+
+也就是说：
+
+- `AI 智能出题` 依赖 Worker
+- `AI 排课建议` 依赖 Worker
+- `AI 自动组卷`、`AI 自动生成试卷`、`AI 个训方案` 不依赖 Worker
+- `app/tasks/recommendation.py` 目前只是占位脚本，没有注册成 Celery 定时任务
+
 ### 启动 Worker
 
 ```powershell
@@ -367,8 +367,53 @@ celery -A celery_app beat --loglevel=info
 
 说明：
 
-- Docker 镜像统一通过 `backend/docker/entrypoint.sh` 接收 `api`、`worker`、`beat` 三种模式
-- 当前仓库内已有推荐流相关任务，但大部分业务仍以同步 API 为主
+- Worker 镜像与 API 镜像共用 `backend/Dockerfile`
+- 默认 Compose 只启动 `worker`，不启动 `beat`
+- 当前仓库没有现成启用的周期任务编排，`beat` 主要用于后续扩展
+
+## Docker 启动入口
+
+`backend/docker/entrypoint.sh` 支持三种模式：
+
+- `api`
+- `worker`
+- `beat`
+
+`api` 模式下会先探测数据库状态：
+
+- 空库：执行 `init_data.py`，再 `python migrate.py stamp head`
+- 有业务表但缺种子数据：执行 `init_data.py`
+- 已初始化：跳过种子数据，直接启动 API
+
+## 环境变量与运行时配置
+
+推荐从 `backend/.env.example` 复制为 `backend/.env`。
+
+### 常用环境变量
+
+| 变量 | 说明 |
+| --- | --- |
+| `DEBUG` | 调试模式 |
+| `API_V1_STR` | API 前缀，默认 `/api/v1` |
+| `AUTO_MIGRATE_ON_STARTUP` | 启动时自动检查迁移 |
+| `DATABASE_URL` | PostgreSQL 连接串 |
+| `DATABASE_ECHO` | 是否打印 SQL |
+| `REDIS_HOST` / `REDIS_PORT` / `REDIS_DB` | Redis 连接信息 |
+| `MINIO_PUBLIC_URL` | 文件对外访问基础地址 |
+| `MINIO_ENDPOINT` | MinIO 内部连接地址 |
+| `MINIO_ACCESS_KEY` / `MINIO_SECRET_KEY` | MinIO 账号密码 |
+| `MINIO_BUCKET` | 存储桶名称 |
+| `CELERY_BROKER_URL` | Celery Broker |
+| `CELERY_RESULT_BACKEND` | Celery 结果后端 |
+| `SECRET_KEY` | JWT 签名密钥 |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Token 过期时间 |
+| `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` | 保留在 Settings 中的模型环境变量 |
+
+### 需要特别注意的点
+
+- `LLM_*` 仍保留在 `config.py` 中，但 AI 智能出题和 AI 排课自然语言解析实际优先读取系统配置组 `ai`
+- 培训排课默认规则来自系统配置组 `training_schedule`
+- 系统配置会同步到 Redis 缓存；修改配置后由配置服务负责刷新缓存
 
 ## 数据迁移
 
@@ -383,17 +428,23 @@ python migrate.py status
 python migrate.py generate "your message"
 ```
 
-额外说明：
+当前迁移已经覆盖的关键改造包括：
 
-- `python migrate.py stamp head` 只允许在“你已经确认数据库结构和最新迁移完全一致”时使用
-- `Base.metadata.create_all()` 只负责补缺表，不能替代 Alembic 字段迁移
-- 当前迁移已经覆盖考试重构、试卷状态字段、培训 P0 重构、培训班考试去除 `scope`、准入考试结构化适用范围字段以及 AI 任务表
-- 当前迁移也承担历史库的权限补齐与内置角色修正，不再依赖应用启动时做运行时兼容补丁
-- 最新一轮课程 / 培训改造还依赖以下结构迁移：
-  - `course_tags`、`course_tag_relations`
-  - `course_progress.playback_seconds`
-  - `training_courses.course_key`
-  - `training_course_change_logs`
+- 考试 P0 重构、试卷状态字段、准入考试结构化适用范围
+- 培训基地与数据归属字段
+- 角色 `data_scopes` 与创建人字段
+- AI 任务表 `ai_tasks`
+- 培训报名审批开关
+- 课程标签、学习位置、学习情况
+- 培训班课程变更日志
+- 课程可见范围字段
+- 个训方案快照表 `personal_training_plan_snapshots`
+- 培训排课规则字段 `training_schedule_rule_config`
+
+注意：
+
+- `python migrate.py stamp head` 只适用于你已经确认库结构与最新迁移完全一致的场景
+- `Base.metadata.create_all()` 不能替代 Alembic 字段迁移
 
 ## 认证与权限
 
@@ -401,7 +452,7 @@ python migrate.py generate "your message"
 
 - 登录接口：`POST /api/v1/auth/login`
 - 手机登录接口：`POST /api/v1/auth/login/phone`
-- 受保护接口统一使用 `Authorization: Bearer <token>`
+- 当前用户：`GET /api/v1/auth/me`
 
 ### 统一响应
 
@@ -415,39 +466,17 @@ python migrate.py generate "your message"
 }
 ```
 
-分页数据结构：
-
-```json
-{
-  "page": 1,
-  "size": 10,
-  "total": 100,
-  "items": []
-}
-```
-
 ### 权限模型
 
 - 用户权限由角色权限与部门权限共同决定
-- 角色还可配置 `data_scopes`，用于列表过滤、详情访问和对象创建/更新时的归属范围校验
-- `admin` 角色的全量权限回填与内置角色默认 `data_scopes` 修正由 Alembic 迁移负责
-- 培训域的对象级权限以当前代码为准：
-  - 管理员：全部可操作
-  - 班主任：`training.instructor_id`
-  - 主讲 / 带教教官：仅可操作自己课次
-  - 学员：只能查看和操作自己的报名、签到、训历等数据
-- 培训班更新接口已拆成两条：
-  - `PUT /api/v1/trainings/{id}`：要求 `UPDATE_TRAINING`，且必须是当前培训班班主任
-  - `PUT /api/v1/trainings/{id}/manage`：要求 `MANAGE_TRAINING`，用于管理端直接更新
-- 培训班课程变更记录接口：`GET /api/v1/trainings/{id}/course-change-logs`
-  - 仅班主任可直接查看
-  - 或具备 `MANAGE_TRAINING` 且数据范围允许管理当前培训班的用户可查看
+- 角色还可配置 `data_scopes`
+- 培训域更新接口已拆成两条：
+  - `PUT /api/v1/trainings/{id}`：要求 `UPDATE_TRAINING`，且必须是当前班主任
+  - `PUT /api/v1/trainings/{id}/manage`：要求 `MANAGE_TRAINING`
 - 课程学习情况接口：`GET /api/v1/courses/{id}/learning-status`
   - 课程创建者、课程主讲教官可直接查看
   - 其余用户需具备 `GET_COURSE_LEARNING_STATUS`
-- 用户管理、培训班、培训基地、题库当前已接入数据范围控制：
-  - 用户：部门或警种命中即可
-  - 培训班 / 培训基地 / 题目：按对象自身的部门、警种归属控制
+- 系统配置接口当前统一要求 `admin`
 
 ### 受保护对象
 
@@ -457,7 +486,7 @@ python migrate.py generate "your message"
 
 ## 文件上传与对象存储
 
-资源和媒体相关能力依赖 MinIO：
+资源和媒体能力依赖 MinIO：
 
 - 上传接口：`POST /api/v1/media/upload`
 - 取文件接口：`GET /api/v1/media/files/{file_id}`
@@ -472,12 +501,14 @@ python migrate.py generate "your message"
 
 ## 批量导入
 
-后端提供三类培训导入和一类全员底库导入：
+当前提供以下导入能力：
 
 - 全员底库导入：`POST /api/v1/users/import/police-base`
 - 培训学员导入：`POST /api/v1/trainings/{training_id}/import/students`
 - 培训教官导入：`POST /api/v1/trainings/{training_id}/import/instructors`
-- 培训课表导入：`POST /api/v1/trainings/{training_id}/import/schedule`
+- 培训课程导入：`POST /api/v1/trainings/{training_id}/import/courses`
+- 培训课次导入：`POST /api/v1/trainings/{training_id}/import/sessions`
+- 培训课次导入兼容别名：`POST /api/v1/trainings/{training_id}/import/schedule`
 
 导入特点：
 
@@ -485,18 +516,6 @@ python migrate.py generate "your message"
 - 自动识别中英文表头别名
 - 缺失部门与警种会自动创建
 - 新建账号默认密码为 `Police@123456`
-
-## Docker 运行说明
-
-`backend/Dockerfile` 会构建 API 与 Worker 共用镜像。
-
-容器内启动入口：
-
-- `api`：`python main.py`
-- `worker`：`celery -A celery_app worker --loglevel=info --pool=gevent ...`
-- `beat`：`celery -A celery_app beat --loglevel=info`
-
-完整部署建议从仓库根目录下的 `docker/` 目录操作，而不是单独运行后端镜像。
 
 ## 种子数据
 
@@ -507,6 +526,9 @@ python migrate.py generate "your message"
 - 基础警种
 - `admin` / `instructor` / `student` 三个默认角色
 - 三个示例用户
+- 系统配置模板：
+  - `ai`
+  - `training_schedule`
 
 默认账号：
 
@@ -518,18 +540,15 @@ python migrate.py generate "your message"
 
 ## 已知行为与注意事项
 
-- `POST /api/v1/auth/login/phone` 目前尚未校验验证码内容，只根据手机号查用户并发 token。
+- `POST /api/v1/auth/login/phone` 目前不会校验验证码内容，只按手机号查用户并发 token。
+- `AI 智能出题`、`AI 排课建议` 需要 Worker；只启动 API 时任务不会自动完成。
+- AI 智能出题依赖系统配置组 `ai` 中的模型配置；如果 `default_text_model`、`api_base_url` 或 `api_key` 未配置，任务会失败。
+- AI 排课自然语言解析未配置模型或调用失败时，会在任务详情里留下 `parse_warnings`，并按规则兜底继续生成。
+- `AI 自动组卷`、`AI 自动生成试卷`、`AI 个训方案` 当前不是异步队列任务。
 - 培训二维码签到依赖 Redis；Redis 不可用时，扫码签到链路不可用。
-- 培训课次一旦过了系统判定截止时间，会自动转为 `missed`，无法再开始签到或跳过。
-- `checkin_closed` 的真实语义是“课程仍在进行，但签到窗口已结束”；前端展示应按“进行中”理解，而不是“已结束”。
-- 培训班和培训基地新增了 `created_by`；旧库需要执行最新 Alembic 迁移后才能正常读取这些字段。
-- 准入考试现在新增了 `scope_type`、`scope_target_ids` 两个字段；旧库必须执行最新 Alembic 迁移后才能正常保存结构化适用范围。
-- 培训班现在新增了 `enrollment_requires_approval`；旧库必须执行最新 Alembic 迁移后才能正常区分“审批报名”和“直接通过”两种模式。
-- 课程标签、课程学习播放位置、培训班课程变更日志都依赖最新 Alembic 迁移；旧库不迁移会导致标签、学习进度恢复和课程变更记录不可用。
-- 试卷详情接口现在会返回每道题的标准答案；前端试卷详情页依赖该字段展示答案与解析。
-- 历史库中的缺失权限、`admin` 权限集合以及内置角色默认 `data_scopes`，会在最新 Alembic 迁移里被一次性修正；部署后请先执行 `python migrate.py upgrade`。
-- 某些系统管理接口同时提供 REST 风格和兼容旧前端的 `/create`、`/update`、`/delete` 别名。
-- 项目已全面移除 `from __future__ import annotations`。该语句会将所有类型注解变为字符串延迟求值，导致 Pydantic v2 在 Python 3.12 下无法解析模型字段，启动时报 `PydanticUndefinedAnnotation`。根治方式是重排 `schemas/course.py` 和 `schemas/training.py` 中的类定义顺序，将被引用类移到引用方前面，彻底消除 forward reference，无需 `model_rebuild()`。**后续新增代码禁止再使用 `from __future__ import annotations`。**
+- `checkin_closed` 的真实语义是“课程仍在进行，但签到窗口已结束”，前端应按“进行中”理解。
+- 默认 Compose 没有启动 `beat`，推荐刷新脚本也还没有接入正式周期调度。
+- 仓库里仍然存在 `from __future__ import annotations` 的历史文件，当前代码并未做到“全面移除”这条约束；以后如果继续处理 Pydantic / 注解兼容问题，应以实际文件为准，不要依赖旧文档描述。
 
 ## 进一步阅读
 

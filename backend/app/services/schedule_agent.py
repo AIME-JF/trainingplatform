@@ -36,6 +36,10 @@ class ScheduleAgentService:
         "fill_workdays": "排满工作日",
         "by_hours": "按课时排",
     }
+    COURSE_TYPE_LABELS = {
+        "theory": "理论课",
+        "practice": "实操课",
+    }
     IMMUTABLE_STATUSES = {"checkin_open", "checkin_closed", "checkout_open", "completed", "skipped", "missed"}
     LIFECYCLE_FIELDS = (
         "started_at",
@@ -390,11 +394,19 @@ class ScheduleAgentService:
 
         for unit in units:
             placed = False
-            for target_date in self._resolve_unit_candidate_dates(unit, date_sequence):
+            preferred_dates = self._resolve_exam_focus_dates_for_unit(training, unit, data.constraint_payload, date_sequence)
+            for target_date in self._resolve_unit_candidate_dates(unit, date_sequence, preferred_dates):
                 if self._day_hours(occupied, target_date) + unit["hours"] > data.constraint_payload.daily_max_hours + 1e-6:
                     continue
-                for start_minutes, end_minutes, time_range in self._build_slot_candidates(rule_config, unit["hours"], plan_index):
-                    if self._has_overlap(occupied, target_date, start_minutes, end_minutes):
+                slot_candidates = self._build_slot_candidates(rule_config, unit["hours"], plan_index)
+                slot_candidates = self._apply_course_type_time_preferences(
+                    slot_candidates,
+                    target_date,
+                    unit,
+                    data.constraint_payload,
+                )
+                for start_minutes, end_minutes, time_range in slot_candidates:
+                    if self._has_overlap(occupied, target_date, start_minutes, end_minutes, unit):
                         continue
 
                     schedule_item = deepcopy(unit.get("source_schedule") or {})
@@ -451,6 +463,12 @@ class ScheduleAgentService:
             (course.course_key or f"course-{course.id}"): course
             for course in (training.courses or [])
         }
+        for slot in (constraint_payload.blocked_time_slots or []):
+            self._append_unavailable_slot(occupied, slot, scope="global")
+        for slot in (constraint_payload.instructor_unavailable_slots or []):
+            self._append_unavailable_slot(occupied, slot, scope="instructor")
+        for slot in (constraint_payload.location_unavailable_slots or []):
+            self._append_unavailable_slot(occupied, slot, scope="location")
 
         for course_key, course in course_map.items():
             planned_total_hours = 0.0
@@ -512,7 +530,29 @@ class ScheduleAgentService:
                         )
                         break
 
-                if self._has_overlap(occupied, schedule_date, start_minutes, end_minutes):
+                preference_violation = self._build_course_type_preference_conflict(
+                    schedule_date,
+                    start_minutes,
+                    end_minutes,
+                    course.get("type") or "theory",
+                    course_key,
+                    schedule.get("session_id"),
+                    constraint_payload,
+                )
+                if preference_violation:
+                    conflicts.append(preference_violation)
+
+                if self._has_overlap(
+                    occupied,
+                    schedule_date,
+                    start_minutes,
+                    end_minutes,
+                    {
+                        "course_type": course.get("type") or "theory",
+                        "instructor": course.get("instructor"),
+                        "location": schedule.get("location") or course.get("location"),
+                    },
+                ):
                     conflicts.append(
                         AIScheduleConflictItem(
                             severity="error",
@@ -656,10 +696,12 @@ class ScheduleAgentService:
                 )
         for date_key, blocks in self._build_exam_blocks(training, constraint_payload).items():
             occupied.setdefault(date_key, []).extend(blocks)
+        for slot in (constraint_payload.blocked_time_slots or []):
+            self._append_unavailable_slot(occupied, slot, scope="global")
         for slot in (constraint_payload.instructor_unavailable_slots or []):
-            self._append_unavailable_slot(occupied, slot)
+            self._append_unavailable_slot(occupied, slot, scope="instructor")
         for slot in (constraint_payload.location_unavailable_slots or []):
-            self._append_unavailable_slot(occupied, slot)
+            self._append_unavailable_slot(occupied, slot, scope="location")
         return occupied
 
     def _build_exam_blocks(
@@ -683,7 +725,7 @@ class ScheduleAgentService:
             })
         return result
 
-    def _append_unavailable_slot(self, occupied: Dict[str, List[dict]], slot: Any) -> None:
+    def _append_unavailable_slot(self, occupied: Dict[str, List[dict]], slot: Any, scope: str = "global") -> None:
         slot_date = self._parse_date(getattr(slot, "date", None) or slot.get("date"))
         start_time, end_time = self._parse_time_range(getattr(slot, "time_range", None) or slot.get("time_range"))
         if not slot_date or not start_time or not end_time:
@@ -693,7 +735,10 @@ class ScheduleAgentService:
             slot_date,
             self._time_to_minutes(start_time),
             self._time_to_minutes(end_time),
-            {"block_type": "manual_unavailable"},
+            {
+                "block_type": f"{scope}_unavailable",
+                "label": getattr(slot, "label", None) or slot.get("label"),
+            },
         )
 
     def _resolve_planning_dates(self, training: Training, data: AIScheduleTaskCreateRequest) -> List[date]:
@@ -895,11 +940,167 @@ class ScheduleAgentService:
         target_date: date,
         start_minutes: int,
         end_minutes: int,
+        unit_context: Optional[dict[str, Any]] = None,
     ) -> bool:
         for item in occupied.get(target_date.isoformat(), []):
-            if self._interval_overlap(start_minutes, end_minutes, item["start"], item["end"]):
-                return True
+            if not self._interval_overlap(start_minutes, end_minutes, item["start"], item["end"]):
+                continue
+            if not self._occupied_item_applies_to_unit(item, unit_context or {}):
+                continue
+            return True
         return False
+
+    def _occupied_item_applies_to_unit(self, item: dict, unit_context: dict[str, Any]) -> bool:
+        block_type = str(item.get("block_type") or "")
+        if block_type == "instructor_unavailable":
+            label = str(item.get("label") or "").strip().lower()
+            instructor = str(unit_context.get("instructor") or "").strip().lower()
+            return not label or (instructor and label == instructor)
+        if block_type == "location_unavailable":
+            label = str(item.get("label") or "").strip().lower()
+            location = str(unit_context.get("location") or "").strip().lower()
+            return not label or (location and label == location)
+        return True
+
+    def _apply_course_type_time_preferences(
+        self,
+        slot_candidates: List[tuple[int, int, str]],
+        target_date: date,
+        unit: dict,
+        constraint_payload: AIScheduleTaskConstraintPayload,
+    ) -> List[tuple[int, int, str]]:
+        preferences = [
+            item
+            for item in (constraint_payload.course_type_time_preferences or [])
+            if self._preference_matches_unit(item, target_date, unit)
+        ]
+        if not preferences:
+            return slot_candidates
+
+        strict_windows = [
+            (self._parse_clock(item.start_time), self._parse_clock(item.end_time))
+            for item in preferences
+            if item.priority == "only"
+        ]
+        strict_windows = [(start, end) for start, end in strict_windows if start is not None and end is not None]
+        if strict_windows:
+            return [
+                candidate
+                for candidate in slot_candidates
+                if any(candidate[0] >= start and candidate[1] <= end for start, end in strict_windows)
+            ]
+
+        preferred_windows = [
+            (self._parse_clock(item.start_time), self._parse_clock(item.end_time))
+            for item in preferences
+        ]
+        preferred_windows = [(start, end) for start, end in preferred_windows if start is not None and end is not None]
+        preferred_slots = [
+            candidate
+            for candidate in slot_candidates
+            if any(candidate[0] >= start and candidate[1] <= end for start, end in preferred_windows)
+        ]
+        if not preferred_slots:
+            return slot_candidates
+        preferred_keys = {(start, end, time_range) for start, end, time_range in preferred_slots}
+        fallback_slots = [candidate for candidate in slot_candidates if candidate not in preferred_keys]
+        return preferred_slots + fallback_slots
+
+    def _preference_matches_unit(self, preference: Any, target_date: date, unit: dict) -> bool:
+        course_type = getattr(preference, "course_type", None)
+        weekdays = list(getattr(preference, "weekdays", None) or [])
+        return (
+            course_type == (unit.get("course_type") or "theory")
+            and (not weekdays or target_date.isoweekday() in weekdays)
+        )
+
+    def _build_course_type_preference_conflict(
+        self,
+        schedule_date: date,
+        start_minutes: int,
+        end_minutes: int,
+        course_type: str,
+        course_key: Optional[str],
+        session_id: Optional[str],
+        constraint_payload: AIScheduleTaskConstraintPayload,
+    ) -> Optional[AIScheduleConflictItem]:
+        matched_preferences = [
+            item
+            for item in (constraint_payload.course_type_time_preferences or [])
+            if item.course_type == course_type and (not item.weekdays or schedule_date.isoweekday() in item.weekdays)
+        ]
+        if not matched_preferences:
+            return None
+
+        strict_preferences = [item for item in matched_preferences if item.priority == "only"]
+        if strict_preferences:
+            if any(
+                self._slot_within_window(start_minutes, end_minutes, item.start_time, item.end_time)
+                for item in strict_preferences
+            ):
+                return None
+            return AIScheduleConflictItem(
+                severity="error",
+                conflict_type="course_type_time_preference_violation",
+                course_key=course_key,
+                session_id=session_id,
+                message=f"{self.COURSE_TYPE_LABELS.get(course_type, course_type)}未落在允许时段内",
+                suggestion="请调整课次时间，或修改该课程类型的时段限制",
+            )
+
+        if any(
+            self._slot_within_window(start_minutes, end_minutes, item.start_time, item.end_time)
+            for item in matched_preferences
+        ):
+            return None
+        return AIScheduleConflictItem(
+            severity="warning",
+            conflict_type="course_type_time_preference_miss",
+            course_key=course_key,
+            session_id=session_id,
+            message=f"{self.COURSE_TYPE_LABELS.get(course_type, course_type)}未命中偏好时段",
+            suggestion="如条件允许，建议调整到偏好时间段",
+        )
+
+    def _resolve_exam_focus_dates_for_unit(
+        self,
+        training: Training,
+        unit: dict,
+        constraint_payload: AIScheduleTaskConstraintPayload,
+        default_dates: List[date],
+    ) -> List[date]:
+        focus = constraint_payload.exam_week_focus
+        if not focus or not self._unit_matches_exam_focus(unit, focus):
+            return []
+        focus_dates: List[date] = []
+        for exam in training.exam_sessions or []:
+            if not isinstance(exam, Exam) or not exam.start_time:
+                continue
+            exam_date = exam.start_time.date()
+            window_start = exam_date - timedelta(days=max(int(focus.days_before_exam or 7), 1))
+            focus_dates.extend(
+                item
+                for item in default_dates
+                if window_start <= item < exam_date
+            )
+        return list(dict.fromkeys(focus_dates))
+
+    def _unit_matches_exam_focus(self, unit: dict, focus: Any) -> bool:
+        course_type = getattr(focus, "course_type", None)
+        if course_type and course_type != (unit.get("course_type") or "theory"):
+            return False
+        keywords = [str(item).strip() for item in (getattr(focus, "course_keywords", None) or []) if str(item).strip()]
+        if not keywords:
+            return True
+        course_name = str(unit.get("course_name") or "")
+        return any(keyword in course_name for keyword in keywords)
+
+    def _slot_within_window(self, start_minutes: int, end_minutes: int, start_time: str, end_time: str) -> bool:
+        window_start = self._parse_clock(start_time)
+        window_end = self._parse_clock(end_time)
+        if window_start is None or window_end is None:
+            return False
+        return start_minutes >= window_start and end_minutes <= window_end
 
     def _interval_overlap(self, left_start: int, left_end: int, right_start: int, right_end: int) -> bool:
         return max(left_start, right_start) < min(left_end, right_end)
@@ -945,15 +1146,28 @@ class ScheduleAgentService:
         result.append(round(max(remaining, 1), 1))
         return result
 
-    def _resolve_unit_candidate_dates(self, unit: dict, default_dates: List[date]) -> List[date]:
+    def _resolve_unit_candidate_dates(
+        self,
+        unit: dict,
+        default_dates: List[date],
+        preferred_dates: Optional[List[date]] = None,
+    ) -> List[date]:
         candidate_date_values = {
             str(item).strip()
             for item in (unit.get("candidate_dates") or [])
             if str(item).strip()
         }
+        candidate_dates = default_dates
         if not candidate_date_values:
-            return default_dates
-        return [item for item in default_dates if item.isoformat() in candidate_date_values]
+            candidate_dates = default_dates
+        else:
+            candidate_dates = [item for item in default_dates if item.isoformat() in candidate_date_values]
+        if not preferred_dates:
+            return candidate_dates
+        preferred_keys = {item.isoformat() for item in preferred_dates}
+        prioritized = [item for item in candidate_dates if item.isoformat() in preferred_keys]
+        fallback = [item for item in candidate_dates if item.isoformat() not in preferred_keys]
+        return prioritized + fallback
 
     @staticmethod
     def _is_workday(target_date: date) -> bool:

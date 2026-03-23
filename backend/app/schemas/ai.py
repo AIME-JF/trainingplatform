@@ -116,6 +116,26 @@ class AIScheduleUnavailableSlot(BaseModel):
     label: Optional[str] = Field(None, description="标识，如教官/场地名")
 
 
+class AIScheduleCourseTypeTimePreference(BaseModel):
+    """课程类型的时间偏好"""
+
+    course_type: Literal["theory", "practice"] = Field(..., description="课程类型")
+    start_time: str = Field(..., description="开始时间 HH:MM")
+    end_time: str = Field(..., description="结束时间 HH:MM")
+    weekdays: List[int] = Field(default_factory=list, description="适用星期，1-7 表示周一到周日")
+    priority: Literal["prefer", "only"] = Field("prefer", description="prefer=优先，only=仅允许")
+    label: Optional[str] = Field(None, description="规则标签")
+
+
+class AIScheduleExamWeekFocus(BaseModel):
+    """考前强化偏好"""
+
+    course_type: Optional[Literal["theory", "practice"]] = Field(None, description="优先强化的课程类型")
+    course_keywords: List[str] = Field(default_factory=list, description="优先强化的课程关键词")
+    days_before_exam: int = Field(7, ge=1, le=30, description="考试前多少天内优先安排")
+    label: Optional[str] = Field(None, description="规则标签")
+
+
 class AIScheduleTaskConstraintPayload(BaseModel):
     """排课约束参数"""
 
@@ -123,8 +143,11 @@ class AIScheduleTaskConstraintPayload(BaseModel):
     theory_practice_ratio: Optional[str] = Field(None, description="理论/实操比例，如 4:6")
     avoid_exam_days: bool = Field(True, description="是否避开考试日")
     fixed_course_keys: List[str] = Field(default_factory=list, description="固定课程键列表")
+    blocked_time_slots: List[AIScheduleUnavailableSlot] = Field(default_factory=list, description="全局禁排时间")
+    course_type_time_preferences: List[AIScheduleCourseTypeTimePreference] = Field(default_factory=list, description="课程类型时段偏好")
     instructor_unavailable_slots: List[AIScheduleUnavailableSlot] = Field(default_factory=list, description="教官不可用时间")
     location_unavailable_slots: List[AIScheduleUnavailableSlot] = Field(default_factory=list, description="场地不可用时间")
+    exam_week_focus: Optional[AIScheduleExamWeekFocus] = Field(None, description="考前强化偏好")
 
 
 class AIScheduleTaskCreateRequest(BaseModel):
@@ -140,6 +163,7 @@ class AIScheduleTaskCreateRequest(BaseModel):
         "auto",
         description="排课方式: auto/fill_all_days/fill_workdays/by_hours",
     )
+    parsed_request_confirmed: bool = Field(False, description="是否已确认解析结果，执行时不再二次猜测")
     constraint_payload: AIScheduleTaskConstraintPayload = Field(default_factory=AIScheduleTaskConstraintPayload, description="排课约束")
     schedule_rule_override: Optional[TrainingScheduleRuleConfig] = Field(None, description="任务级排课规则覆盖")
     notes: Optional[str] = Field(None, max_length=1000, description="补充说明")
@@ -355,8 +379,20 @@ class AIScheduleTaskDetailResponse(AITaskSummaryResponse):
     explanation: Optional[str] = None
     parse_summary: Optional[str] = None
     parse_warnings: List[str] = Field(default_factory=list)
+    understood_items: List[str] = Field(default_factory=list)
     effective_rule_config: Optional[TrainingScheduleRuleConfig] = None
     error_message: Optional[str] = None
+
+
+class AIScheduleParsePreviewResponse(BaseModel):
+    """AI 排课解析预览响应"""
+
+    request_payload: AIScheduleTaskCreateRequest
+    parse_summary: Optional[str] = None
+    parse_warnings: List[str] = Field(default_factory=list)
+    understood_items: List[str] = Field(default_factory=list)
+    training_rule_config: TrainingScheduleRuleConfig = Field(default_factory=TrainingScheduleRuleConfig)
+    effective_rule_config: TrainingScheduleRuleConfig = Field(default_factory=TrainingScheduleRuleConfig)
 
 
 class AIPersonalTrainingTaskDetailResponse(AITaskSummaryResponse):

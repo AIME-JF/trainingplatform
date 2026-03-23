@@ -14,6 +14,7 @@ from app.schemas import (
     AIPersonalTrainingTaskDetailResponse,
     AIPersonalTrainingTaskUpdateRequest,
     AIScheduleConflictItem,
+    AIScheduleParsePreviewResponse,
     AISchedulePlan,
     AIScheduleTaskCreateRequest,
     AIScheduleTaskDetailResponse,
@@ -63,6 +64,23 @@ class TrainingAIService:
         task = self._get_task_or_raise(task_id, self.SCHEDULE_TASK_TYPE, current_user_id)
         return self._to_schedule_task_detail(task)
 
+    def preview_schedule_task(
+        self,
+        data: AIScheduleTaskCreateRequest,
+        current_user_id: int,
+    ) -> AIScheduleParsePreviewResponse:
+        training = self.schedule_agent._load_training_or_raise(data.training_id)  # noqa: SLF001
+        self.schedule_agent._ensure_manage_permission(training, current_user_id)  # noqa: SLF001
+        preview = self.schedule_config_parser.preview_task_request(training, data)
+        return AIScheduleParsePreviewResponse(
+            request_payload=preview["request"],
+            parse_summary=preview.get("summary"),
+            parse_warnings=list(preview.get("warnings") or []),
+            understood_items=list(preview.get("understood_items") or []),
+            training_rule_config=preview.get("training_rule_config"),
+            effective_rule_config=preview.get("effective_rule_config"),
+        )
+
     def get_personal_training_task_detail(self, task_id: int, current_user_id: int) -> AIPersonalTrainingTaskDetailResponse:
         task = self._get_task_or_raise(task_id, self.PERSONAL_TRAINING_TASK_TYPE, current_user_id, allow_target_user=True)
         return self._to_personal_training_task_detail(task)
@@ -74,10 +92,17 @@ class TrainingAIService:
     ) -> AIScheduleTaskDetailResponse:
         training = self.schedule_agent._load_training_or_raise(data.training_id)  # noqa: SLF001
         self.schedule_agent._ensure_manage_permission(training, current_user_id)  # noqa: SLF001
+        effective_request = data
+        if data.parsed_request_confirmed:
+            effective_request = self.schedule_config_parser.preview_task_request(
+                training,
+                data,
+                parse_prompt=False,
+            )["request"]
         task = self._create_task_entity(
-            data.task_name,
+            effective_request.task_name,
             self.SCHEDULE_TASK_TYPE,
-            self._build_schedule_request_payload(data),
+            self._build_schedule_request_payload(effective_request),
             current_user_id,
             status="pending",
         )
@@ -114,7 +139,11 @@ class TrainingAIService:
             task.error_message = None
             self.db.commit()
 
-        parser_result = self.schedule_config_parser.parse_task_request(training, request_payload)
+        parser_result = self.schedule_config_parser.preview_task_request(
+            training,
+            request_payload,
+            parse_prompt=not request_payload.parsed_request_confirmed,
+        )
         effective_request = parser_result["request"]
         task.task_name = effective_request.task_name
         task.request_payload = self._build_schedule_request_payload(effective_request)
@@ -122,6 +151,7 @@ class TrainingAIService:
             **self.schedule_agent.build_task_result(effective_request, task.created_by),
             "parse_summary": parser_result.get("summary"),
             "parse_warnings": parser_result.get("warnings") or [],
+            "understood_items": parser_result.get("understood_items") or [],
         }
         self._mark_task_completed(task)
         self.db.commit()
@@ -193,6 +223,7 @@ class TrainingAIService:
             "explanation": data.explanation,
             "parse_summary": (task.result_payload or {}).get("parse_summary"),
             "parse_warnings": list((task.result_payload or {}).get("parse_warnings") or []),
+            "understood_items": list((task.result_payload or {}).get("understood_items") or []),
         }
         self.db.commit()
         return self.get_schedule_task_detail(task_id, current_user_id)
@@ -409,6 +440,7 @@ class TrainingAIService:
             explanation=result_payload.get("explanation"),
             parse_summary=result_payload.get("parse_summary"),
             parse_warnings=list(result_payload.get("parse_warnings") or []),
+            understood_items=list(result_payload.get("understood_items") or []),
             effective_rule_config=effective_rule_config,
             error_message=task.error_message,
         )
