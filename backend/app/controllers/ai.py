@@ -196,6 +196,17 @@ class AIController:
             logger.error("更新 AI 排课任务异常: %s", exc)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新任务失败")
 
+    def delete_schedule_task(self, task_id: int, current_user_id: int):
+        try:
+            return self.training_ai_service.delete_schedule_task(task_id, current_user_id)
+        except ValueError as exc:
+            detail = str(exc)
+            status_code = status.HTTP_404_NOT_FOUND if detail == "任务不存在" else status.HTTP_400_BAD_REQUEST
+            raise HTTPException(status_code=status_code, detail=detail)
+        except Exception as exc:
+            logger.error("删除 AI 排课任务异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="删除任务失败")
+
     def confirm_schedule_task(self, task_id: int, current_user_id: int):
         try:
             return self.training_ai_service.confirm_schedule_task(task_id, current_user_id)
@@ -204,6 +215,15 @@ class AIController:
         except Exception as exc:
             logger.error("确认 AI 排课任务异常: %s", exc)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="确认任务失败")
+
+    def confirm_schedule_task_rules(self, task_id: int, data: AIScheduleTaskCreateRequest, current_user_id: int):
+        try:
+            return self.training_ai_service.confirm_schedule_task_rules(task_id, data, current_user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("确认 AI 排课任务规则异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="确认排课规则失败")
 
     def list_personal_training_tasks(self, page: int, size: int, status_value: str | None, current_user_id: int):
         try:

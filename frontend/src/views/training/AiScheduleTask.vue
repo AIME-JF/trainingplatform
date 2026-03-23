@@ -2,13 +2,15 @@
   <ai-task-tabs-layout
     v-model:active-tab="activeTab"
     title="AI排课建议"
-    subtitle="先解析规则预览并确认，再生成建议方案、人工调整并应用到现有课表"
+    subtitle="智能排课会先异步解析规则，再确认生成课表，最后人工调整并应用到现有课表"
     tag-text="训练智能体"
     :task-list="taskList"
     :task-loading="taskLoading"
     :active-task-id="activeTask?.id || null"
     :status-labels="statusLabels"
     :status-colors="statusColors"
+    :status-label-resolver="resolveTaskStatusLabel"
+    :status-color-resolver="resolveTaskStatusColor"
     @refresh-tasks="loadTasks"
     @select-task="selectTask"
   >
@@ -43,210 +45,14 @@
                     :rows="7"
                     placeholder="例：本周按工作日排满，上午 08:30-12:30，下午 14:00-17:30；一个课时 40 分钟，课间休息 10 分钟，一节课最多 3 个课时，尽量平分，避开考试。"
                   />
-                  <div class="field-help">这里只需要输入自然语言要求。系统会先解析成结构化排课配置供你预览和修改，确认后才正式生成排课任务。</div>
+                  <div class="field-help">这里只需要输入自然语言要求。提交后会创建异步任务，后台先解析规则，完成后再到任务页确认。</div>
                 </a-form-item>
               </div>
-              <div data-tour-id="schedule-create-button">
-                <a-button type="primary" block :loading="creating" @click="handleCreateTask">
-                  解析规则并预览
-                </a-button>
-              </div>
-              <div v-if="parsedPreview" class="detail-section">
-                <div class="detail-section-title">解析预览</div>
-                <a-alert v-if="parsedPreview.parseSummary" type="success" :message="parsedPreview.parseSummary" show-icon style="margin-bottom:12px" />
-                <div v-if="parsedPreview.parseWarnings?.length" class="conflict-list" style="margin-bottom:12px">
-                  <a-alert v-for="(item, index) in parsedPreview.parseWarnings" :key="`preview-warning-${index}`" type="warning" :message="item" show-icon />
+              <a-form-item label="是否覆盖当前课表">
+                <a-switch v-model:checked="taskForm.overwriteExistingSchedule" />
+                <div class="field-help">
+                  开启后会按新课表重新生成，最终确认应用时还会再次提示是否覆盖；关闭后会保留当前已有课次，并把它们作为避让上下文一起提供给模型。
                 </div>
-                <a-descriptions :column="1" size="small" bordered>
-                  <a-descriptions-item label="AI理解了什么">
-                    <div v-if="parsedPreview.understoodItems?.length" class="preview-list">
-                      <div v-for="(item, index) in parsedPreview.understoodItems" :key="`understood-${index}`">{{ item }}</div>
-                    </div>
-                    <span v-else>暂无</span>
-                  </a-descriptions-item>
-                  <a-descriptions-item label="培训班默认规则">
-                    {{ formatRuleOverrideSummary(selectedTrainingRuleConfig) }}
-                  </a-descriptions-item>
-                  <a-descriptions-item label="本次任务覆盖">
-                    {{ formatRuleOverrideSummary(parsedPreview.requestPayload?.scheduleRuleOverride) }}
-                  </a-descriptions-item>
-                </a-descriptions>
-              </div>
-            </a-form>
-          </a-tab-pane>
-
-          <a-tab-pane key="manual" tab="普通排课">
-            <a-form layout="vertical">
-              <a-alert
-                v-if="parsedPreview"
-                type="info"
-                show-icon
-                style="margin-bottom:16px"
-                message="当前表单已带入自然语言解析结果"
-                description="你可以继续修改结构化规则，确认无误后再创建正式排课任务。"
-              />
-              <div v-if="parsedPreview" class="detail-section" style="margin-top:0;margin-bottom:16px">
-                <div class="detail-section-title">规则预览与解释</div>
-                <a-alert
-                  v-if="parsedPreview.parseSummary"
-                  type="success"
-                  :message="parsedPreview.parseSummary"
-                  show-icon
-                  style="margin-bottom:12px"
-                />
-                <div v-if="parsedPreview.parseWarnings?.length" class="conflict-list" style="margin-bottom:12px">
-                  <a-alert
-                    v-for="(item, index) in parsedPreview.parseWarnings"
-                    :key="`manual-preview-warning-${index}`"
-                    type="warning"
-                    :message="item"
-                    show-icon
-                  />
-                </div>
-                <a-descriptions :column="1" size="small" bordered>
-                  <a-descriptions-item label="AI理解了什么">
-                    <div class="preview-list">
-                      <div v-for="(item, index) in parsedPreview.understoodItems || []" :key="`manual-understood-${index}`">{{ item }}</div>
-                    </div>
-                  </a-descriptions-item>
-                  <a-descriptions-item label="培训班默认规则">
-                    {{ formatRuleOverrideSummary(selectedTrainingRuleConfig) }}
-                  </a-descriptions-item>
-                  <a-descriptions-item label="当前任务覆盖规则">
-                    {{ formatRuleOverrideSummary(buildStructuredTaskPayload(taskForm.taskName).scheduleRuleOverride) }}
-                  </a-descriptions-item>
-                </a-descriptions>
-              </div>
-              <div data-tour-id="schedule-task-name">
-                <a-form-item label="任务名称" required>
-                  <a-input v-model:value="taskForm.taskName" placeholder="例：三月第二周排课建议" />
-                </a-form-item>
-              </div>
-              <div data-tour-id="schedule-training">
-                <a-form-item label="培训班" required>
-                  <a-select v-model:value="taskForm.trainingId" :options="trainingOptions" placeholder="请选择培训班" />
-                </a-form-item>
-              </div>
-              <a-row :gutter="12">
-                <a-col :span="12">
-                  <div data-tour-id="schedule-scope">
-                    <a-form-item label="排课范围">
-                      <a-select v-model:value="taskForm.scopeType">
-                        <a-select-option value="all">全班次</a-select-option>
-                        <a-select-option value="current_week">指定周</a-select-option>
-                        <a-select-option value="unscheduled">仅未排课课次</a-select-option>
-                      </a-select>
-                    </a-form-item>
-                  </div>
-                </a-col>
-                <a-col :span="12">
-                  <div data-tour-id="schedule-goal">
-                    <a-form-item label="排课目标">
-                      <a-select v-model:value="taskForm.goal">
-                        <a-select-option value="balanced">均衡排课</a-select-option>
-                        <a-select-option value="practice_first">优先实战</a-select-option>
-                        <a-select-option value="theory_first">优先理论</a-select-option>
-                        <a-select-option value="exam_intensive">考前强化</a-select-option>
-                      </a-select>
-                    </a-form-item>
-                  </div>
-                </a-col>
-              </a-row>
-              <a-row :gutter="12">
-                <a-col :span="12">
-                  <div data-tour-id="schedule-planning-mode">
-                    <a-form-item label="排课方式">
-                      <a-select v-model:value="taskForm.planningMode">
-                        <a-select-option value="fill_workdays">排满工作日</a-select-option>
-                        <a-select-option value="fill_all_days">排满</a-select-option>
-                        <a-select-option value="by_hours">按课时排</a-select-option>
-                      </a-select>
-                      <div class="field-help">按课时排会严格使用课程计划课时；排满模式会优先铺满可排日期，不受计划课时限制。</div>
-                    </a-form-item>
-                  </div>
-                </a-col>
-                <a-col :span="12">
-                  <div data-tour-id="schedule-daily-hours">
-                    <a-form-item label="单日最大课时">
-                      <a-input-number v-model:value="taskForm.dailyMaxHours" :min="1" :max="12" style="width:100%" />
-                    </a-form-item>
-                  </div>
-                </a-col>
-              </a-row>
-              <div data-tour-id="schedule-rule-overrides">
-                <a-divider orientation="left" plain>任务级规则覆盖</a-divider>
-                <a-row :gutter="12">
-                  <a-col :span="6">
-                    <a-form-item label="单课时分钟数">
-                      <a-input-number v-model:value="taskForm.lessonUnitMinutes" :min="20" :max="180" style="width:100%" />
-                    </a-form-item>
-                  </a-col>
-                  <a-col :span="6">
-                    <a-form-item label="课间休息分钟数">
-                      <a-input-number v-model:value="taskForm.breakMinutes" :min="0" :max="60" style="width:100%" />
-                    </a-form-item>
-                  </a-col>
-                  <a-col :span="6">
-                    <a-form-item label="单节最多课时">
-                      <a-input-number v-model:value="taskForm.maxUnitsPerSession" :min="1" :max="12" style="width:100%" />
-                    </a-form-item>
-                  </a-col>
-                  <a-col :span="6">
-                    <a-form-item label="拆分策略">
-                      <a-select value="balanced" disabled>
-                        <a-select-option value="balanced">尽量平分</a-select-option>
-                      </a-select>
-                    </a-form-item>
-                  </a-col>
-                </a-row>
-                <a-form-item label="可排课时间段">
-                  <a-textarea v-model:value="taskForm.teachingWindowsText" :rows="3" placeholder="每行一个时间段，如：上午|08:30-12:30" />
-                  <div class="field-help">不填时默认使用培训班规则。支持写多行，格式如“上午|08:30-12:30”。</div>
-                </a-form-item>
-              </div>
-              <div v-if="taskForm.scopeType === 'current_week'" data-tour-id="schedule-week">
-                <a-form-item label="指定周">
-                  <a-date-picker
-                    v-model:value="taskForm.scopeStartDate"
-                    style="width:100%"
-                    format="YYYY-MM-DD"
-                    value-format="YYYY-MM-DD"
-                    placeholder="请选择该周任意日期"
-                  />
-                  <div class="field-help">默认取培训周期内最近有效周，可修改；系统会自动按该周周一处理。</div>
-                </a-form-item>
-              </div>
-              <div data-tour-id="schedule-constraint">
-                <a-form-item>
-                  <a-checkbox v-model:checked="taskForm.avoidExamDays">避开考试日</a-checkbox>
-                </a-form-item>
-              </div>
-              <div data-tour-id="schedule-fixed-course-key">
-                <a-form-item label="固定课程键">
-                  <a-textarea v-model:value="taskForm.fixedCourseKeysText" :rows="2" placeholder="每行一个 course_key，可选" />
-                  <div class="field-help">填写需要锁定的 course_key。AI 生成建议时会保留这些已定课次，不再重新调整。</div>
-                </a-form-item>
-              </div>
-              <a-divider orientation="left" plain>高级约束</a-divider>
-              <a-form-item label="全局禁排时段">
-                <a-textarea v-model:value="taskForm.blockedTimeSlotsText" :rows="3" placeholder="每行一条：日期|时间段|说明，例如 2026-03-25|14:00~17:30|周三下午不排课" />
-                <div class="field-help">用于表达指定日期的全局禁排。预览阶段从“周三下午不排课”这类自然语言自动展开后也会写到这里。</div>
-              </a-form-item>
-              <a-form-item label="课程类型时段偏好">
-                <a-textarea v-model:value="taskForm.courseTypePreferencesText" :rows="3" placeholder="每行一条：课程类型|开始~结束|星期1,2,3|prefer/only，例如 theory|08:30~12:30|1,2,3,4,5|only" />
-                <div class="field-help">课程类型请填 theory 或 practice。prefer 表示优先，only 表示仅允许。</div>
-              </a-form-item>
-              <a-form-item label="教官不可用时段">
-                <a-textarea v-model:value="taskForm.instructorUnavailableSlotsText" :rows="3" placeholder="每行一条：教官名|日期|时间段，例如 张三|2026-03-25|14:00~17:30" />
-                <div class="field-help">只会限制同名教官的课程，不再全局误伤其他课次。</div>
-              </a-form-item>
-              <a-form-item label="场地不可用时段">
-                <a-textarea v-model:value="taskForm.locationUnavailableSlotsText" :rows="3" placeholder="每行一条：场地名|日期|时间段，例如 靶场|2026-03-25|14:00~17:30" />
-                <div class="field-help">只会限制同名场地的课程。</div>
-              </a-form-item>
-              <a-form-item label="考前强化偏好">
-                <a-textarea v-model:value="taskForm.examWeekFocusText" :rows="2" placeholder="一行：提前天数|课程类型|关键词，例如 7|practice|警械,实战" />
-                <div class="field-help">会优先把匹配课程排到考试前若干天，排不进去时会自动回退，不会把整个任务卡死。</div>
               </a-form-item>
               <div data-tour-id="schedule-notes">
                 <a-form-item label="补充说明">
@@ -255,17 +61,48 @@
               </div>
               <div data-tour-id="schedule-create-button">
                 <a-button type="primary" block :loading="creating" @click="handleCreateTask">
-                  {{ parsedPreview ? '确认预览并创建排课任务' : '创建普通排课任务' }}
+                  创建智能排课任务
                 </a-button>
               </div>
             </a-form>
+          </a-tab-pane>
+
+          <a-tab-pane key="manual" tab="手动排课">
+            <schedule-structured-task-form
+              :form-state="taskForm"
+              :training-options="trainingOptions"
+              :loading="creating"
+              submit-text="创建手动排课任务"
+              tour-prefix="schedule"
+              @submit="handleCreateTask"
+            />
           </a-tab-pane>
         </a-tabs>
       </div>
     </template>
 
     <template #task-description="{ item }">
-      {{ item.trainingName || '未命名培训班' }} · {{ item.itemCount || 0 }} 个课次
+      {{ item.trainingName || '未命名培训班' }} · {{ item.itemCount ? `${item.itemCount} 个课次` : resolveTaskStatusLabel(item) }}
+    </template>
+
+    <template #task-actions="{ item }">
+      <a-popconfirm
+        v-if="item.canDelete"
+        title="确定删除这个任务吗？"
+        ok-text="删除"
+        cancel-text="取消"
+        @confirm="handleDeleteTask(item)"
+      >
+        <a-button
+          type="link"
+          danger
+          size="small"
+          :loading="deletingTaskId === item.id"
+          @click.stop
+        >
+          删除
+        </a-button>
+      </a-popconfirm>
     </template>
 
     <template #detail>
@@ -273,63 +110,46 @@
         <div data-tour-id="schedule-detail-header" class="detail-header">
           <div>
             <div class="detail-title">{{ activeTask.taskName }}</div>
-            <div class="detail-sub">{{ activeTask.trainingName || '未命名培训班' }}</div>
+            <div class="detail-sub">{{ activeTask.trainingName || '未命名培训班' }} · {{ resolveTaskStatusLabel(activeTask) }}</div>
           </div>
           <a-space>
             <a-button @click="loadTaskDetail(activeTask.id)">刷新详情</a-button>
-            <a-button :disabled="activeTask.status !== 'completed'" :loading="saving" @click="handleSaveTask">保存修改</a-button>
-            <a-button type="primary" :disabled="activeTask.status !== 'completed'" :loading="confirming" @click="handleConfirmTask">
+            <a-button v-if="isScheduleConfirmationStage(activeTask)" @click="openPlanCalendar">周历预览</a-button>
+            <a-button v-if="isScheduleConfirmationStage(activeTask)" :loading="saving" @click="handleSaveTask">保存修改</a-button>
+            <a-button v-if="isScheduleConfirmationStage(activeTask)" type="primary" :loading="confirming" @click="handleConfirmTask">
               确认应用
             </a-button>
           </a-space>
         </div>
 
         <ai-task-timeline
+          mode="schedule"
           :status="activeTask.status"
+          :stage="activeTask.taskStage"
           :created-at="activeTask.createdAt"
           :completed-at="activeTask.completedAt"
           :confirmed-at="activeTask.confirmedAt"
         />
 
-        <div data-tour-id="schedule-request-section" class="detail-section">
-          <div class="detail-section-title">任务请求</div>
-          <a-descriptions :column="2" size="small" bordered>
-            <a-descriptions-item label="自然语言要求" :span="2">
-              {{ activeTask.requestPayload.naturalLanguagePrompt || '未填写' }}
-            </a-descriptions-item>
-            <a-descriptions-item label="排课范围">{{ scopeLabels[activeTask.requestPayload.scopeType] || activeTask.requestPayload.scopeType }}</a-descriptions-item>
-            <a-descriptions-item label="排课目标">{{ goalLabels[activeTask.requestPayload.goal] || activeTask.requestPayload.goal }}</a-descriptions-item>
-            <a-descriptions-item label="排课方式">{{ planningModeLabels[resolvePlanningMode(activeTask.requestPayload.planningMode)] || resolvePlanningMode(activeTask.requestPayload.planningMode) }}</a-descriptions-item>
-            <a-descriptions-item label="单日最大课时">{{ activeTask.requestPayload.constraintPayload?.dailyMaxHours || 0 }}</a-descriptions-item>
-            <a-descriptions-item label="避开考试日">{{ activeTask.requestPayload.constraintPayload?.avoidExamDays ? '是' : '否' }}</a-descriptions-item>
-            <a-descriptions-item
-              v-if="activeTask.requestPayload.scopeType === 'current_week' && activeTask.requestPayload.scopeStartDate"
-              label="指定周"
-            >
-              {{ activeTask.requestPayload.scopeStartDate }}
-            </a-descriptions-item>
-            <a-descriptions-item label="规则覆盖" :span="2">
-              {{ formatRuleOverrideSummary(activeTask.requestPayload.scheduleRuleOverride) }}
-            </a-descriptions-item>
-            <a-descriptions-item label="全局禁排" :span="2">
-              {{ formatSlotTextSummary(formatSlotLines(activeTask.requestPayload.constraintPayload?.blockedTimeSlots || [])) }}
-            </a-descriptions-item>
-            <a-descriptions-item label="教官不可用" :span="2">
-              {{ formatSlotTextSummary(formatSlotLines(activeTask.requestPayload.constraintPayload?.instructorUnavailableSlots || [], { withLabel: true }), { withLabel: true }) }}
-            </a-descriptions-item>
-            <a-descriptions-item label="场地不可用" :span="2">
-              {{ formatSlotTextSummary(formatSlotLines(activeTask.requestPayload.constraintPayload?.locationUnavailableSlots || [], { withLabel: true }), { withLabel: true }) }}
-            </a-descriptions-item>
-            <a-descriptions-item label="课程类型时段偏好" :span="2">
-              {{ formatCourseTypePreferenceSummary(formatCourseTypePreferencesText(activeTask.requestPayload.constraintPayload?.courseTypeTimePreferences || [])) }}
-            </a-descriptions-item>
-            <a-descriptions-item label="考前强化偏好" :span="2">
-              {{ formatExamWeekFocusSummary(formatExamWeekFocusText(activeTask.requestPayload.constraintPayload?.examWeekFocus)) }}
-            </a-descriptions-item>
-          </a-descriptions>
+        <div class="detail-section" v-if="isProcessingStage(activeTask)">
+          <a-alert
+            type="info"
+            show-icon
+            :message="activeTask.taskStage === 'schedule_generation' ? '后台正在生成课表，请稍候' : '后台正在解析规则，请稍候'"
+            description="当前页面会自动刷新任务详情。"
+          />
         </div>
 
-        <div class="detail-section" v-if="activeTask.parseSummary || activeTask.parseWarnings?.length">
+        <div class="detail-section" v-else-if="isRuleConfirmationStage(activeTask)">
+          <a-alert
+            type="success"
+            show-icon
+            message="规则解析已完成，请先确认结构化规则"
+            description="请直接在当前任务详情里核对并修改结构化规则；确认后任务会自动进入课表生成阶段。"
+          />
+        </div>
+
+        <div data-tour-id="schedule-parse-section" class="detail-section" v-if="showPrimaryParseSection">
           <div class="detail-section-title">自然语言解析结果</div>
           <a-alert v-if="activeTask.parseSummary" type="success" :message="activeTask.parseSummary" show-icon style="margin-bottom:12px" />
           <a-descriptions v-if="activeTask.understoodItems?.length" :column="1" size="small" bordered style="margin-bottom:12px">
@@ -344,12 +164,35 @@
           </div>
         </div>
 
-        <div class="detail-section" v-if="activeTask.explanation">
+        <div data-tour-id="schedule-rule-confirm-section" class="detail-section" v-if="isRuleConfirmationStage(activeTask)">
+          <div class="detail-section-title">确认结构化规则</div>
+          <schedule-structured-task-form
+            :form-state="ruleConfirmForm"
+            :training-options="trainingOptions"
+            :disable-training-select="true"
+            :loading="ruleConfirming"
+            submit-text="确认规则并生成课表"
+            tour-prefix="schedule-rule-confirm"
+            @submit="handleConfirmRules"
+          >
+            <template #top>
+              <a-alert
+                type="info"
+                show-icon
+                style="margin-bottom:16px"
+                message="当前规则来自自然语言解析结果"
+                description="你可以直接修改结构化字段。确认后仍停留在任务列表，等待后台继续生成课表。"
+              />
+            </template>
+          </schedule-structured-task-form>
+        </div>
+
+        <div class="detail-section" v-if="activeTask.explanation && isScheduleConfirmationStage(activeTask)">
           <div class="detail-section-title">方案说明</div>
           <a-alert type="info" :message="activeTask.explanation" show-icon />
         </div>
 
-        <div data-tour-id="schedule-conflict-section" class="detail-section">
+        <div data-tour-id="schedule-conflict-section" class="detail-section" v-if="isScheduleConfirmationStage(activeTask)">
           <div class="detail-section-title">冲突清单</div>
           <a-empty v-if="!activeTask.conflicts?.length" description="当前主方案未发现冲突" />
           <div v-else class="conflict-list">
@@ -389,9 +232,14 @@
                     <div>{{ session.date }} {{ session.timeRange }}</div>
                     <div class="schedule-sub">{{ session.location || '未指定地点' }} · {{ getSessionDisplayHours(session) }} 课时</div>
                   </div>
-                  <a-button v-if="activeTask.status === 'completed'" type="link" size="small" @click="openEditSession(courseIndex, scheduleIndex)">
-                    编辑
-                  </a-button>
+                  <a-space v-if="activeTask.status === 'completed'" size="small">
+                    <a-button type="link" size="small" @click="openEditSession(courseIndex, scheduleIndex)">
+                      编辑
+                    </a-button>
+                    <a-button type="link" danger size="small" @click="removeTaskSession(courseIndex, scheduleIndex)">
+                      删除
+                    </a-button>
+                  </a-space>
                 </div>
                 <a-empty v-if="!(course.schedules || []).length" description="暂无课次" />
               </div>
@@ -407,6 +255,71 @@
               <div class="alternative-sub">{{ plan.summary }}</div>
               <div class="alternative-metrics">{{ plan.metrics?.totalSessions || 0 }} 个课次 · {{ plan.metrics?.totalHours || 0 }} 课时</div>
               <a-button size="small" @click="adoptAlternativePlan(plan)">设为主方案</a-button>
+            </div>
+          </div>
+        </div>
+
+        <div class="detail-section detail-more-toggle" v-if="hasHiddenDetailContent">
+          <a-button type="link" class="detail-more-button" @click="detailExtrasExpanded = !detailExtrasExpanded">
+            {{ detailExtrasExpanded ? '收起详细规则与任务信息' : '展开详细规则与任务信息' }}
+          </a-button>
+        </div>
+
+        <div v-if="detailExtrasExpanded">
+          <div v-if="activeTask.requestPayload" data-tour-id="schedule-request-section" class="detail-section">
+            <div class="detail-section-title">任务请求</div>
+            <a-descriptions :column="2" size="small" bordered>
+              <a-descriptions-item label="自然语言要求" :span="2">
+                {{ activeTask.requestPayload.naturalLanguagePrompt || '未填写' }}
+              </a-descriptions-item>
+              <a-descriptions-item label="排课范围">{{ scopeLabels[activeTask.requestPayload.scopeType] || activeTask.requestPayload.scopeType }}</a-descriptions-item>
+              <a-descriptions-item label="排课目标">{{ goalLabels[activeTask.requestPayload.goal] || activeTask.requestPayload.goal }}</a-descriptions-item>
+              <a-descriptions-item label="排课方式">{{ planningModeLabels[resolvePlanningMode(activeTask.requestPayload.planningMode)] || resolvePlanningMode(activeTask.requestPayload.planningMode) }}</a-descriptions-item>
+              <a-descriptions-item label="单日最大课时">{{ activeTask.requestPayload.constraintPayload?.dailyMaxHours || 0 }}</a-descriptions-item>
+              <a-descriptions-item label="避开考试日">{{ activeTask.requestPayload.constraintPayload?.avoidExamDays ? '是' : '否' }}</a-descriptions-item>
+              <a-descriptions-item label="覆盖当前课表">{{ activeTask.requestPayload.overwriteExistingSchedule ? '是' : '否' }}</a-descriptions-item>
+              <a-descriptions-item
+                v-if="activeTask.requestPayload.scopeType === 'current_week' && activeTask.requestPayload.scopeStartDate"
+                label="指定周"
+              >
+                {{ activeTask.requestPayload.scopeStartDate }}
+              </a-descriptions-item>
+              <a-descriptions-item label="培训班默认规则" :span="2">
+                {{ formatRuleOverrideSummary(activeTask.trainingRuleConfig) }}
+              </a-descriptions-item>
+              <a-descriptions-item label="规则覆盖" :span="2">
+                {{ formatRuleOverrideSummary(activeTask.requestPayload.scheduleRuleOverride) }}
+              </a-descriptions-item>
+              <a-descriptions-item label="全局禁排" :span="2">
+                {{ formatSlotTextSummary(formatSlotLines(activeTask.requestPayload.constraintPayload?.blockedTimeSlots || [])) }}
+              </a-descriptions-item>
+              <a-descriptions-item label="教官不可用" :span="2">
+                {{ formatSlotTextSummary(formatSlotLines(activeTask.requestPayload.constraintPayload?.instructorUnavailableSlots || [], { withLabel: true }), { withLabel: true }) }}
+              </a-descriptions-item>
+              <a-descriptions-item label="场地不可用" :span="2">
+                {{ formatSlotTextSummary(formatSlotLines(activeTask.requestPayload.constraintPayload?.locationUnavailableSlots || [], { withLabel: true }), { withLabel: true }) }}
+              </a-descriptions-item>
+              <a-descriptions-item label="课程类型时段偏好" :span="2">
+                {{ formatCourseTypePreferenceSummary(formatCourseTypePreferencesText(activeTask.requestPayload.constraintPayload?.courseTypeTimePreferences || [])) }}
+              </a-descriptions-item>
+              <a-descriptions-item label="考前强化偏好" :span="2">
+                {{ formatExamWeekFocusSummary(formatExamWeekFocusText(activeTask.requestPayload.constraintPayload?.examWeekFocus)) }}
+              </a-descriptions-item>
+            </a-descriptions>
+          </div>
+
+          <div data-tour-id="schedule-parse-section" class="detail-section" v-if="showDetailParseSection">
+            <div class="detail-section-title">自然语言解析结果</div>
+            <a-alert v-if="activeTask.parseSummary" type="success" :message="activeTask.parseSummary" show-icon style="margin-bottom:12px" />
+            <a-descriptions v-if="activeTask.understoodItems?.length" :column="1" size="small" bordered style="margin-bottom:12px">
+              <a-descriptions-item label="AI理解了什么">
+                <div class="preview-list">
+                  <div v-for="(item, index) in activeTask.understoodItems" :key="`task-understood-detail-${index}`">{{ item }}</div>
+                </div>
+              </a-descriptions-item>
+            </a-descriptions>
+            <div v-if="activeTask.parseWarnings?.length" class="conflict-list">
+              <a-alert v-for="(item, index) in activeTask.parseWarnings" :key="`detail-warning-${index}`" type="warning" :message="item" show-icon />
             </div>
           </div>
         </div>
@@ -429,6 +342,35 @@
     </a-form>
   </a-modal>
 
+  <a-modal v-model:open="planCalendarOpen" title="周历课表预览" width="1100px">
+    <a-empty v-if="!planCalendarWeeks.length" description="当前任务暂无可预览课表" />
+    <a-tabs v-else v-model:activeKey="planCalendarActiveWeek">
+      <a-tab-pane v-for="week in planCalendarWeeks" :key="week.key" :tab="week.label">
+        <div class="calendar-grid">
+          <div v-for="day in week.days" :key="day.date" class="calendar-cell">
+            <div class="calendar-date">{{ day.label }}</div>
+            <div class="calendar-session-list">
+              <div v-for="session in day.sessions" :key="session.id" class="calendar-session">
+                <div class="calendar-session-title">{{ session.courseName }}</div>
+                <div class="calendar-session-sub">{{ session.timeRange }} · {{ session.location }}</div>
+                <div class="calendar-session-sub">{{ session.instructor }} · {{ session.hours }} 课时</div>
+              </div>
+              <a-empty v-if="!day.sessions.length" :image="false" description="无课次" />
+            </div>
+          </div>
+        </div>
+      </a-tab-pane>
+    </a-tabs>
+    <template #footer>
+      <a-space>
+        <a-button @click="planCalendarOpen = false">关闭</a-button>
+        <a-button v-if="isScheduleConfirmationStage(activeTask)" type="primary" :loading="confirming" @click="handleConfirmTask">
+          确认应用该课表
+        </a-button>
+      </a-space>
+    </template>
+  </a-modal>
+
   <a-tour
     v-model:open="scheduleTourOpen"
     v-model:current="scheduleTourCurrent"
@@ -438,22 +380,24 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+import { Modal, message } from 'ant-design-vue'
 import { QuestionCircleOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import {
   confirmAiScheduleTask,
+  confirmAiScheduleTaskRules,
   createAiScheduleTask,
+  deleteAiScheduleTask,
   getAiScheduleTaskDetail,
   getAiScheduleTasks,
-  previewAiScheduleTask,
   updateAiScheduleTaskResult,
 } from '@/api/ai'
 import { getTraining, getTrainings } from '@/api/training'
 import AiTaskTabsLayout from '@/views/exam/components/AiTaskTabsLayout.vue'
 import AiTaskTimeline from '@/views/exam/components/AiTaskTimeline.vue'
+import ScheduleStructuredTaskForm from '@/views/training/components/ScheduleStructuredTaskForm.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -466,12 +410,18 @@ const creating = ref(false)
 const saving = ref(false)
 const confirming = ref(false)
 const trainings = ref([])
-const parsedPreview = ref(null)
-const selectedTrainingRuleConfig = ref({})
 const scheduleTourOpen = ref(false)
 const scheduleTourCurrent = ref(0)
 const sessionModalOpen = ref(false)
+const planCalendarOpen = ref(false)
+const planCalendarActiveWeek = ref('')
+const detailExtrasExpanded = ref(false)
+const detailExtrasTaskId = ref(null)
+const deletingTaskId = ref(null)
+const ruleConfirming = ref(false)
+const ruleConfirmTaskId = ref(null)
 const sessionForm = reactive({ courseIndex: -1, scheduleIndex: -1, date: '', timeRange: '', location: '' })
+let taskPollTimer = 0
 
 const statusLabels = { pending: '待处理', processing: '处理中', completed: '已完成', confirmed: '已确认', failed: '处理失败' }
 const statusColors = { pending: 'default', processing: 'processing', completed: 'blue', confirmed: 'green', failed: 'red' }
@@ -486,42 +436,50 @@ const planningModeLabels = {
 const typeLabels = { theory: '理论课', practice: '实操课' }
 const weekdayLabels = { 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周五', 6: '周六', 7: '周日' }
 
-const taskForm = reactive({
-  taskName: '',
-  trainingId: route.params.id ? Number(route.params.id) : undefined,
-  naturalLanguagePrompt: '',
-  scopeType: 'all',
-  scopeStartDate: '',
-  goal: 'balanced',
-  planningMode: 'fill_workdays',
-  dailyMaxHours: 6,
-  lessonUnitMinutes: 40,
-  breakMinutes: 10,
-  maxUnitsPerSession: 3,
-  teachingWindowsText: '',
-  avoidExamDays: true,
-  fixedCourseKeysText: '',
-  blockedTimeSlotsText: '',
-  courseTypePreferencesText: '',
-  instructorUnavailableSlotsText: '',
-  locationUnavailableSlotsText: '',
-  examWeekFocusText: '',
-  notes: '',
-})
+function createStructuredTaskFormState(trainingId) {
+  return {
+    taskName: '',
+    trainingId,
+    naturalLanguagePrompt: '',
+    scopeType: 'all',
+    scopeStartDate: '',
+    goal: 'balanced',
+    planningMode: 'fill_workdays',
+    overwriteExistingSchedule: false,
+    dailyMaxHours: 6,
+    lessonUnitMinutes: 40,
+    breakMinutes: 10,
+    maxUnitsPerSession: 3,
+    teachingWindowsText: '',
+    avoidExamDays: true,
+    fixedCourseKeysText: '',
+    blockedTimeSlotsText: '',
+    courseTypePreferencesText: '',
+    instructorUnavailableSlotsText: '',
+    locationUnavailableSlotsText: '',
+    examWeekFocusText: '',
+    notes: '',
+  }
+}
+
+const taskForm = reactive(createStructuredTaskFormState(route.params.id ? Number(route.params.id) : undefined))
+const ruleConfirmForm = reactive(createStructuredTaskFormState(route.params.id ? Number(route.params.id) : undefined))
 
 const trainingOptions = computed(() => (trainings.value || []).map(item => ({
   label: item.name,
   value: item.id,
 })))
 const hasPresetTrainingId = computed(() => Boolean(route.params.id))
-const selectedTraining = computed(() => (trainings.value || []).find(item => item.id === taskForm.trainingId) || null)
+
+function getTrainingById(trainingId) {
+  return (trainings.value || []).find(item => item.id === trainingId) || null
+}
+
+const selectedTraining = computed(() => getTrainingById(taskForm.trainingId))
+const planCalendarWeeks = computed(() => buildPlanCalendarWeeks(activeTask.value?.mainPlan))
 
 function cloneDeep(value) {
   return JSON.parse(JSON.stringify(value))
-}
-
-function parseFixedCourseKeys() {
-  return taskForm.fixedCourseKeysText.split(/\r?\n|,|，|;|；/).map(item => item.trim()).filter(Boolean)
 }
 
 function parseSlotLines(text, { withLabel = false } = {}) {
@@ -682,6 +640,39 @@ function getSessionDisplayHours(session) {
   return normalizeCourseHours(session?.hours) || calculateSessionUnitsFromTimeRange(session?.timeRange)
 }
 
+function buildLocalPlanMetrics(plan) {
+  const metrics = {
+    totalSessions: 0,
+    totalHours: 0,
+    theoryHours: 0,
+    practiceHours: 0,
+  }
+  for (const course of plan?.courses || []) {
+    const courseType = course?.type || 'theory'
+    for (const session of course?.schedules || []) {
+      const hours = getSessionDisplayHours(session)
+      metrics.totalSessions += 1
+      metrics.totalHours += hours
+      if (courseType === 'practice') {
+        metrics.practiceHours += hours
+      } else {
+        metrics.theoryHours += hours
+      }
+    }
+  }
+  metrics.totalHours = normalizeCourseHours(metrics.totalHours)
+  metrics.theoryHours = normalizeCourseHours(metrics.theoryHours)
+  metrics.practiceHours = normalizeCourseHours(metrics.practiceHours)
+  return metrics
+}
+
+function syncMainPlanMetrics() {
+  if (!activeTask.value?.mainPlan) {
+    return
+  }
+  activeTask.value.mainPlan.metrics = buildLocalPlanMetrics(activeTask.value.mainPlan)
+}
+
 function resolvePlanningMode(value) {
   const normalized = String(value || '').trim()
   if (Object.prototype.hasOwnProperty.call(planningModeLabels, normalized)) {
@@ -692,58 +683,69 @@ function resolvePlanningMode(value) {
 
 const activePlanningMode = computed(() => resolvePlanningMode(activeTask.value?.requestPayload?.planningMode))
 
-function applyTrainingRuleDefaults(ruleConfig) {
-  const config = ruleConfig || {}
-  taskForm.lessonUnitMinutes = Number(config.lessonUnitMinutes || config.lesson_unit_minutes || 40)
-  taskForm.breakMinutes = Number(config.breakMinutes || config.break_minutes || 10)
-  taskForm.maxUnitsPerSession = Number(config.maxUnitsPerSession || config.max_units_per_session || 3)
-  taskForm.dailyMaxHours = Number(config.dailyMaxUnits || config.daily_max_units || 6)
-  taskForm.planningMode = resolvePlanningMode(config.preferredPlanningMode || config.preferred_planning_mode || taskForm.planningMode)
-  taskForm.teachingWindowsText = formatTeachingWindowsText(config.teachingWindows || config.teaching_windows || [])
-  taskForm.blockedTimeSlotsText = ''
-  taskForm.courseTypePreferencesText = ''
-  taskForm.instructorUnavailableSlotsText = ''
-  taskForm.locationUnavailableSlotsText = ''
-  taskForm.examWeekFocusText = ''
+function resetStructuredTaskForm(formState, trainingId = formState.trainingId) {
+  Object.assign(formState, createStructuredTaskFormState(trainingId))
 }
 
-function applyStructuredTaskPayload(payload, { preserveTaskName = false } = {}) {
+function parseFixedCourseKeys(formState) {
+  return String(formState.fixedCourseKeysText || '')
+    .split(/\r?\n|,|，|;|；/)
+    .map(item => item.trim())
+    .filter(Boolean)
+}
+
+function applyTrainingRuleDefaults(formState, ruleConfig) {
+  const config = ruleConfig || {}
+  formState.lessonUnitMinutes = Number(config.lessonUnitMinutes || config.lesson_unit_minutes || 40)
+  formState.breakMinutes = Number(config.breakMinutes || config.break_minutes || 10)
+  formState.maxUnitsPerSession = Number(config.maxUnitsPerSession || config.max_units_per_session || 3)
+  formState.dailyMaxHours = Number(config.dailyMaxUnits || config.daily_max_units || 6)
+  formState.planningMode = resolvePlanningMode(config.preferredPlanningMode || config.preferred_planning_mode || formState.planningMode)
+  formState.teachingWindowsText = formatTeachingWindowsText(config.teachingWindows || config.teaching_windows || [])
+  formState.blockedTimeSlotsText = ''
+  formState.courseTypePreferencesText = ''
+  formState.instructorUnavailableSlotsText = ''
+  formState.locationUnavailableSlotsText = ''
+  formState.examWeekFocusText = ''
+}
+
+function applyStructuredTaskPayload(formState, payload, { preserveTaskName = false } = {}) {
   const request = payload || {}
+  formState.trainingId = request.trainingId || request.training_id || formState.trainingId
+  formState.naturalLanguagePrompt = request.naturalLanguagePrompt || request.natural_language_prompt || ''
   if (!preserveTaskName) {
-    taskForm.taskName = request.taskName || request.task_name || buildSmartTaskName()
+    formState.taskName = request.taskName || request.task_name || buildSmartTaskName(formState.trainingId)
   }
-  taskForm.scopeType = request.scopeType || request.scope_type || 'all'
-  taskForm.scopeStartDate = request.scopeStartDate || request.scope_start_date || ''
-  taskForm.goal = request.goal || 'balanced'
-  taskForm.planningMode = resolvePlanningMode(request.planningMode || request.planning_mode || 'fill_workdays')
+  formState.scopeType = request.scopeType || request.scope_type || 'all'
+  formState.scopeStartDate = request.scopeStartDate || request.scope_start_date || ''
+  formState.goal = request.goal || 'balanced'
+  formState.planningMode = resolvePlanningMode(request.planningMode || request.planning_mode || 'fill_workdays')
+  formState.overwriteExistingSchedule = Boolean(request.overwriteExistingSchedule || request.overwrite_existing_schedule)
   const constraintPayload = request.constraintPayload || request.constraint_payload || {}
-  taskForm.dailyMaxHours = Number(constraintPayload.dailyMaxHours || constraintPayload.daily_max_hours || taskForm.dailyMaxHours || 6)
-  taskForm.avoidExamDays = constraintPayload.avoidExamDays !== false && constraintPayload.avoid_exam_days !== false
-  taskForm.fixedCourseKeysText = (constraintPayload.fixedCourseKeys || constraintPayload.fixed_course_keys || []).join('\n')
-  taskForm.blockedTimeSlotsText = formatSlotLines(constraintPayload.blockedTimeSlots || constraintPayload.blocked_time_slots || [])
-  taskForm.courseTypePreferencesText = formatCourseTypePreferencesText(
+  formState.dailyMaxHours = Number(constraintPayload.dailyMaxHours || constraintPayload.daily_max_hours || formState.dailyMaxHours || 6)
+  formState.avoidExamDays = constraintPayload.avoidExamDays !== false && constraintPayload.avoid_exam_days !== false
+  formState.fixedCourseKeysText = (constraintPayload.fixedCourseKeys || constraintPayload.fixed_course_keys || []).join('\n')
+  formState.blockedTimeSlotsText = formatSlotLines(constraintPayload.blockedTimeSlots || constraintPayload.blocked_time_slots || [])
+  formState.courseTypePreferencesText = formatCourseTypePreferencesText(
     constraintPayload.courseTypeTimePreferences || constraintPayload.course_type_time_preferences || [],
   )
-  taskForm.instructorUnavailableSlotsText = formatSlotLines(
+  formState.instructorUnavailableSlotsText = formatSlotLines(
     constraintPayload.instructorUnavailableSlots || constraintPayload.instructor_unavailable_slots || [],
     { withLabel: true },
   )
-  taskForm.locationUnavailableSlotsText = formatSlotLines(
+  formState.locationUnavailableSlotsText = formatSlotLines(
     constraintPayload.locationUnavailableSlots || constraintPayload.location_unavailable_slots || [],
     { withLabel: true },
   )
-  taskForm.examWeekFocusText = formatExamWeekFocusText(
+  formState.examWeekFocusText = formatExamWeekFocusText(
     constraintPayload.examWeekFocus || constraintPayload.exam_week_focus,
   )
   const ruleOverride = request.scheduleRuleOverride || request.schedule_rule_override || {}
-  taskForm.lessonUnitMinutes = Number(ruleOverride.lessonUnitMinutes || ruleOverride.lesson_unit_minutes || taskForm.lessonUnitMinutes || 40)
-  taskForm.breakMinutes = Number(ruleOverride.breakMinutes || ruleOverride.break_minutes || taskForm.breakMinutes || 10)
-  taskForm.maxUnitsPerSession = Number(ruleOverride.maxUnitsPerSession || ruleOverride.max_units_per_session || taskForm.maxUnitsPerSession || 3)
-  taskForm.teachingWindowsText = formatTeachingWindowsText(ruleOverride.teachingWindows || ruleOverride.teaching_windows || [])
-}
-
-function resetParsedPreview() {
-  parsedPreview.value = null
+  formState.lessonUnitMinutes = Number(ruleOverride.lessonUnitMinutes || ruleOverride.lesson_unit_minutes || formState.lessonUnitMinutes || 40)
+  formState.breakMinutes = Number(ruleOverride.breakMinutes || ruleOverride.break_minutes || formState.breakMinutes || 10)
+  formState.maxUnitsPerSession = Number(ruleOverride.maxUnitsPerSession || ruleOverride.max_units_per_session || formState.maxUnitsPerSession || 3)
+  formState.teachingWindowsText = formatTeachingWindowsText(ruleOverride.teachingWindows || ruleOverride.teaching_windows || [])
+  formState.notes = request.notes || ''
 }
 
 function formatRuleOverrideSummary(ruleOverride) {
@@ -800,71 +802,130 @@ function formatExamWeekFocusSummary(text) {
   return `考前 ${focus.daysBeforeExam} 天优先强化 ${courseType}${keywords}`
 }
 
-function buildSmartTaskName() {
-  const trainingName = selectedTraining.value?.name || '培训班'
+function buildSmartTaskName(trainingId = taskForm.trainingId) {
+  const trainingName = getTrainingById(trainingId)?.name || '培训班'
   return `${trainingName}智能排课-${dayjs().format('MMDDHHmm')}`
 }
 
-function buildStructuredTaskPayload(taskName) {
-  return {
-    taskName,
-    trainingId: taskForm.trainingId,
-    naturalLanguagePrompt: parsedPreview.value ? (taskForm.naturalLanguagePrompt.trim() || undefined) : undefined,
-    parsedRequestConfirmed: Boolean(parsedPreview.value),
-    scopeType: taskForm.scopeType,
-    scopeStartDate: taskForm.scopeType === 'current_week' && taskForm.scopeStartDate
-      ? normalizeWeekStart(taskForm.scopeStartDate)
-      : undefined,
-    goal: taskForm.goal,
-    planningMode: taskForm.planningMode,
-    constraintPayload: {
-      dailyMaxHours: taskForm.dailyMaxHours,
-      avoidExamDays: taskForm.avoidExamDays,
-      fixedCourseKeys: parseFixedCourseKeys(),
-      blockedTimeSlots: parseSlotLines(taskForm.blockedTimeSlotsText),
-      courseTypeTimePreferences: parseCourseTypePreferencesText(taskForm.courseTypePreferencesText),
-      instructorUnavailableSlots: parseSlotLines(taskForm.instructorUnavailableSlotsText, { withLabel: true }),
-      locationUnavailableSlots: parseSlotLines(taskForm.locationUnavailableSlotsText, { withLabel: true }),
-      examWeekFocus: parseExamWeekFocusText(taskForm.examWeekFocusText),
-    },
-    scheduleRuleOverride: {
-      lessonUnitMinutes: taskForm.lessonUnitMinutes,
-      breakMinutes: taskForm.breakMinutes,
-      maxUnitsPerSession: taskForm.maxUnitsPerSession,
-      dailyMaxUnits: taskForm.dailyMaxHours,
-      preferredPlanningMode: taskForm.planningMode,
-      splitStrategy: 'balanced',
-      teachingWindows: parseTeachingWindowsText(taskForm.teachingWindowsText),
-    },
-    notes: taskForm.notes,
+function resolveTaskStatusLabel(task) {
+  if (!task) {
+    return '未知状态'
   }
+  if (task.status === 'failed') {
+    return '处理失败'
+  }
+  if (task.status === 'confirmed') {
+    return '已确认'
+  }
+  if (task.taskStage === 'rule_parsing') {
+    return task.status === 'processing' ? '解析规则中' : '待解析规则'
+  }
+  if (task.taskStage === 'rule_confirmation') {
+    return '待确认规则'
+  }
+  if (task.taskStage === 'schedule_generation') {
+    return task.status === 'processing' ? '生成课表中' : '待生成课表'
+  }
+  if (task.taskStage === 'schedule_confirmation') {
+    return '待确认课表'
+  }
+  return statusLabels[task.status] || task.status
 }
 
-async function handlePreviewRules() {
-  if (!taskForm.trainingId) {
-    message.warning('请先选择培训班')
-    return
+function resolveTaskStatusColor(task) {
+  if (!task) {
+    return 'default'
   }
-  if (!taskForm.naturalLanguagePrompt.trim()) {
-    message.warning('请输入自然语言排课要求')
-    return
+  if (task.status === 'failed') {
+    return 'red'
   }
-  creating.value = true
-  try {
-    const preview = await previewAiScheduleTask({
-      taskName: buildSmartTaskName(),
-      trainingId: taskForm.trainingId,
-      naturalLanguagePrompt: taskForm.naturalLanguagePrompt.trim(),
-    })
-    parsedPreview.value = cloneDeep(preview)
-    applyStructuredTaskPayload(preview.requestPayload)
-    taskForm.taskName = preview.requestPayload.taskName || buildSmartTaskName()
-    createMode.value = 'manual'
-    message.success('已生成规则预览，请确认后再创建排课任务')
-  } catch (error) {
-    message.error(error.message || '解析预览失败')
-  } finally {
-    creating.value = false
+  if (task.status === 'confirmed') {
+    return 'green'
+  }
+  if (task.taskStage === 'rule_confirmation') {
+    return 'gold'
+  }
+  if (task.taskStage === 'schedule_confirmation') {
+    return 'blue'
+  }
+  if (task.status === 'processing') {
+    return 'processing'
+  }
+  return statusColors[task.status] || 'default'
+}
+
+function isRuleConfirmationStage(task) {
+  return task?.status === 'completed' && task?.taskStage === 'rule_confirmation'
+}
+
+function isScheduleConfirmationStage(task) {
+  return task?.status === 'completed' && task?.taskStage === 'schedule_confirmation'
+}
+
+function isProcessingStage(task) {
+  return Boolean(task && ['pending', 'processing'].includes(task.status) && ['rule_parsing', 'schedule_generation'].includes(task.taskStage))
+}
+
+const hasParseContent = computed(() => Boolean(
+  activeTask.value?.parseSummary
+  || activeTask.value?.parseWarnings?.length
+  || activeTask.value?.understoodItems?.length,
+))
+
+const showPrimaryParseSection = computed(() => Boolean(
+  activeTask.value
+  && isRuleConfirmationStage(activeTask.value)
+  && hasParseContent.value,
+))
+
+const showDetailParseSection = computed(() => Boolean(
+  activeTask.value
+  && detailExtrasExpanded.value
+  && !isRuleConfirmationStage(activeTask.value)
+  && hasParseContent.value,
+))
+
+const hasHiddenDetailContent = computed(() => Boolean(
+  activeTask.value
+  && (
+    activeTask.value.requestPayload
+    || (!isRuleConfirmationStage(activeTask.value) && hasParseContent.value)
+  ),
+))
+
+function buildStructuredTaskPayload(formState, taskName, { includeNaturalLanguage = false, parsedRequestConfirmed = false } = {}) {
+  return {
+    taskName,
+    trainingId: formState.trainingId,
+    naturalLanguagePrompt: includeNaturalLanguage ? (String(formState.naturalLanguagePrompt || '').trim() || undefined) : undefined,
+    parsedRequestConfirmed,
+    scopeType: formState.scopeType,
+    scopeStartDate: formState.scopeType === 'current_week' && formState.scopeStartDate
+      ? normalizeWeekStart(formState.scopeStartDate)
+      : undefined,
+    goal: formState.goal,
+    planningMode: formState.planningMode,
+    overwriteExistingSchedule: formState.overwriteExistingSchedule,
+    constraintPayload: {
+      dailyMaxHours: formState.dailyMaxHours,
+      avoidExamDays: formState.avoidExamDays,
+      fixedCourseKeys: parseFixedCourseKeys(formState),
+      blockedTimeSlots: parseSlotLines(formState.blockedTimeSlotsText),
+      courseTypeTimePreferences: parseCourseTypePreferencesText(formState.courseTypePreferencesText),
+      instructorUnavailableSlots: parseSlotLines(formState.instructorUnavailableSlotsText, { withLabel: true }),
+      locationUnavailableSlots: parseSlotLines(formState.locationUnavailableSlotsText, { withLabel: true }),
+      examWeekFocus: parseExamWeekFocusText(formState.examWeekFocusText),
+    },
+    scheduleRuleOverride: {
+      lessonUnitMinutes: formState.lessonUnitMinutes,
+      breakMinutes: formState.breakMinutes,
+      maxUnitsPerSession: formState.maxUnitsPerSession,
+      dailyMaxUnits: formState.dailyMaxHours,
+      preferredPlanningMode: formState.planningMode,
+      splitStrategy: 'balanced',
+      teachingWindows: parseTeachingWindowsText(formState.teachingWindowsText),
+    },
+    notes: formState.notes,
   }
 }
 
@@ -947,29 +1008,39 @@ function getNearestValidWeekStart(training) {
   return currentWeekStart
 }
 
-function syncScopeStartDate() {
-  if (taskForm.scopeType !== 'current_week') {
-    taskForm.scopeStartDate = ''
+function syncScopeStartDate(formState, training) {
+  if (formState.scopeType !== 'current_week') {
+    formState.scopeStartDate = ''
     return
   }
-  taskForm.scopeStartDate = getNearestValidWeekStart(selectedTraining.value)
+  formState.scopeStartDate = getNearestValidWeekStart(training)
 }
 
-async function loadSelectedTrainingDetail() {
+async function loadTaskFormTrainingDetail() {
   if (!taskForm.trainingId) {
-    selectedTrainingRuleConfig.value = {}
     return
   }
   try {
     const result = await getTraining(taskForm.trainingId)
-    selectedTrainingRuleConfig.value = result.scheduleRuleConfig || {}
-    applyTrainingRuleDefaults(result.scheduleRuleConfig)
+    applyTrainingRuleDefaults(taskForm, result.scheduleRuleConfig)
     if (taskForm.scopeType === 'current_week') {
-      syncScopeStartDate()
+      syncScopeStartDate(taskForm, result)
     }
-  } catch {
-    selectedTrainingRuleConfig.value = {}
+  } catch {}
+}
+
+function primeRuleConfirmForm(task) {
+  if (!task?.requestPayload) {
+    ruleConfirmTaskId.value = null
+    return
   }
+  resetStructuredTaskForm(ruleConfirmForm, task.requestPayload.trainingId || task.requestPayload.training_id || task.trainingId)
+  applyStructuredTaskPayload(ruleConfirmForm, task.requestPayload)
+  ruleConfirmForm.taskName = task.taskName || ruleConfirmForm.taskName || buildSmartTaskName(ruleConfirmForm.trainingId)
+  if (ruleConfirmForm.scopeType === 'current_week' && !ruleConfirmForm.scopeStartDate) {
+    syncScopeStartDate(ruleConfirmForm, getTrainingById(ruleConfirmForm.trainingId))
+  }
+  ruleConfirmTaskId.value = task.id
 }
 
 function queryTourTarget(tourId) {
@@ -990,9 +1061,18 @@ function createTourStep(title, description, tourId, placement = 'bottom') {
 
 const scheduleTourSteps = computed(() => {
   if (activeTab.value === 'list' && activeTask.value) {
+    if (isRuleConfirmationStage(activeTask.value)) {
+      return [
+        createTourStep('这里看当前任务状态', '当前选中的任务名称、状态和刷新操作都集中在这里。', 'schedule-detail-header', 'bottom'),
+        hasParseContent.value
+          ? createTourStep('先看解析结果', '这里会展示 AI 理解了什么，以及还需要你特别注意的警告。', 'schedule-parse-section', 'top')
+          : null,
+        createTourStep('直接在这里确认规则', '不需要再跳到创建区；就在当前任务详情里调整结构化规则。', 'schedule-rule-confirm-section', 'top'),
+        createTourStep('确认后继续生成课表', '提交后仍停留在任务列表，后台会继续生成课表，完成后再预览并确认应用。', 'schedule-rule-confirm-create-button', 'top'),
+      ].filter(Boolean)
+    }
     return [
       createTourStep('这里看当前任务结果', '当前选中的任务名称、刷新、保存和确认操作都集中在这里。', 'schedule-detail-header', 'bottom'),
-      createTourStep('先核对任务请求', '先确认排课范围、排课目标、排课方式和单日最大课时是否符合本次意图。', 'schedule-request-section', 'bottom'),
       createTourStep('优先处理冲突', '如果这里还有硬冲突，先修改方案，不要直接确认应用。', 'schedule-conflict-section', 'top'),
       createTourStep('主方案会真正落库', '这里是当前准备应用的课表，可以逐条检查课次时间、地点和课时。', 'schedule-main-plan', 'top'),
       createTourStep('备选方案可一键切换', '主方案不合适时，可以先切换备选方案，再继续微调。', 'schedule-alternative-plan', 'top'),
@@ -1005,7 +1085,7 @@ const scheduleTourSteps = computed(() => {
         ? createTourStep('先选择培训班', '智能排课会基于该培训班的培训周期、课程清单、考试安排和排课规则生成建议。', 'schedule-training', 'bottom')
         : null,
       createTourStep('这里只写自然语言要求', '你可以直接写“本周按工作日排满，上午 08:30-12:30，一个课时 40 分钟，课间休息 10 分钟”这类自然语言。', 'schedule-natural-language', 'bottom'),
-      createTourStep('先生成规则预览', '智能排课模式下会先自动生成任务名并解析自然语言要求，你确认结构化规则后才会正式创建排课任务。', 'schedule-create-button', 'top'),
+      createTourStep('先创建智能排课任务', '提交后会进入任务列表，后台先解析规则；解析完成后再确认结构化规则，并继续生成课表。', 'schedule-create-button', 'top'),
     ].filter(Boolean)
   }
 
@@ -1016,14 +1096,12 @@ const scheduleTourSteps = computed(() => {
     createTourStep('这里决定排课倾向', '均衡排课适合常规安排，专项强化适合实战、理论或考前阶段。', 'schedule-goal', 'bottom'),
     createTourStep('这里决定排课方式', '你可以直接选择排满、排满工作日或按课时排。只有按课时排时，系统才会严格使用课程计划课时。', 'schedule-planning-mode', 'bottom'),
     createTourStep('用它控制每日强度', '单日最大课时会影响可排时段和冲突判断，过高或过低都会影响结果。', 'schedule-daily-hours', 'bottom'),
-    createTourStep('这里可临时覆盖更多规则', '如果本次任务想临时调整单课时分钟数、课间休息或时间段，可以在这里覆盖，不会直接改培训班正式规则。', 'schedule-rule-overrides', 'top'),
     taskForm.scopeType === 'current_week'
       ? createTourStep('指定周默认已带出', '这里默认取培训周期内最近有效周，你可以改成其他周；如果超出培训周期，后端会直接提示。', 'schedule-week', 'left')
       : null,
     createTourStep('先决定是否避开考试日', '开启后，系统会在生成建议时主动避开考试日期或考试时段。', 'schedule-constraint', 'top'),
-    createTourStep('固定课程键用于锁定已定课次', '这里填的不是课程名称，而是 course_key。填写后，AI 生成建议时会保留这些课程，不会重新调整它们；如果当前没有固定课次，可以留空。', 'schedule-fixed-course-key', 'top'),
     createTourStep('补充说明写人工约束', '这里适合填写“周三下午不排理论课”“重点课程尽量前置”这类额外要求。', 'schedule-notes', 'top'),
-    createTourStep('从这里生成方案', '创建后会进入任务列表，可以查看主方案、冲突清单和备选方案。', 'schedule-create-button', 'top'),
+    createTourStep('从这里生成方案', '创建后会进入任务列表，等待后台生成主方案、冲突清单和备选方案。', 'schedule-create-button', 'top'),
   ].filter(Boolean)
 })
 
@@ -1070,7 +1148,28 @@ async function handleCreateTask() {
     return
   }
   if (createMode.value === 'smart') {
-    await handlePreviewRules()
+    if (!taskForm.naturalLanguagePrompt.trim()) {
+      message.warning('请输入自然语言排课要求')
+      return
+    }
+    creating.value = true
+    try {
+      const result = await createAiScheduleTask({
+        taskName: buildSmartTaskName(taskForm.trainingId),
+        trainingId: taskForm.trainingId,
+        naturalLanguagePrompt: taskForm.naturalLanguagePrompt.trim(),
+        overwriteExistingSchedule: taskForm.overwriteExistingSchedule,
+        notes: taskForm.notes || undefined,
+      })
+      message.success('智能排课任务已创建，后台正在解析规则')
+      await loadTasks()
+      await loadTaskDetail(result.id)
+      activeTab.value = 'list'
+    } catch (error) {
+      message.error(error.message || '创建任务失败')
+    } finally {
+      creating.value = false
+    }
     return
   }
   if (!taskForm.taskName.trim()) {
@@ -1079,10 +1178,9 @@ async function handleCreateTask() {
   }
   creating.value = true
   try {
-    const payload = buildStructuredTaskPayload(taskForm.taskName)
+    const payload = buildStructuredTaskPayload(taskForm, taskForm.taskName)
     const result = await createAiScheduleTask(payload)
-    message.success('排课任务已创建')
-    resetParsedPreview()
+    message.success('手动排课任务已创建')
     await loadTasks()
     await loadTaskDetail(result.id)
     activeTab.value = 'list'
@@ -1090,6 +1188,55 @@ async function handleCreateTask() {
     message.error(error.message || '创建任务失败')
   } finally {
     creating.value = false
+  }
+}
+
+async function handleConfirmRules() {
+  if (!activeTask.value?.id) {
+    return
+  }
+  if (!ruleConfirmForm.taskName.trim()) {
+    message.warning('请填写任务名称')
+    return
+  }
+  ruleConfirming.value = true
+  try {
+    const taskId = activeTask.value.id
+    const result = await confirmAiScheduleTaskRules(
+      taskId,
+      buildStructuredTaskPayload(ruleConfirmForm, ruleConfirmForm.taskName, {
+        includeNaturalLanguage: true,
+        parsedRequestConfirmed: true,
+      }),
+    )
+    await loadTasks()
+    await loadTaskDetail(result.id || taskId)
+    message.success('规则已确认，后台正在生成课表')
+  } catch (error) {
+    message.error(error.message || '确认规则失败')
+  } finally {
+    ruleConfirming.value = false
+  }
+}
+
+async function handleDeleteTask(task) {
+  if (!task?.id || !task?.canDelete) {
+    return
+  }
+  deletingTaskId.value = task.id
+  try {
+    const deletingActiveTask = activeTask.value?.id === task.id
+    if (deletingActiveTask) {
+      clearTaskPollTimer()
+      activeTask.value = null
+    }
+    await deleteAiScheduleTask(task.id)
+    await loadTasks()
+    message.success('任务已删除')
+  } catch (error) {
+    message.error(error.message || '删除任务失败')
+  } finally {
+    deletingTaskId.value = null
   }
 }
 
@@ -1112,7 +1259,32 @@ function handleSessionEdit() {
   session.timeRange = sessionForm.timeRange.trim()
   session.location = sessionForm.location.trim()
   session.hours = calculateSessionUnitsFromTimeRange(session.timeRange)
+  syncMainPlanMetrics()
   sessionModalOpen.value = false
+}
+
+function removeTaskSession(courseIndex, scheduleIndex) {
+  const session = activeTask.value?.mainPlan?.courses?.[courseIndex]?.schedules?.[scheduleIndex]
+  const courseName = activeTask.value?.mainPlan?.courses?.[courseIndex]?.name || '未命名课程'
+  if (!session) {
+    return
+  }
+  Modal.confirm({
+    title: '确认删除课次',
+    content: `确定删除课次「${courseName} ${session.date || ''} ${session.timeRange || ''}」吗？`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: () => {
+      const targetCourse = activeTask.value?.mainPlan?.courses?.[courseIndex]
+      if (!targetCourse?.schedules?.[scheduleIndex]) {
+        return
+      }
+      targetCourse.schedules.splice(scheduleIndex, 1)
+      syncMainPlanMetrics()
+      message.success('课次已从当前任务草案中移除，请记得保存')
+    },
+  })
 }
 
 function adoptAlternativePlan(plan) {
@@ -1145,6 +1317,21 @@ async function handleSaveTask() {
 
 async function handleConfirmTask() {
   if (!activeTask.value) return
+  if (activeTask.value.requestPayload?.overwriteExistingSchedule) {
+    const shouldContinue = await new Promise(resolve => {
+      Modal.confirm({
+        title: '确认覆盖当前课表？',
+        content: '应用后将以当前主方案覆盖现有课表，已有未锁定课次会被替换。',
+        okText: '确认覆盖并应用',
+        cancelText: '取消',
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false),
+      })
+    })
+    if (!shouldContinue) {
+      return
+    }
+  }
   confirming.value = true
   try {
     const saved = await handleSaveTask()
@@ -1154,12 +1341,99 @@ async function handleConfirmTask() {
     const result = await confirmAiScheduleTask(activeTask.value.id)
     activeTask.value = cloneDeep(result)
     await loadTasks()
+    planCalendarOpen.value = false
     message.success('排课方案已应用到现有课表')
   } catch (error) {
     message.error(error.message || '确认失败')
   } finally {
     confirming.value = false
   }
+}
+
+function clearTaskPollTimer() {
+  if (!taskPollTimer) {
+    return
+  }
+  window.clearTimeout(taskPollTimer)
+  taskPollTimer = 0
+}
+
+function scheduleTaskPoll() {
+  clearTaskPollTimer()
+  if (!isProcessingStage(activeTask.value)) {
+    return
+  }
+  taskPollTimer = window.setTimeout(async () => {
+    if (!activeTask.value?.id) {
+      return
+    }
+    await loadTaskDetail(activeTask.value.id)
+    await loadTasks()
+    if (isProcessingStage(activeTask.value)) {
+      scheduleTaskPoll()
+      return
+    }
+    if (isRuleConfirmationStage(activeTask.value)) {
+      message.success('规则解析完成，请确认规则后继续生成课表')
+    } else if (isScheduleConfirmationStage(activeTask.value)) {
+      message.success('课表生成完成，请预览后确认应用')
+    }
+  }, 3000)
+}
+
+function buildPlanCalendarWeeks(plan) {
+  const sessions = []
+  for (const course of plan?.courses || []) {
+    for (const schedule of course.schedules || []) {
+      if (!schedule.date || !schedule.timeRange) {
+        continue
+      }
+      sessions.push({
+        id: `${course.courseKey || course.name}-${schedule.sessionId || schedule.date}-${schedule.timeRange}`,
+        date: schedule.date,
+        timeRange: schedule.timeRange,
+        courseName: course.name || '未命名课程',
+        instructor: course.instructor || '未指定教官',
+        location: schedule.location || course.location || '未指定地点',
+        hours: getSessionDisplayHours(schedule),
+      })
+    }
+  }
+  sessions.sort((left, right) => `${left.date} ${left.timeRange}`.localeCompare(`${right.date} ${right.timeRange}`))
+  const grouped = new Map()
+  for (const session of sessions) {
+    const weekKey = normalizeWeekStart(session.date)
+    if (!grouped.has(weekKey)) {
+      const days = Array.from({ length: 7 }, (_, index) => {
+        const current = dayjs(weekKey).add(index, 'day')
+        return {
+          date: current.format('YYYY-MM-DD'),
+          label: `${current.format('MM-DD')} ${weekdayLabels[index + 1]}`,
+          sessions: [],
+        }
+      })
+      grouped.set(weekKey, {
+        key: weekKey,
+        label: `${weekKey} - ${dayjs(weekKey).add(6, 'day').format('YYYY-MM-DD')}`,
+        days,
+      })
+    }
+    const targetWeek = grouped.get(weekKey)
+    const targetDay = targetWeek.days.find(item => item.date === session.date)
+    if (targetDay) {
+      targetDay.sessions.push(session)
+    }
+  }
+  return Array.from(grouped.values()).sort((left, right) => left.key.localeCompare(right.key))
+}
+
+function openPlanCalendar() {
+  if (!planCalendarWeeks.value.length) {
+    message.info('当前任务暂无可预览课表')
+    return
+  }
+  planCalendarActiveWeek.value = planCalendarWeeks.value[0].key
+  planCalendarOpen.value = true
 }
 
 async function openScheduleTour() {
@@ -1201,10 +1475,9 @@ async function maybeOpenRequestedTour() {
 watch(
   () => taskForm.trainingId,
   async () => {
-    resetParsedPreview()
-    await loadSelectedTrainingDetail()
+    await loadTaskFormTrainingDetail()
     if (taskForm.scopeType === 'current_week') {
-      syncScopeStartDate()
+      syncScopeStartDate(taskForm, selectedTraining.value)
     }
   },
 )
@@ -1213,7 +1486,7 @@ watch(
   () => taskForm.scopeType,
   (value) => {
     if (value === 'current_week') {
-      syncScopeStartDate()
+      syncScopeStartDate(taskForm, selectedTraining.value)
       return
     }
     taskForm.scopeStartDate = ''
@@ -1221,22 +1494,48 @@ watch(
 )
 
 watch(
-  () => taskForm.naturalLanguagePrompt,
-  () => {
-    if (createMode.value === 'smart') {
-      resetParsedPreview()
+  () => ruleConfirmForm.scopeType,
+  (value) => {
+    if (value === 'current_week') {
+      syncScopeStartDate(ruleConfirmForm, getTrainingById(ruleConfirmForm.trainingId))
+      return
     }
+    ruleConfirmForm.scopeStartDate = ''
   },
+)
+
+watch(
+  activeTask,
+  () => {
+    if (activeTask.value?.id !== detailExtrasTaskId.value) {
+      detailExtrasExpanded.value = false
+      detailExtrasTaskId.value = activeTask.value?.id || null
+    }
+    if (isRuleConfirmationStage(activeTask.value) && activeTask.value?.id !== ruleConfirmTaskId.value) {
+      primeRuleConfirmForm(activeTask.value)
+    } else if (!isRuleConfirmationStage(activeTask.value)) {
+      ruleConfirmTaskId.value = null
+    }
+    if (planCalendarWeeks.value.length && !planCalendarWeeks.value.some(item => item.key === planCalendarActiveWeek.value)) {
+      planCalendarActiveWeek.value = planCalendarWeeks.value[0].key
+    }
+    scheduleTaskPoll()
+  },
+  { deep: true },
 )
 
 onMounted(async () => {
   await loadTrainings()
-  await loadSelectedTrainingDetail()
+  await loadTaskFormTrainingDetail()
   if (taskForm.scopeType === 'current_week') {
-    syncScopeStartDate()
+    syncScopeStartDate(taskForm, selectedTraining.value)
   }
   await loadTasks()
   await maybeOpenRequestedTour()
+})
+
+onBeforeUnmount(() => {
+  clearTaskPollTimer()
 })
 </script>
 
@@ -1252,6 +1551,8 @@ onMounted(async () => {
 .detail-sub { margin-top: 6px; color: #8c8c8c; }
 .detail-section { margin-top: 20px; }
 .detail-section-title { margin-bottom: 12px; font-size: 15px; font-weight: 600; color: #1f1f1f; }
+.detail-more-toggle { display: flex; justify-content: center; }
+.detail-more-button { padding-inline: 0; }
 .preview-list { display: flex; flex-direction: column; gap: 6px; }
 .conflict-list { display: flex; flex-direction: column; gap: 10px; }
 .plan-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
@@ -1269,8 +1570,16 @@ onMounted(async () => {
 .alternative-title { font-weight: 600; color: #1f1f1f; }
 .alternative-sub { margin-top: 6px; min-height: 40px; color: #595959; font-size: 13px; }
 .alternative-metrics { margin: 10px 0 12px; color: #8c8c8c; font-size: 12px; }
+.calendar-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; }
+.calendar-cell { min-height: 220px; padding: 12px; border: 1px solid #eef0f5; border-radius: 12px; background: #fbfcff; }
+.calendar-date { font-weight: 600; color: #001234; }
+.calendar-session-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.calendar-session { padding: 10px; border-radius: 10px; background: #eef4ff; }
+.calendar-session-title { font-weight: 600; color: #1d4ed8; }
+.calendar-session-sub { margin-top: 4px; color: #475569; font-size: 12px; line-height: 1.5; }
 @media (max-width: 960px) {
   .course-grid, .alternative-grid { grid-template-columns: 1fr; }
   .detail-header { flex-direction: column; }
+  .calendar-grid { grid-template-columns: 1fr; }
 }
 </style>

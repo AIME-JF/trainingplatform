@@ -20,6 +20,7 @@ import {
   ROLE_MANAGE_PAGE_PERMISSIONS,
   TALENT_PAGE_PERMISSIONS,
   TRAINING_BASE_PAGE_PERMISSIONS,
+  TRAINING_MANAGE_PAGE_PERMISSIONS,
   TRAINING_PAGE_PERMISSIONS,
   TRAINING_SCHEDULE_PAGE_PERMISSIONS,
   USER_ARCHIVE_PAGE_PERMISSIONS,
@@ -141,7 +142,7 @@ const router = createRouter({
           path: 'training/ai-schedule/:id?',
           name: 'AiScheduleTask',
           component: () => import('../views/training/AiScheduleTask.vue'),
-          meta: { title: 'AI排课建议', anyPermissions: TRAINING_SCHEDULE_PAGE_PERMISSIONS },
+          meta: { title: 'AI排课建议', anyPermissions: TRAINING_MANAGE_PAGE_PERMISSIONS },
         },
         {
           path: 'training/board',

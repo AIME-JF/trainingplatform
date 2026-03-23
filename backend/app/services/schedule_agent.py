@@ -98,6 +98,7 @@ class ScheduleAgentService:
                     training,
                     main_plan_payload.get("courses") or [],
                     data.constraint_payload,
+                    data.overwrite_existing_schedule,
                     data.planning_mode,
                     rule_config,
                 ),
@@ -140,6 +141,7 @@ class ScheduleAgentService:
             training,
             main_plan_payload.get("courses") or [],
             request_payload.constraint_payload,
+            request_payload.overwrite_existing_schedule,
             request_payload.planning_mode,
             rule_config,
         )
@@ -163,6 +165,7 @@ class ScheduleAgentService:
             training,
             main_plan_payload.get("courses") or [],
             request_payload.constraint_payload,
+            request_payload.overwrite_existing_schedule,
             request_payload.planning_mode,
             rule_config,
         )
@@ -220,8 +223,10 @@ class ScheduleAgentService:
             template_course["schedules"] = []
             raw_schedule_map = self._build_raw_schedule_map(original_course)
             existing_schedules = course_data.get("schedules") or []
+            existing_scheduled_hours = 0.0
 
             for schedule in existing_schedules:
+                existing_scheduled_hours += self._resolve_schedule_hours(schedule, rule_config)
                 raw_schedule = raw_schedule_map.get(self._schedule_identity(schedule), schedule)
                 if self._is_schedule_locked(course_key, raw_schedule, data, planning_dates, fixed_course_keys):
                     template_course["schedules"].append(deepcopy(schedule))
@@ -229,7 +234,26 @@ class ScheduleAgentService:
                 units.append(self._build_plan_unit(template_course, schedule, rule_config=rule_config))
 
             if not existing_schedules and self._should_schedule_empty_course(data.scope_type):
-                units.extend(self._build_empty_course_units(template_course, planning_date_list, planning_mode, rule_config))
+                units.extend(
+                    self._build_empty_course_units(
+                        template_course,
+                        planning_date_list,
+                        planning_mode,
+                        rule_config,
+                        training,
+                        data.constraint_payload,
+                    ),
+                )
+            elif existing_schedules and not data.overwrite_existing_schedule:
+                units.extend(
+                    self._build_remaining_course_units(
+                        template_course,
+                        existing_scheduled_hours,
+                        planning_date_list,
+                        planning_mode,
+                        rule_config,
+                    )
+                )
 
             template_courses.append(template_course)
 
@@ -238,7 +262,15 @@ class ScheduleAgentService:
     def _should_schedule_empty_course(self, scope_type: str) -> bool:
         return scope_type in {"all", "current_week", "unscheduled"}
 
-    def _build_empty_course_units(self, course: dict, planning_dates: List[date], planning_mode: str, rule_config: dict[str, Any]) -> List[dict]:
+    def _build_empty_course_units(
+        self,
+        course: dict,
+        planning_dates: List[date],
+        planning_mode: str,
+        rule_config: dict[str, Any],
+        training: Training,
+        constraint_payload: AIScheduleTaskConstraintPayload,
+    ) -> List[dict]:
         effective_mode = self._resolve_course_generation_mode(course, planning_mode)
         declared_hours = self._normalize_course_hours(course.get("hours"))
         if effective_mode == "by_hours":
@@ -248,6 +280,13 @@ class ScheduleAgentService:
             ]
 
         target_dates = self._resolve_fill_target_dates(planning_dates, effective_mode)
+        target_dates = self._filter_fill_target_dates_by_availability(
+            course,
+            target_dates,
+            training,
+            constraint_payload,
+            rule_config,
+        )
         default_fill_units = self._resolve_default_fill_units(rule_config)
         return [
             self._build_plan_unit(
@@ -258,6 +297,24 @@ class ScheduleAgentService:
                 rule_config=rule_config,
             )
             for target_date in target_dates
+        ]
+
+    def _build_remaining_course_units(
+        self,
+        course: dict,
+        existing_scheduled_hours: float,
+        planning_dates: List[date],
+        planning_mode: str,
+        rule_config: dict[str, Any],
+    ) -> List[dict]:
+        effective_mode = self._resolve_course_generation_mode(course, planning_mode)
+        declared_hours = self._normalize_course_hours(course.get("hours"))
+        remaining_hours = round(max(declared_hours - existing_scheduled_hours, 0), 1)
+        if remaining_hours <= 0 or effective_mode != "by_hours":
+            return []
+        return [
+            self._build_plan_unit(course, None, rule_config=rule_config, fallback_hours=hours)
+            for hours in self._split_hours(remaining_hours, rule_config)
         ]
 
     def _ensure_by_hours_courses_ready(self, courses: List[dict], scope_type: str) -> None:
@@ -286,6 +343,50 @@ class ScheduleAgentService:
             return list(planning_dates)
         return [item for item in planning_dates if self._is_workday(item)] or list(planning_dates)
 
+    def _filter_fill_target_dates_by_availability(
+        self,
+        course: dict,
+        target_dates: List[date],
+        training: Training,
+        constraint_payload: AIScheduleTaskConstraintPayload,
+        rule_config: dict[str, Any],
+    ) -> List[date]:
+        if not target_dates:
+            return []
+
+        slot_candidates = self._build_slot_candidates(
+            rule_config,
+            self._resolve_default_fill_units(rule_config),
+            0,
+        )
+        if not slot_candidates:
+            return list(target_dates)
+
+        occupied: Dict[str, List[dict]] = {}
+        for date_key, blocks in self._build_exam_blocks(training, constraint_payload).items():
+            occupied.setdefault(date_key, []).extend(blocks)
+        for slot in (constraint_payload.blocked_time_slots or []):
+            self._append_unavailable_slot(occupied, slot, scope="global")
+        for slot in (constraint_payload.instructor_unavailable_slots or []):
+            self._append_unavailable_slot(occupied, slot, scope="instructor")
+        for slot in (constraint_payload.location_unavailable_slots or []):
+            self._append_unavailable_slot(occupied, slot, scope="location")
+
+        unit_context = {
+            "course_type": course.get("type") or "theory",
+            "instructor": course.get("instructor"),
+            "location": course.get("location"),
+        }
+        available_dates: List[date] = []
+        for target_date in target_dates:
+            if any(
+                not self._has_overlap(occupied, target_date, start_minutes, end_minutes, unit_context)
+                for start_minutes, end_minutes, _ in slot_candidates
+            ):
+                available_dates.append(target_date)
+
+        return available_dates or list(target_dates)
+
     def _build_raw_schedule_map(self, course: Optional[TrainingCourse]) -> Dict[str, dict]:
         raw_map: Dict[str, dict] = {}
         if not course:
@@ -302,6 +403,8 @@ class ScheduleAgentService:
         planning_dates: set[str],
         fixed_course_keys: set[str],
     ) -> bool:
+        if not data.overwrite_existing_schedule:
+            return True
         if course_key in fixed_course_keys:
             return True
         if any(schedule.get(field) for field in self.LIFECYCLE_FIELDS):
@@ -449,6 +552,7 @@ class ScheduleAgentService:
         training: Training,
         courses: List[dict],
         constraint_payload: AIScheduleTaskConstraintPayload,
+        overwrite_existing_schedule: bool,
         planning_mode: str = "auto",
         rule_config: Optional[dict[str, Any]] = None,
     ) -> List[AIScheduleConflictItem]:
@@ -469,6 +573,9 @@ class ScheduleAgentService:
             self._append_unavailable_slot(occupied, slot, scope="instructor")
         for slot in (constraint_payload.location_unavailable_slots or []):
             self._append_unavailable_slot(occupied, slot, scope="location")
+
+        if not overwrite_existing_schedule:
+            conflicts.extend(self._validate_existing_schedules_preserved(training, course_map))
 
         for course_key, course in course_map.items():
             planned_total_hours = 0.0
@@ -641,6 +748,51 @@ class ScheduleAgentService:
                         )
                     )
 
+        return conflicts
+
+    def _validate_existing_schedules_preserved(
+        self,
+        training: Training,
+        planned_course_map: Dict[str, dict],
+    ) -> List[AIScheduleConflictItem]:
+        conflicts: List[AIScheduleConflictItem] = []
+        for course in training.courses or []:
+            course_key = course.course_key or f"course-{course.id}"
+            planned_course = planned_course_map.get(course_key) or {}
+            planned_schedule_map = {
+                self._schedule_identity(item): item
+                for item in (planned_course.get("schedules") or [])
+            }
+            for schedule in course.schedules or []:
+                identity = self._schedule_identity(schedule)
+                planned_schedule = planned_schedule_map.get(identity)
+                if not planned_schedule:
+                    conflicts.append(
+                        AIScheduleConflictItem(
+                            severity="error",
+                            conflict_type="existing_session_removed",
+                            course_key=course_key,
+                            session_id=schedule.get("session_id"),
+                            message=f"课程“{course.name or '未命名课程'}”的已有课次被删除或替换",
+                            suggestion="关闭覆盖当前课表时，必须保留现有课次",
+                        )
+                    )
+                    continue
+                if (
+                    str(planned_schedule.get("date")) != str(schedule.get("date"))
+                    or str(planned_schedule.get("time_range")) != str(schedule.get("time_range"))
+                    or str(planned_schedule.get("location") or "") != str(schedule.get("location") or "")
+                ):
+                    conflicts.append(
+                        AIScheduleConflictItem(
+                            severity="error",
+                            conflict_type="existing_session_changed",
+                            course_key=course_key,
+                            session_id=schedule.get("session_id"),
+                            message=f"课程“{course.name or '未命名课程'}”的已有课次被改动",
+                            suggestion="关闭覆盖当前课表时，已有课次只能保留，不能直接改动",
+                        )
+                    )
         return conflicts
 
     def _merge_conflicts(self, *conflict_groups: List[AIScheduleConflictItem]) -> List[AIScheduleConflictItem]:

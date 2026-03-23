@@ -93,7 +93,7 @@ class AIScheduleConfigParserService:
 
         if should_parse_prompt:
             heuristic_payload = self._parse_with_rules(prompt, training, base_request)
-            ai_payload, warnings = self._parse_with_llm(prompt, training)
+            ai_payload, warnings = self._parse_with_llm(prompt, training, base_request)
             merged_payload = self._merge_dicts(heuristic_payload, ai_payload)
             next_request_payload = self._apply_prompt_payload(base_request, merged_payload, training)
         else:
@@ -127,7 +127,12 @@ class AIScheduleConfigParserService:
             "effective_rule_config": preview["effective_rule_config"],
         }
 
-    def _parse_with_llm(self, prompt: str, training: Training) -> tuple[dict[str, Any], list[str]]:
+    def _parse_with_llm(
+        self,
+        prompt: str,
+        training: Training,
+        request_payload: dict[str, Any],
+    ) -> tuple[dict[str, Any], list[str]]:
         warnings: List[str] = []
         try:
             config = self._load_runtime_config()
@@ -143,7 +148,7 @@ class AIScheduleConfigParserService:
                 },
                 {
                     "role": "user",
-                    "content": self._build_llm_prompt(prompt, training),
+                    "content": self._build_llm_prompt(prompt, training, request_payload),
                 },
             ],
         }
@@ -342,8 +347,10 @@ class AIScheduleConfigParserService:
         result["parsed_request_confirmed"] = bool(result.get("parsed_request_confirmed"))
         return result
 
-    def _build_llm_prompt(self, prompt: str, training: Training) -> str:
+    def _build_llm_prompt(self, prompt: str, training: Training, request_payload: dict[str, Any]) -> str:
         training_rule = TrainingScheduleRuleService.resolve_effective_rule_config(training.schedule_rule_config)
+        preserve_existing_schedule = not bool(request_payload.get("overwrite_existing_schedule"))
+        existing_schedule_context = self._build_existing_schedule_context(training) if preserve_existing_schedule else ""
         return "\n".join(
             [
                 "请把下面的自然语言排课要求解析成 JSON 配置。",
@@ -362,9 +369,16 @@ class AIScheduleConfigParserService:
                 '- constraint_payload.exam_week_focus: {"course_type":"practice","course_keywords":["警械"],"days_before_exam":7,"label":"考前强化"}',
                 "- schedule_rule_override: 对象，可包含 lesson_unit_minutes, break_minutes, max_units_per_session, daily_max_units, preferred_planning_mode, split_strategy, teaching_windows",
                 '- teaching_windows: [{\"label\":\"上午\",\"start_time\":\"08:30\",\"end_time\":\"12:30\"}]',
+                "- overwrite_existing_schedule: true/false，可省略",
                 f"当前培训班默认规则：{json.dumps(training_rule, ensure_ascii=False)}",
                 f"培训班名称：{training.name}",
                 f"培训周期：{training.start_date} 至 {training.end_date}",
+                (
+                    "当前课表处理策略：保留当前课表，已有课次需要在后续排课中尽量避开。"
+                    if preserve_existing_schedule
+                    else "当前课表处理策略：允许覆盖当前课表，重新生成新的排课方案。"
+                ),
+                existing_schedule_context or "当前已有课次：无或无需额外参考。",
                 "用户要求：",
                 prompt,
             ]
@@ -385,6 +399,10 @@ class AIScheduleConfigParserService:
             extras.append(f"课程类型时段偏好 {len(constraint_payload.get('course_type_time_preferences') or [])} 条")
         if constraint_payload.get("exam_week_focus"):
             extras.append("已识别考前强化偏好")
+        if request_payload.get("overwrite_existing_schedule"):
+            extras.append("最终确认时将覆盖当前课表")
+        else:
+            extras.append("会保留当前已有课次并尽量绕开")
         extra_text = f"，{'，'.join(extras)}" if extras else ""
         return (
             f"已解析排课配置：范围 {self.SCOPE_LABELS.get(request_payload.get('scope_type'), request_payload.get('scope_type'))}，"
@@ -425,6 +443,7 @@ class AIScheduleConfigParserService:
             f"排课方式：{self.PLANNING_MODE_LABELS.get(request_payload.get('planning_mode'), request_payload.get('planning_mode') or '未指定')}",
             f"单日最大课时：{constraint_payload.get('daily_max_hours') or 0}",
             f"避开考试日：{'是' if constraint_payload.get('avoid_exam_days') else '否'}",
+            f"当前课表处理：{'覆盖当前课表' if request_payload.get('overwrite_existing_schedule') else '保留当前课表并绕开已有课次'}",
         ]
         if request_payload.get("scope_type") == "current_week" and request_payload.get("scope_start_date"):
             items.append(f"指定周：{request_payload.get('scope_start_date')}")
@@ -460,6 +479,26 @@ class AIScheduleConfigParserService:
                 f"{' / '.join(focus_parts) if focus_parts else '指定课程'}"
             )
         return items
+
+    def _build_existing_schedule_context(self, training: Training) -> str:
+        summaries: List[str] = []
+        for course in training.courses or []:
+            course_name = str(getattr(course, "name", "") or "未命名课程")
+            instructor = str(getattr(course, "instructor", "") or "").strip() or "未指定教官"
+            for schedule in getattr(course, "schedules", None) or []:
+                schedule_payload = schedule if isinstance(schedule, dict) else {}
+                schedule_date = getattr(schedule, "date", None) or schedule_payload.get("date")
+                time_range = getattr(schedule, "time_range", None) or schedule_payload.get("time_range")
+                if not schedule_date or not time_range:
+                    continue
+                location = getattr(schedule, "location", None) or schedule_payload.get("location") or "未指定地点"
+                summaries.append(f"- {schedule_date} {time_range} | {course_name} | {instructor} | {location}")
+        if not summaries:
+            return ""
+        preview_lines = summaries[:40]
+        if len(summaries) > len(preview_lines):
+            preview_lines.append(f"- 其余 {len(summaries) - len(preview_lines)} 条已有课次省略")
+        return "当前已有课次：\n" + "\n".join(preview_lines)
 
     def _extract_course_type_preferences(self, prompt: str, rule_config: dict[str, Any]) -> List[dict[str, Any]]:
         preferences: List[dict[str, Any]] = []

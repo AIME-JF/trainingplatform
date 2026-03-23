@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.controllers import AIController
 from app.database import get_db
 from app.middleware.auth import get_current_user
+from app.models import Permission, Role, User
 from app.schemas import (
     AIPersonalTrainingTaskCreateRequest,
     AIPersonalTrainingTaskDetailResponse,
@@ -38,6 +39,26 @@ router = APIRouter(prefix="/ai", tags=["AI任务"])
 def _require_admin_or_instructor(db: Session, user_id: int):
     if not (is_admin_user(db, user_id) or is_instructor_user(db, user_id)):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅管理员或教官可执行该操作")
+
+
+def _has_permission(db: Session, current_user: TokenData, permission: str) -> bool:
+    if permission in current_user.permissions:
+        return True
+    has_permission = db.query(User.id).join(User.roles).join(Role.permissions).filter(
+        User.id == current_user.user_id,
+        User.is_active == True,
+        Permission.code == permission,
+    ).first()
+    return bool(has_permission)
+
+
+def _require_schedule_task_permission(db: Session, current_user: TokenData):
+    if _has_permission(db, current_user, "UPDATE_TRAINING") or _has_permission(db, current_user, "MANAGE_TRAINING"):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="权限不足，需要 UPDATE_TRAINING 或 MANAGE_TRAINING",
+    )
 
 
 @router.get(
@@ -301,6 +322,7 @@ def list_schedule_tasks(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    _require_schedule_task_permission(db, current_user)
     controller = AIController(db)
     data = controller.list_schedule_tasks(page, size, status_value, current_user.user_id)
     return StandardResponse(data=data)
@@ -316,6 +338,7 @@ def preview_schedule_task(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    _require_schedule_task_permission(db, current_user)
     controller = AIController(db)
     result = controller.preview_schedule_task(data, current_user.user_id)
     return StandardResponse(data=result)
@@ -331,6 +354,7 @@ def create_schedule_task(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    _require_schedule_task_permission(db, current_user)
     controller = AIController(db)
     result = controller.create_schedule_task(data, current_user.user_id)
     return StandardResponse(data=result)
@@ -346,6 +370,7 @@ def get_schedule_task_detail(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    _require_schedule_task_permission(db, current_user)
     controller = AIController(db)
     data = controller.get_schedule_task_detail(task_id, current_user.user_id)
     return StandardResponse(data=data)
@@ -362,8 +387,42 @@ def update_schedule_task(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    _require_schedule_task_permission(db, current_user)
     controller = AIController(db)
     result = controller.update_schedule_task(task_id, data, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.delete(
+    "/schedule-tasks/{task_id}",
+    response_model=StandardResponse[dict],
+    summary="删除 AI 排课任务",
+)
+def delete_schedule_task(
+    task_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_schedule_task_permission(db, current_user)
+    controller = AIController(db)
+    controller.delete_schedule_task(task_id, current_user.user_id)
+    return StandardResponse(data={"deleted": True})
+
+
+@router.post(
+    "/schedule-tasks/{task_id}/confirm-rules",
+    response_model=StandardResponse[AIScheduleTaskDetailResponse],
+    summary="确认 AI 排课规则并继续生成课表",
+)
+def confirm_schedule_task_rules(
+    task_id: int,
+    data: AIScheduleTaskCreateRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_schedule_task_permission(db, current_user)
+    controller = AIController(db)
+    result = controller.confirm_schedule_task_rules(task_id, data, current_user.user_id)
     return StandardResponse(data=result)
 
 
@@ -377,6 +436,7 @@ def confirm_schedule_task(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    _require_schedule_task_permission(db, current_user)
     controller = AIController(db)
     result = controller.confirm_schedule_task(task_id, current_user.user_id)
     return StandardResponse(data=result)

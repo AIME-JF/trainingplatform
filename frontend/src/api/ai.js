@@ -76,6 +76,14 @@ export function getAiScheduleTaskDetail(taskId) {
   return request.get(`/ai/schedule-tasks/${taskId}`)
 }
 
+export function deleteAiScheduleTask(taskId) {
+  return request.delete(`/ai/schedule-tasks/${taskId}`)
+}
+
+export function confirmAiScheduleTaskRules(taskId, data) {
+  return request.post(`/ai/schedule-tasks/${taskId}/confirm-rules`, data)
+}
+
 export function updateAiScheduleTaskResult(taskId, data) {
   return request.put(`/ai/schedule-tasks/${taskId}/result`, data)
 }

@@ -18,6 +18,7 @@ AITaskType = Literal[
     "personal_training_plan_generation",
 ]
 AITaskStatus = Literal["pending", "processing", "completed", "confirmed", "failed"]
+AIScheduleTaskStage = Literal["rule_parsing", "rule_confirmation", "schedule_generation", "schedule_confirmation"]
 
 
 class AITaskQuestionDraft(BaseModel):
@@ -163,6 +164,7 @@ class AIScheduleTaskCreateRequest(BaseModel):
         "auto",
         description="排课方式: auto/fill_all_days/fill_workdays/by_hours",
     )
+    overwrite_existing_schedule: bool = Field(False, description="是否覆盖当前课表")
     parsed_request_confirmed: bool = Field(False, description="是否已确认解析结果，执行时不再二次猜测")
     constraint_payload: AIScheduleTaskConstraintPayload = Field(default_factory=AIScheduleTaskConstraintPayload, description="排课约束")
     schedule_rule_override: Optional[TrainingScheduleRuleConfig] = Field(None, description="任务级排课规则覆盖")
@@ -326,6 +328,7 @@ class AITaskSummaryResponse(BaseModel):
     task_name: str
     task_type: AITaskType
     status: AITaskStatus
+    task_stage: Optional[str] = None
     item_count: int = 0
     paper_title: Optional[str] = None
     training_id: Optional[int] = None
@@ -337,6 +340,7 @@ class AITaskSummaryResponse(BaseModel):
     confirmed_question_ids: List[int] = Field(default_factory=list)
     confirmed_paper_id: Optional[int] = None
     confirmed_snapshot_id: Optional[int] = None
+    can_delete: bool = False
     created_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
     confirmed_at: Optional[datetime] = None
@@ -380,6 +384,7 @@ class AIScheduleTaskDetailResponse(AITaskSummaryResponse):
     parse_summary: Optional[str] = None
     parse_warnings: List[str] = Field(default_factory=list)
     understood_items: List[str] = Field(default_factory=list)
+    training_rule_config: Optional[TrainingScheduleRuleConfig] = None
     effective_rule_config: Optional[TrainingScheduleRuleConfig] = None
     error_message: Optional[str] = None
 

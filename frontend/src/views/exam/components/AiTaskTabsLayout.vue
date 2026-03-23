@@ -43,9 +43,12 @@
                         <slot name="task-description" :item="item" />
                       </template>
                     </a-list-item-meta>
-                    <a-tag :color="statusColors[item.status] || 'default'">
-                      {{ statusLabels[item.status] || item.status }}
-                    </a-tag>
+                    <div class="task-list-item-extra">
+                      <slot name="task-actions" :item="item" />
+                      <a-tag :color="resolveStatusColor(item)">
+                        {{ resolveStatusLabel(item) }}
+                      </a-tag>
+                    </div>
                   </a-list-item>
                 </template>
               </a-list>
@@ -66,7 +69,7 @@
 </template>
 
 <script setup>
-defineProps({
+const props = defineProps({
   title: { type: String, required: true },
   subtitle: { type: String, required: true },
   tagText: { type: String, default: '任务流' },
@@ -76,11 +79,27 @@ defineProps({
   activeTaskId: { type: Number, default: null },
   statusLabels: { type: Object, required: true },
   statusColors: { type: Object, required: true },
+  statusLabelResolver: { type: Function, default: null },
+  statusColorResolver: { type: Function, default: null },
   listTitle: { type: String, default: '任务列表' },
   emptyText: { type: String, default: '暂无任务' },
 })
 
 const emit = defineEmits(['update:activeTab', 'refresh-tasks', 'select-task'])
+
+function resolveStatusLabel(item) {
+  if (typeof props.statusLabelResolver === 'function') {
+    return props.statusLabelResolver(item)
+  }
+  return props.statusLabels[item.status] || item.status
+}
+
+function resolveStatusColor(item) {
+  if (typeof props.statusColorResolver === 'function') {
+    return props.statusColorResolver(item)
+  }
+  return props.statusColors[item.status] || 'default'
+}
 </script>
 
 <style scoped>
@@ -140,6 +159,12 @@ const emit = defineEmits(['update:activeTab', 'refresh-tasks', 'select-task'])
 .task-list-item.active {
   background: #eef4ff;
   border-color: rgba(0, 48, 135, 0.12);
+}
+
+.task-list-item-extra {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .task-detail-card {
