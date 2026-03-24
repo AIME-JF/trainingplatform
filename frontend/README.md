@@ -191,6 +191,7 @@ pnpm preview
 - 试卷仓库：`frontend/src/views/exam/PaperManage.vue`
 - 试卷详情：`frontend/src/views/exam/PaperDetail.vue`
 - 题目仓库：`frontend/src/views/exam/QuestionBank.vue`
+- 知识点管理：`frontend/src/views/exam/KnowledgePointManage.vue`
 
 AI 任务页：
 
@@ -204,6 +205,13 @@ AI 任务页：
 - `frontend/src/views/exam/components/AiTaskTimeline.vue`
 - `frontend/src/views/exam/components/PaperDraftEditor.vue`
 - `frontend/src/views/exam/components/QuestionFormModal.vue`
+
+当前前端已覆盖的考试能力：
+
+- 题目支持多知识点选择、搜索与即时创建
+- “题库管理 / 知识点管理” 已拆成独立菜单入口
+- AI 智能出题结果会带知识点列表，确认入库时自动关联知识点
+- AI 自动组卷页会展示解析结果、选题放宽记录和试卷草稿
 
 ### 培训域
 
@@ -252,6 +260,13 @@ AI 任务页：
 - 审核工作台：`frontend/src/views/resource/ReviewQueue.vue`
 - 审核策略：`frontend/src/views/resource/PolicyManage.vue`
 
+当前资源域前端已覆盖：
+
+- 上传页标签输入与课程标签交互一致，支持远程搜索已有标签并回车创建新标签
+- 资源标签逻辑已抽成公共组合式工具，课程和资源共用一套“可搜索、可创建”标签交互
+- 审核策略页支持作用域、上传者约束、审核路径预览和更完整的前端校验
+- 审核策略页会明确提示：空规则时系统回退到管理员默认审核；如无明确业务变更，建议优先沿用现有规则
+
 ### 系统与其他
 
 - 用户管理：`frontend/src/views/system/UserManage.vue`
@@ -292,8 +307,9 @@ AI 任务页：
 - 手机验证码登录页会调用外部短信接口发送验证码；后端 `POST /auth/login/phone` 当前并不会校验验证码真伪
 - AI 页面当前用户可见行为与后端实现保持一致：
   - AI 智能出题：创建任务后异步排队
+  - AI 自动组卷：创建任务后异步排队，任务详情中展示解析条件、选题说明和试卷草稿
   - AI 排课建议：创建任务后异步排队，并在任务列表中完成规则确认和课表确认
-  - AI 自动组卷 / AI 自动生成试卷 / AI 个训方案：创建后通常会直接拿到结果
+  - AI 自动生成试卷 / AI 个训方案：创建后通常会直接拿到结果
 - 培训详情页可以从“考试安排”直接快捷创建培训班考试，并携带 `trainingId` 跳转到考试管理页
 - 培训详情页中的“课程变更记录”与“学习情况”等标签，都会依赖后端返回的 `canView...` 标记再决定是否展示
 - 课程创建 / 编辑弹窗支持课程可见范围；如果范围不是 `all`，前端会要求至少选择一个目标

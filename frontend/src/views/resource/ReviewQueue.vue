@@ -69,7 +69,7 @@ const currentTask = ref(null)
 onMounted(fetchTasks)
 
 function statusLabel(status) {
-  const map = { pending: '待处理', approved: '已通过', rejected: '已驳回' }
+  const map = { pending: '待处理', approved: '已通过', rejected: '已驳回', skipped: '已跳过' }
   return map[status] || status
 }
 

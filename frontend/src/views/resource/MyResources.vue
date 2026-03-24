@@ -164,7 +164,7 @@ function statusLabel(status) {
   const map = {
     draft: '草稿', pendingReview: '待审核', pending_review: '待审核', reviewing: '审核中',
     published: '已发布', rejected: '已驳回', offline: '已下线',
-    approved: '已通过', pending: '待处理'
+    approved: '已通过', pending: '待处理', skipped: '已跳过'
   }
   return map[status] || status
 }

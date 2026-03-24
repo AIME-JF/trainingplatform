@@ -25,12 +25,15 @@ class ReviewController:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='资源不存在')
             return result
         except PermissionError as e:
+            self.db.rollback()
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
         except ValueError as e:
+            self.db.rollback()
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
         except HTTPException:
             raise
         except Exception as e:
+            self.db.rollback()
             logger.error(f"提交审核异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='提交审核失败')
 
@@ -45,10 +48,13 @@ class ReviewController:
         try:
             return self.service.approve_task(task_id, current_user_id, data.comment)
         except PermissionError as e:
+            self.db.rollback()
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
         except ValueError as e:
+            self.db.rollback()
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
         except Exception as e:
+            self.db.rollback()
             logger.error(f"审核通过异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='审核通过失败')
 
@@ -56,10 +62,13 @@ class ReviewController:
         try:
             return self.service.reject_task(task_id, current_user_id, data.comment)
         except PermissionError as e:
+            self.db.rollback()
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
         except ValueError as e:
+            self.db.rollback()
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
         except Exception as e:
+            self.db.rollback()
             logger.error(f"审核驳回异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='审核驳回失败')
 
@@ -80,8 +89,10 @@ class ReviewController:
         try:
             return self.service.create_policy(data)
         except ValueError as e:
+            self.db.rollback()
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
         except Exception as e:
+            self.db.rollback()
             logger.error(f"创建审核策略异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='创建审核策略失败')
 
@@ -92,9 +103,11 @@ class ReviewController:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='审核策略不存在')
             return result
         except ValueError as e:
+            self.db.rollback()
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
         except HTTPException:
             raise
         except Exception as e:
+            self.db.rollback()
             logger.error(f"更新审核策略异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='更新审核策略失败')

@@ -19,7 +19,8 @@
 
 当前考试域已经拆成四层：
 
-- `Question`：统一题库
+- `KnowledgePoint`：知识点主数据
+- `Question`：统一题库，和知识点是多对多关系
 - `ExamPaper`：独立试卷实体，维护题目快照与试卷状态
 - `AdmissionExam`：独立准入考试，不直接隶属培训班
 - `Exam`：培训班内考试，必须关联 `training_id`
@@ -28,6 +29,7 @@
 
 - 试卷状态流：`draft -> published -> archived`
 - 试卷发布后不可再修改题目；已被考试引用的试卷不能删除
+- 题目不再使用单个知识点字符串，改为 `knowledge_points` 关联和知识点快照
 - 准入考试和培训班考试都只关联 `paper_id`
 - 只有已发布试卷才能创建准入考试和培训班考试
 - 准入考试范围由 `scope_type + scope_target_ids` 控制，支持 `all`、`user`、`department`、`role`
@@ -67,9 +69,10 @@
   - 采用“两阶段任务流”：先解析规则，再确认规则，再生成课表
   - 任务详情内可保存主方案、删除任务、删除任务中的课次，最终确认后回写培训班课程与课次
 - `AI 自动组卷`
-  - 也是任务化接口
-  - 但创建任务时同步生成试卷草稿
-  - 会优先复用现有题库题目，不足时再按规则补草稿题
+  - 创建任务后写入 `AITask`
+  - 通过 `app.tasks.ai_paper_assembly` 进入 Celery 队列
+  - 采用“解析自然语言要求 -> 按题型查题库 -> 不足时放宽条件 -> 生成试卷草稿”链路
+  - 组卷过程只从题库选题，不再在任务执行中补生成题目
 - `AI 自动生成试卷`
   - 也是任务化接口
   - 但创建任务时同步生成试卷草稿
@@ -105,6 +108,17 @@ AI 运行时配置：
 - AI 智能出题和 AI 排课自然语言解析读取系统配置组 `ai`
 - 支持 `openai` 与 `ollama`
 - 如果 AI 排课自然语言解析未配置模型或调用失败，会自动退化到规则兜底解析
+
+### 资源与审核域
+
+当前资源与审核相关实现包括：
+
+- 资源标签已独立成 `ResourceTag / ResourceTagRelation`
+- 资源标签支持列表查询与即时创建接口：`GET /api/v1/resources/tags`、`POST /api/v1/resources/tags`
+- 上传页标签交互与课程标签一致，支持搜索已有标签并直接新建
+- 审核策略支持 `global / department / department_tree` 三种作用域
+- 审核策略支持上传者约束、连续多级审核、最小通过数校验
+- 如果当前没有任何启用的自定义审核规则，资源提交审核时会自动回退到“管理员默认审核”
 
 ### 培训域
 
@@ -360,16 +374,18 @@ python main.py
 
 ### 当前注册到 Celery 的任务
 
-`celery_app.py` 当前只显式注册了两类任务：
+`celery_app.py` 当前显式注册了三类任务：
 
+- `app.tasks.ai_paper_assembly`
 - `app.tasks.ai_question`
 - `app.tasks.ai_schedule`
 
 也就是说：
 
+- `AI 自动组卷` 依赖 Worker
 - `AI 智能出题` 依赖 Worker
 - `AI 排课建议` 依赖 Worker
-- `AI 自动组卷`、`AI 自动生成试卷`、`AI 个训方案` 不依赖 Worker
+- `AI 自动生成试卷`、`AI 个训方案` 不依赖 Worker
 - `app/tasks/recommendation.py` 目前只是占位脚本，没有注册成 Celery 定时任务
 
 ### 启动 Worker
@@ -454,6 +470,7 @@ python migrate.py generate "your message"
 当前迁移已经覆盖的关键改造包括：
 
 - 考试 P0 重构、试卷状态字段、准入考试结构化适用范围
+- 题目知识点拆表、多对多关联与试卷知识点快照
 - 培训基地与数据归属字段
 - 角色 `data_scopes` 与创建人字段
 - AI 任务表 `ai_tasks`
@@ -556,6 +573,11 @@ python migrate.py generate "your message"
   - `ai`
   - `training_schedule`
 
+说明：
+
+- `init_data.py` 不会预置审核策略
+- 当资源提交审核时，如果库里没有启用的自定义审核规则，后端会自动创建或复用“系统默认审核策略”，默认只走管理员审核
+
 默认账号：
 
 | 角色 | 用户名 | 密码 |
@@ -567,11 +589,13 @@ python migrate.py generate "your message"
 ## 已知行为与注意事项
 
 - `POST /api/v1/auth/login/phone` 目前不会校验验证码内容，只按手机号查用户并发 token。
-- `AI 智能出题`、`AI 排课建议` 需要 Worker；只启动 API 时任务不会自动完成。
+- `AI 智能出题`、`AI 自动组卷`、`AI 排课建议` 需要 Worker；只启动 API 时任务不会自动完成。
 - AI 智能出题依赖系统配置组 `ai` 中的模型配置；如果 `default_text_model`、`api_base_url` 或 `api_key` 未配置，任务会失败。
 - AI 排课自然语言解析未配置模型或调用失败时，会在任务详情里留下 `parse_warnings`，并按规则兜底继续生成。
 - 智能排课当前是两阶段异步任务流，不是同步接口。
-- `AI 自动组卷`、`AI 自动生成试卷`、`AI 个训方案` 当前不是异步队列任务。
+- `AI 自动组卷` 当前已经是异步队列任务；`AI 自动生成试卷`、`AI 个训方案` 仍是同步结果任务。
+- AI 自动组卷会先解析自然语言要求，再按题型、警种、难度、知识点关键词查题；题库不足时会放宽条件并把放宽记录写回任务结果。
+- 资源审核策略页允许维护复杂规则，但如无明确业务需要，建议优先沿用现有规则；空规则场景由管理员默认审核兜底。
 - 培训二维码签到依赖 Redis；Redis 不可用时，扫码签到链路不可用。
 - `checkin_closed` 的真实语义是“课程仍在进行，但签到窗口已结束”，前端应按“进行中”理解。
 - 默认 Compose 没有启动 `beat`，推荐刷新脚本也还没有接入正式周期调度。
