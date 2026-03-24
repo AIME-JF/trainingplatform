@@ -10,7 +10,7 @@ from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.schemas import StandardResponse, TokenData, PaginatedResponse
 from app.schemas.resource import (
-    ResourceCreate, ResourceUpdate,
+    ResourceCreate, ResourceUpdate, ResourceTagCreate, ResourceTagResponse,
     ResourceListItemResponse, ResourceDetailResponse
 )
 from app.controllers.resource import ResourceController
@@ -42,6 +42,28 @@ def get_resources(
         my_only=my_only,
     )
     return StandardResponse(data=data)
+
+
+@router.get('/tags', response_model=StandardResponse[List[ResourceTagResponse]], summary='资源标签列表')
+def get_resource_tags(
+    search: Optional[str] = Query(None),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = ResourceController(db)
+    data = controller.list_resource_tags(search=search)
+    return StandardResponse(data=data)
+
+
+@router.post('/tags', response_model=StandardResponse[ResourceTagResponse], summary='创建资源标签')
+def create_resource_tag(
+    data: ResourceTagCreate,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = ResourceController(db)
+    result = controller.create_resource_tag(data)
+    return StandardResponse(data=result)
 
 
 @router.post('', response_model=StandardResponse[ResourceDetailResponse], summary='创建资源')

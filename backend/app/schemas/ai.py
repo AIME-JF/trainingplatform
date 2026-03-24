@@ -106,6 +106,60 @@ class AIPaperAssemblyTypeConfig(BaseModel):
     score: int = Field(2, ge=1, description="单题分值")
 
 
+class AIPaperAssemblyParsedTypeConfig(BaseModel):
+    """AI 自动组卷解析后的题型条件"""
+
+    type: str = Field(..., description="题目类型")
+    count: int = Field(..., ge=1, le=50, description="题目数量")
+    difficulty: Optional[int] = Field(None, ge=1, le=5, description="题型难度")
+    score: int = Field(2, ge=1, description="单题分值")
+    knowledge_points: List[str] = Field(default_factory=list, description="该题型命中的知识点关键词")
+    police_type_id: Optional[int] = Field(None, description="题型级警种 ID")
+
+    @field_validator("knowledge_points", mode="before")
+    @classmethod
+    def validate_keywords(cls, value: Any) -> List[str]:
+        if value is None:
+            return []
+        raw_items = [value] if isinstance(value, str) else list(value or [])
+        normalized: List[str] = []
+        seen = set()
+        for raw_item in raw_items:
+            item = str(raw_item or "").strip()
+            if not item or item in seen:
+                continue
+            seen.add(item)
+            normalized.append(item[:100])
+        return normalized
+
+
+class AIPaperAssemblyParsedRequest(BaseModel):
+    """AI 自动组卷解析结果"""
+
+    summary: Optional[str] = Field(None, description="解析摘要")
+    police_type_id: Optional[int] = Field(None, description="全局警种 ID")
+    knowledge_points: List[str] = Field(default_factory=list, description="全局知识点关键词")
+    type_configs: List[AIPaperAssemblyParsedTypeConfig] = Field(default_factory=list, description="解析后的题型条件")
+    understood_items: List[str] = Field(default_factory=list, description="AI 理解到的需求点")
+    warnings: List[str] = Field(default_factory=list, description="解析告警")
+
+    @field_validator("knowledge_points", "understood_items", "warnings", mode="before")
+    @classmethod
+    def validate_string_list(cls, value: Any) -> List[str]:
+        if value is None:
+            return []
+        raw_items = [value] if isinstance(value, str) else list(value or [])
+        normalized: List[str] = []
+        seen = set()
+        for raw_item in raw_items:
+            item = str(raw_item or "").strip()
+            if not item or item in seen:
+                continue
+            seen.add(item)
+            normalized.append(item[:200])
+        return normalized
+
+
 class AIPaperAssemblyTaskCreateRequest(BaseModel):
     """AI 自动组卷创建请求"""
 
@@ -394,6 +448,9 @@ class AIPaperAssemblyTaskDetailResponse(AITaskSummaryResponse):
 
     request_payload: AIPaperAssemblyTaskCreateRequest
     paper_draft: Optional[AITaskPaperDraft] = None
+    parse_summary: Optional[str] = None
+    parsed_request: Optional[AIPaperAssemblyParsedRequest] = None
+    selection_notes: List[str] = Field(default_factory=list)
     error_message: Optional[str] = None
 
 

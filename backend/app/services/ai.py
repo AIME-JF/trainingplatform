@@ -4,11 +4,14 @@ AI 任务服务
 from datetime import datetime
 from typing import Iterable, List, Optional
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, selectinload
 
 from app.models import AITask, ExamPaper, KnowledgePoint, Question
 from app.schemas import (
     AIPaperAssemblyTaskCreateRequest,
+    AIPaperAssemblyParsedRequest,
+    AIPaperAssemblyParsedTypeConfig,
     AIPaperAssemblyTaskDetailResponse,
     AIPaperAssemblyTypeConfig,
     AIPaperGenerationTaskCreateRequest,
@@ -23,8 +26,11 @@ from app.schemas import (
     PaginatedResponse,
     QuestionCreate,
 )
+from app.services.ai_paper_assembly_parser import AIPaperAssemblyParser
 from app.services.exam import ExamService
 from app.services.question import QuestionService, deduplicate_questions
+from app.utils.authz import can_view_question_with_context
+from app.utils.data_scope import build_data_scope_context
 from logger import logger
 
 
@@ -50,6 +56,7 @@ class AIService:
 
     def __init__(self, db: Session):
         self.db = db
+        self.paper_assembly_parser = AIPaperAssemblyParser()
 
     def list_question_tasks(
         self,
@@ -129,16 +136,69 @@ class AIService:
         data: AIPaperAssemblyTaskCreateRequest,
         current_user_id: int,
     ) -> AIPaperAssemblyTaskDetailResponse:
-        task = self._create_task_entity(data.task_name, self.PAPER_ASSEMBLY_TASK_TYPE, data.model_dump(mode="python"), current_user_id)
-        try:
-            paper_draft = self._simulate_paper_assembly_result(data)
-            task.result_payload = {"paper_draft": paper_draft.model_dump(mode="python")}
-            self._mark_task_completed(task)
-        except Exception as exc:
-            self._mark_task_failed(task, str(exc))
-            logger.error("AI 自动组卷任务失败: %s", exc)
+        normalized_data = self._normalize_paper_assembly_task_request(data)
+        task = self._create_task_entity(
+            normalized_data.task_name,
+            self.PAPER_ASSEMBLY_TASK_TYPE,
+            normalized_data.model_dump(mode="python"),
+            current_user_id,
+            status="pending",
+        )
+        task.result_payload = self._build_paper_assembly_result_payload()
         self.db.commit()
+        self.db.refresh(task)
+
+        try:
+            from app.tasks.ai_paper_assembly import schedule_paper_assembly_task
+
+            schedule_paper_assembly_task(preferred_task_id=task.id, db=self.db)
+            self.db.refresh(task)
+        except Exception as exc:
+            logger.error("调度 AI 自动组卷任务失败: %s", exc)
+
         return self.get_paper_assembly_task_detail(task.id, current_user_id)
+
+    def execute_paper_assembly_task(self, task_id: int) -> None:
+        task = self.db.query(AITask).filter(
+            AITask.id == task_id,
+            AITask.task_type == self.PAPER_ASSEMBLY_TASK_TYPE,
+        ).first()
+        if not task:
+            raise ValueError("任务不存在")
+        if task.status in {"completed", "confirmed", "failed"}:
+            return
+
+        if task.status != "processing":
+            task.status = "processing"
+            task.started_at = task.started_at or datetime.now()
+            task.completed_at = None
+            task.error_message = None
+            self.db.commit()
+
+        request_payload = AIPaperAssemblyTaskCreateRequest.model_validate(task.request_payload or {})
+        normalized_request = self._normalize_paper_assembly_task_request(request_payload)
+        task.task_name = normalized_request.task_name
+        task.request_payload = normalized_request.model_dump(mode="python")
+
+        parsed_request = self.paper_assembly_parser.parse_request(
+            normalized_request,
+            self.DEFAULT_TYPE_CONFIGS,
+        )
+        task.result_payload = self._build_paper_assembly_result_payload(parsed_request=parsed_request)
+        self.db.commit()
+
+        paper_draft, selection_notes = self._assemble_paper_from_question_bank(
+            normalized_request,
+            parsed_request,
+            task.created_by,
+        )
+        task.result_payload = self._build_paper_assembly_result_payload(
+            paper_draft=paper_draft,
+            parsed_request=parsed_request,
+            selection_notes=selection_notes,
+        )
+        self._mark_task_completed(task)
+        self.db.commit()
 
     def create_paper_generation_task(
         self,
@@ -184,9 +244,9 @@ class AIService:
         self._ensure_task_editable(task)
         if data.task_name:
             task.task_name = data.task_name
-        task.result_payload = {
-            "paper_draft": self._sanitize_paper_draft(data.paper_draft).model_dump(mode="python"),
-        }
+        result_payload = dict(task.result_payload or {})
+        result_payload["paper_draft"] = self._sanitize_paper_draft(data.paper_draft).model_dump(mode="python")
+        task.result_payload = result_payload
         self.db.commit()
         return self.get_paper_assembly_task_detail(task_id, current_user_id)
 
@@ -395,11 +455,19 @@ class AIService:
         )
 
     def _to_paper_assembly_task_detail(self, task: AITask) -> AIPaperAssemblyTaskDetailResponse:
+        result_payload = task.result_payload or {}
         paper_draft = self._extract_paper_draft(task)
+        parsed_payload = result_payload.get("parsed_request")
+        parsed_request = None
+        if parsed_payload:
+            parsed_request = AIPaperAssemblyParsedRequest.model_validate(parsed_payload)
         return AIPaperAssemblyTaskDetailResponse(
             **self._to_task_summary(task).model_dump(),
             request_payload=AIPaperAssemblyTaskCreateRequest.model_validate(task.request_payload or {}),
             paper_draft=paper_draft,
+            parse_summary=result_payload.get("parse_summary") or (parsed_request.summary if parsed_request else None),
+            parsed_request=parsed_request,
+            selection_notes=[str(item).strip() for item in (result_payload.get("selection_notes") or []) if str(item).strip()],
             error_message=task.error_message,
         )
 
@@ -466,6 +534,72 @@ class AIService:
         payload["knowledge_points"] = knowledge_points
         return AIQuestionTaskCreateRequest.model_validate(payload)
 
+    def _normalize_paper_assembly_task_request(
+        self,
+        data: AIPaperAssemblyTaskCreateRequest,
+    ) -> AIPaperAssemblyTaskCreateRequest:
+        task_name = str(data.task_name or "").strip()
+        paper_title = str(data.paper_title or "").strip()
+        if not task_name or not paper_title:
+            raise ValueError("请填写任务名称和试卷名称")
+
+        type_configs = []
+        seen_types = set()
+        raw_type_configs = data.type_configs or list(self.DEFAULT_TYPE_CONFIGS)
+        for item in raw_type_configs:
+            normalized_type = str(item.type or "").strip()
+            if normalized_type in seen_types:
+                continue
+            if normalized_type not in self.SUPPORTED_QUESTION_TYPES:
+                raise ValueError("AI 自动组卷仅支持 single、multi、judge 三种题型")
+            seen_types.add(normalized_type)
+            type_configs.append(
+                AIPaperAssemblyTypeConfig(
+                    type=normalized_type,
+                    count=int(item.count or 0),
+                    difficulty=item.difficulty,
+                    score=int(item.score or 0),
+                )
+            )
+
+        if not type_configs:
+            raise ValueError("请至少配置一种题型")
+
+        exclude_question_ids = []
+        seen_question_ids = set()
+        for raw_item in data.exclude_question_ids or []:
+            question_id = int(raw_item or 0)
+            if question_id <= 0 or question_id in seen_question_ids:
+                continue
+            seen_question_ids.add(question_id)
+            exclude_question_ids.append(question_id)
+
+        payload = data.model_dump(mode="python")
+        payload["task_name"] = task_name
+        payload["paper_title"] = paper_title
+        payload["paper_type"] = str(data.paper_type or "formal").strip() or "formal"
+        payload["description"] = (data.description or "").strip() or None
+        payload["requirements"] = (data.requirements or "").strip() or None
+        payload["knowledge_points"] = self._normalize_knowledge_points(data.knowledge_points)
+        payload["exclude_question_ids"] = exclude_question_ids
+        payload["type_configs"] = [item.model_dump(mode="python") for item in type_configs]
+        return AIPaperAssemblyTaskCreateRequest.model_validate(payload)
+
+    def _build_paper_assembly_result_payload(
+        self,
+        *,
+        paper_draft: Optional[AITaskPaperDraft] = None,
+        parsed_request: Optional[AIPaperAssemblyParsedRequest] = None,
+        selection_notes: Optional[Iterable[str]] = None,
+    ) -> dict:
+        normalized_notes = [str(item).strip() for item in (selection_notes or []) if str(item).strip()]
+        return {
+            "paper_draft": paper_draft.model_dump(mode="python") if paper_draft else None,
+            "parse_summary": parsed_request.summary if parsed_request else None,
+            "parsed_request": parsed_request.model_dump(mode="python") if parsed_request else None,
+            "selection_notes": normalized_notes,
+        }
+
     def _validate_question_task_result(self, task: AITask, questions: List[AITaskQuestionDraft]) -> None:
         request_payload = task.request_payload or {}
         allowed_types = [
@@ -482,51 +616,50 @@ class AIService:
             allowed_type_names = "、".join(allowed_types)
             raise ValueError(f"当前任务仅允许题型：{allowed_type_names}")
 
-    def _simulate_paper_assembly_result(self, data: AIPaperAssemblyTaskCreateRequest) -> AITaskPaperDraft:
-        type_configs = data.type_configs or list(self.DEFAULT_TYPE_CONFIGS)
-        candidate_questions = self._load_candidate_questions(
-            police_type_id=data.police_type_id,
-            knowledge_points=data.knowledge_points,
-            exclude_question_ids=data.exclude_question_ids,
-        )
+    def _assemble_paper_from_question_bank(
+        self,
+        data: AIPaperAssemblyTaskCreateRequest,
+        parsed_request: AIPaperAssemblyParsedRequest,
+        current_user_id: int,
+    ) -> tuple[AITaskPaperDraft, List[str]]:
         drafts: List[AITaskQuestionDraft] = []
-        used_question_ids: set[int] = set()
-        knowledge_points = data.knowledge_points or [data.paper_title]
+        used_question_ids = {int(item) for item in (data.exclude_question_ids or []) if item}
+        selection_notes: List[str] = []
 
-        for config in type_configs:
-            typed_candidates = [
-                item
-                for item in candidate_questions
-                if item.type == config.type and item.id not in used_question_ids
-            ]
-            for item_index in range(config.count):
-                if typed_candidates:
-                    question = typed_candidates.pop(0)
-                    used_question_ids.add(question.id)
-                    drafts.append(
-                        self._question_to_draft(
-                            question,
-                            origin="existing",
-                            difficulty=config.difficulty,
-                            score=config.score,
-                        )
-                    )
-                    continue
+        parsed_type_configs = parsed_request.type_configs or [
+            AIPaperAssemblyParsedTypeConfig(
+                type=item.type,
+                count=item.count,
+                difficulty=item.difficulty,
+                score=item.score,
+                knowledge_points=parsed_request.knowledge_points,
+                police_type_id=parsed_request.police_type_id,
+            )
+            for item in (data.type_configs or list(self.DEFAULT_TYPE_CONFIGS))
+        ]
 
-                knowledge_point = knowledge_points[(len(drafts) + item_index) % len(knowledge_points)]
+        for config in parsed_type_configs:
+            selected_questions, notes = self._select_questions_for_assembly_type(
+                config=config,
+                global_police_type_id=parsed_request.police_type_id,
+                global_knowledge_points=parsed_request.knowledge_points,
+                used_question_ids=used_question_ids,
+                current_user_id=current_user_id,
+            )
+            selection_notes.extend(notes)
+            for question in selected_questions:
+                used_question_ids.add(question.id)
                 drafts.append(
-                    self._build_generated_question_draft(
-                        index=len(drafts),
-                        question_type=config.type,
-                        topic=data.paper_title,
-                        knowledge_points=[knowledge_point],
-                        difficulty=config.difficulty or 3,
-                        police_type_id=data.police_type_id,
+                    self._question_to_draft(
+                        question,
+                        origin="existing",
+                        difficulty=None,
                         score=config.score,
-                        source_text=data.requirements,
-                        requirements=f"组卷模式：{data.assembly_mode}",
                     )
                 )
+
+        if not drafts:
+            raise ValueError("未能根据当前条件从题库筛出任何题目")
 
         return self._build_paper_draft(
             title=data.paper_title,
@@ -535,7 +668,129 @@ class AIService:
             duration=data.duration,
             passing_score=data.passing_score,
             questions=drafts,
-        )
+        ), selection_notes
+
+    def _select_questions_for_assembly_type(
+        self,
+        config: AIPaperAssemblyParsedTypeConfig,
+        global_police_type_id: Optional[int],
+        global_knowledge_points: Iterable[str],
+        used_question_ids: set[int],
+        current_user_id: int,
+    ) -> tuple[List[Question], List[str]]:
+        selected_questions: List[Question] = []
+        selection_notes: List[str] = []
+        question_type_label = self._type_label(config.type)
+        target_police_type_id = config.police_type_id if config.police_type_id is not None else global_police_type_id
+        target_keywords = self._normalize_knowledge_points(config.knowledge_points or global_knowledge_points)
+
+        for step_index, step in enumerate(
+            self._build_assembly_relaxation_steps(
+                difficulty=config.difficulty,
+                knowledge_points=target_keywords,
+                police_type_id=target_police_type_id,
+            ),
+            start=1,
+        ):
+            needed = config.count - len(selected_questions)
+            if needed <= 0:
+                break
+
+            candidates = self._query_questions_for_assembly(
+                question_type=config.type,
+                police_type_id=target_police_type_id,
+                difficulties=step["difficulties"],
+                knowledge_points=step["knowledge_points"],
+                exclude_question_ids=used_question_ids | {item.id for item in selected_questions},
+                current_user_id=current_user_id,
+            )
+            if not candidates:
+                continue
+
+            picked_questions = candidates[:needed]
+            selected_questions.extend(picked_questions)
+            if step_index == 1:
+                selection_notes.append(f"{question_type_label}按“{step['label']}”选中 {len(picked_questions)} 道。")
+            else:
+                selection_notes.append(
+                    f"{question_type_label}严格条件不足，已放宽到“{step['label']}”，补入 {len(picked_questions)} 道。"
+                )
+
+        missing_count = config.count - len(selected_questions)
+        if missing_count > 0:
+            selection_notes.append(
+                f"{question_type_label}目标 {config.count} 道，当前仅选到 {len(selected_questions)} 道，仍缺 {missing_count} 道。"
+            )
+
+        return selected_questions, selection_notes
+
+    def _build_assembly_relaxation_steps(
+        self,
+        *,
+        difficulty: Optional[int],
+        knowledge_points: List[str],
+        police_type_id: Optional[int],
+    ) -> List[dict]:
+        steps: List[dict] = []
+        seen_keys = set()
+
+        def add_step(difficulties: Optional[List[int]], use_keywords: bool) -> None:
+            normalized_difficulties = None
+            if difficulties:
+                normalized_difficulties = sorted({int(item) for item in difficulties if 1 <= int(item) <= 5})
+                if not normalized_difficulties:
+                    normalized_difficulties = None
+
+            keywords = knowledge_points if use_keywords else []
+            key = (tuple(normalized_difficulties or []), tuple(keywords))
+            if key in seen_keys:
+                return
+            seen_keys.add(key)
+            steps.append(
+                {
+                    "label": self._describe_assembly_step(police_type_id, normalized_difficulties, bool(keywords)),
+                    "difficulties": normalized_difficulties,
+                    "knowledge_points": keywords,
+                }
+            )
+
+        has_keywords = bool(knowledge_points)
+        if difficulty is not None:
+            add_step([difficulty], has_keywords)
+            if has_keywords:
+                add_step([difficulty], False)
+
+            nearby_difficulties = [item for item in [difficulty - 1, difficulty, difficulty + 1] if 1 <= item <= 5]
+            if len(set(nearby_difficulties)) > 1:
+                add_step(nearby_difficulties, has_keywords)
+                if has_keywords:
+                    add_step(nearby_difficulties, False)
+
+            add_step(None, False)
+            return steps
+
+        add_step(None, has_keywords)
+        if has_keywords:
+            add_step(None, False)
+        return steps
+
+    def _describe_assembly_step(
+        self,
+        police_type_id: Optional[int],
+        difficulties: Optional[List[int]],
+        has_keywords: bool,
+    ) -> str:
+        parts = ["题型"]
+        if police_type_id is not None:
+            parts.append("警种")
+        if difficulties:
+            if len(difficulties) == 1:
+                parts.append(f"难度 {difficulties[0]}")
+            else:
+                parts.append("难度 " + "/".join(str(item) for item in difficulties))
+        if has_keywords:
+            parts.append("知识点关键词")
+        return " + ".join(parts) if len(parts) > 1 else "仅按题型"
 
     def _simulate_paper_generation_result(self, data: AIPaperGenerationTaskCreateRequest) -> AITaskPaperDraft:
         type_configs = data.type_configs or list(self.DEFAULT_TYPE_CONFIGS)
@@ -589,28 +844,53 @@ class AIService:
             questions=self._sort_question_drafts(sanitized_questions),
         )
 
-    def _load_candidate_questions(
+    def _query_questions_for_assembly(
         self,
+        *,
+        question_type: str,
         police_type_id: Optional[int],
+        difficulties: Optional[List[int]],
         knowledge_points: Iterable[str],
         exclude_question_ids: Iterable[int],
+        current_user_id: int,
     ) -> List[Question]:
-        query = self.db.query(Question).options(
-            selectinload(Question.knowledge_points)
-        ).order_by(Question.created_at.desc(), Question.id.desc())
-        if police_type_id:
+        query = (
+            self.db.query(Question)
+            .options(selectinload(Question.knowledge_points))
+            .filter(Question.type == question_type)
+            .order_by(Question.created_at.desc(), Question.id.desc())
+        )
+        if police_type_id is not None:
             query = query.filter(Question.police_type_id == police_type_id)
-        excluded = [item for item in exclude_question_ids if item]
+
+        difficulty_values = [int(item) for item in (difficulties or []) if 1 <= int(item) <= 5]
+        if difficulty_values:
+            query = query.filter(Question.difficulty.in_(difficulty_values))
+
+        excluded = [int(item) for item in exclude_question_ids if int(item or 0) > 0]
         if excluded:
             query = query.filter(~Question.id.in_(excluded))
-        normalized_points = self._normalize_knowledge_points(knowledge_points)
-        if not normalized_points:
-            return deduplicate_questions(query.all())
 
-        matched = deduplicate_questions(query.join(Question.knowledge_points).filter(
-            KnowledgePoint.name.in_(normalized_points)
-        ).all())
-        return matched or deduplicate_questions(query.all())
+        normalized_points = self._normalize_knowledge_points(knowledge_points)
+        if normalized_points:
+            query = query.join(Question.knowledge_points).filter(
+                or_(
+                    *[
+                        KnowledgePoint.name.ilike(self._build_knowledge_point_like_pattern(item), escape="\\")
+                        for item in normalized_points
+                    ]
+                )
+            )
+
+        questions = deduplicate_questions(query.all())
+        scope_context = build_data_scope_context(self.db, current_user_id) if current_user_id else None
+        if scope_context:
+            questions = [
+                question
+                for question in questions
+                if can_view_question_with_context(scope_context, question)
+            ]
+        return questions
 
     def _question_to_draft(
         self,
@@ -818,3 +1098,16 @@ class AIService:
         if answer is None:
             return None
         return str(answer)
+
+    @staticmethod
+    def _build_knowledge_point_like_pattern(keyword: str) -> str:
+        escaped = str(keyword or "").replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        return f"%{escaped}%"
+
+    @staticmethod
+    def _type_label(question_type: str) -> str:
+        return {
+            "single": "单选题",
+            "multi": "多选题",
+            "judge": "判断题",
+        }.get(question_type, question_type)

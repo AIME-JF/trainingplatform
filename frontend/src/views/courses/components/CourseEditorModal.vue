@@ -181,7 +181,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, toRef, watch } from 'vue'
 import { DeleteOutlined, InboxOutlined, PlusOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { createCourse, createCourseTag, getCourse, getCourseTags, updateCourse } from '@/api/course'
@@ -189,6 +189,7 @@ import { uploadFile } from '@/api/media'
 import { getUsers } from '@/api/user'
 import AdmissionScopeSelector from '@/views/exam/components/AdmissionScopeSelector.vue'
 import { COURSE_CATEGORIES } from '@/mock/courses'
+import { useCreatableTagSelect } from '@/utils/creatableTagSelect'
 
 const props = defineProps({
   open: {
@@ -218,12 +219,7 @@ const submitting = ref(false)
 const uploadPercent = ref(0)
 const currentStep = ref(0)
 const instructorOptions = ref([])
-const tagOptions = ref([])
-const tagSearching = ref(false)
 let chapterSeed = 0
-let tagSearchTimer = null
-const creatingTagNames = new Set()
-const knownTagNames = new Set()
 
 const form = reactive({
   title: '',
@@ -237,18 +233,24 @@ const form = reactive({
   scopeTargetIds: [],
   chapters: [],
 })
+const formTagsRef = toRef(form, 'tags')
+const {
+  tagSearching,
+  mergedTagOptions,
+  normalizeTags,
+  fetchTagOptions: loadTagOptions,
+  handleTagSearch,
+  handleTagChange,
+} = useCreatableTagSelect(formTagsRef, {
+  fetchTags: getCourseTags,
+  createTag: createCourseTag,
+  createErrorMessage: (tagName, error) => error?.message || `标签“${tagName}”创建失败`,
+})
 
 const isEditing = computed(() => props.courseId !== null && props.courseId !== undefined && props.courseId !== '')
 const difficultyLabel = computed(() => {
   const labels = ['', '初级', '初中级', '中级', '中高级', '高级']
   return labels[Math.round(form.difficulty)] || ''
-})
-const mergedTagOptions = computed(() => {
-  const values = new Set([
-    ...tagOptions.value.map((item) => item.value),
-    ...(form.tags || []).map((item) => String(item || '').trim()).filter(Boolean),
-  ])
-  return Array.from(values).map((value) => ({ value, label: value }))
 })
 
 function createChapter(overrides = {}) {
@@ -279,30 +281,6 @@ function resetForm() {
   form.scopeType = 'all'
   form.scopeTargetIds = []
   form.chapters = [createChapter()]
-}
-
-function normalizeTags(tags) {
-  const seen = new Set()
-  return (tags || [])
-    .map((item) => String(item || '').trim())
-    .filter((item) => {
-      if (!item || seen.has(item)) {
-        return false
-      }
-      seen.add(item)
-      return true
-    })
-}
-
-function rememberTagNames(names) {
-  const normalizedTags = normalizeTags(names)
-  normalizedTags.forEach((name) => {
-    knownTagNames.add(name)
-  })
-  tagOptions.value = normalizeTags([
-    ...tagOptions.value.map((item) => item.value),
-    ...normalizedTags,
-  ]).map((value) => ({ value, label: value }))
 }
 
 function detectContentType(fileName = '', mimeType = '') {
@@ -351,9 +329,9 @@ function readVideoDuration(file) {
 }
 
 async function ensureOptionsLoaded() {
-  const [instructorResult, tagResult] = await Promise.allSettled([
+  const [instructorResult] = await Promise.allSettled([
     getUsers({ role: 'instructor', size: -1 }),
-    getCourseTags(),
+    loadTagOptions(),
   ])
 
   if (instructorResult.status === 'fulfilled') {
@@ -364,62 +342,6 @@ async function ensureOptionsLoaded() {
     }))
   } else {
     instructorOptions.value = []
-  }
-
-  if (tagResult.status === 'fulfilled') {
-    const items = tagResult.value || []
-    rememberTagNames(items.map((item) => item.name))
-  } else {
-    tagOptions.value = []
-  }
-}
-
-async function fetchTagOptions(search = '') {
-  tagSearching.value = true
-  try {
-    const items = await getCourseTags({
-      search: search?.trim() || undefined,
-    })
-    const names = (items || []).map((item) => item.name)
-    rememberTagNames(names)
-    if (search?.trim()) {
-      tagOptions.value = normalizeTags([
-        ...form.tags,
-        ...names,
-      ]).map((value) => ({ value, label: value }))
-    }
-  } finally {
-    tagSearching.value = false
-  }
-}
-
-function handleTagSearch(value) {
-  clearTimeout(tagSearchTimer)
-  tagSearchTimer = setTimeout(() => {
-    fetchTagOptions(value).catch(() => {})
-  }, 250)
-}
-
-async function handleTagChange(values) {
-  const normalizedTags = normalizeTags(values)
-  form.tags = normalizedTags
-
-  const missingTagNames = normalizedTags.filter(
-    (name) => !knownTagNames.has(name) && !creatingTagNames.has(name),
-  )
-
-  for (const tagName of missingTagNames) {
-    creatingTagNames.add(tagName)
-    try {
-      const createdTag = await createCourseTag({ name: tagName })
-      rememberTagNames([createdTag.name])
-      form.tags = normalizeTags([...form.tags, createdTag.name])
-    } catch (error) {
-      form.tags = form.tags.filter((item) => item !== tagName)
-      message.error(error?.message || `标签“${tagName}”创建失败`)
-    } finally {
-      creatingTagNames.delete(tagName)
-    }
   }
 }
 

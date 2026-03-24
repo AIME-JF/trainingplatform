@@ -39,7 +39,18 @@
 
           <a-col :span="8">
             <a-form-item label="标签">
-              <a-select v-model:value="form.tags" mode="tags" />
+              <a-select
+                v-model:value="form.tags"
+                mode="tags"
+                show-search
+                :options="mergedTagOptions"
+                :filter-option="false"
+                :loading="tagSearching"
+                placeholder="支持搜索已有标签，输入后回车可直接创建新标签"
+                style="width: 100%"
+                @search="handleTagSearch"
+                @change="handleTagChange"
+              />
             </a-form-item>
           </a-col>
         </a-row>
@@ -80,14 +91,15 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref, toRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message, Upload } from 'ant-design-vue'
 import { uploadFile } from '@/api/media'
-import { createResource } from '@/api/resource'
+import { createResource, createResourceTag, getResourceTags } from '@/api/resource'
 import { submitResource } from '@/api/review'
 import { useAuthStore } from '@/stores/auth'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
+import { useCreatableTagSelect } from '@/utils/creatableTagSelect'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -110,10 +122,26 @@ const form = reactive({
   tags: [],
   visibilityScopes: [],
 })
+const {
+  tagSearching,
+  mergedTagOptions,
+  normalizeTags,
+  fetchTagOptions: loadTagOptions,
+  handleTagSearch,
+  handleTagChange,
+} = useCreatableTagSelect(toRef(form, 'tags'), {
+  fetchTags: getResourceTags,
+  createTag: createResourceTag,
+  createErrorMessage: (tagName, error) => error?.message || `标签“${tagName}”创建失败`,
+})
 
 const currentAccept = computed(() => {
   const extList = ALLOWED_EXTENSIONS[form.contentType] || []
   return extList.map((ext) => `.${ext}`).join(',')
+})
+
+onMounted(() => {
+  loadTagOptions().catch(() => {})
 })
 
 
@@ -207,7 +235,7 @@ async function createDraft() {
     summary: form.summary,
     contentType: form.contentType,
     visibilityType: form.visibilityType,
-    tags: form.tags,
+    tags: normalizeTags(form.tags),
     visibilityScopes: form.visibilityScopes,
     mediaLinks: uploadedFiles.map((file, index) => ({
       mediaFileId: file.id,

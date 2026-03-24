@@ -2,7 +2,7 @@
   <ai-task-tabs-layout
     v-model:active-tab="activeTab"
     title="AI 自动组卷"
-    subtitle="基于现有题库筛题生成试卷草稿，可调整题目后确认进入试卷仓库"
+    subtitle="先解析自然语言组卷要求，再按题库条件筛题并逐级放宽，生成可编辑的试卷草稿"
     :task-list="taskList"
     :task-loading="taskLoading"
     :active-task-id="activeTask?.id || null"
@@ -77,8 +77,14 @@
             </div>
           </div>
         </a-form-item>
-        <a-form-item label="补充要求">
-          <a-textarea v-model:value="taskForm.requirements" :rows="3" :maxlength="1000" show-count />
+        <a-form-item label="自然语言组卷要求">
+          <a-textarea
+            v-model:value="taskForm.requirements"
+            :rows="4"
+            :maxlength="1000"
+            show-count
+            placeholder="例：围绕执法规范和现场处置组一套考试卷，单选偏多，难度中等，知识点尽量覆盖盘查、讯问、证据固定"
+          />
         </a-form-item>
         <permissions-tooltip
           :allowed="canCreateTaskPermission"
@@ -132,18 +138,65 @@
           :confirmed-at="activeTask.confirmedAt"
         />
 
+        <a-alert
+          v-if="activeTask.errorMessage"
+          type="error"
+          show-icon
+          :message="activeTask.errorMessage"
+          style="margin-top: 12px;"
+        />
+
         <div class="detail-section">
           <div class="detail-section-title">任务请求</div>
-          <a-descriptions :column="2" size="small" bordered>
-            <a-descriptions-item label="组卷模式">{{ modeLabels[activeTask.requestPayload.assemblyMode] }}</a-descriptions-item>
-            <a-descriptions-item label="知识点">{{ activeTask.requestPayload.knowledgePoints?.join('、') || '未设置' }}</a-descriptions-item>
-            <a-descriptions-item label="题型配置">
-              {{ formatTypeConfigs(activeTask.requestPayload.typeConfigs) }}
+            <a-descriptions :column="2" size="small" bordered>
+              <a-descriptions-item label="组卷模式">{{ modeLabels[activeTask.requestPayload.assemblyMode] }}</a-descriptions-item>
+              <a-descriptions-item label="知识点">{{ activeTask.requestPayload.knowledgePoints?.join('、') || '未设置' }}</a-descriptions-item>
+              <a-descriptions-item label="题型配置">
+                {{ formatTypeConfigs(activeTask.requestPayload.typeConfigs) }}
+              </a-descriptions-item>
+              <a-descriptions-item label="警种">
+                {{ findPoliceTypeName(activeTask.requestPayload.policeTypeId) || '未设置' }}
+              </a-descriptions-item>
+              <a-descriptions-item label="自然语言要求" :span="2">
+                {{ activeTask.requestPayload.requirements || '未填写' }}
+              </a-descriptions-item>
+            </a-descriptions>
+        </div>
+
+        <div v-if="activeTask.parseSummary || activeTask.parsedRequest || activeTask.selectionNotes?.length" class="detail-section">
+          <div class="detail-section-title">解析与选题</div>
+          <a-alert v-if="activeTask.parseSummary" type="info" show-icon :message="activeTask.parseSummary" />
+          <a-descriptions
+            v-if="activeTask.parsedRequest"
+            :column="2"
+            size="small"
+            bordered
+            style="margin-top: 12px;"
+          >
+            <a-descriptions-item label="解析警种">
+              {{ findPoliceTypeName(activeTask.parsedRequest.policeTypeId) || activeTask.parsedRequest.policeTypeId || '未限制' }}
             </a-descriptions-item>
-            <a-descriptions-item label="警种">
-              {{ findPoliceTypeName(activeTask.requestPayload.policeTypeId) || '未设置' }}
+            <a-descriptions-item label="解析知识点">
+              {{ activeTask.parsedRequest.knowledgePoints?.join('、') || '未限制' }}
+            </a-descriptions-item>
+            <a-descriptions-item label="解析题型配置" :span="2">
+              {{ formatParsedTypeConfigs(activeTask.parsedRequest.typeConfigs) }}
+            </a-descriptions-item>
+            <a-descriptions-item label="AI 理解" :span="2">
+              {{ activeTask.parsedRequest.understoodItems?.join('；') || '无' }}
+            </a-descriptions-item>
+            <a-descriptions-item label="解析告警" :span="2">
+              {{ activeTask.parsedRequest.warnings?.join('；') || '无' }}
             </a-descriptions-item>
           </a-descriptions>
+          <a-alert v-if="activeTask.selectionNotes?.length" type="warning" show-icon style="margin-top: 12px;">
+            <template #message>选题记录</template>
+            <template #description>
+              <div class="note-list">
+                <div v-for="(item, index) in activeTask.selectionNotes" :key="`${index}-${item}`">{{ item }}</div>
+              </div>
+            </template>
+          </a-alert>
         </div>
 
         <div class="detail-section">
@@ -313,7 +366,7 @@ async function handleCreateTask() {
       ...taskForm,
       knowledgePoints: parseKnowledgePoints(),
     })
-    message.success('任务已创建')
+    message.success('任务已创建，已加入处理队列')
     resetTaskForm()
     await loadTasks()
     await loadTaskDetail(result.id)
@@ -405,6 +458,18 @@ function formatTypeConfigs(configs = []) {
   return configs.map((item) => `${typeLabels[item.type]} ${item.count}题`).join(' / ')
 }
 
+function formatParsedTypeConfigs(configs = []) {
+  return configs
+    .map((item) => {
+      const parts = [`${typeLabels[item.type] || item.type} ${item.count}题`]
+      if (item.difficulty) parts.push(`难度${item.difficulty}`)
+      if (item.score) parts.push(`单题${item.score}分`)
+      if (item.knowledgePoints?.length) parts.push(`关键词：${item.knowledgePoints.join('、')}`)
+      return parts.join('，')
+    })
+    .join(' / ')
+}
+
 function findPoliceTypeName(id) {
   return policeTypeOptions.value.find((item) => item.id === id)?.name
 }
@@ -462,5 +527,11 @@ onMounted(() => {
 .config-type {
   color: #595959;
   font-size: 13px;
+}
+
+.note-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 </style>

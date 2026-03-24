@@ -80,6 +80,7 @@ from .report import (
 # AI功能
 from .ai import (
     AIQuestionTaskCreateRequest, AIQuestionTaskUpdateRequest,
+    AIPaperAssemblyParsedRequest, AIPaperAssemblyParsedTypeConfig,
     AIPaperAssemblyTaskCreateRequest, AIPaperAssemblyTypeConfig,
     AIPaperGenerationTaskCreateRequest, AIPaperTaskUpdateRequest,
     AIScheduleTaskCreateRequest, AIScheduleTaskConstraintPayload,
@@ -105,6 +106,7 @@ from .media import MediaFileResponse
 from .notice import NoticeCreate, NoticeUpdate, NoticeResponse
 from .resource import (
     ResourceCreate, ResourceUpdate,
+    ResourceTagCreate, ResourceTagResponse,
     ResourceMediaLinkPayload, ResourceMediaLinkResponse,
     ResourceListItemResponse, ResourceDetailResponse,
     CourseResourceBindRequest, TrainingResourceBindRequest
@@ -180,6 +182,7 @@ __all__ = [
     "TrainingTrendItem", "CityAttendanceItem", "CityCompletionItem",
     # AI功能
     "AIQuestionTaskCreateRequest", "AIQuestionTaskUpdateRequest",
+    "AIPaperAssemblyParsedRequest", "AIPaperAssemblyParsedTypeConfig",
     "AIPaperAssemblyTaskCreateRequest", "AIPaperAssemblyTypeConfig",
     "AIPaperGenerationTaskCreateRequest", "AIPaperTaskUpdateRequest",
     "AIScheduleTaskCreateRequest", "AIScheduleTaskConstraintPayload",
@@ -204,6 +207,7 @@ __all__ = [
     "NoticeCreate", "NoticeUpdate", "NoticeResponse",
     # 资源库
     "ResourceCreate", "ResourceUpdate",
+    "ResourceTagCreate", "ResourceTagResponse",
     "ResourceMediaLinkPayload", "ResourceMediaLinkResponse",
     "ResourceListItemResponse", "ResourceDetailResponse",
     "CourseResourceBindRequest", "TrainingResourceBindRequest",

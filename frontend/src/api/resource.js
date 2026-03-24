@@ -8,6 +8,14 @@ export function getResource(id) {
   return request.get(`/resources/${id}`)
 }
 
+export function getResourceTags(params) {
+  return request.get('/resources/tags', { params })
+}
+
+export function createResourceTag(data) {
+  return request.post('/resources/tags', data)
+}
+
 export function createResource(data) {
   return request.post('/resources', data)
 }

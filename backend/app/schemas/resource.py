@@ -12,6 +12,19 @@ class ResourceMediaLinkPayload(BaseModel):
     sort_order: int = Field(0, description='排序')
 
 
+class ResourceTagResponse(BaseModel):
+    """资源标签响应"""
+    id: int
+    name: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ResourceTagCreate(BaseModel):
+    """资源标签创建"""
+    name: str = Field(..., min_length=1, max_length=50, description='标签名称')
+
+
 class ResourceCreate(BaseModel):
     title: str = Field(..., max_length=200, description='资源标题')
     summary: Optional[str] = Field(None, description='资源摘要')

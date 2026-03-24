@@ -18,7 +18,8 @@ from app.models.review import ResourceReviewTask
 from app.schemas import PaginatedResponse
 from app.schemas.resource import (
     ResourceCreate, ResourceUpdate, ResourceListItemResponse, ResourceDetailResponse,
-    ResourceMediaLinkResponse, CourseResourceBindRequest, TrainingResourceBindRequest
+    ResourceMediaLinkResponse, ResourceTagResponse,
+    CourseResourceBindRequest, TrainingResourceBindRequest
 )
 from config import settings
 
@@ -102,6 +103,22 @@ class ResourceService:
             total=total,
             items=items,
         )
+
+    def list_resource_tags(self, search: Optional[str] = None) -> List[ResourceTagResponse]:
+        """获取全部资源标签。"""
+        query = self.db.query(ResourceTag)
+        keyword = str(search or '').strip()
+        if keyword:
+            query = query.filter(ResourceTag.name.contains(keyword))
+        tags = query.order_by(ResourceTag.name.asc()).all()
+        return [ResourceTagResponse.model_validate(tag) for tag in tags]
+
+    def create_resource_tag(self, name: str) -> ResourceTagResponse:
+        """创建资源标签。若标签已存在则直接返回。"""
+        tag = self._get_or_create_resource_tag(name)
+        self.db.commit()
+        self.db.refresh(tag)
+        return ResourceTagResponse.model_validate(tag)
 
     def create_resource(self, data: ResourceCreate, current_user_id: int) -> ResourceDetailResponse:
         user_ctx = self._get_user_context(current_user_id)
@@ -405,18 +422,33 @@ class ResourceService:
     def _sync_tags(self, resource: Resource, tags: List[str]):
         self.db.query(ResourceTagRelation).filter(ResourceTagRelation.resource_id == resource.id).delete()
         cleaned = []
-        for t in (tags or []):
-            name = (t or '').strip()
+        for raw_name in (tags or []):
+            name = self._normalize_tag_name(raw_name)
             if name and name not in cleaned:
                 cleaned.append(name)
 
         for name in cleaned:
-            tag = self.db.query(ResourceTag).filter(ResourceTag.name == name).first()
-            if not tag:
-                tag = ResourceTag(name=name)
-                self.db.add(tag)
-                self.db.flush()
+            tag = self._get_or_create_resource_tag(name)
             self.db.add(ResourceTagRelation(resource_id=resource.id, tag_id=tag.id))
+
+    def _normalize_tag_name(self, raw_name: Optional[str]) -> str:
+        return str(raw_name or '').strip()
+
+    def _get_or_create_resource_tag(self, raw_name: Optional[str]) -> ResourceTag:
+        name = self._normalize_tag_name(raw_name)
+        if not name:
+            raise ValueError('标签名称不能为空')
+        if len(name) > 50:
+            raise ValueError('标签名称长度不能超过50个字符')
+
+        tag = self.db.query(ResourceTag).filter(ResourceTag.name == name).first()
+        if tag:
+            return tag
+
+        tag = ResourceTag(name=name)
+        self.db.add(tag)
+        self.db.flush()
+        return tag
 
     def _sync_media_links(self, resource: Resource, media_links: List[Dict[str, Any]]):
         self.db.query(ResourceMediaLink).filter(ResourceMediaLink.resource_id == resource.id).delete()
