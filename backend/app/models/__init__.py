@@ -15,9 +15,10 @@ from .training import (
     TrainingCourseChangeLog,
 )
 from .exam import (
-    Question, ExamPaper, ExamPaperQuestion,
+    KnowledgePoint, Question, ExamPaper, ExamPaperQuestion,
     AdmissionExam, AdmissionExamRecord,
     Exam, ExamQuestion, ExamRecord,
+    question_knowledge_point_relations,
 )
 from .ai_task import AITask
 from .personal_training_plan_snapshot import PersonalTrainingPlanSnapshot
@@ -55,9 +56,10 @@ __all__ = [
     "Training", "TrainingBase", "TrainingCourse", "Enrollment", "CheckinRecord", "ScheduleItem", "TrainingHistory",
     "TrainingCourseChangeLog",
     # 考试相关
-    "Question", "ExamPaper", "ExamPaperQuestion",
+    "KnowledgePoint", "Question", "ExamPaper", "ExamPaperQuestion",
     "AdmissionExam", "AdmissionExamRecord",
     "Exam", "ExamQuestion", "ExamRecord",
+    "question_knowledge_point_relations",
     "AITask",
     "PersonalTrainingPlanSnapshot",
     # 证书

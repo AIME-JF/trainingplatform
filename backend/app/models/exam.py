@@ -9,12 +9,42 @@ from sqlalchemy import (
     Integer,
     JSON,
     String,
+    Table,
     Text,
 )
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
 from app.database import Base
+
+
+question_knowledge_point_relations = Table(
+    "question_knowledge_point_relations",
+    Base.metadata,
+    Column("question_id", Integer, ForeignKey("questions.id", ondelete="CASCADE"), primary_key=True),
+    Column("knowledge_point_id", Integer, ForeignKey("knowledge_points.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
+class KnowledgePoint(Base):
+    """知识点表"""
+
+    __tablename__ = "knowledge_points"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False, unique=True, index=True, comment="知识点名称")
+    description = Column(Text, nullable=True, comment="知识点描述")
+    is_active = Column(Boolean, default=True, comment="是否启用")
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True, comment="创建人ID")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), comment="更新时间")
+
+    creator = relationship("User", foreign_keys=[created_by])
+    questions = relationship(
+        "Question",
+        secondary=question_knowledge_point_relations,
+        back_populates="knowledge_points",
+    )
 
 
 class Question(Base):
@@ -29,7 +59,6 @@ class Question(Base):
     answer = Column(JSON, nullable=False, comment="答案 string 或 string[]")
     explanation = Column(Text, nullable=True, comment="解析")
     difficulty = Column(Integer, default=1, comment="难度1-5")
-    knowledge_point = Column(String(200), nullable=True, comment="知识点")
     police_type_id = Column(Integer, ForeignKey("police_types.id"), nullable=True, comment="警种ID")
     score = Column(Integer, default=1, comment="分值")
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True, comment="创建人ID")
@@ -38,6 +67,11 @@ class Question(Base):
 
     creator = relationship("User", foreign_keys=[created_by])
     police_type = relationship("PoliceType", foreign_keys=[police_type_id])
+    knowledge_points = relationship(
+        "KnowledgePoint",
+        secondary=question_knowledge_point_relations,
+        back_populates="questions",
+    )
 
 
 class ExamPaper(Base):
@@ -82,7 +116,7 @@ class ExamPaperQuestion(Base):
     answer = Column(JSON, nullable=True, comment="答案快照")
     explanation = Column(Text, nullable=True, comment="解析快照")
     score = Column(Integer, default=1, comment="分值快照")
-    knowledge_point = Column(String(200), nullable=True, comment="知识点快照")
+    knowledge_points = Column(JSON, nullable=True, comment="知识点快照")
 
     paper = relationship("ExamPaper", back_populates="paper_questions")
     question = relationship("Question")
@@ -185,7 +219,7 @@ class ExamQuestion(Base):
     answer = Column(JSON, nullable=False, comment="答案快照")
     explanation = Column(Text, nullable=True, comment="解析快照")
     score = Column(Integer, default=1, comment="分值快照")
-    knowledge_point = Column(String(200), nullable=True, comment="知识点快照")
+    knowledge_points = Column(JSON, nullable=True, comment="知识点快照")
 
     exam = relationship("Exam", foreign_keys=[exam_id])
 

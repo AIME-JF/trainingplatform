@@ -9,6 +9,7 @@ from .course import router as course_router
 from .dashboard import router as dashboard_router
 from .department import router as department_router
 from .exam import router as exam_router
+from .knowledge_point import router as knowledge_point_router
 from .media import router as media_router
 from .notice import router as notice_router
 from .permission import router as permission_router
@@ -32,6 +33,7 @@ all_routers = [
     dashboard_router,
     course_router,
     exam_router,
+    knowledge_point_router,
     question_router,
     training_router,
     training_base_router,
@@ -60,6 +62,7 @@ __all__ = [
     "dashboard_router",
     "course_router",
     "exam_router",
+    "knowledge_point_router",
     "question_router",
     "training_router",
     "training_base_router",

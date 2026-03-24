@@ -87,9 +87,11 @@
               <span class="expand-label">解析：</span>
               <span>{{ record.explanation }}</span>
             </div>
-            <div class="expand-item" v-if="record.knowledgePoint">
+            <div class="expand-item" v-if="record.knowledgePointNames?.length">
               <span class="expand-label">知识点：</span>
-              <span>{{ record.knowledgePoint }}</span>
+              <span v-for="item in record.knowledgePointNames" :key="item" class="expand-tag">
+                {{ item }}
+              </span>
             </div>
             <div class="expand-item" v-if="record.policeTypeName">
               <span class="expand-label">警种：</span>
@@ -107,6 +109,16 @@
           </template>
           <template v-else-if="column.key === 'difficulty'">
             <a-tag :color="difficultyColors[record.difficulty]">{{ difficultyLabels[record.difficulty] }}</a-tag>
+          </template>
+          <template v-else-if="column.key === 'knowledgePointNames'">
+            <div class="knowledge-cell">
+              <a-tag v-for="item in (record.knowledgePointNames || []).slice(0, 3)" :key="item">
+                {{ item }}
+              </a-tag>
+              <span v-if="(record.knowledgePointNames || []).length > 3" class="knowledge-more">
+                +{{ record.knowledgePointNames.length - 3 }}
+              </span>
+            </div>
           </template>
           <template v-else-if="column.key === 'score'">
             {{ record.score || 0 }} 分
@@ -138,6 +150,7 @@
       :title="editingQuestion ? '编辑题目' : '新增题目'"
       :question="editingQuestion"
       :police-type-options="policeTypeOptions"
+      :knowledge-point-options="knowledgePointOptions"
       @submit="handleSubmitQuestion"
     />
   </div>
@@ -149,6 +162,7 @@ import { message, Modal } from 'ant-design-vue'
 import { PlusOutlined, RobotOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { createQuestion, deleteQuestion, getQuestions, updateQuestion } from '@/api/question'
+import { getKnowledgePoints } from '@/api/knowledgePoint'
 import { getPoliceTypes } from '@/api/user'
 import QuestionFormModal from './components/QuestionFormModal.vue'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
@@ -159,6 +173,7 @@ const modalOpen = ref(false)
 const editingQuestion = ref(null)
 const questionList = ref([])
 const policeTypeOptions = ref([])
+const knowledgePointOptions = ref([])
 const searchText = ref('')
 const filterType = ref('all')
 const filterDifficulty = ref('all')
@@ -172,6 +187,7 @@ const columns = [
   { title: '题干', key: 'content' },
   { title: '题型', key: 'type', width: 110 },
   { title: '难度', key: 'difficulty', width: 100 },
+  { title: '知识点', key: 'knowledgePointNames', width: 220 },
   { title: '分值', key: 'score', width: 90 },
   { title: '警种', dataIndex: 'policeTypeName', key: 'policeTypeName', width: 120 },
   { title: '操作', key: 'action', width: 120 },
@@ -231,6 +247,9 @@ async function loadQuestions() {
     })
     questionList.value = (result.items || []).map((item) => ({
       ...item,
+      knowledgePointNames: item.knowledgePointNames
+        || item.knowledgePoints?.map((point) => (typeof point === 'string' ? point : point?.name)).filter(Boolean)
+        || (item.knowledgePoint ? [item.knowledgePoint] : []),
       options: item.options || (item.type === 'judge'
         ? [{ key: 'A', text: '正确' }, { key: 'B', text: '错误' }]
         : []),
@@ -272,6 +291,15 @@ async function loadPoliceTypeOptions() {
   }
 }
 
+async function loadKnowledgePointOptions() {
+  try {
+    const result = await getKnowledgePoints({ size: -1, isActive: true })
+    knowledgePointOptions.value = result.items || result || []
+  } catch {
+    knowledgePointOptions.value = []
+  }
+}
+
 async function handleSubmitQuestion(payload) {
   const allowed = editingQuestion.value?.id ? canUpdateQuestion.value : canCreateQuestion.value
   if (!allowed) return
@@ -285,7 +313,7 @@ async function handleSubmitQuestion(payload) {
     }
     modalOpen.value = false
     editingQuestion.value = null
-    await Promise.all([loadQuestions(), loadStats()])
+    await Promise.all([loadQuestions(), loadStats(), loadKnowledgePointOptions()])
   } catch (error) {
     message.error(error.message || '保存失败')
   }
@@ -323,6 +351,7 @@ onMounted(() => {
   loadQuestions()
   loadStats()
   loadPoliceTypeOptions()
+  loadKnowledgePointOptions()
 })
 </script>
 
@@ -375,6 +404,17 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.knowledge-cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.knowledge-more {
+  color: #8c8c8c;
+  font-size: 12px;
 }
 
 .expand-row {

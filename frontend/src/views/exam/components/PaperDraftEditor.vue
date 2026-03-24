@@ -61,7 +61,7 @@
           <div class="question-foot">
             <span>分值 {{ item.score || 0 }}</span>
             <span>难度 {{ item.difficulty || 3 }}</span>
-            <span>{{ item.knowledgePoint || '未设置知识点' }}</span>
+            <span>{{ formatKnowledgePoints(item.knowledgePoints) }}</span>
             <a-space v-if="!disabled && allowQuestionEdit">
               <a-button type="link" size="small" @click="emit('edit-question', item, index)">编辑</a-button>
               <a-button type="link" danger size="small" @click="removeQuestion(index)">移除</a-button>
@@ -82,7 +82,7 @@
       @cancel="pickerVisible = false"
     >
       <div class="picker-toolbar">
-        <a-input-search v-model:value="pickerSearch" placeholder="搜索题干" style="width:260px" @search="loadPickerQuestions" />
+        <a-input-search v-model:value="pickerSearch" placeholder="搜索题干或知识点" style="width:260px" @search="loadPickerQuestions" />
         <a-select v-model:value="pickerType" style="width:120px" @change="loadPickerQuestions">
           <a-select-option value="all">全部题型</a-select-option>
           <a-select-option value="single">单选题</a-select-option>
@@ -137,6 +137,7 @@ const pickerSelectedKeys = ref([])
 const pickerColumns = [
   { title: '题干', dataIndex: 'content', key: 'content' },
   { title: '题型', dataIndex: 'type', key: 'type', width: 90 },
+  { title: '知识点', dataIndex: 'knowledgePointNames', key: 'knowledgePointNames', width: 220 },
   { title: '分值', dataIndex: 'score', key: 'score', width: 80 },
 ]
 
@@ -181,7 +182,12 @@ async function loadPickerQuestions() {
       search: pickerSearch.value || undefined,
       type: pickerType.value !== 'all' ? pickerType.value : undefined,
     })
-    pickerQuestions.value = result.items || []
+    pickerQuestions.value = (result.items || []).map((item) => ({
+      ...item,
+      knowledgePointNames: item.knowledgePointNames
+        || item.knowledgePoints?.map((point) => (typeof point === 'string' ? point : point?.name)).filter(Boolean)
+        || [],
+    }))
     pickerPagination.total = result.total || 0
   } catch (error) {
     message.error(error.message || '加载题库失败')
@@ -210,6 +216,10 @@ function confirmQuestionPick() {
 }
 
 function mapQuestionToDraft(question) {
+  const knowledgePoints = question.knowledgePointNames
+    || question.knowledgePoints?.map((item) => (typeof item === 'string' ? item : item?.name)).filter(Boolean)
+    || (question.knowledgePoint ? [question.knowledgePoint] : [])
+    || []
   return {
     tempId: `question-${question.id}`,
     sourceQuestionId: question.id,
@@ -222,10 +232,18 @@ function mapQuestionToDraft(question) {
     answer: question.answer,
     explanation: question.explanation,
     difficulty: Number(question.difficulty || 3),
-    knowledgePoint: question.knowledgePoint,
+    knowledgePoints,
+    knowledgePointNames: knowledgePoints,
     policeTypeId: question.policeTypeId,
     score: Number(question.score || 1),
   }
+}
+
+function formatKnowledgePoints(points = []) {
+  const values = Array.isArray(points)
+    ? points.map((item) => (typeof item === 'string' ? item : item?.name)).filter(Boolean)
+    : (points ? [String(points)] : [])
+  return values.length ? values.join('、') : '未设置知识点'
 }
 </script>
 

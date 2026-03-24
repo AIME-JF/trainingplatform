@@ -54,7 +54,7 @@
 - `confirmed`
 - `failed`
 
-当前实现差异：
+#### 当前实现差异
 
 - `AI 智能出题`
   - 创建任务后写入 `AITask`
@@ -64,8 +64,8 @@
 - `AI 排课建议`
   - 创建任务后写入 `AITask`
   - 通过 `app.tasks.ai_schedule` 进入 Celery 队列
-  - 生成主方案、备选方案、冲突清单
-  - 确认后直接回写培训班课程与课次
+  - 采用“两阶段任务流”：先解析规则，再确认规则，再生成课表
+  - 任务详情内可保存主方案、删除任务、删除任务中的课次，最终确认后回写培训班课程与课次
 - `AI 自动组卷`
   - 也是任务化接口
   - 但创建任务时同步生成试卷草稿
@@ -78,6 +78,27 @@
   - 创建任务时同步生成画像与方案
   - 确认后写入 `PersonalTrainingPlanSnapshot`
   - 同一培训班、同一学员按 `version_no` 递增保存快照
+
+#### AI 排课当前流程
+
+当前智能排课不是单次同步调用，而是任务流：
+
+1. 创建任务
+2. 后台异步解析自然语言规则
+3. 任务进入“待确认规则”
+4. 用户在任务详情内确认或修改结构化规则
+5. 后台异步生成课表
+6. 用户在任务详情内预览主方案、备选方案、冲突清单和周历视图
+7. 用户保存修改并确认应用
+
+当前支持的排课相关能力：
+
+- 预览排课解析结果：`POST /api/v1/ai/schedule-tasks/preview`
+- 在任务详情内确认规则：`POST /api/v1/ai/schedule-tasks/{task_id}/confirm-rules`
+- 更新主方案：`PUT /api/v1/ai/schedule-tasks/{task_id}/result`
+- 删除排课任务：`DELETE /api/v1/ai/schedule-tasks/{task_id}`
+- 确认应用：`POST /api/v1/ai/schedule-tasks/{task_id}/confirm`
+- 是否覆盖当前课表：`overwrite_existing_schedule`
 
 AI 运行时配置：
 
@@ -112,6 +133,7 @@ AI 运行时配置：
   - 任务级规则覆盖
   - 固定课程键锁定
   - 主方案 / 备选方案 / 冲突清单
+  - 教官 / 场地不可用、禁排时段、课程类型时段偏好、考前强化等结构化约束
 - AI 个训任务支持：
   - 按学员画像生成目标、动作、资源推荐
   - 确认后落版本化快照
@@ -200,6 +222,7 @@ AI 运行时配置：
 | 日志 | Loguru |
 | Excel 导入导出 | openpyxl |
 | AI | OpenAI 兼容客户端、Ollama |
+
 
 ## 目录结构
 
@@ -473,6 +496,9 @@ python migrate.py generate "your message"
 - 培训域更新接口已拆成两条：
   - `PUT /api/v1/trainings/{id}`：要求 `UPDATE_TRAINING`，且必须是当前班主任
   - `PUT /api/v1/trainings/{id}/manage`：要求 `MANAGE_TRAINING`
+- 智能排课页面和相关接口权限已与培训班管理口径对齐：
+  - 路由层要求 `UPDATE_TRAINING` 或 `MANAGE_TRAINING`
+  - 任务访问和操作继续校验具体培训班管理权限
 - 课程学习情况接口：`GET /api/v1/courses/{id}/learning-status`
   - 课程创建者、课程主讲教官可直接查看
   - 其余用户需具备 `GET_COURSE_LEARNING_STATUS`
@@ -544,6 +570,7 @@ python migrate.py generate "your message"
 - `AI 智能出题`、`AI 排课建议` 需要 Worker；只启动 API 时任务不会自动完成。
 - AI 智能出题依赖系统配置组 `ai` 中的模型配置；如果 `default_text_model`、`api_base_url` 或 `api_key` 未配置，任务会失败。
 - AI 排课自然语言解析未配置模型或调用失败时，会在任务详情里留下 `parse_warnings`，并按规则兜底继续生成。
+- 智能排课当前是两阶段异步任务流，不是同步接口。
 - `AI 自动组卷`、`AI 自动生成试卷`、`AI 个训方案` 当前不是异步队列任务。
 - 培训二维码签到依赖 Redis；Redis 不可用时，扫码签到链路不可用。
 - `checkin_closed` 的真实语义是“课程仍在进行，但签到窗口已结束”，前端应按“进行中”理解。

@@ -97,6 +97,10 @@ def init_permissions():
                 {"path": "/api/v1/questions/{id}/update", "code": "UPDATE_QUESTION", "description": "更新题目"},
                 {"path": "/api/v1/questions/{id}/delete", "code": "DELETE_QUESTION", "description": "删除题目"},
                 {"path": "/api/v1/questions/batch", "code": "BATCH_CREATE_QUESTIONS", "description": "批量导入题目"},
+                {"path": "/api/v1/knowledge-points", "code": "GET_KNOWLEDGE_POINTS", "description": "获取知识点列表"},
+                {"path": "/api/v1/knowledge-points/create", "code": "CREATE_KNOWLEDGE_POINT", "description": "创建知识点"},
+                {"path": "/api/v1/knowledge-points/{id}/update", "code": "UPDATE_KNOWLEDGE_POINT", "description": "更新知识点"},
+                {"path": "/api/v1/knowledge-points/{id}/delete", "code": "DELETE_KNOWLEDGE_POINT", "description": "删除知识点"},
 
                 # 培训管理
                 {"path": "/api/v1/trainings", "code": "GET_TRAININGS", "description": "获取培训列表"},
@@ -283,6 +287,7 @@ def init_roles():
                 "GET_COURSES", "CREATE_COURSE", "GET_COURSE_DETAIL", "UPDATE_COURSE",
                 "GET_EXAMS", "CREATE_EXAM", "GET_EXAM_DETAIL", "GET_EXAM_SCORES",
                 "GET_QUESTIONS", "CREATE_QUESTION", "UPDATE_QUESTION", "DELETE_QUESTION", "BATCH_CREATE_QUESTIONS",
+                "GET_KNOWLEDGE_POINTS", "CREATE_KNOWLEDGE_POINT", "UPDATE_KNOWLEDGE_POINT", "DELETE_KNOWLEDGE_POINT",
                 "GET_TRAININGS", "CREATE_TRAINING", "GET_TRAINING_DETAIL", "UPDATE_TRAINING",
                 "GET_TRAINING_STUDENTS", "GET_TRAINING_SCHEDULE",
                 "GET_ENROLLMENTS", "APPROVE_ENROLLMENT", "REJECT_ENROLLMENT",

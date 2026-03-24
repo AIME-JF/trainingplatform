@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from .knowledge_point import KnowledgePointSimpleResponse
+
 
 ADMISSION_SCOPE_ALL = "all"
 ADMISSION_SCOPE_USER = "user"
@@ -46,6 +48,26 @@ def _normalize_admission_scope_target_ids(value: Any, allow_none: bool = False) 
     return normalized
 
 
+def _normalize_knowledge_point_names(value: Any, allow_none: bool = False) -> Optional[List[str]]:
+    if value is None:
+        return None if allow_none else []
+
+    if isinstance(value, str):
+        raw_items = [value]
+    else:
+        raw_items = list(value or [])
+
+    normalized: List[str] = []
+    seen = set()
+    for raw_item in raw_items:
+        item = str(raw_item or "").strip()
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        normalized.append(item[:100])
+    return normalized
+
+
 class QuestionCreate(BaseModel):
     """创建题目"""
 
@@ -55,9 +77,14 @@ class QuestionCreate(BaseModel):
     answer: Any = Field(..., description="答案")
     explanation: Optional[str] = Field(None, description="解析")
     difficulty: int = Field(1, ge=1, le=5, description="难度1-5")
-    knowledge_point: Optional[str] = Field(None, max_length=200)
+    knowledge_point_names: List[str] = Field(default_factory=list, description="知识点名称列表")
     police_type_id: Optional[int] = Field(None, description="警种ID")
     score: int = Field(1, description="分值")
+
+    @field_validator("knowledge_point_names", mode="before")
+    @classmethod
+    def validate_knowledge_point_names(cls, value: Any) -> List[str]:
+        return _normalize_knowledge_point_names(value) or []
 
 
 class QuestionUpdate(BaseModel):
@@ -69,9 +96,14 @@ class QuestionUpdate(BaseModel):
     answer: Optional[Any] = None
     explanation: Optional[str] = None
     difficulty: Optional[int] = Field(None, ge=1, le=5)
-    knowledge_point: Optional[str] = None
+    knowledge_point_names: Optional[List[str]] = Field(None, description="知识点名称列表")
     police_type_id: Optional[int] = None
     score: Optional[int] = None
+
+    @field_validator("knowledge_point_names", mode="before")
+    @classmethod
+    def validate_knowledge_point_names(cls, value: Any) -> Optional[List[str]]:
+        return _normalize_knowledge_point_names(value, allow_none=True)
 
 
 class QuestionResponse(BaseModel):
@@ -84,7 +116,8 @@ class QuestionResponse(BaseModel):
     answer: Any = None
     explanation: Optional[str] = None
     difficulty: int = 1
-    knowledge_point: Optional[str] = None
+    knowledge_points: List[KnowledgePointSimpleResponse] = Field(default_factory=list)
+    knowledge_point_names: List[str] = Field(default_factory=list)
     police_type_id: Optional[int] = None
     police_type_name: Optional[str] = None
     score: int = 1
@@ -111,7 +144,7 @@ class ExamQuestionSnapshotResponse(BaseModel):
     answer: Any = None
     explanation: Optional[str] = None
     score: int = 1
-    knowledge_point: Optional[str] = None
+    knowledge_points: List[str] = Field(default_factory=list)
 
 
 class ExamWrongQuestionResponse(BaseModel):

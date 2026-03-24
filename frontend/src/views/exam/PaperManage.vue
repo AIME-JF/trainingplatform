@@ -226,6 +226,8 @@ function resetDraft() {
 }
 
 function mapPaperQuestion(question) {
+  const knowledgePoints = question.knowledgePoints
+    || (question.knowledgePoint ? [question.knowledgePoint] : [])
   return {
     tempId: `question-${question.id}`,
     sourceQuestionId: question.id,
@@ -238,7 +240,8 @@ function mapPaperQuestion(question) {
     answer: question.answer,
     explanation: question.explanation,
     difficulty: Number(question.difficulty || 3),
-    knowledgePoint: question.knowledgePoint,
+    knowledgePoints,
+    knowledgePointNames: [...knowledgePoints],
     policeTypeId: question.policeTypeId,
     score: Number(question.score || 1),
   }

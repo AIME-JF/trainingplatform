@@ -701,7 +701,9 @@ class ExamService:
 
     def _paper_load_options(self) -> tuple:
         return (
-            selectinload(ExamPaper.paper_questions).joinedload(ExamPaperQuestion.question),
+            selectinload(ExamPaper.paper_questions).joinedload(
+                ExamPaperQuestion.question
+            ).selectinload(Question.knowledge_points),
             selectinload(ExamPaper.training_exams),
             selectinload(ExamPaper.admission_exams),
         )
@@ -773,7 +775,9 @@ class ExamService:
     def _load_questions(self, question_ids: List[int]) -> List[Question]:
         if not question_ids:
             raise ValueError("请至少选择一道题目")
-        questions = self.db.query(Question).filter(Question.id.in_(question_ids)).all()
+        questions = self.db.query(Question).options(
+            selectinload(Question.knowledge_points)
+        ).filter(Question.id.in_(question_ids)).all()
         question_map = {question.id: question for question in questions}
         ordered_questions = [question_map.get(question_id) for question_id in question_ids]
         if not all(ordered_questions):
@@ -1058,7 +1062,7 @@ class ExamService:
                 answer=question.answer,
                 explanation=question.explanation,
                 score=question.score or 0,
-                knowledge_point=question.knowledge_point,
+                knowledge_points=self._resolve_question_knowledge_points(question),
             ))
 
     def _build_snapshot_responses(self, paper: Optional[ExamPaper]) -> List[ExamQuestionSnapshotResponse]:
@@ -1073,7 +1077,11 @@ class ExamService:
                 answer=item.answer if item.answer is not None else (item.question.answer if item.question else None),
                 explanation=item.explanation if item.explanation is not None else (item.question.explanation if item.question else None),
                 score=int(item.score or (item.question.score if item.question else 0) or 0),
-                knowledge_point=item.knowledge_point or (item.question.knowledge_point if item.question else None),
+                knowledge_points=(
+                    item.knowledge_points
+                    if item.knowledge_points is not None
+                    else self._resolve_question_knowledge_points(item.question)
+                ),
             )
             for item in sorted(paper.paper_questions or [], key=lambda row: row.sort_order or 0)
         ]
@@ -1129,7 +1137,7 @@ class ExamService:
 
         for snapshot in snapshots:
             question_score = int(snapshot.score or 0)
-            dimension = self._resolve_dimension(snapshot.knowledge_point)
+            dimension = self._resolve_dimension(snapshot.knowledge_points)
             dimension_totals[dimension] += question_score
 
             user_answer = data.answers.get(str(snapshot.id))
@@ -1443,11 +1451,22 @@ class ExamService:
             return "F"
         return text
 
-    def _resolve_dimension(self, knowledge_point: Optional[str]) -> str:
-        if not knowledge_point:
+    @staticmethod
+    def _resolve_question_knowledge_points(question: Optional[Question]) -> List[str]:
+        if not question:
+            return []
+        knowledge_points = sorted(
+            question.knowledge_points or [],
+            key=lambda item: (item.name or "", item.id or 0),
+        )
+        return [item.name for item in knowledge_points if item.name]
+
+    def _resolve_dimension(self, knowledge_points: Optional[List[str]]) -> str:
+        if not knowledge_points:
             return "law"
+        joined_text = " ".join(str(item or "") for item in knowledge_points)
         for dimension, keywords in DIMENSION_RULES.items():
-            if any(keyword in knowledge_point for keyword in keywords):
+            if any(keyword in joined_text for keyword in keywords):
                 return dimension
         return "law"
 

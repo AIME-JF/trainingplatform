@@ -10,6 +10,7 @@ import {
   ENROLL_MANAGE_PAGE_PERMISSIONS,
   EXAM_LIST_PAGE_PERMISSIONS,
   EXAM_MANAGE_PAGE_PERMISSIONS,
+  KNOWLEDGE_POINT_PAGE_PERMISSIONS,
   PAPER_PAGE_PERMISSIONS,
   QUESTION_BANK_PAGE_PERMISSIONS,
   REPORT_PAGE_PERMISSIONS,
@@ -89,6 +90,12 @@ const router = createRouter({
           name: 'QuestionBank',
           component: () => import('../views/exam/QuestionBank.vue'),
           meta: { title: '试题仓库', anyPermissions: QUESTION_BANK_PAGE_PERMISSIONS },
+        },
+        {
+          path: 'question/knowledge-points',
+          name: 'KnowledgePointManage',
+          component: () => import('../views/exam/KnowledgePointManage.vue'),
+          meta: { title: '知识点管理', anyPermissions: KNOWLEDGE_POINT_PAGE_PERMISSIONS },
         },
         {
           path: 'exam/do/:id',

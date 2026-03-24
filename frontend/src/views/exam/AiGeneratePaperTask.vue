@@ -171,6 +171,7 @@
     :title="editingQuestionIndex === -1 ? '新增题目' : '编辑题目'"
     :question="editingQuestion"
     :police-type-options="policeTypeOptions"
+    :knowledge-point-options="knowledgePointOptions"
     @submit="handleSubmitQuestion"
   />
 </template>
@@ -186,6 +187,7 @@ import {
   getAiPaperGenerationTasks,
   updateAiPaperGenerationTaskResult,
 } from '@/api/ai'
+import { getKnowledgePoints } from '@/api/knowledgePoint'
 import { getPoliceTypes } from '@/api/user'
 import AiTaskTabsLayout from './components/AiTaskTabsLayout.vue'
 import AiTaskTimeline from './components/AiTaskTimeline.vue'
@@ -211,6 +213,7 @@ const activeTask = ref(null)
 const activeTab = ref('create')
 const knowledgePointsText = ref('')
 const policeTypeOptions = ref([])
+const knowledgePointOptions = ref([])
 
 const taskForm = reactive(createDefaultTaskForm())
 
@@ -258,6 +261,15 @@ async function loadPoliceTypeOptions() {
     policeTypeOptions.value = result.items || result || []
   } catch {
     policeTypeOptions.value = []
+  }
+}
+
+async function loadKnowledgePointOptions() {
+  try {
+    const result = await getKnowledgePoints({ size: -1, isActive: true })
+    knowledgePointOptions.value = result.items || result || []
+  } catch {
+    knowledgePointOptions.value = []
   }
 }
 
@@ -398,6 +410,7 @@ function formatTypeConfigs(configs = []) {
 
 onMounted(() => {
   loadPoliceTypeOptions()
+  loadKnowledgePointOptions()
   loadTasks()
 })
 </script>

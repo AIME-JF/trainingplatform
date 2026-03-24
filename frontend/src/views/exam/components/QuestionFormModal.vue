@@ -41,7 +41,21 @@
         </a-col>
         <a-col :span="12">
           <a-form-item label="知识点">
-            <a-input v-model:value="form.knowledgePoint" placeholder="请输入知识点" />
+            <a-select
+              v-model:value="form.knowledgePointNames"
+              mode="tags"
+              allow-clear
+              :max-tag-count="4"
+              placeholder="可选择已有知识点，也可直接输入新知识点"
+            >
+              <a-select-option
+                v-for="item in knowledgePointOptions"
+                :key="item.id || item.name"
+                :value="item.name"
+              >
+                {{ item.name }}
+              </a-select-option>
+            </a-select>
           </a-form-item>
         </a-col>
         <a-col :span="12">
@@ -115,6 +129,7 @@ const props = defineProps({
   confirmText: { type: String, default: '保存' },
   question: { type: Object, default: null },
   policeTypeOptions: { type: Array, default: () => [] },
+  knowledgePointOptions: { type: Array, default: () => [] },
   allowedTypes: { type: Array, default: () => ['single', 'multi', 'judge'] },
 })
 
@@ -149,7 +164,7 @@ function createDefaultForm() {
     difficulty: 3,
     score: 2,
     content: '',
-    knowledgePoint: '',
+    knowledgePointNames: [],
     policeTypeId: undefined,
     options: [
       { key: 'A', text: '' },
@@ -177,7 +192,7 @@ function resetForm(question = null) {
     difficulty: Number(question?.difficulty || 3),
     score: Number(question?.score || 2),
     content: question?.content || '',
-    knowledgePoint: question?.knowledgePoint || question?.knowledge_point || '',
+    knowledgePointNames: resolveKnowledgePointNames(question),
     policeTypeId: question?.policeTypeId || question?.police_type_id,
     options: normalizeOptions(resolvedType, question?.options),
     explanation: question?.explanation || '',
@@ -220,6 +235,30 @@ function normalizeMultiAnswer(answer) {
     return answer
   }
   return answer ? [answer] : []
+}
+
+function resolveKnowledgePointNames(question) {
+  const rawValue = question?.knowledgePointNames
+    || question?.knowledge_point_names
+    || question?.knowledgePoints
+    || question?.knowledge_points
+    || question?.knowledgePoint
+    || question?.knowledge_point
+
+  const rawItems = Array.isArray(rawValue)
+    ? rawValue
+    : (rawValue ? [rawValue] : [])
+
+  return [...new Set(rawItems.map((item) => {
+    if (typeof item === 'string') {
+      return item.trim()
+    }
+    return String(item?.name || '').trim()
+  }).filter(Boolean))]
+}
+
+function normalizeKnowledgePointNames(names = []) {
+  return [...new Set((names || []).map((item) => String(item || '').trim()).filter(Boolean))]
 }
 
 function handleTypeChange() {
@@ -266,6 +305,7 @@ function handleOk() {
     }
   }
 
+  const knowledgePointNames = normalizeKnowledgePointNames(form.knowledgePointNames)
   emit('submit', {
     tempId: form.tempId || `draft-${Date.now()}`,
     sourceQuestionId: form.sourceQuestionId || undefined,
@@ -274,7 +314,8 @@ function handleOk() {
     difficulty: Number(form.difficulty || 3),
     score: Number(form.score || 2),
     content: form.content.trim(),
-    knowledgePoint: form.knowledgePoint?.trim() || undefined,
+    knowledgePointNames,
+    knowledgePoints: [...knowledgePointNames],
     policeTypeId: form.policeTypeId || undefined,
     options: form.type === 'judge' ? normalizeOptions('judge') : form.options.map((item) => ({ ...item })),
     answer: form.type === 'multi' ? [...form.answerMulti] : form.answer,

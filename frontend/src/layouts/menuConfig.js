@@ -22,6 +22,7 @@ import {
   EXAM_LIST_PAGE_PERMISSIONS,
   EXAM_MANAGE_PAGE_PERMISSIONS,
   PAPER_PAGE_PERMISSIONS,
+  KNOWLEDGE_POINT_PAGE_PERMISSIONS,
   QUESTION_BANK_PAGE_PERMISSIONS,
   REPORT_PAGE_PERMISSIONS,
   RESOURCE_MANAGE_PAGE_PERMISSIONS,
@@ -77,6 +78,11 @@ export const appMenuConfig = [
         key: '/question/repository',
         label: '试题仓库',
         anyPermissions: QUESTION_BANK_PAGE_PERMISSIONS,
+      },
+      {
+        key: '/question/knowledge-points',
+        label: '知识点管理',
+        anyPermissions: KNOWLEDGE_POINT_PAGE_PERMISSIONS,
       },
       {
         key: '/question/ai',

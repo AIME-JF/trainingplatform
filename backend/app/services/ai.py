@@ -4,9 +4,9 @@ AI 任务服务
 from datetime import datetime
 from typing import Iterable, List, Optional
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
-from app.models import AITask, ExamPaper, Question
+from app.models import AITask, ExamPaper, KnowledgePoint, Question
 from app.schemas import (
     AIPaperAssemblyTaskCreateRequest,
     AIPaperAssemblyTaskDetailResponse,
@@ -21,9 +21,10 @@ from app.schemas import (
     AITaskQuestionDraft,
     AITaskSummaryResponse,
     PaginatedResponse,
+    QuestionCreate,
 )
 from app.services.exam import ExamService
-from app.services.question import QuestionService
+from app.services.question import QuestionService, deduplicate_questions
 from logger import logger
 
 
@@ -518,7 +519,7 @@ class AIService:
                         index=len(drafts),
                         question_type=config.type,
                         topic=data.paper_title,
-                        knowledge_point=knowledge_point,
+                        knowledge_points=[knowledge_point],
                         difficulty=config.difficulty or 3,
                         police_type_id=data.police_type_id,
                         score=config.score,
@@ -549,7 +550,7 @@ class AIService:
                         index=len(drafts),
                         question_type=config.type,
                         topic=data.topic,
-                        knowledge_point=knowledge_point,
+                        knowledge_points=[knowledge_point],
                         difficulty=config.difficulty or data.difficulty,
                         police_type_id=data.police_type_id,
                         score=config.score,
@@ -594,23 +595,22 @@ class AIService:
         knowledge_points: Iterable[str],
         exclude_question_ids: Iterable[int],
     ) -> List[Question]:
-        query = self.db.query(Question).order_by(Question.created_at.desc(), Question.id.desc())
+        query = self.db.query(Question).options(
+            selectinload(Question.knowledge_points)
+        ).order_by(Question.created_at.desc(), Question.id.desc())
         if police_type_id:
             query = query.filter(Question.police_type_id == police_type_id)
         excluded = [item for item in exclude_question_ids if item]
         if excluded:
             query = query.filter(~Question.id.in_(excluded))
-        candidates = query.all()
-        knowledge_points = [item for item in knowledge_points if item]
-        if not knowledge_points:
-            return candidates
+        normalized_points = self._normalize_knowledge_points(knowledge_points)
+        if not normalized_points:
+            return deduplicate_questions(query.all())
 
-        matched = [
-            item
-            for item in candidates
-            if any(point in (item.knowledge_point or "") for point in knowledge_points)
-        ]
-        return matched or candidates
+        matched = deduplicate_questions(query.join(Question.knowledge_points).filter(
+            KnowledgePoint.name.in_(normalized_points)
+        ).all())
+        return matched or deduplicate_questions(query.all())
 
     def _question_to_draft(
         self,
@@ -619,6 +619,13 @@ class AIService:
         difficulty: Optional[int],
         score: Optional[int],
     ) -> AITaskQuestionDraft:
+        knowledge_points = self._normalize_knowledge_points(
+            item.name
+            for item in sorted(
+                question.knowledge_points or [],
+                key=lambda knowledge_point: (knowledge_point.name or "", knowledge_point.id or 0),
+            )
+        )
         return self._sanitize_question_draft(
             AITaskQuestionDraft(
                 temp_id=f"question-{question.id}",
@@ -630,7 +637,7 @@ class AIService:
                 answer=question.answer,
                 explanation=question.explanation,
                 difficulty=difficulty or int(question.difficulty or 3),
-                knowledge_point=question.knowledge_point,
+                knowledge_points=knowledge_points,
                 police_type_id=question.police_type_id,
                 score=score or int(question.score or 1),
             )
@@ -641,7 +648,7 @@ class AIService:
         index: int,
         question_type: str,
         topic: str,
-        knowledge_point: str,
+        knowledge_points: List[str],
         difficulty: int,
         police_type_id: Optional[int],
         score: int,
@@ -649,6 +656,8 @@ class AIService:
         requirements: Optional[str],
     ) -> AITaskQuestionDraft:
         question_no = index + 1
+        normalized_points = self._normalize_knowledge_points(knowledge_points) or [topic]
+        primary_knowledge_point = normalized_points[0]
         prompt_tail = source_text[:18] if source_text else topic
         if question_type == "judge":
             options = [
@@ -659,17 +668,17 @@ class AIService:
         else:
             options = [
                 {"key": "A", "text": f"{topic}要点一"},
-                {"key": "B", "text": f"{knowledge_point}常见误区"},
+                {"key": "B", "text": f"{primary_knowledge_point}常见误区"},
                 {"key": "C", "text": f"{prompt_tail}处置要求"},
                 {"key": "D", "text": "以上说法均不准确"},
             ]
             answer = "A" if question_type == "single" else ["A", "C"]
 
-        content = f"{question_no}. 围绕“{topic}”的{knowledge_point}要求，下列说法哪项最符合实战规范？"
+        content = f"{question_no}. 围绕“{topic}”的{primary_knowledge_point}要求，下列说法哪项最符合实战规范？"
         if question_type == "judge":
-            content = f"{question_no}. 关于“{topic}”中的{knowledge_point}要求，下列说法是否正确？"
+            content = f"{question_no}. 关于“{topic}”中的{primary_knowledge_point}要求，下列说法是否正确？"
 
-        explanation = f"该题依据“{knowledge_point}”抽取生成。{requirements or '请结合业务规范理解。'}"
+        explanation = f"该题依据“{primary_knowledge_point}”抽取生成。{requirements or '请结合业务规范理解。'}"
         return self._sanitize_question_draft(
             AITaskQuestionDraft(
                 temp_id=f"draft-{question_no}",
@@ -680,7 +689,7 @@ class AIService:
                 answer=answer,
                 explanation=explanation,
                 difficulty=difficulty,
-                knowledge_point=knowledge_point,
+                knowledge_points=normalized_points,
                 police_type_id=police_type_id,
                 score=score,
             )
@@ -711,6 +720,8 @@ class AIService:
         else:
             answer = str(draft.answer or "A")
 
+        knowledge_points = self._normalize_knowledge_points(draft.knowledge_points or [])
+
         return AITaskQuestionDraft(
             temp_id=draft.temp_id,
             source_question_id=draft.source_question_id,
@@ -721,7 +732,7 @@ class AIService:
             answer=answer,
             explanation=(draft.explanation or "").strip() or None,
             difficulty=draft.difficulty,
-            knowledge_point=(draft.knowledge_point or "").strip() or None,
+            knowledge_points=knowledge_points,
             police_type_id=draft.police_type_id,
             score=draft.score,
         )
@@ -738,7 +749,9 @@ class AIService:
         if source_ids:
             existing_questions = {
                 item.id: item
-                for item in self.db.query(Question).filter(Question.id.in_(source_ids)).all()
+                for item in self.db.query(Question).options(
+                    selectinload(Question.knowledge_points)
+                ).filter(Question.id.in_(source_ids)).all()
             }
 
         ordered_ids: List[int] = []
@@ -753,24 +766,20 @@ class AIService:
 
     def _persist_question_draft(self, draft: AITaskQuestionDraft, current_user_id: int) -> Question:
         question_service = QuestionService(self.db)
-        question_service._ensure_actor_can_assign_question_scope(current_user_id, draft.police_type_id)
-        question_service._ensure_police_type(draft.police_type_id)
-
-        question = Question(
-            type=draft.type,
-            content=draft.content,
-            options=draft.options,
-            answer=draft.answer,
-            explanation=draft.explanation,
-            difficulty=draft.difficulty,
-            knowledge_point=draft.knowledge_point,
-            police_type_id=draft.police_type_id,
-            score=draft.score,
-            created_by=current_user_id,
+        return question_service._create_question_entity(
+            QuestionCreate(
+                type=draft.type,
+                content=draft.content,
+                options=draft.options,
+                answer=draft.answer,
+                explanation=draft.explanation,
+                difficulty=draft.difficulty,
+                knowledge_point_names=draft.knowledge_points,
+                police_type_id=draft.police_type_id,
+                score=draft.score,
+            ),
+            current_user_id,
         )
-        self.db.add(question)
-        self.db.flush()
-        return question
 
     def _question_matches_draft(self, question: Question, draft: AITaskQuestionDraft) -> bool:
         return (
@@ -780,10 +789,28 @@ class AIService:
             and self._normalize_answer(question.answer) == self._normalize_answer(draft.answer)
             and ((question.explanation or "").strip() or None) == draft.explanation
             and int(question.difficulty or 0) == int(draft.difficulty or 0)
-            and ((question.knowledge_point or "").strip() or None) == draft.knowledge_point
+            and self._normalize_knowledge_points(
+                item.name
+                for item in sorted(
+                    question.knowledge_points or [],
+                    key=lambda knowledge_point: (knowledge_point.name or "", knowledge_point.id or 0),
+                )
+            ) == draft.knowledge_points
             and question.police_type_id == draft.police_type_id
             and int(question.score or 0) == int(draft.score or 0)
         )
+
+    @staticmethod
+    def _normalize_knowledge_points(knowledge_points: Iterable[str]) -> List[str]:
+        normalized: List[str] = []
+        seen = set()
+        for raw_item in knowledge_points or []:
+            item = str(raw_item or "").strip()
+            if not item or item in seen:
+                continue
+            seen.add(item)
+            normalized.append(item[:100])
+        return normalized
 
     def _normalize_answer(self, answer):
         if isinstance(answer, list):

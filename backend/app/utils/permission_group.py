@@ -14,6 +14,7 @@ _PATH_GROUP_RULES: Tuple[Tuple[str, str], ...] = (
     ("/api/v1/permissions", "PERMISSION_MANAGEMENT"),
     ("/api/v1/departments", "DEPARTMENT_MANAGEMENT"),
     ("/api/v1/police-types", "POLICE_TYPE_MANAGEMENT"),
+    ("/api/v1/knowledge-points", "QUESTION_BANK"),
     ("/api/v1/courses", "COURSE_MANAGEMENT"),
     ("/api/v1/exams", "EXAM_MANAGEMENT"),
     ("/api/v1/questions", "QUESTION_BANK"),

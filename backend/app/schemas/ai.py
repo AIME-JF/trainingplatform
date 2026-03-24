@@ -5,7 +5,7 @@ from datetime import date as DateType
 from datetime import datetime
 from typing import Any, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .training import TrainingCourseCreate, TrainingScheduleRuleConfig
 
@@ -33,9 +33,41 @@ class AITaskQuestionDraft(BaseModel):
     answer: Any = Field(..., description="答案")
     explanation: Optional[str] = Field(None, description="解析")
     difficulty: int = Field(3, ge=1, le=5, description="难度")
-    knowledge_point: Optional[str] = Field(None, description="知识点")
+    knowledge_points: List[str] = Field(default_factory=list, description="知识点列表")
     police_type_id: Optional[int] = Field(None, description="警种 ID")
     score: int = Field(2, ge=1, description="分值")
+
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_legacy_knowledge_point(cls, value: Any):
+        if not isinstance(value, dict):
+            return value
+        if "knowledge_points" in value or "knowledgePoints" in value:
+            return value
+
+        legacy_value = value.get("knowledge_point", value.get("knowledgePoint"))
+        if legacy_value in (None, ""):
+            return value
+
+        payload = dict(value)
+        payload["knowledge_points"] = legacy_value if isinstance(legacy_value, list) else [legacy_value]
+        return payload
+
+    @field_validator("knowledge_points", mode="before")
+    @classmethod
+    def validate_knowledge_points(cls, value: Any) -> List[str]:
+        if value is None:
+            return []
+        raw_items = [value] if isinstance(value, str) else list(value or [])
+        normalized: List[str] = []
+        seen = set()
+        for raw_item in raw_items:
+            item = str(raw_item or "").strip()
+            if not item or item in seen:
+                continue
+            seen.add(item)
+            normalized.append(item[:100])
+        return normalized
 
 
 class AITaskPaperDraft(BaseModel):

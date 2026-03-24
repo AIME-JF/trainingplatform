@@ -88,7 +88,7 @@ class AIQuestionGenerator:
        "answer": "A",
        "explanation": "解析",
        "difficulty": 3,
-       "knowledge_point": "知识点",
+       "knowledge_points": ["知识点1", "知识点2"],
        "score": __SCORE__
      }
    - 约束：必须且只能有 1 个正确答案；选项数量 4-6 个；answer 必须是单个选项 key。
@@ -106,7 +106,7 @@ class AIQuestionGenerator:
        "answer": ["A", "C"],
        "explanation": "解析",
        "difficulty": 3,
-       "knowledge_point": "知识点",
+       "knowledge_points": ["知识点1", "知识点2"],
        "score": __SCORE__
      }
    - 约束：必须至少 2 个正确答案；answer 必须是去重后的选项 key 数组。
@@ -122,7 +122,7 @@ class AIQuestionGenerator:
        "answer": "A",
        "explanation": "解析",
        "difficulty": 3,
-       "knowledge_point": "知识点",
+       "knowledge_points": ["知识点1"],
        "score": __SCORE__
      }
    - 约束：options 固定为 A=正确、B=错误；answer 只能是 A 或 B。
@@ -147,7 +147,7 @@ class AIQuestionGenerator:
             "- 所有题目必须唯一，不能出现重复题干或语义重复的题目。",
             "- 题干必须完整、明确，不要出现“根据上文”“根据材料”之类缺少上下文的表达。",
             "- explanation 必须给出简洁且明确的解析。",
-            "- knowledge_point 必须优先从提供的知识点列表中选择或贴近生成。",
+            "- knowledge_points 必须是 1-3 个字符串组成的数组，且优先从提供的知识点列表中选择或贴近生成。",
             "- 不要生成与警务训练无关的内容。",
             "任务上下文：",
             f"- 任务名称：{request.task_name}",
@@ -318,7 +318,12 @@ class AIQuestionGenerator:
         if difficulty < 1 or difficulty > 5:
             raise ValueError(f"第 {index} 题难度必须在 1-5 之间")
 
-        knowledge_point = str(item.get("knowledge_point") or item.get("knowledgePoint") or "").strip() or None
+        knowledge_points = self._normalize_knowledge_points(
+            item.get("knowledge_points")
+            or item.get("knowledgePoints")
+            or item.get("knowledge_point")
+            or item.get("knowledgePoint")
+        )
         explanation = str(item.get("explanation") or "").strip() or None
 
         options, answer = self._normalize_question_content(question_type, item.get("options"), item.get("answer"), index)
@@ -332,7 +337,7 @@ class AIQuestionGenerator:
             answer=answer,
             explanation=explanation,
             difficulty=difficulty,
-            knowledge_point=knowledge_point,
+            knowledge_points=knowledge_points,
             police_type_id=request.police_type_id,
             score=int(request.score),
         )
@@ -415,6 +420,20 @@ class AIQuestionGenerator:
         if answer in {"B", "错误", "FALSE", "NO", "0"}:
             return "B"
         raise ValueError("判断题答案非法")
+
+    def _normalize_knowledge_points(self, raw_value: Any) -> list[str]:
+        raw_items = [raw_value] if isinstance(raw_value, str) else list(raw_value or [])
+        normalized: list[str] = []
+        seen = set()
+        for raw_item in raw_items:
+            item = str(raw_item or "").strip()
+            if not item or item in seen:
+                continue
+            seen.add(item)
+            normalized.append(item[:100])
+        if not normalized:
+            raise ValueError("题目缺少知识点列表")
+        return normalized[:3]
 
     def _to_int(self, value: Any) -> int | None:
         if value in (None, ""):

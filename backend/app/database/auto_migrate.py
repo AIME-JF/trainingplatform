@@ -40,7 +40,7 @@ CRITICAL_SCHEMA_REQUIREMENTS: dict[str, tuple[str, ...]] = {
         "answer",
         "explanation",
         "score",
-        "knowledge_point",
+        "knowledge_points",
     ),
     "admission_exams": (
         "id",
@@ -83,7 +83,7 @@ CRITICAL_SCHEMA_REQUIREMENTS: dict[str, tuple[str, ...]] = {
         "answer",
         "explanation",
         "score",
-        "knowledge_point",
+        "knowledge_points",
     ),
     "exam_records": (
         "paper_id",
@@ -135,10 +135,19 @@ CRITICAL_SCHEMA_REQUIREMENTS: dict[str, tuple[str, ...]] = {
         "content",
         "answer",
         "difficulty",
-        "knowledge_point",
         "police_type_id",
         "score",
         "created_by",
+    ),
+    "knowledge_points": (
+        "id",
+        "name",
+        "is_active",
+        "created_by",
+    ),
+    "question_knowledge_point_relations": (
+        "question_id",
+        "knowledge_point_id",
     ),
     "enrollments": (
         "contact_phone",

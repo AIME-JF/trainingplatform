@@ -76,7 +76,7 @@
               :message="`解析：${question.explanation}`"
             />
             <div class="question-foot">
-              <span>知识点：{{ question.knowledgePoint || '未设置' }}</span>
+              <span>知识点：{{ formatKnowledgePoints(question.knowledgePoints || question.knowledgePoint) }}</span>
             </div>
           </a-collapse-panel>
         </a-collapse>
@@ -131,6 +131,13 @@ function formatAnswer(question) {
     return '未设置'
   }
   return String(answer)
+}
+
+function formatKnowledgePoints(points) {
+  const values = Array.isArray(points)
+    ? points.map((item) => (typeof item === 'string' ? item : item?.name)).filter(Boolean)
+    : (points ? [String(points)] : [])
+  return values.length ? values.join('、') : '未设置'
 }
 
 async function loadPaperDetail() {

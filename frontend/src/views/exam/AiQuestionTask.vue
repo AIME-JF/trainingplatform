@@ -170,7 +170,7 @@
               <div class="question-card-meta">
                 <span>难度 {{ item.difficulty }}</span>
                 <span>分值 {{ item.score }}</span>
-                <span>{{ item.knowledgePoint || '未设置知识点' }}</span>
+                <span>{{ formatKnowledgePoints(item.knowledgePoints) }}</span>
               </div>
             </div>
           </div>
@@ -185,6 +185,7 @@
     :title="editingQuestionIndex === -1 ? '新增题目' : '编辑题目'"
     :question="editingQuestion"
     :police-type-options="policeTypeOptions"
+    :knowledge-point-options="knowledgePointOptions"
     :allowed-types="questionModalAllowedTypes"
     @submit="handleSubmitQuestion"
   />
@@ -201,6 +202,7 @@ import {
   getAiQuestionTasks,
   updateAiQuestionTaskResult,
 } from '@/api/ai'
+import { getKnowledgePoints } from '@/api/knowledgePoint'
 import { getPoliceTypes } from '@/api/user'
 import AiTaskTabsLayout from './components/AiTaskTabsLayout.vue'
 import AiTaskTimeline from './components/AiTaskTimeline.vue'
@@ -233,6 +235,7 @@ const activeTask = ref(null)
 const activeTab = ref('create')
 const knowledgePointsText = ref('')
 const policeTypeOptions = ref([])
+const knowledgePointOptions = ref([])
 
 const taskForm = reactive({
   taskName: '',
@@ -287,12 +290,28 @@ function formatQuestionTypes(types = []) {
   return labels.length ? labels.join('、') : '未设置'
 }
 
+function formatKnowledgePoints(points = []) {
+  const values = Array.isArray(points)
+    ? points.map((item) => (typeof item === 'string' ? item : item?.name)).filter(Boolean)
+    : (points ? [String(points)] : [])
+  return values.length ? values.join('、') : '未设置知识点'
+}
+
 async function loadPoliceTypeOptions() {
   try {
     const result = await getPoliceTypes()
     policeTypeOptions.value = result.items || result || []
   } catch {
     policeTypeOptions.value = []
+  }
+}
+
+async function loadKnowledgePointOptions() {
+  try {
+    const result = await getKnowledgePoints({ size: -1, isActive: true })
+    knowledgePointOptions.value = result.items || result || []
+  } catch {
+    knowledgePointOptions.value = []
   }
 }
 
@@ -434,6 +453,7 @@ async function handleConfirmTask() {
 
 onMounted(() => {
   loadPoliceTypeOptions()
+  loadKnowledgePointOptions()
   loadTasks()
 })
 </script>
