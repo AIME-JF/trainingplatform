@@ -101,7 +101,7 @@ class AIPaperAssemblyTypeConfig(BaseModel):
     """AI 自动组卷题型配置"""
 
     type: str = Field(..., description="题目类型")
-    count: int = Field(..., ge=1, le=50, description="题目数量")
+    count: int = Field(..., ge=0, le=50, description="题目数量")
     difficulty: Optional[int] = Field(None, ge=1, le=5, description="题型难度")
     score: int = Field(2, ge=1, description="单题分值")
 
@@ -110,7 +110,7 @@ class AIPaperAssemblyParsedTypeConfig(BaseModel):
     """AI 自动组卷解析后的题型条件"""
 
     type: str = Field(..., description="题目类型")
-    count: int = Field(..., ge=1, le=50, description="题目数量")
+    count: int = Field(..., ge=0, le=50, description="题目数量")
     difficulty: Optional[int] = Field(None, ge=1, le=5, description="题型难度")
     score: int = Field(2, ge=1, description="单题分值")
     knowledge_points: List[str] = Field(default_factory=list, description="该题型命中的知识点关键词")
@@ -171,10 +171,47 @@ class AIPaperAssemblyTaskCreateRequest(BaseModel):
     passing_score: int = Field(60, ge=1, description="及格分")
     assembly_mode: str = Field("balanced", description="组卷模式: balanced/practice/exam")
     police_type_id: Optional[int] = Field(None, description="警种 ID")
-    knowledge_points: List[str] = Field(default_factory=list, description="知识点列表")
+    knowledge_point_ids: List[int] = Field(default_factory=list, description="知识点 ID 列表")
+    knowledge_points: List[str] = Field(default_factory=list, description="知识点名称列表")
+    allow_relaxation: bool = Field(True, description="未匹配到时是否允许放宽条件")
     exclude_question_ids: List[int] = Field(default_factory=list, description="排除题目 ID 列表")
     type_configs: List[AIPaperAssemblyTypeConfig] = Field(default_factory=list, description="题型配置")
     requirements: Optional[str] = Field(None, max_length=1000, description="补充要求")
+
+    @field_validator("knowledge_point_ids", mode="before")
+    @classmethod
+    def validate_knowledge_point_ids(cls, value: Any) -> List[int]:
+        if value is None:
+            return []
+        raw_items = [value] if isinstance(value, (str, int)) else list(value or [])
+        normalized: List[int] = []
+        seen = set()
+        for raw_item in raw_items:
+            try:
+                item = int(raw_item)
+            except (TypeError, ValueError):
+                continue
+            if item <= 0 or item in seen:
+                continue
+            seen.add(item)
+            normalized.append(item)
+        return normalized
+
+    @field_validator("knowledge_points", mode="before")
+    @classmethod
+    def validate_knowledge_point_names(cls, value: Any) -> List[str]:
+        if value is None:
+            return []
+        raw_items = [value] if isinstance(value, str) else list(value or [])
+        normalized: List[str] = []
+        seen = set()
+        for raw_item in raw_items:
+            item = str(raw_item or "").strip()
+            if not item or item in seen:
+                continue
+            seen.add(item)
+            normalized.append(item[:100])
+        return normalized
 
 
 class AIPaperGenerationTaskCreateRequest(BaseModel):

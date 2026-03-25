@@ -150,7 +150,6 @@
       :title="editingQuestion ? '编辑题目' : '新增题目'"
       :question="editingQuestion"
       :police-type-options="policeTypeOptions"
-      :knowledge-point-options="knowledgePointOptions"
       @submit="handleSubmitQuestion"
     />
   </div>
@@ -162,7 +161,6 @@ import { message, Modal } from 'ant-design-vue'
 import { PlusOutlined, RobotOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import { createQuestion, deleteQuestion, getQuestions, updateQuestion } from '@/api/question'
-import { getKnowledgePoints } from '@/api/knowledgePoint'
 import { getPoliceTypes } from '@/api/user'
 import QuestionFormModal from './components/QuestionFormModal.vue'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
@@ -173,7 +171,6 @@ const modalOpen = ref(false)
 const editingQuestion = ref(null)
 const questionList = ref([])
 const policeTypeOptions = ref([])
-const knowledgePointOptions = ref([])
 const searchText = ref('')
 const filterType = ref('all')
 const filterDifficulty = ref('all')
@@ -291,15 +288,6 @@ async function loadPoliceTypeOptions() {
   }
 }
 
-async function loadKnowledgePointOptions() {
-  try {
-    const result = await getKnowledgePoints({ size: -1, isActive: true })
-    knowledgePointOptions.value = result.items || result || []
-  } catch {
-    knowledgePointOptions.value = []
-  }
-}
-
 async function handleSubmitQuestion(payload) {
   const allowed = editingQuestion.value?.id ? canUpdateQuestion.value : canCreateQuestion.value
   if (!allowed) return
@@ -313,7 +301,7 @@ async function handleSubmitQuestion(payload) {
     }
     modalOpen.value = false
     editingQuestion.value = null
-    await Promise.all([loadQuestions(), loadStats(), loadKnowledgePointOptions()])
+    await Promise.all([loadQuestions(), loadStats()])
   } catch (error) {
     message.error(error.message || '保存失败')
   }
@@ -351,7 +339,6 @@ onMounted(() => {
   loadQuestions()
   loadStats()
   loadPoliceTypeOptions()
-  loadKnowledgePointOptions()
 })
 </script>
 

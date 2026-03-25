@@ -111,7 +111,7 @@ class AIPaperAssemblyParser:
             "- type：题型，只能是 single / multi / judge。",
             "- police_type_id：警种 ID。只能使用输入里已经给出的 ID，不能猜测新的 ID。",
             "- difficulty：难度，必须是 1-5 整数。",
-            "- knowledge_points：知识点关键词数组。后端会按 knowledge_point LIKE '%关键词%' 模糊匹配。",
+            "- knowledge_points：知识点数组。如果表单已经显式选择知识点，就沿用这些知识点名称；否则输出适合筛题的短关键词。",
             "请严格输出如下 JSON：",
             "{",
             '  "summary": "一句话概括解析结果",',
@@ -126,7 +126,8 @@ class AIPaperAssemblyParser:
             "解析规则：",
             "- 如果表单已经给出题型数量、难度、分值，它们是默认值；只有自然语言要求非常明确时才覆盖。",
             "- police_type_id 如果输入为空就返回 null，不允许凭空编造 ID。",
-            "- knowledge_points 必须输出适合模糊匹配的短关键词，不要输出长句。",
+            "- 如果表单已经显式选择知识点，则 knowledge_points 必须沿用这些知识点，不要擅自替换。",
+            "- 如果表单没有显式选择知识点，knowledge_points 必须输出适合筛题的短关键词，不要输出长句。",
             "- type_configs 至少保留一个题型，且 count 必须为正整数。",
             "- 如果自然语言没有给出更细条件，就沿用默认值。",
             "- 所有输出必须使用简体中文。",
@@ -160,7 +161,8 @@ class AIPaperAssemblyParser:
         fallback: AIPaperAssemblyParsedRequest,
     ) -> AIPaperAssemblyParsedRequest:
         summary = str(payload.get("summary") or "").strip() or fallback.summary
-        global_points = self._normalize_keywords(payload.get("knowledge_points")) or list(fallback.knowledge_points)
+        explicit_points = list(request.knowledge_points or fallback.knowledge_points) if request.knowledge_point_ids else []
+        global_points = explicit_points or self._normalize_keywords(payload.get("knowledge_points")) or list(fallback.knowledge_points)
 
         payload_police_type_id = self._to_int(payload.get("police_type_id"))
         police_type_id = request.police_type_id if request.police_type_id is not None else payload_police_type_id
@@ -174,6 +176,7 @@ class AIPaperAssemblyParser:
                 fallback_map=fallback_map,
                 police_type_id=police_type_id,
                 global_points=global_points,
+                explicit_points=explicit_points,
             )
             if not parsed_item or parsed_item.type in parsed_types:
                 continue
@@ -211,6 +214,7 @@ class AIPaperAssemblyParser:
         fallback_map: dict[str, AIPaperAssemblyParsedTypeConfig],
         police_type_id: Optional[int],
         global_points: list[str],
+        explicit_points: list[str],
     ) -> Optional[AIPaperAssemblyParsedTypeConfig]:
         if not isinstance(raw_item, dict):
             return None
@@ -232,7 +236,7 @@ class AIPaperAssemblyParser:
             if item_police_type_id is None and fallback_item:
                 item_police_type_id = fallback_item.police_type_id
 
-        item_points = self._normalize_keywords(raw_item.get("knowledge_points"))
+        item_points = list(explicit_points) if explicit_points else self._normalize_keywords(raw_item.get("knowledge_points"))
         if not item_points and fallback_item:
             item_points = list(fallback_item.knowledge_points)
         if not item_points:

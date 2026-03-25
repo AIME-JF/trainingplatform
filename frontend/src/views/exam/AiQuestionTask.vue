@@ -23,8 +23,22 @@
           <a-form-item label="参考文本">
             <a-textarea v-model:value="taskForm.sourceText" :rows="5" :maxlength="2000" show-count />
           </a-form-item>
-          <a-form-item label="知识点">
-            <a-textarea v-model:value="knowledgePointsText" :rows="3" placeholder="每行一个知识点" />
+          <a-form-item
+            label="知识点"
+            extra="可输入关键词搜索知识点；不输入时默认展示前 20 条。"
+          >
+            <a-select
+              v-model:value="taskForm.knowledgePoints"
+              mode="multiple"
+              allow-clear
+              show-search
+              :filter-option="false"
+              :loading="knowledgePointLoading"
+              placeholder="可选，可输入搜索题库知识点"
+              :options="knowledgePointSelectOptions"
+              @search="handleKnowledgePointSearch"
+              @focus="handleKnowledgePointFocus"
+            />
           </a-form-item>
           <a-row :gutter="12">
             <a-col :span="12">
@@ -185,7 +199,6 @@
     :title="editingQuestionIndex === -1 ? '新增题目' : '编辑题目'"
     :question="editingQuestion"
     :police-type-options="policeTypeOptions"
-    :knowledge-point-options="knowledgePointOptions"
     :allowed-types="questionModalAllowedTypes"
     @submit="handleSubmitQuestion"
   />
@@ -202,11 +215,11 @@ import {
   getAiQuestionTasks,
   updateAiQuestionTaskResult,
 } from '@/api/ai'
-import { getKnowledgePoints } from '@/api/knowledgePoint'
 import { getPoliceTypes } from '@/api/user'
 import AiTaskTabsLayout from './components/AiTaskTabsLayout.vue'
 import AiTaskTimeline from './components/AiTaskTimeline.vue'
 import QuestionFormModal from './components/QuestionFormModal.vue'
+import { createKnowledgePointRemoteSelect } from './utils/knowledgePointRemoteSelect'
 import { sortQuestionsByType } from './utils/questionSort'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
@@ -233,14 +246,19 @@ const editingQuestionIndex = ref(-1)
 const taskList = ref([])
 const activeTask = ref(null)
 const activeTab = ref('create')
-const knowledgePointsText = ref('')
 const policeTypeOptions = ref([])
-const knowledgePointOptions = ref([])
+const {
+  knowledgePointLoading,
+  knowledgePointSelectOptions,
+  handleKnowledgePointSearch,
+  handleKnowledgePointFocus,
+} = createKnowledgePointRemoteSelect('name')
 
 const taskForm = reactive({
   taskName: '',
   topic: '',
   sourceText: '',
+  knowledgePoints: [],
   questionCount: 10,
   questionTypes: [DEFAULT_QUESTION_TYPE],
   difficulty: 3,
@@ -263,18 +281,12 @@ const questionModalAllowedTypes = computed(() => {
   return types.length ? types : [selectedQuestionType.value]
 })
 
-function parseKnowledgePoints() {
-  return knowledgePointsText.value
-    .split(/\r?\n|,|，|；|;/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-}
-
 function resetTaskForm() {
   Object.assign(taskForm, {
     taskName: '',
     topic: '',
     sourceText: '',
+    knowledgePoints: [],
     questionCount: 10,
     questionTypes: [DEFAULT_QUESTION_TYPE],
     difficulty: 3,
@@ -282,7 +294,6 @@ function resetTaskForm() {
     score: 2,
     requirements: '',
   })
-  knowledgePointsText.value = ''
 }
 
 function formatQuestionTypes(types = []) {
@@ -303,15 +314,6 @@ async function loadPoliceTypeOptions() {
     policeTypeOptions.value = result.items || result || []
   } catch {
     policeTypeOptions.value = []
-  }
-}
-
-async function loadKnowledgePointOptions() {
-  try {
-    const result = await getKnowledgePoints({ size: -1, isActive: true })
-    knowledgePointOptions.value = result.items || result || []
-  } catch {
-    knowledgePointOptions.value = []
   }
 }
 
@@ -357,7 +359,7 @@ async function handleCreateTask() {
     const result = await createAiQuestionTask({
       ...taskForm,
       questionTypes: [...taskForm.questionTypes],
-      knowledgePoints: parseKnowledgePoints(),
+      knowledgePoints: [...(taskForm.knowledgePoints || [])],
     })
     message.success('任务已创建')
     resetTaskForm()
@@ -453,7 +455,6 @@ async function handleConfirmTask() {
 
 onMounted(() => {
   loadPoliceTypeOptions()
-  loadKnowledgePointOptions()
   loadTasks()
 })
 </script>

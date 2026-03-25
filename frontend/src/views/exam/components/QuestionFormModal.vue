@@ -40,22 +40,23 @@
           </a-form-item>
         </a-col>
         <a-col :span="12">
-          <a-form-item label="知识点">
+          <a-form-item
+            label="知识点"
+            extra="可输入关键词搜索知识点；不输入时默认展示前 20 条，也可直接输入新知识点。"
+          >
             <a-select
               v-model:value="form.knowledgePointNames"
               mode="tags"
               allow-clear
+              show-search
+              :filter-option="false"
+              :loading="knowledgePointLoading"
               :max-tag-count="4"
-              placeholder="可选择已有知识点，也可直接输入新知识点"
-            >
-              <a-select-option
-                v-for="item in knowledgePointOptions"
-                :key="item.id || item.name"
-                :value="item.name"
-              >
-                {{ item.name }}
-              </a-select-option>
-            </a-select>
+              placeholder="可输入搜索知识点，也可直接输入新知识点"
+              :options="knowledgePointSelectOptions"
+              @search="handleKnowledgePointSearch"
+              @focus="handleKnowledgePointFocus"
+            />
           </a-form-item>
         </a-col>
         <a-col :span="12">
@@ -122,6 +123,7 @@
 <script setup>
 import { computed, reactive, watch } from 'vue'
 import { message } from 'ant-design-vue'
+import { createKnowledgePointRemoteSelect, mergeKnowledgePointOptions } from '../utils/knowledgePointRemoteSelect'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -154,6 +156,14 @@ const typeOptions = computed(() => {
   }
   return allTypeOptions.filter((item) => allowedTypes.includes(item.value))
 })
+const {
+  knowledgePointSelectOptions,
+  knowledgePointLoading,
+  pinKnowledgePointOptions,
+  loadKnowledgePointOptions,
+  handleKnowledgePointSearch,
+  handleKnowledgePointFocus,
+} = createKnowledgePointRemoteSelect('name')
 
 function createDefaultForm() {
   return {
@@ -204,6 +214,12 @@ function resetForm(question = null) {
     ? normalizeMultiAnswer(question?.answer)
     : []
   Object.assign(form, next)
+  pinKnowledgePointOptions(
+    mergeKnowledgePointOptions(
+      props.knowledgePointOptions,
+      next.knowledgePointNames.map((item) => ({ name: item })),
+    ),
+  )
 }
 
 function normalizeOptions(type, options) {
@@ -329,6 +345,7 @@ watch(
   (value) => {
     if (value) {
       resetForm(props.question)
+      loadKnowledgePointOptions().catch(() => {})
     }
   },
   { immediate: true }
@@ -342,6 +359,22 @@ watch(
     }
   },
   { deep: true }
+)
+
+watch(
+  () => props.knowledgePointOptions,
+  (value) => {
+    pinKnowledgePointOptions(value)
+  },
+  { deep: true, immediate: true }
+)
+
+watch(
+  () => form.knowledgePointNames,
+  (value) => {
+    pinKnowledgePointOptions((value || []).map((item) => ({ name: item })))
+  },
+  { deep: true, immediate: true }
 )
 </script>
 

@@ -2,7 +2,7 @@
   <ai-task-tabs-layout
     v-model:active-tab="activeTab"
     title="AI 自动组卷"
-    subtitle="先解析自然语言组卷要求，再按题库条件筛题并逐级放宽，生成可编辑的试卷草稿"
+    subtitle="先解析自然语言组卷要求，再按题库条件筛题，并根据设置决定是否放宽条件，生成可编辑的试卷草稿"
     :task-list="taskList"
     :task-loading="taskLoading"
     :active-task-id="activeTask?.id || null"
@@ -53,8 +53,23 @@
             </a-form-item>
           </a-col>
         </a-row>
-        <a-form-item label="知识点">
-          <a-textarea v-model:value="knowledgePointsText" :rows="3" placeholder="每行一个知识点" />
+        <a-form-item
+          label="知识点"
+          extra="可输入关键词搜索知识点；不输入时默认展示前 20 条。"
+        >
+          <a-select
+            v-model:value="taskForm.knowledgePointIds"
+            mode="multiple"
+            allow-clear
+            show-search
+            :filter-option="false"
+            :loading="knowledgePointLoading"
+            placeholder="可选，可输入搜索题库知识点"
+            style="width:100%"
+            :options="knowledgePointSelectOptions"
+            @search="handleKnowledgePointSearch"
+            @focus="handleKnowledgePointFocus"
+          />
         </a-form-item>
         <a-form-item label="警种">
           <a-select v-model:value="taskForm.policeTypeId" allow-clear placeholder="可选">
@@ -63,19 +78,18 @@
             </a-select-option>
           </a-select>
         </a-form-item>
+        <a-form-item label="未匹配时放宽条件">
+          <a-switch
+            v-model:checked="taskForm.allowRelaxation"
+            checked-children="允许"
+            un-checked-children="严格"
+          />
+        </a-form-item>
         <a-form-item label="题型配置">
-          <div class="config-list">
-            <div v-for="config in taskForm.typeConfigs" :key="config.type" class="config-item">
-              <span class="config-type">{{ typeLabels[config.type] }}</span>
-              <a-input-number v-model:value="config.count" :min="1" :max="30" />
-              <a-select v-model:value="config.difficulty" style="width:90px">
-                <a-select-option v-for="level in [1, 2, 3, 4, 5]" :key="level" :value="level">
-                  {{ level }}级
-                </a-select-option>
-              </a-select>
-              <a-input-number v-model:value="config.score" :min="1" :max="20" />
-            </div>
-          </div>
+          <paper-type-config-editor
+            v-model="taskForm.typeConfigs"
+            description="这里决定每种题型要抽多少题、优先按几级难度查题，以及每道题按多少分计入试卷。"
+          />
         </a-form-item>
         <a-form-item label="自然语言组卷要求">
           <a-textarea
@@ -151,6 +165,9 @@
             <a-descriptions :column="2" size="small" bordered>
               <a-descriptions-item label="组卷模式">{{ modeLabels[activeTask.requestPayload.assemblyMode] }}</a-descriptions-item>
               <a-descriptions-item label="知识点">{{ activeTask.requestPayload.knowledgePoints?.join('、') || '未设置' }}</a-descriptions-item>
+              <a-descriptions-item label="未匹配时放宽条件">
+                {{ activeTask.requestPayload.allowRelaxation === false ? '否' : '是' }}
+              </a-descriptions-item>
               <a-descriptions-item label="题型配置">
                 {{ formatTypeConfigs(activeTask.requestPayload.typeConfigs) }}
               </a-descriptions-item>
@@ -222,7 +239,6 @@
     :title="editingQuestionIndex === -1 ? '新增题目' : '编辑题目'"
     :question="editingQuestion"
     :police-type-options="policeTypeOptions"
-    :knowledge-point-options="knowledgePointOptions"
     @submit="handleSubmitQuestion"
   />
 </template>
@@ -238,12 +254,14 @@ import {
   getAiPaperAssemblyTasks,
   updateAiPaperAssemblyTaskResult,
 } from '@/api/ai'
-import { getKnowledgePoints } from '@/api/knowledgePoint'
 import { getPoliceTypes } from '@/api/user'
 import AiTaskTabsLayout from './components/AiTaskTabsLayout.vue'
 import AiTaskTimeline from './components/AiTaskTimeline.vue'
 import PaperDraftEditor from './components/PaperDraftEditor.vue'
+import PaperTypeConfigEditor from './components/PaperTypeConfigEditor.vue'
 import QuestionFormModal from './components/QuestionFormModal.vue'
+import { createKnowledgePointRemoteSelect } from './utils/knowledgePointRemoteSelect'
+import { formatPaperTypeConfigs, summarizePaperTypeConfigs } from './utils/paperTypeConfig'
 import { sortQuestionsByType } from './utils/questionSort'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
@@ -263,9 +281,13 @@ const editingQuestionIndex = ref(-1)
 const taskList = ref([])
 const activeTask = ref(null)
 const activeTab = ref('create')
-const knowledgePointsText = ref('')
 const policeTypeOptions = ref([])
-const knowledgePointOptions = ref([])
+const {
+  knowledgePointLoading,
+  knowledgePointSelectOptions,
+  handleKnowledgePointSearch,
+  handleKnowledgePointFocus,
+} = createKnowledgePointRemoteSelect('id')
 
 const taskForm = reactive(createDefaultTaskForm())
 
@@ -284,6 +306,8 @@ function createDefaultTaskForm() {
     passingScore: 60,
     assemblyMode: 'balanced',
     policeTypeId: undefined,
+    knowledgePointIds: [],
+    allowRelaxation: true,
     typeConfigs: [
       { type: 'single', count: 5, difficulty: 3, score: 2 },
       { type: 'multi', count: 3, difficulty: 3, score: 3 },
@@ -293,16 +317,8 @@ function createDefaultTaskForm() {
   }
 }
 
-function parseKnowledgePoints() {
-  return knowledgePointsText.value
-    .split(/\r?\n|,|，|；|;/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-}
-
 function resetTaskForm() {
   Object.assign(taskForm, createDefaultTaskForm())
-  knowledgePointsText.value = ''
 }
 
 async function loadPoliceTypeOptions() {
@@ -311,15 +327,6 @@ async function loadPoliceTypeOptions() {
     policeTypeOptions.value = result.items || result || []
   } catch {
     policeTypeOptions.value = []
-  }
-}
-
-async function loadKnowledgePointOptions() {
-  try {
-    const result = await getKnowledgePoints({ size: -1, isActive: true })
-    knowledgePointOptions.value = result.items || result || []
-  } catch {
-    knowledgePointOptions.value = []
   }
 }
 
@@ -360,12 +367,13 @@ async function handleCreateTask() {
     message.warning('请填写任务名称和试卷名称')
     return
   }
+  if (summarizePaperTypeConfigs(taskForm.typeConfigs).totalCount <= 0) {
+    message.warning('请至少将一种题型的数量设置为大于 0')
+    return
+  }
   creating.value = true
   try {
-    const result = await createAiPaperAssemblyTask({
-      ...taskForm,
-      knowledgePoints: parseKnowledgePoints(),
-    })
+    const result = await createAiPaperAssemblyTask({ ...taskForm })
     message.success('任务已创建，已加入处理队列')
     resetTaskForm()
     await loadTasks()
@@ -455,14 +463,14 @@ async function handleConfirmTask() {
 }
 
 function formatTypeConfigs(configs = []) {
-  return configs.map((item) => `${typeLabels[item.type]} ${item.count}题`).join(' / ')
+  return formatPaperTypeConfigs(configs, typeLabels)
 }
 
 function formatParsedTypeConfigs(configs = []) {
   return configs
     .map((item) => {
       const parts = [`${typeLabels[item.type] || item.type} ${item.count}题`]
-      if (item.difficulty) parts.push(`难度${item.difficulty}`)
+      if (item.difficulty) parts.push(`难度${item.difficulty}级`)
       if (item.score) parts.push(`单题${item.score}分`)
       if (item.knowledgePoints?.length) parts.push(`关键词：${item.knowledgePoints.join('、')}`)
       return parts.join('，')
@@ -476,7 +484,6 @@ function findPoliceTypeName(id) {
 
 onMounted(() => {
   loadPoliceTypeOptions()
-  loadKnowledgePointOptions()
   loadTasks()
 })
 </script>
@@ -509,24 +516,6 @@ onMounted(() => {
   margin-bottom: 12px;
   font-size: 15px;
   font-weight: 600;
-}
-
-.config-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.config-item {
-  display: grid;
-  grid-template-columns: 72px 1fr 90px 1fr;
-  gap: 8px;
-  align-items: center;
-}
-
-.config-type {
-  color: #595959;
-  font-size: 13px;
 }
 
 .note-list {
