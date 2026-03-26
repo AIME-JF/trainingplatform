@@ -10,7 +10,7 @@
       <div class="section-header" style="margin-bottom:14px">
         <div>
           <h4 style="margin:0">开班指引</h4>
-          <div class="section-helper">先准备学员、课程和课次，再发布培训班、锁定名单并开班，用户更容易看懂当前进度。</div>
+          <div class="section-helper">先准备学员、课程和课次，再发布培训班、锁定名单并开班。</div>
         </div>
         <a-button size="small" type="link" @click="$emit('go-schedule')">去课程安排</a-button>
       </div>

@@ -17,7 +17,6 @@ import {
   RESOURCE_MANAGE_PAGE_PERMISSIONS,
   RESOURCE_POLICY_PAGE_PERMISSIONS,
   RESOURCE_REVIEW_PAGE_PERMISSIONS,
-  RESOURCE_UPLOAD_PAGE_PERMISSIONS,
   ROLE_MANAGE_PAGE_PERMISSIONS,
   TALENT_PAGE_PERMISSIONS,
   TRAINING_BASE_PAGE_PERMISSIONS,
@@ -53,13 +52,13 @@ const router = createRouter({
           path: 'courses',
           name: 'CourseList',
           component: () => import('../views/courses/List.vue'),
-          meta: { title: '课程学习', icon: 'PlayCircleOutlined', anyPermissions: COURSE_PAGE_PERMISSIONS },
+          meta: { title: '课程资源', icon: 'PlayCircleOutlined', anyPermissions: COURSE_PAGE_PERMISSIONS },
         },
         {
           path: 'courses/:id',
           name: 'CourseDetail',
           component: () => import('../views/courses/Detail.vue'),
-          meta: { title: '课程详情', anyPermissions: COURSE_PAGE_PERMISSIONS },
+          meta: { title: '课程资源详情', anyPermissions: COURSE_PAGE_PERMISSIONS },
         },
         {
           path: 'exam/list',
@@ -204,12 +203,6 @@ const router = createRouter({
           name: 'ResourceDetail',
           component: () => import('../views/resource/Detail.vue'),
           meta: { title: '资源详情' },
-        },
-        {
-          path: 'resource/upload',
-          name: 'ResourceUpload',
-          component: () => import('../views/resource/Upload.vue'),
-          meta: { title: '上传资源', anyPermissions: RESOURCE_UPLOAD_PAGE_PERMISSIONS },
         },
         {
           path: 'resource/my',

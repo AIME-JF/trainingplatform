@@ -10,12 +10,19 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from app.models import (
     Resource, ResourceMediaLink, ResourceTag, ResourceTagRelation,
     ResourceVisibilityScope, CourseResourceRef, TrainingResourceRef,
-    MediaFile, User
+    Department, MediaFile, PoliceType, Role, User
 )
 from app.models.course import Course
 from app.models.training import Training
 from app.models.review import ResourceReviewTask
 from app.schemas import PaginatedResponse
+from app.schemas.exam import (
+    ADMISSION_SCOPE_ALL,
+    ADMISSION_SCOPE_DEPARTMENT,
+    ADMISSION_SCOPE_ROLE,
+    ADMISSION_SCOPE_USER,
+    _normalize_admission_scope_target_ids,
+)
 from app.schemas.resource import (
     ResourceCreate, ResourceUpdate, ResourceListItemResponse, ResourceDetailResponse,
     ResourceMediaLinkResponse, ResourceTagResponse,
@@ -38,6 +45,13 @@ RESOURCE_CONTENT_FILE_EXTENSIONS = {
     'document': {'.pdf', '.doc', '.docx', '.ppt', '.pptx'},
     'image': {'.jpg', '.jpeg', '.png', '.webp'},
     'image_text': {'.jpg', '.jpeg', '.png', '.webp'},
+}
+
+RESOURCE_SCOPE_CHOICES = {
+    ADMISSION_SCOPE_ALL,
+    ADMISSION_SCOPE_USER,
+    ADMISSION_SCOPE_DEPARTMENT,
+    ADMISSION_SCOPE_ROLE,
 }
 
 
@@ -124,6 +138,7 @@ class ResourceService:
         user_ctx = self._get_user_context(current_user_id)
         owner_department_id = data.owner_department_id or (next(iter(user_ctx['department_ids'])) if user_ctx['department_ids'] else None)
         normalized_content_type = self._normalize_content_type(data.content_type)
+        scope_type, scope_target_ids, _ = self._prepare_resource_scope(data.scope_type, data.scope_target_ids)
 
         media_file_ids = self._extract_media_file_ids(data.media_links)
         if data.cover_media_file_id:
@@ -136,7 +151,7 @@ class ResourceService:
             content_type=normalized_content_type,
             source_type=data.source_type,
             status='draft',
-            visibility_type=data.visibility_type,
+            visibility_type=scope_type,
             uploader_id=current_user_id,
             owner_department_id=owner_department_id,
             cover_media_file_id=data.cover_media_file_id,
@@ -146,7 +161,7 @@ class ResourceService:
 
         self._sync_tags(resource, data.tags)
         self._sync_media_links(resource, data.media_links)
-        self._sync_visibility_scopes(resource, data.visibility_type, data.visibility_scopes)
+        self._sync_visibility_scopes(resource, scope_type, scope_target_ids)
 
         self.db.commit()
         self.db.refresh(resource)
@@ -185,7 +200,11 @@ class ResourceService:
         update_data = data.model_dump(exclude_unset=True)
         tags = update_data.pop('tags', None)
         media_links = update_data.pop('media_links', None)
-        visibility_scopes = update_data.pop('visibility_scopes', None)
+        next_scope_type = update_data.pop('scope_type', None)
+        next_scope_target_ids = update_data.pop('scope_target_ids', None)
+        update_data.pop('visibility_type', None)
+        update_data.pop('visibility_scopes', None)
+        update_data.pop('scope', None)
 
         for field, value in update_data.items():
             if field == 'content_type' and value is not None:
@@ -196,8 +215,14 @@ class ResourceService:
             self._sync_tags(resource, tags)
         if media_links is not None:
             self._sync_media_links(resource, media_links)
-        if visibility_scopes is not None:
-            self._sync_visibility_scopes(resource, resource.visibility_type, visibility_scopes)
+        if next_scope_type is not None or next_scope_target_ids is not None:
+            current_scope_payload = self._resolve_resource_scope_payload(resource)
+            resolved_scope_type, resolved_scope_target_ids, _ = self._prepare_resource_scope(
+                next_scope_type if next_scope_type is not None else current_scope_payload['scope_type'],
+                next_scope_target_ids if next_scope_target_ids is not None else current_scope_payload['scope_target_ids'],
+            )
+            resource.visibility_type = resolved_scope_type
+            self._sync_visibility_scopes(resource, resolved_scope_type, resolved_scope_target_ids)
 
         file_ids = [link.media_file_id for link in (resource.media_links or []) if link.media_file_id]
         if resource.cover_media_file_id:
@@ -464,16 +489,201 @@ class ResourceService:
                 sort_order=payload.get('sort_order', idx),
             ))
 
-    def _sync_visibility_scopes(self, resource: Resource, visibility_type: str, scope_ids: List[int]):
-        self.db.query(ResourceVisibilityScope).filter(ResourceVisibilityScope.resource_id == resource.id).delete()
-        if visibility_type == 'public':
-            return
+    def _normalize_scope_target_ids(self, value: Any) -> List[int]:
+        return _normalize_admission_scope_target_ids(value) or []
 
-        scope_type = 'department'
-        if visibility_type == 'police_type':
-            scope_type = 'police_type'
-        elif visibility_type == 'custom':
-            scope_type = 'department'
+    def _build_scope_summary(self, label: str, names: List[str]) -> str:
+        cleaned_names = [str(name).strip() for name in names if str(name or '').strip()]
+        if not cleaned_names:
+            return label
+        if len(cleaned_names) <= 3:
+            return f"{label}：{'、'.join(cleaned_names)}"
+        return f"{label}：{'、'.join(cleaned_names[:3])} 等{len(cleaned_names)}项"
+
+    def _display_user_name(self, user: Optional[User]) -> str:
+        if not user:
+            return ''
+        return str(user.nickname or user.username or user.id)
+
+    def _prepare_resource_scope(
+        self,
+        scope_type: Optional[str],
+        scope_target_ids: Any,
+    ) -> tuple[str, List[int], str]:
+        resolved_scope_type = str(scope_type or ADMISSION_SCOPE_ALL).strip() or ADMISSION_SCOPE_ALL
+        if resolved_scope_type not in RESOURCE_SCOPE_CHOICES:
+            raise ValueError('不支持的可见范围类型')
+
+        target_ids = self._normalize_scope_target_ids(scope_target_ids)
+        if resolved_scope_type == ADMISSION_SCOPE_ALL:
+            return ADMISSION_SCOPE_ALL, [], '全部用户'
+
+        if not target_ids:
+            raise ValueError('请至少选择一个可见范围目标')
+
+        if resolved_scope_type == ADMISSION_SCOPE_USER:
+            users = self.db.query(User).filter(
+                User.id.in_(target_ids),
+                User.is_active == True,
+            ).all()
+            user_map = {user.id: user for user in users}
+            ordered_users = [user_map.get(item_id) for item_id in target_ids]
+            if not all(ordered_users):
+                raise ValueError('指定用户中包含无效用户')
+            return (
+                resolved_scope_type,
+                target_ids,
+                self._build_scope_summary('指定用户', [self._display_user_name(user) for user in ordered_users]),
+            )
+
+        if resolved_scope_type == ADMISSION_SCOPE_DEPARTMENT:
+            departments = self.db.query(Department).filter(
+                Department.id.in_(target_ids),
+                Department.is_active == True,
+            ).all()
+            department_map = {department.id: department for department in departments}
+            ordered_departments = [department_map.get(item_id) for item_id in target_ids]
+            if not all(ordered_departments):
+                raise ValueError('指定部门中包含无效部门')
+            return (
+                resolved_scope_type,
+                target_ids,
+                self._build_scope_summary('指定部门', [department.name for department in ordered_departments]),
+            )
+
+        roles = self.db.query(Role).filter(
+            Role.id.in_(target_ids),
+            Role.is_active == True,
+        ).all()
+        role_map = {role.id: role for role in roles}
+        ordered_roles = [role_map.get(item_id) for item_id in target_ids]
+        if not all(ordered_roles):
+            raise ValueError('指定角色中包含无效角色')
+        return (
+            resolved_scope_type,
+            target_ids,
+            self._build_scope_summary('指定角色', [role.name for role in ordered_roles]),
+        )
+
+    def _build_legacy_scope_summary(self, scope_type: str, target_ids: List[int]) -> str:
+        if scope_type == ADMISSION_SCOPE_ALL:
+            return '全部用户'
+        if not target_ids:
+            legacy_labels = {
+                ADMISSION_SCOPE_USER: '指定用户',
+                ADMISSION_SCOPE_DEPARTMENT: '指定部门',
+                ADMISSION_SCOPE_ROLE: '指定角色',
+                'police_type': '历史警种范围',
+                'custom': '历史自定义范围',
+            }
+            return legacy_labels.get(scope_type, '可见范围')
+
+        if scope_type == ADMISSION_SCOPE_USER:
+            users = self.db.query(User).filter(User.id.in_(target_ids)).all()
+            user_map = {user.id: user for user in users}
+            return self._build_scope_summary('指定用户', [self._display_user_name(user_map.get(item_id)) for item_id in target_ids])
+
+        if scope_type == ADMISSION_SCOPE_DEPARTMENT:
+            departments = self.db.query(Department).filter(Department.id.in_(target_ids)).all()
+            department_map = {department.id: department for department in departments}
+            return self._build_scope_summary('指定部门', [department_map.get(item_id).name for item_id in target_ids if department_map.get(item_id)])
+
+        if scope_type == ADMISSION_SCOPE_ROLE:
+            roles = self.db.query(Role).filter(Role.id.in_(target_ids)).all()
+            role_map = {role.id: role for role in roles}
+            return self._build_scope_summary('指定角色', [role_map.get(item_id).name for item_id in target_ids if role_map.get(item_id)])
+
+        if scope_type == 'police_type':
+            police_types = self.db.query(PoliceType).filter(PoliceType.id.in_(target_ids)).all()
+            police_type_map = {item.id: item for item in police_types}
+            return self._build_scope_summary('历史警种范围', [police_type_map.get(item_id).name for item_id in target_ids if police_type_map.get(item_id)])
+
+        return '历史自定义范围'
+
+    def _resolve_resource_scope_payload(self, resource: Resource, *, include_summary: bool = True) -> dict[str, Any]:
+        raw_visibility_type = str(resource.visibility_type or ADMISSION_SCOPE_ALL).strip() or ADMISSION_SCOPE_ALL
+        scopes = list(resource.visibility_scopes or [])
+
+        if raw_visibility_type in RESOURCE_SCOPE_CHOICES:
+            target_ids = [] if raw_visibility_type == ADMISSION_SCOPE_ALL else [
+                int(scope.scope_id)
+                for scope in scopes
+                if scope.scope_type == raw_visibility_type
+            ]
+            if raw_visibility_type == ADMISSION_SCOPE_DEPARTMENT and not target_ids and resource.owner_department_id:
+                target_ids = [int(resource.owner_department_id)]
+            return {
+                'visibility_type': raw_visibility_type,
+                'visibility_scopes': list(target_ids),
+                'scope_type': raw_visibility_type,
+                'scope_target_ids': list(target_ids),
+                'scope': self._build_legacy_scope_summary(raw_visibility_type, list(target_ids)) if include_summary else None,
+            }
+
+        if raw_visibility_type == 'public':
+            return {
+                'visibility_type': raw_visibility_type,
+                'visibility_scopes': [],
+                'scope_type': ADMISSION_SCOPE_ALL,
+                'scope_target_ids': [],
+                'scope': '全部用户' if include_summary else None,
+            }
+
+        if raw_visibility_type == 'police_type':
+            target_ids = [int(scope.scope_id) for scope in scopes if scope.scope_type == 'police_type']
+            return {
+                'visibility_type': raw_visibility_type,
+                'visibility_scopes': list(target_ids),
+                'scope_type': 'police_type',
+                'scope_target_ids': [],
+                'scope': self._build_legacy_scope_summary('police_type', list(target_ids)) if include_summary else None,
+            }
+
+        if raw_visibility_type == 'custom':
+            supported_scope_types = [ADMISSION_SCOPE_USER, ADMISSION_SCOPE_DEPARTMENT, ADMISSION_SCOPE_ROLE]
+            grouped_scope_ids = {
+                scope_type: [int(scope.scope_id) for scope in scopes if scope.scope_type == scope_type]
+                for scope_type in [*supported_scope_types, 'police_type']
+            }
+            matched_scope_types = [scope_type for scope_type in supported_scope_types if grouped_scope_ids[scope_type]]
+            if len(matched_scope_types) == 1 and not grouped_scope_ids['police_type']:
+                matched_scope_type = matched_scope_types[0]
+                target_ids = grouped_scope_ids[matched_scope_type]
+                return {
+                    'visibility_type': raw_visibility_type,
+                    'visibility_scopes': [int(scope.scope_id) for scope in scopes],
+                    'scope_type': matched_scope_type,
+                    'scope_target_ids': list(target_ids),
+                    'scope': self._build_legacy_scope_summary(matched_scope_type, list(target_ids)) if include_summary else None,
+                }
+
+            summary_parts = []
+            if include_summary:
+                for scope_type in supported_scope_types:
+                    if grouped_scope_ids[scope_type]:
+                        summary_parts.append(self._build_legacy_scope_summary(scope_type, grouped_scope_ids[scope_type]))
+                if grouped_scope_ids['police_type']:
+                    summary_parts.append(self._build_legacy_scope_summary('police_type', grouped_scope_ids['police_type']))
+            return {
+                'visibility_type': raw_visibility_type,
+                'visibility_scopes': [int(scope.scope_id) for scope in scopes],
+                'scope_type': 'custom',
+                'scope_target_ids': [],
+                'scope': '；'.join(summary_parts) if summary_parts else ('历史自定义范围' if include_summary else None),
+            }
+
+        return {
+            'visibility_type': raw_visibility_type,
+            'visibility_scopes': [int(scope.scope_id) for scope in scopes],
+            'scope_type': ADMISSION_SCOPE_ALL,
+            'scope_target_ids': [],
+            'scope': '全部用户' if include_summary else None,
+        }
+
+    def _sync_visibility_scopes(self, resource: Resource, scope_type: str, scope_ids: List[int]):
+        self.db.query(ResourceVisibilityScope).filter(ResourceVisibilityScope.resource_id == resource.id).delete()
+        if scope_type == ADMISSION_SCOPE_ALL:
+            return
 
         for sid in scope_ids or []:
             self.db.add(ResourceVisibilityScope(
@@ -569,25 +779,39 @@ class ResourceService:
                 return bool(resource.owner_department_id and resource.owner_department_id in dept_ids)
             return False
 
+        return self.can_user_access_published_resource(resource, user_id, user_ctx or self._get_user_context(user_id))
+
+    def can_user_access_published_resource(
+        self,
+        resource: Resource,
+        user_id: int,
+        user_ctx: Optional[Dict[str, Set[int]]] = None,
+    ) -> bool:
         return self._is_visible_by_scope(resource, user_id, user_ctx or self._get_user_context(user_id))
 
     def _is_visible_by_scope(self, resource: Resource, user_id: int, user_ctx: Dict[str, Set[int]]) -> bool:
-        if resource.visibility_type == 'public':
-            return True
-
+        scope_payload = self._resolve_resource_scope_payload(resource, include_summary=False)
+        scope_type = str(scope_payload.get('scope_type') or ADMISSION_SCOPE_ALL)
+        target_ids = set(self._normalize_scope_target_ids(scope_payload.get('scope_target_ids')))
         department_ids = user_ctx.get('department_ids', set())
         police_type_ids = user_ctx.get('police_type_ids', set())
         role_ids = user_ctx.get('role_ids', set())
 
-        if resource.visibility_type == 'department':
-            if resource.owner_department_id and resource.owner_department_id in department_ids:
-                return True
-            return any(s.scope_type == 'department' and s.scope_id in department_ids for s in (resource.visibility_scopes or []))
-
-        if resource.visibility_type == 'police_type':
-            return any(s.scope_type == 'police_type' and s.scope_id in police_type_ids for s in (resource.visibility_scopes or []))
-
-        if resource.visibility_type == 'custom':
+        if scope_type == ADMISSION_SCOPE_ALL:
+            return True
+        if scope_type == ADMISSION_SCOPE_USER:
+            return bool(target_ids and user_id in target_ids)
+        if scope_type == ADMISSION_SCOPE_DEPARTMENT:
+            return bool(target_ids.intersection(department_ids))
+        if scope_type == ADMISSION_SCOPE_ROLE:
+            return bool(target_ids.intersection(role_ids))
+        if scope_type == 'police_type':
+            return bool(police_type_ids.intersection({
+                int(scope.scope_id)
+                for scope in (resource.visibility_scopes or [])
+                if scope.scope_type == 'police_type'
+            }))
+        if scope_type == 'custom':
             for s in (resource.visibility_scopes or []):
                 if s.scope_type == 'user' and s.scope_id == user_id:
                     return True
@@ -611,8 +835,41 @@ class ResourceService:
             return f'{base}/{bucket}/{path}'
         return f'{settings.API_V1_STR}/media/files/{media.id}'
 
+    def _guess_media_content_type(
+        self,
+        media: Optional[MediaFile],
+        fallback: Optional[str] = None,
+    ) -> Optional[str]:
+        filename = str(getattr(media, 'filename', '') or '').lower()
+        mime_type = str(getattr(media, 'mime_type', '') or '').lower()
+        if 'video' in mime_type or filename.endswith('.mp4'):
+            return 'video'
+        if any(token in mime_type for token in ('pdf', 'msword', 'powerpoint', 'document')):
+            return 'document'
+        if any(filename.endswith(ext) for ext in ('.pdf', '.doc', '.docx', '.ppt', '.pptx')):
+            return 'document'
+        if any(token in mime_type for token in ('image', 'png', 'jpeg', 'jpg', 'webp')):
+            return 'image'
+        if any(filename.endswith(ext) for ext in ('.jpg', '.jpeg', '.png', '.webp')):
+            return 'image'
+        return self._normalize_content_type(fallback)
+
+    def _build_media_display_label(self, media_links: List[ResourceMediaLink], current_link: ResourceMediaLink) -> str:
+        ordered_links = list(media_links or [])
+        if not current_link:
+            return '文件'
+        if str(current_link.media_role or '').strip() == 'main':
+            return '主文件'
+
+        attachments = [item for item in ordered_links if str(item.media_role or '').strip() != 'main']
+        for index, item in enumerate(attachments, start=1):
+            if item.id == current_link.id:
+                return f'附件{index}'
+        return '附件'
+
     def _to_list_item_response(self, resource: Resource) -> ResourceListItemResponse:
         tags = [rel.tag.name for rel in (resource.tag_relations or []) if rel.tag]
+        scope_payload = self._resolve_resource_scope_payload(resource)
         return ResourceListItemResponse(
             id=resource.id,
             title=resource.title,
@@ -620,7 +877,10 @@ class ResourceService:
             content_type=self._normalize_content_type(resource.content_type),
             source_type=resource.source_type,
             status=resource.status,
-            visibility_type=resource.visibility_type,
+            visibility_type=scope_payload['visibility_type'],
+            scope=scope_payload['scope'],
+            scope_type=scope_payload['scope_type'],
+            scope_target_ids=scope_payload['scope_target_ids'],
             uploader_id=resource.uploader_id,
             uploader_name=resource.uploader.nickname if resource.uploader else None,
             owner_department_id=resource.owner_department_id,
@@ -634,18 +894,23 @@ class ResourceService:
 
     def _to_detail_response(self, resource: Resource) -> ResourceDetailResponse:
         base = self._to_list_item_response(resource)
+        scope_payload = self._resolve_resource_scope_payload(resource)
         media_links = []
-        for link in sorted((resource.media_links or []), key=lambda x: x.sort_order):
+        ordered_links = sorted((resource.media_links or []), key=lambda x: (x.sort_order, x.id))
+        for link in ordered_links:
             media_links.append(ResourceMediaLinkResponse(
                 id=link.id,
                 media_file_id=link.media_file_id,
                 media_role=link.media_role,
                 sort_order=link.sort_order,
+                file_name=link.media_file.filename if link.media_file else None,
+                display_label=self._build_media_display_label(ordered_links, link),
+                content_type=self._guess_media_content_type(link.media_file, resource.content_type),
                 file_url=self._build_media_url(link.media_file),
             ))
 
         return ResourceDetailResponse(
             **base.model_dump(),
             media_links=media_links,
-            visibility_scopes=[s.scope_id for s in (resource.visibility_scopes or [])],
+            visibility_scopes=scope_payload['visibility_scopes'],
         )

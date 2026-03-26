@@ -2,10 +2,13 @@
   <div class="admission-scope-selector">
     <a-radio-group v-model:value="localScopeType" button-style="solid" class="scope-type-group">
       <a-radio-button value="all">全部</a-radio-button>
-      <a-radio-button value="user">指定用户</a-radio-button>
-      <a-radio-button value="department">指定部门</a-radio-button>
-      <a-radio-button value="role">指定角色</a-radio-button>
+      <a-radio-button value="user" :disabled="!scopeAvailabilityMap.user.enabled">指定用户</a-radio-button>
+      <a-radio-button value="department" :disabled="!scopeAvailabilityMap.department.enabled">指定部门</a-radio-button>
+      <a-radio-button value="role" :disabled="!scopeAvailabilityMap.role.enabled">指定角色</a-radio-button>
     </a-radio-group>
+    <div v-if="unavailableScopeTips.length" class="scope-permission-tip">
+      {{ unavailableScopeTips.join('；') }}
+    </div>
 
     <div class="scope-content">
       <div v-if="localScopeType === 'all'" class="scope-hint">
@@ -20,6 +23,7 @@
           show-search
           :filter-option="false"
           style="width: 100%"
+          :disabled="!isScopeSelectable(localScopeType)"
           :loading="loadingMap[localScopeType]"
           :options="currentOptions"
           :placeholder="currentPlaceholder"
@@ -36,6 +40,7 @@ import { computed, reactive, ref, watch, onBeforeUnmount } from 'vue'
 import { getUser, getUsers } from '@/api/user'
 import { getDepartmentDetail, getDepartmentList } from '@/api/department'
 import { getRoleDetail, getRoleList } from '@/api/role'
+import { useAuthStore } from '@/stores/auth'
 
 const REMOTE_PAGE_SIZE = 10
 
@@ -83,6 +88,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:scopeType', 'update:scopeTargetIds'])
+const authStore = useAuthStore()
 
 const localScopeType = ref('all')
 const localScopeTargetIds = ref([])
@@ -121,6 +127,27 @@ function getScopedOptions(scopeType) {
   return mergeOptions(optionMap[scopeType], selectedOptionMap[scopeType])
 }
 
+const scopeAvailabilityMap = computed(() => ({
+  user: {
+    enabled: authStore.hasPermission('GET_USERS'),
+    label: '无用户列表查看权限，不能指定用户范围',
+  },
+  department: {
+    enabled: authStore.hasPermission('GET_DEPARTMENTS'),
+    label: '无部门列表查看权限，不能指定部门范围',
+  },
+  role: {
+    enabled: authStore.hasPermission('GET_ROLES'),
+    label: '无角色列表查看权限，不能指定角色范围',
+  },
+}))
+
+const unavailableScopeTips = computed(() => (
+  ['user', 'department', 'role']
+    .filter((scopeType) => !scopeAvailabilityMap.value[scopeType].enabled)
+    .map((scopeType) => scopeAvailabilityMap.value[scopeType].label)
+))
+
 const currentOptions = computed(() => getScopedOptions(localScopeType.value))
 const currentPlaceholder = computed(() => {
   if (localScopeType.value === 'user') return props.userPlaceholder
@@ -137,6 +164,13 @@ const currentHint = computed(() => {
 
 function normalizeScopeType(value) {
   return ['all', 'user', 'department', 'role'].includes(value) ? value : 'all'
+}
+
+function isScopeSelectable(scopeType) {
+  if (scopeType === 'all') {
+    return true
+  }
+  return !!scopeAvailabilityMap.value[scopeType]?.enabled
 }
 
 function normalizeTargetIds(value) {
@@ -229,7 +263,7 @@ function rememberCurrentSelections(scopeType, selectedIds) {
 }
 
 async function fetchOptions(scopeType, keyword = '') {
-  if (!['user', 'department', 'role'].includes(scopeType)) {
+  if (!['user', 'department', 'role'].includes(scopeType) || !isScopeSelectable(scopeType)) {
     return
   }
 
@@ -292,6 +326,9 @@ async function fetchOptions(scopeType, keyword = '') {
 }
 
 async function fetchOptionById(scopeType, id) {
+  if (!isScopeSelectable(scopeType)) {
+    return null
+  }
   if (scopeType === 'user') {
     return buildUserOption(await getUser(id))
   }
@@ -305,7 +342,7 @@ async function fetchOptionById(scopeType, id) {
 }
 
 async function ensureSelectedOptions(scopeType, targetIds) {
-  if (!['user', 'department', 'role'].includes(scopeType)) {
+  if (!['user', 'department', 'role'].includes(scopeType) || !isScopeSelectable(scopeType)) {
     return
   }
 
@@ -325,7 +362,7 @@ async function ensureSelectedOptions(scopeType, targetIds) {
 
 function handleSearch(value) {
   const scopeType = localScopeType.value
-  if (!['user', 'department', 'role'].includes(scopeType)) {
+  if (!['user', 'department', 'role'].includes(scopeType) || !isScopeSelectable(scopeType)) {
     return
   }
 
@@ -429,6 +466,7 @@ onBeforeUnmount(() => {
   gap: 8px;
 }
 
+.scope-permission-tip,
 .scope-hint {
   font-size: 12px;
   color: #8c8c8c;

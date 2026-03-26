@@ -49,20 +49,7 @@ class CourseProgressService:
             if (record_map.get(chapter.id).progress if record_map.get(chapter.id) else 0) >= 100
         )
 
-        total_weight = sum(
-            max(int(chapter.duration or 0), 0)
-            for chapter in ordered_chapters
-            if int(chapter.duration or 0) > 0
-        )
-        if total_weight > 0:
-            weighted_progress = round(
-                sum(
-                    max(int(chapter.duration or 0), 0)
-                    * min(max(record_map.get(chapter.id).progress if record_map.get(chapter.id) else 0, 0), 100)
-                    for chapter in ordered_chapters
-                ) / total_weight
-            )
-        elif chapter_count > 0:
+        if chapter_count > 0:
             weighted_progress = round(
                 sum(
                     min(max(record_map.get(chapter.id).progress if record_map.get(chapter.id) else 0, 0), 100)

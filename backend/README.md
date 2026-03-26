@@ -117,7 +117,7 @@ AI 运行时配置：
 
 - 资源标签已独立成 `ResourceTag / ResourceTagRelation`
 - 资源标签支持列表查询与即时创建接口：`GET /api/v1/resources/tags`、`POST /api/v1/resources/tags`
-- 上传页标签交互与课程标签一致，支持搜索已有标签并直接新建
+- 资源上传入口的标签交互与课程标签一致，支持搜索已有标签并直接新建
 - 审核策略支持 `global / department / department_tree` 三种作用域
 - 审核策略支持上传者约束、连续多级审核、最小通过数校验
 - 如果当前没有任何启用的自定义审核规则，资源提交审核时会自动回退到“管理员默认审核”
@@ -172,13 +172,16 @@ AI 运行时配置：
   - `user`
   - `department`
   - `role`
+- 课程章节创建 / 编辑时不再直接上传文件，而是引用当前操作用户自己已发布的资源
+- 章节可绑定资源中的具体文件；未显式指定时默认取第一个文件，对外摘要按 `文件1 / 文件2 ...` 返回
 - 课程总进度由 `CourseProgressService` 聚合：
-  - 按章节时长加权
+  - 按章节平均
   - 列表、详情、工作台、个人中心共用
 - 视频学习进度会持久化 `playback_seconds`
+- 课程文件类型已覆盖 `video`、`document`、`image`、`mixed`
 - 课程学习情况接口：`GET /api/v1/courses/{course_id}/learning-status`
   - 仅课程创建者、课程主讲教官，或具备 `GET_COURSE_LEARNING_STATUS` 权限的用户可查看
-- 课程可绑定资源，详情会返回绑定资源列表
+- 课程详情会返回章节所引用的资源与具体文件摘要
 
 ### 系统配置域
 
@@ -248,7 +251,8 @@ backend/
 │   ├── __init__.py              # FastAPI 应用实例、startup / shutdown
 │   ├── views/                   # 路由层
 │   ├── controllers/             # 控制器层
-│   ├── services/                # 业务层、AI 服务
+│   ├── agents/                  # 智能体与大模型调用封装
+│   ├── services/                # 业务层
 │   ├── tasks/                   # Celery 任务
 │   ├── models/                  # SQLAlchemy 模型
 │   ├── schemas/                 # Pydantic 模型

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models import Resource
 from app.models.recommendation import ResourceBehaviorEvent, ResourceRecommendScore
+from app.services.resource import ResourceService
 
 
 class RecommendationService:
@@ -15,6 +16,7 @@ class RecommendationService:
 
     def __init__(self, db: Session):
         self.db = db
+        self.resource_service = ResourceService(db)
 
     def record_event(
         self,
@@ -49,15 +51,37 @@ class RecommendationService:
         return event
 
     def get_recommendation_feed(self, user_id: int, page: int = 1, size: int = 10) -> Dict:
+        user_ctx = self._get_user_context(user_id)
         # 优先使用预计算分
         pre_scores = self.db.query(ResourceRecommendScore).filter(
             ResourceRecommendScore.user_id == user_id
         ).order_by(ResourceRecommendScore.score.desc()).all()
 
         if pre_scores:
-            total = len(pre_scores)
+            resource_ids = [int(item.resource_id) for item in pre_scores if item.resource_id]
+            resource_map = {
+                item.id: item
+                for item in self.db.query(Resource).options(
+                    selectinload(Resource.visibility_scopes),
+                ).filter(
+                    Resource.id.in_(resource_ids),
+                    Resource.status == 'published',
+                ).all()
+            }
+            filtered_scores = [
+                score
+                for score in pre_scores
+                if resource_map.get(int(score.resource_id))
+                and self.resource_service.can_user_access_published_resource(
+                    resource_map[int(score.resource_id)],
+                    user_id,
+                    user_ctx,
+                )
+            ]
+
+            total = len(filtered_scores)
             start = (page - 1) * size
-            selected = pre_scores[start:start + size]
+            selected = filtered_scores[start:start + size]
             return {
                 'items': [
                     {
@@ -78,12 +102,13 @@ class RecommendationService:
             selectinload(Resource.tag_relations),
         ).filter(Resource.status == 'published').all()
 
-        user_ctx = self._get_user_context(user_id)
         interest_weights = self._get_interest_weights(user_id)
 
         scored = []
         now = datetime.now()
         for r in resources:
+            if not self.resource_service.can_user_access_published_resource(r, user_id, user_ctx):
+                continue
             police_type_score = self._calc_police_type_score(r, user_ctx['police_type_ids'])
             department_score = self._calc_department_score(r, user_ctx['department_ids'])
             interest_score = self._calc_interest_score(r, interest_weights)
@@ -146,14 +171,16 @@ class RecommendationService:
         user = self.db.query(User).options(
             selectinload(User.departments),
             selectinload(User.police_types),
+            selectinload(User.roles),
         ).filter(User.id == user_id).first()
 
         if not user:
-            return {'department_ids': set(), 'police_type_ids': set()}
+            return {'department_ids': set(), 'police_type_ids': set(), 'role_ids': set()}
 
         return {
             'department_ids': {d.id for d in (user.departments or [])},
             'police_type_ids': {p.id for p in (user.police_types or [])},
+            'role_ids': {r.id for r in (user.roles or [])},
         }
 
     def _get_interest_weights(self, user_id: int) -> Dict[int, float]:

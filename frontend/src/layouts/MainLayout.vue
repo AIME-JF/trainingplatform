@@ -153,15 +153,6 @@
         <span class="nav-label">首页</span>
       </a>
       <a
-        v-if="showCourseNav"
-        class="mobile-nav-item"
-        :class="{ active: $route.path.startsWith('/courses') }"
-        @click="$router.push('/courses')"
-      >
-        <span class="nav-icon"><PlayCircleOutlined /></span>
-        <span class="nav-label">课程</span>
-      </a>
-      <a
         v-if="primaryTrainingRoute"
         class="mobile-nav-item"
         :class="{ active: $route.path.startsWith('/training') }"
@@ -193,7 +184,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores/auth.js'
 import { appMenuConfig } from './menuConfig'
 import {
-  HomeOutlined, PlayCircleOutlined, FormOutlined,
+  HomeOutlined, FormOutlined,
   TeamOutlined, UserOutlined,
   MenuUnfoldOutlined, MenuFoldOutlined, DownOutlined, LogoutOutlined,
 } from '@ant-design/icons-vue'
@@ -288,7 +279,6 @@ function flattenMenuKeys(items) {
 const visibleMenuItems = computed(() => filterMenuItems(appMenuConfig))
 const visibleMenuKeys = computed(() => flattenMenuKeys(visibleMenuItems.value))
 const showDashboardNav = computed(() => visibleMenuKeys.value.includes('/'))
-const showCourseNav = computed(() => visibleMenuKeys.value.includes('/courses'))
 const primaryTrainingRoute = computed(() => {
   const preferredRoutes = [
     '/training',
@@ -328,7 +318,6 @@ function getSelectedMenuKeyByPath(path) {
   if (path.startsWith('/training')) return '/training'
   if (path.startsWith('/resource/library')) return '/resource/library'
   if (path.startsWith('/resource/recommend')) return '/resource/recommend'
-  if (path.startsWith('/resource/upload')) return '/resource/upload'
   if (path.startsWith('/resource/my')) return '/resource/my'
   if (path.startsWith('/resource/manage')) return '/resource/manage'
   if (path.startsWith('/resource/review')) return '/resource/review'
@@ -350,6 +339,7 @@ function getOpenKeysByPath(path) {
   if (path.startsWith('/exam/')) return ['examCenter']
   if (path.startsWith('/question/')) return ['questionCenter']
   if (path.startsWith('/paper/')) return ['paperCenter']
+  if (path.startsWith('/courses')) return ['resource']
   if (path.startsWith('/training')) return ['training']
   if (path.startsWith('/resource/')) return ['resource']
   if (

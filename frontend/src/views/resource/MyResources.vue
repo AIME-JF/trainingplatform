@@ -9,7 +9,7 @@
           tips="需要 CREATE_RESOURCE 或 VIEW_RESOURCE_ALL 权限"
           v-slot="{ disabled }"
         >
-          <a-button type="primary" :disabled="disabled" @click="$router.push('/resource/upload')">上传资源</a-button>
+          <a-button type="primary" :disabled="disabled" @click="uploadModalOpen = true">上传资源</a-button>
         </permissions-tooltip>
       </a-space>
     </div>
@@ -110,6 +110,8 @@
         </a-timeline-item>
       </a-timeline>
     </a-modal>
+
+    <resource-upload-modal v-model:open="uploadModalOpen" @success="handleUploadSuccess" />
   </div>
 </template>
 
@@ -121,12 +123,14 @@ import { useAuthStore } from '@/stores/auth'
 import { getResources, publishResource, offlineResource, deleteResource } from '@/api/resource'
 import { submitResource, getReviewWorkflow } from '@/api/review'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
+import ResourceUploadModal from './components/ResourceUploadModal.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
 const query = reactive({ page: 1, size: 10, search: '', status: '' })
 const rows = ref([])
 const total = ref(0)
+const uploadModalOpen = ref(false)
 
 const workflowVisible = ref(false)
 const workflow = ref(null)
@@ -294,6 +298,11 @@ async function viewWorkflow(record) {
 function onPageChange(page, size) {
   query.page = page
   query.size = size
+  fetchMine()
+}
+
+function handleUploadSuccess() {
+  query.page = 1
   fetchMine()
 }
 </script>

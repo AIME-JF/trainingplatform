@@ -7,7 +7,7 @@
 前端基于 Vue 3 + Vite，负责：
 
 - 登录、工作台、个人中心
-- 课程学习、培训管理、考试系统、资源中心
+- 课程资源、培训管理、考试系统、资源中心
 - 系统管理、数据看板、人才库
 - AI 任务页：出题、组卷、生成试卷、排课建议、个训方案
 - 与后端 `/api/v1` 接口联调
@@ -147,7 +147,7 @@ pnpm preview
 - 请求层会自动处理 `camelCase <-> snake_case` 转换
 - 标准响应会自动解包 `{ code, message, data }`
 - 文件下载会保留 `blob / arraybuffer`
-- 课程学习离开页面时，会用原生 `fetch(..., { keepalive: true })` 兜底提交学习进度
+- 课程详情学习页离开页面时，会用原生 `fetch(..., { keepalive: true })` 兜底提交学习进度
 
 接口能力以 `backend/API_DOCUMENTATION.md` 和后端 OpenAPI 为准。
 
@@ -177,8 +177,9 @@ pnpm preview
 
 - 标签远程搜索与即时新建
 - 可见范围选择
-- 视频章节自动识别时长
+- 章节引用当前用户已发布资源，并可选择资源内具体 `文件1 / 文件2 ...`
 - 学习进度保存与恢复
+- 课程详情支持视频、文档、图片三类资源预览
 - 学习情况标签页
 - 课程资源绑定
 
@@ -253,10 +254,10 @@ AI 任务页：
 
 ### 资源域
 
+- 资源上传弹窗：`frontend/src/views/resource/components/ResourceUploadModal.vue`
 - 资源库：`frontend/src/views/resource/Library.vue`
 - 资源推荐：`frontend/src/views/resource/Recommend.vue`
 - 资源详情：`frontend/src/views/resource/Detail.vue`
-- 上传资源：`frontend/src/views/resource/Upload.vue`
 - 我的资源：`frontend/src/views/resource/MyResources.vue`
 - 资源管理：`frontend/src/views/resource/Manage.vue`
 - 审核工作台：`frontend/src/views/resource/ReviewQueue.vue`
@@ -264,7 +265,7 @@ AI 任务页：
 
 当前资源域前端已覆盖：
 
-- 上传页标签输入与课程标签交互一致，支持远程搜索已有标签并回车创建新标签
+- 资源库和我的资源通过弹窗上传资源，标签输入与课程标签交互一致，支持远程搜索已有标签并回车创建新标签
 - 资源标签逻辑已抽成公共组合式工具，课程和资源共用一套“可搜索、可创建”标签交互
 - 审核策略页支持作用域、上传者约束、审核路径预览和更完整的前端校验
 - 审核策略页会明确提示：空规则时系统回退到管理员默认审核；如无明确业务变更，建议优先沿用现有规则

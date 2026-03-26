@@ -1,8 +1,8 @@
 <template>
   <a-modal
     :open="open"
-    :title="isEditing ? '编辑课程' : '上传新课程'"
-    :width="760"
+    :title="isEditing ? '编辑课程' : '创建课程'"
+    :width="780"
     :footer="null"
     :confirm-loading="submitting"
     :destroy-on-close="true"
@@ -11,7 +11,7 @@
     <a-spin :spinning="loading">
       <a-steps :current="currentStep" size="small" style="margin: 12px 0 24px">
         <a-step title="基本信息" description="名称、主讲教官、标签" />
-        <a-step title="章节管理" description="章节、文件、学习时长" />
+        <a-step title="章节资源" description="章节、资源、文件" />
       </a-steps>
 
       <div v-show="currentStep === 0">
@@ -92,69 +92,31 @@
         <a-alert
           type="info"
           show-icon
-          message="视频章节会自动读取视频时长并锁定时长输入；文档章节继续手动填写学习时长。"
+          message="每章从资源库选择当前用户已发布的资源；不选具体文件时，系统默认使用该资源的首个文件。"
           style="margin-bottom: 16px; font-size: 12px"
         />
-        <div v-for="(chapter, idx) in form.chapters" :key="chapter.localKey" class="chapter-row">
-          <div class="chapter-header">
-            <span class="chapter-badge">第 {{ idx + 1 }} 章</span>
-            <a-button
-              v-if="form.chapters.length > 1"
-              size="small"
-              danger
-              type="text"
-              @click="removeChapter(idx)"
-            >
-              <template #icon><DeleteOutlined /></template>删除
-            </a-button>
-          </div>
+        <a-alert
+          v-if="!resourceListLoading && !resourceOptions.length"
+          type="warning"
+          show-icon
+          message="当前账号下暂无已发布资源。请先在资源库发布资源，再回来创建课程章节。"
+          style="margin-bottom: 16px; font-size: 12px"
+        />
 
-          <a-row :gutter="10" style="margin-bottom: 8px">
-            <a-col :span="15">
-              <a-input
-                v-model:value="chapter.title"
-                :placeholder="`章节名称，如：第${idx + 1}章`"
-              />
-            </a-col>
-            <a-col :span="9">
-              <a-input-number
-                v-model:value="chapter.duration"
-                :min="1"
-                :max="600"
-                :disabled="isVideoChapter(chapter)"
-                style="width: 100%"
-                addon-after="分钟"
-              />
-            </a-col>
-          </a-row>
-
-          <div class="chapter-meta">
-            <span v-if="isVideoChapter(chapter)" class="chapter-meta-item video">
-              视频章节：学习时长按视频时长自动换算
-            </span>
-            <span v-else class="chapter-meta-item doc">
-              文档章节：请手动填写建议学习时长
-            </span>
-            <span v-if="chapter.fileList.length === 0 && (chapter.fileId || chapter.resourceId)" class="chapter-meta-item">
-              当前已保留原文件，重新上传会覆盖原文件引用
-            </span>
-          </div>
-
-          <a-upload-dragger
-            :file-list="chapter.fileList"
-            :before-upload="() => false"
-            :max-count="1"
-            accept=".mp4,.pdf,.ppt,.pptx,.doc,.docx"
-            class="chapter-upload"
-            @change="(info) => handleChapterFileChange(idx, info)"
-          >
-            <p><InboxOutlined style="font-size: 24px; color: #003087" /></p>
-            <p style="font-size: 13px; font-weight: 500; margin: 4px 0">
-              {{ chapter.fileList.length ? '已选择文件，点击可更换' : '点击或拖拽上传此章节文件' }}
-            </p>
-            <p style="font-size: 11px; color: #aaa">支持 MP4 / PDF / PPT / DOC，单文件 ≤ 500MB</p>
-          </a-upload-dragger>
-        </div>
+        <CourseChapterResourceSelector
+          v-for="(chapter, idx) in form.chapters"
+          :key="chapter.localKey"
+          :chapter="chapter"
+          :index="idx"
+          :can-remove="form.chapters.length > 1"
+          :resource-options="resourceOptions"
+          :resource-loading="resourceListLoading"
+          :file-options="getChapterFileOptions(chapter)"
+          :file-loading="isChapterFileLoading(chapter)"
+          @remove="removeChapter(idx)"
+          @change-resource="(value) => handleChapterResourceChange(idx, value)"
+          @change-file="(value) => handleChapterFileChange(idx, value)"
+        />
 
         <a-button type="dashed" block style="margin-top: 16px" @click="addChapter">
           <template #icon><PlusOutlined /></template>添加章节
@@ -172,7 +134,7 @@
             :loading="submitting"
             @click="handleSubmit"
           >
-            {{ submitting ? `提交中 ${uploadPercent}%` : (isEditing ? '保存修改' : '提交课程') }}
+            {{ submitting ? '提交中' : (isEditing ? '保存修改' : '创建课程') }}
           </a-button>
         </div>
       </div>
@@ -182,14 +144,15 @@
 
 <script setup>
 import { computed, reactive, ref, toRef, watch } from 'vue'
-import { DeleteOutlined, InboxOutlined, PlusOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { createCourse, createCourseTag, getCourse, getCourseTags, updateCourse } from '@/api/course'
-import { uploadFile } from '@/api/media'
+import { getResource, getResources } from '@/api/resource'
 import { getUsers } from '@/api/user'
 import AdmissionScopeSelector from '@/views/exam/components/AdmissionScopeSelector.vue'
 import { COURSE_CATEGORIES } from '@/mock/courses'
 import { useCreatableTagSelect } from '@/utils/creatableTagSelect'
+import CourseChapterResourceSelector from './CourseChapterResourceSelector.vue'
 
 const props = defineProps({
   open: {
@@ -213,12 +176,23 @@ const categoryColorMap = {
   cybersec: '#1A0A4A',
   physical: '#2D4A1A',
 }
+const resourceTypeLabels = {
+  video: '视频',
+  document: '文档',
+  image: '图片',
+  image_text: '图文',
+  audio: '音频',
+  mixed: '混合',
+}
 
 const loading = ref(false)
 const submitting = ref(false)
-const uploadPercent = ref(0)
 const currentStep = ref(0)
 const instructorOptions = ref([])
+const resourceListLoading = ref(false)
+const resourceOptions = ref([])
+const resourceDetailCache = reactive({})
+const resourceDetailLoading = reactive({})
 let chapterSeed = 0
 
 const form = reactive({
@@ -259,14 +233,21 @@ function createChapter(overrides = {}) {
     localKey: `chapter-${chapterSeed}`,
     id: overrides.id ?? undefined,
     title: overrides.title ?? '',
-    duration: overrides.duration ?? 30,
-    originalDuration: overrides.duration ?? 30,
     fileId: overrides.fileId ?? null,
     resourceId: overrides.resourceId ?? null,
     fileUrl: overrides.fileUrl ?? '',
     contentType: overrides.contentType ?? null,
+    resourceTitle: overrides.resourceTitle ?? '',
+    resourceFileName: overrides.resourceFileName ?? '',
+    resourceFileLabel: overrides.resourceFileLabel ?? '',
+    legacyFileOnly: overrides.legacyFileOnly ?? false,
+    originalLegacyFileOnly: overrides.legacyFileOnly ?? false,
+    originalFileId: overrides.fileId ?? null,
+    originalResourceId: overrides.resourceId ?? null,
     originalContentType: overrides.contentType ?? null,
-    fileList: [],
+    originalResourceTitle: overrides.resourceTitle ?? '',
+    originalResourceFileName: overrides.resourceFileName ?? '',
+    originalResourceFileLabel: overrides.resourceFileLabel ?? '',
   }
 }
 
@@ -299,38 +280,165 @@ function detectContentType(fileName = '', mimeType = '') {
   ) {
     return 'document'
   }
+  if (
+    lowerMime.includes('image')
+    || lowerName.endsWith('.png')
+    || lowerName.endsWith('.jpg')
+    || lowerName.endsWith('.jpeg')
+    || lowerName.endsWith('.webp')
+    || lowerName.endsWith('.gif')
+  ) {
+    return 'image'
+  }
   return null
 }
 
-function isVideoChapter(chapter) {
-  return chapter.contentType === 'video'
+function formatResourceOptionLabel(resource) {
+  const typeText = resourceTypeLabels[resource?.contentType] || ''
+  return typeText ? `${resource.title} · ${typeText}` : (resource.title || `资源#${resource.id}`)
 }
 
-function readVideoDuration(file) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file)
-    const video = document.createElement('video')
-    video.preload = 'metadata'
-    video.onloadedmetadata = () => {
-      const seconds = Number(video.duration || 0)
-      URL.revokeObjectURL(url)
-      if (!seconds) {
-        reject(new Error('无法读取视频时长'))
-        return
-      }
-      resolve(Math.max(1, Math.ceil(seconds / 60)))
+function upsertResourceOption(resource) {
+  if (!resource?.id) {
+    return
+  }
+  const option = {
+    value: Number(resource.id),
+    label: resource.label || formatResourceOptionLabel(resource),
+    title: resource.title || '',
+    contentType: resource.contentType || null,
+  }
+  const index = resourceOptions.value.findIndex((item) => Number(item.value) === Number(option.value))
+  if (index >= 0) {
+    resourceOptions.value.splice(index, 1, option)
+  } else {
+    resourceOptions.value.push(option)
+  }
+}
+
+function buildFileOptions(resourceDetail) {
+  const links = (resourceDetail?.mediaLinks || [])
+    .slice()
+    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
+
+  return links.map((link, index) => ({
+    value: Number(link.mediaFileId),
+    label: [`文件${index + 1}`, link.fileName].filter(Boolean).join(' · '),
+    fileName: link.fileName || '',
+    displayLabel: `文件${index + 1}`,
+    contentType: link.contentType || detectContentType(link.fileName || ''),
+  }))
+}
+
+function getChapterFileOptions(chapter) {
+  if (!chapter?.resourceId) {
+    return []
+  }
+  return resourceDetailCache[chapter.resourceId]?.fileOptions || []
+}
+
+function isChapterFileLoading(chapter) {
+  if (!chapter?.resourceId) {
+    return false
+  }
+  return !!resourceDetailLoading[chapter.resourceId]
+}
+
+function applyFileOptionToChapter(chapter, fileOption) {
+  if (!chapter) {
+    return
+  }
+  if (!fileOption) {
+    chapter.fileId = null
+    chapter.resourceFileName = ''
+    chapter.resourceFileLabel = ''
+    chapter.contentType = null
+    return
+  }
+  chapter.fileId = Number(fileOption.value)
+  chapter.resourceFileName = fileOption.fileName || ''
+  chapter.resourceFileLabel = fileOption.displayLabel || ''
+  chapter.contentType = fileOption.contentType || chapter.contentType || null
+}
+
+async function ensureResourceListLoaded() {
+  resourceListLoading.value = true
+  try {
+    const response = await getResources({
+      size: -1,
+      myOnly: true,
+      status: 'published',
+    })
+    const items = response.items || response || []
+    resourceOptions.value = []
+    items.forEach((item) => upsertResourceOption(item))
+  } finally {
+    resourceListLoading.value = false
+  }
+}
+
+async function ensureResourceDetail(resourceId, fallbackTitle = '') {
+  const normalizedId = Number(resourceId)
+  if (!normalizedId) {
+    return null
+  }
+  if (resourceDetailCache[normalizedId]) {
+    return resourceDetailCache[normalizedId]
+  }
+  if (resourceDetailLoading[normalizedId]) {
+    return null
+  }
+
+  resourceDetailLoading[normalizedId] = true
+  try {
+    if (fallbackTitle) {
+      upsertResourceOption({ id: normalizedId, title: fallbackTitle })
     }
-    video.onerror = () => {
-      URL.revokeObjectURL(url)
-      reject(new Error('视频元数据读取失败'))
+    const detail = await getResource(normalizedId)
+    const resolved = {
+      id: normalizedId,
+      title: detail.title || fallbackTitle || `资源#${normalizedId}`,
+      contentType: detail.contentType || null,
+      fileOptions: buildFileOptions(detail),
     }
-    video.src = url
-  })
+    resourceDetailCache[normalizedId] = resolved
+    upsertResourceOption({
+      id: normalizedId,
+      title: resolved.title,
+      contentType: resolved.contentType,
+    })
+    return resolved
+  } catch (error) {
+    if (fallbackTitle) {
+      upsertResourceOption({ id: normalizedId, title: fallbackTitle })
+    }
+    return null
+  } finally {
+    resourceDetailLoading[normalizedId] = false
+  }
+}
+
+async function syncChapterResourceSelection(chapter) {
+  if (!chapter?.resourceId) {
+    return
+  }
+  const detail = await ensureResourceDetail(chapter.resourceId, chapter.resourceTitle)
+  if (!detail) {
+    return
+  }
+  chapter.resourceTitle = detail.title
+  const options = detail.fileOptions || []
+  if (!options.length) {
+    return
+  }
+  const selected = options.find((item) => Number(item.value) === Number(chapter.fileId)) || options[0]
+  applyFileOptionToChapter(chapter, selected)
 }
 
 async function ensureOptionsLoaded() {
-  const [instructorResult] = await Promise.allSettled([
+  const [instructorResult, resourceResult] = await Promise.allSettled([
     getUsers({ role: 'instructor', size: -1 }),
+    ensureResourceListLoaded(),
     loadTagOptions(),
   ])
 
@@ -342,6 +450,10 @@ async function ensureOptionsLoaded() {
     }))
   } else {
     instructorOptions.value = []
+  }
+
+  if (resourceResult.status === 'rejected') {
+    resourceOptions.value = []
   }
 }
 
@@ -356,32 +468,67 @@ async function loadCourseDetail() {
   form.isRequired = !!course.isRequired
   form.scopeType = course.scopeType || 'all'
   form.scopeTargetIds = Array.isArray(course.scopeTargetIds) ? course.scopeTargetIds.map((item) => Number(item)).filter((item) => Number.isInteger(item) && item > 0) : []
+
   form.chapters = (course.chapters || [])
     .slice()
     .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
-    .map((chapter) => createChapter({
-      id: chapter.id,
-      title: chapter.title,
-      duration: chapter.duration || 30,
-      fileId: chapter.fileId || null,
-      resourceId: chapter.resourceId || null,
-      fileUrl: chapter.fileUrl || '',
-      contentType: chapter.contentType || detectContentType(chapter.fileUrl || chapter.videoUrl || chapter.docUrl || ''),
-    }))
+    .map((chapter) => {
+      if (chapter.resourceId && chapter.resourceTitle) {
+        upsertResourceOption({
+          id: chapter.resourceId,
+          title: chapter.resourceTitle,
+          contentType: chapter.contentType,
+        })
+      }
+      return createChapter({
+        id: chapter.id,
+        title: chapter.title,
+        fileId: chapter.fileId || null,
+        resourceId: chapter.resourceId || null,
+        fileUrl: chapter.fileUrl || '',
+        contentType: chapter.contentType || detectContentType(chapter.fileUrl || chapter.videoUrl || chapter.docUrl || ''),
+        resourceTitle: chapter.resourceTitle || '',
+        resourceFileName: chapter.resourceFileName || '',
+        resourceFileLabel: chapter.resourceFileLabel || '',
+        legacyFileOnly: !!chapter.fileId && !chapter.resourceId,
+      })
+    })
+
   if (!form.chapters.length) {
     form.chapters = [createChapter()]
+    return
   }
+
+  const resourceIds = [...new Set(form.chapters.map((chapter) => Number(chapter.resourceId)).filter(Boolean))]
+  await Promise.allSettled(resourceIds.map((resourceId) => {
+    const fallbackTitle = form.chapters.find((item) => Number(item.resourceId) === resourceId)?.resourceTitle || ''
+    return ensureResourceDetail(resourceId, fallbackTitle)
+  }))
+  await Promise.allSettled(form.chapters.map((chapter) => {
+    if (chapter.resourceId) {
+      return syncChapterResourceSelection(chapter)
+    }
+    return Promise.resolve()
+  }))
 }
 
 async function initializeModal() {
   loading.value = true
   currentStep.value = 0
+  resourceOptions.value = []
+  Object.keys(resourceDetailCache).forEach((key) => {
+    delete resourceDetailCache[key]
+  })
+  Object.keys(resourceDetailLoading).forEach((key) => {
+    delete resourceDetailLoading[key]
+  })
   try {
+    if (!isEditing.value) {
+      resetForm()
+    }
     await ensureOptionsLoaded()
     if (isEditing.value) {
       await loadCourseDetail()
-    } else {
-      resetForm()
     }
   } catch (error) {
     message.error(error?.message || '课程表单初始化失败')
@@ -431,31 +578,67 @@ function removeChapter(index) {
   form.chapters.splice(index, 1)
 }
 
-async function handleChapterFileChange(index, info) {
+async function handleChapterResourceChange(index, value) {
   const chapter = form.chapters[index]
   if (!chapter) {
     return
   }
 
-  chapter.fileList = (info?.fileList || []).slice(-1)
-  if (!chapter.fileList.length) {
-    chapter.contentType = chapter.originalContentType
-    chapter.duration = chapter.originalDuration
+  const normalizedValue = value ? Number(value) : null
+  if (!normalizedValue) {
+    if (chapter.originalLegacyFileOnly) {
+      chapter.resourceId = null
+      chapter.fileId = chapter.originalFileId
+      chapter.contentType = chapter.originalContentType
+      chapter.resourceTitle = chapter.originalResourceTitle
+      chapter.resourceFileName = chapter.originalResourceFileName
+      chapter.resourceFileLabel = chapter.originalResourceFileLabel
+      chapter.legacyFileOnly = true
+      return
+    }
+    chapter.resourceId = null
+    chapter.fileId = null
+    chapter.contentType = null
+    chapter.resourceTitle = ''
+    chapter.resourceFileName = ''
+    chapter.resourceFileLabel = ''
+    chapter.legacyFileOnly = false
     return
   }
 
-  const rawFile = chapter.fileList[0].originFileObj || chapter.fileList[0]
-  const contentType = detectContentType(rawFile?.name, rawFile?.type)
-  chapter.contentType = contentType
+  chapter.resourceId = normalizedValue
+  chapter.fileId = null
+  chapter.contentType = null
+  chapter.resourceTitle = resourceOptions.value.find((item) => Number(item.value) === normalizedValue)?.title || ''
+  chapter.resourceFileName = ''
+  chapter.resourceFileLabel = ''
+  chapter.legacyFileOnly = false
+  await syncChapterResourceSelection(chapter)
+}
 
-  if (contentType === 'video') {
-    try {
-      chapter.duration = await readVideoDuration(rawFile)
-    } catch (error) {
-      chapter.duration = chapter.duration || 1
-      message.warning(error?.message || '读取视频时长失败，请重新选择视频')
-    }
+function handleChapterFileChange(index, value) {
+  const chapter = form.chapters[index]
+  if (!chapter || !chapter.resourceId) {
+    return
   }
+  const options = getChapterFileOptions(chapter)
+  const target = options.find((item) => Number(item.value) === Number(value)) || options[0]
+  applyFileOptionToChapter(chapter, target)
+}
+
+function inferCourseFileType() {
+  const types = [...new Set(
+    form.chapters
+      .map((chapter) => chapter.contentType)
+      .filter((item) => ['video', 'document', 'image'].includes(item)),
+  )]
+  if (!types.length) {
+    return 'document'
+  }
+  if (types.length === 1) {
+    return types[0]
+  }
+  return 'mixed'
 }
 
 async function handleSubmit() {
@@ -471,8 +654,8 @@ async function handleSubmit() {
     message.warning('请填写所有章节名称')
     return
   }
-  if (form.chapters.some((chapter) => !chapter.fileList.length && !chapter.fileId && !chapter.resourceId)) {
-    message.warning('每个章节都需要上传文件或保留已有文件')
+  if (form.chapters.some((chapter) => !chapter.resourceId && !chapter.legacyFileOnly)) {
+    message.warning('每个章节都需要从资源库选择资源')
     return
   }
   if (form.scopeType !== 'all' && !form.scopeTargetIds.length) {
@@ -481,45 +664,30 @@ async function handleSubmit() {
   }
 
   submitting.value = true
-  uploadPercent.value = 0
 
   try {
-    const uploadTargets = form.chapters.filter((chapter) => chapter.fileList.length > 0).length
-    let uploadedCount = 0
-    const chapters = []
-
-    for (let index = 0; index < form.chapters.length; index += 1) {
-      const chapter = form.chapters[index]
-      let fileId = chapter.fileId || null
-      let resourceId = chapter.resourceId || null
-      let contentType = chapter.contentType
-
-      if (chapter.fileList.length > 0) {
-        const rawFile = chapter.fileList[0].originFileObj || chapter.fileList[0]
-        contentType = detectContentType(rawFile?.name, rawFile?.type)
-        const fileResult = await uploadFile(rawFile, (percent) => {
-          uploadPercent.value = Math.round(((uploadedCount + percent / 100) / (uploadTargets || 1)) * 100)
-        })
-        fileId = fileResult.id
-        resourceId = null
-        uploadedCount += 1
-        uploadPercent.value = Math.round((uploadedCount / (uploadTargets || 1)) * 100)
+    await Promise.allSettled(form.chapters.map((chapter) => {
+      if (chapter.resourceId) {
+        return syncChapterResourceSelection(chapter)
       }
+      return Promise.resolve()
+    }))
 
-      chapters.push({
-        id: chapter.id,
-        title: chapter.title.trim(),
-        sortOrder: index,
-        duration: Math.max(1, Number(chapter.duration) || 0),
-        fileId,
-        resourceId,
-        contentType,
-      })
+    if (form.chapters.some((chapter) => chapter.resourceId && !['video', 'document', 'image'].includes(chapter.contentType))) {
+      message.warning('课程章节目前仅支持引用视频、文档或图片文件')
+      return
     }
 
-    const totalDuration = chapters.reduce((sum, chapter) => sum + (Number(chapter.duration) || 0), 0)
+    const chapters = form.chapters.map((chapter, index) => ({
+      id: chapter.id,
+      title: chapter.title.trim(),
+      sortOrder: index,
+      duration: 0,
+      fileId: chapter.resourceId ? (chapter.fileId || null) : (chapter.legacyFileOnly ? chapter.fileId || null : null),
+      resourceId: chapter.resourceId || null,
+    }))
+
     const normalizedTags = normalizeTags(form.tags)
-    const hasVideo = form.chapters.some((chapter) => isVideoChapter(chapter))
     const payload = {
       title: form.title.trim(),
       category: form.category,
@@ -530,9 +698,9 @@ async function handleSubmit() {
       isRequired: form.isRequired,
       scopeType: form.scopeType,
       scopeTargetIds: form.scopeType === 'all' ? [] : form.scopeTargetIds,
-      fileType: hasVideo ? 'video' : 'document',
+      fileType: inferCourseFileType(),
       coverColor: categoryColorMap[form.category] || '#003087',
-      duration: totalDuration,
+      duration: 0,
       chapters,
     }
 
@@ -547,7 +715,6 @@ async function handleSubmit() {
     message.error(error?.message || '课程保存失败')
   } finally {
     submitting.value = false
-    uploadPercent.value = 0
   }
 }
 </script>
@@ -555,54 +722,6 @@ async function handleSubmit() {
 <style scoped>
 .chapters-editor {
   min-height: 240px;
-}
-
-.chapter-row {
-  border: 1px solid #e8e8e8;
-  border-radius: 8px;
-  padding: 14px;
-  margin-bottom: 12px;
-  background: #fafbfc;
-}
-
-.chapter-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-}
-
-.chapter-badge {
-  background: var(--police-primary, #003087);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 2px 10px;
-  border-radius: 10px;
-}
-
-.chapter-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
-}
-
-.chapter-meta-item {
-  font-size: 12px;
-  color: #666;
-}
-
-.chapter-meta-item.video {
-  color: #003087;
-}
-
-.chapter-meta-item.doc {
-  color: #8b6d00;
-}
-
-.chapter-upload :deep(.ant-upload.ant-upload-drag) {
-  padding: 8px 0;
 }
 
 .modal-footer {

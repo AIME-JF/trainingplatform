@@ -49,12 +49,13 @@ def get_courses(
     search: Optional[str] = None,
     category: Optional[str] = None,
     sort: Optional[str] = None,
+    instructor_id: Optional[int] = None,
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """获取课程列表"""
     controller = CourseController(db)
-    data = controller.get_courses(page, size, search, category, sort, user_id=current_user.user_id)
+    data = controller.get_courses(page, size, search, category, sort, instructor_id, user_id=current_user.user_id)
     return StandardResponse(data=data)
 
 
@@ -132,7 +133,7 @@ def update_course(
     """更新课程"""
     _require_course_manager(db, course_id, current_user.user_id)
     controller = CourseController(db)
-    result = controller.update_course(course_id, data)
+    result = controller.update_course(course_id, data, actor_user_id=current_user.user_id)
     return StandardResponse(data=result)
 
 

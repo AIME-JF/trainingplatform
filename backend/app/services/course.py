@@ -69,6 +69,7 @@ class CourseService:
         search: Optional[str] = None,
         category: Optional[str] = None,
         sort: Optional[str] = None,
+        instructor_id: Optional[int] = None,
         user_id: Optional[int] = None,
     ) -> PaginatedResponse[CourseListResponse]:
         """获取课程列表"""
@@ -96,6 +97,8 @@ class CourseService:
             )
         if category:
             query = query.filter(Course.category == category)
+        if instructor_id is not None:
+            query = query.filter(Course.instructor_id == instructor_id)
 
         if sort == "rating":
             query = query.order_by(Course.rating.desc())
@@ -186,7 +189,7 @@ class CourseService:
             description=data.description,
             created_by=user_id,
             instructor_id=data.instructor_id,
-            duration=data.duration,
+            duration=0,
             difficulty=data.difficulty,
             is_required=data.is_required,
             cover_color=data.cover_color,
@@ -198,7 +201,7 @@ class CourseService:
         self.db.flush()
 
         self._sync_course_tags(course, data.tags)
-        self._upsert_course_chapters(course, data.chapters or [])
+        self._upsert_course_chapters(course, data.chapters or [], actor_user_id=user_id)
 
         self.db.commit()
         course = self._get_course_entity(course.id)
@@ -227,7 +230,7 @@ class CourseService:
                 return None
         return self._to_response(course, user_id=user_id, user_permissions=user_permissions or [])
 
-    def update_course(self, course_id: int, data: CourseUpdate) -> Optional[CourseResponse]:
+    def update_course(self, course_id: int, data: CourseUpdate, actor_user_id: Optional[int] = None) -> Optional[CourseResponse]:
         """更新课程"""
         course = self._get_course_entity(course_id)
         if not course:
@@ -254,7 +257,9 @@ class CourseService:
         if tags is not None:
             self._sync_course_tags(course, tags)
         if chapters_data is not None:
-            self._upsert_course_chapters(course, chapters_data)
+            self._upsert_course_chapters(course, chapters_data, actor_user_id=actor_user_id)
+
+        course.duration = 0
 
         self.db.commit()
         course = self._get_course_entity(course_id)
@@ -558,7 +563,10 @@ class CourseService:
             .options(
                 joinedload(Course.creator),
                 joinedload(Course.instructor),
-                selectinload(Course.chapters),
+                selectinload(Course.chapters).joinedload(Chapter.file),
+                selectinload(Course.chapters).joinedload(Chapter.resource)
+                .selectinload(Resource.media_links)
+                .joinedload(ResourceMediaLink.media_file),
                 selectinload(Course.tag_relations).joinedload(CourseTagRelation.tag),
             )
             .filter(Course.id == course_id)
@@ -751,7 +759,12 @@ class CourseService:
         self.db.flush()
         return tag
 
-    def _upsert_course_chapters(self, course: Course, chapters_data: List[dict]) -> None:
+    def _upsert_course_chapters(
+        self,
+        course: Course,
+        chapters_data: List[dict],
+        actor_user_id: Optional[int] = None,
+    ) -> None:
         existing_by_id = {chapter.id: chapter for chapter in (course.chapters or []) if chapter.id is not None}
         keep_ids = set()
         active_chapters = []
@@ -773,11 +786,26 @@ class CourseService:
 
             chapter.title = str(chapter_title).strip()
             chapter.sort_order = chapter_data.get("sort_order", idx)
-            chapter.duration = chapter_data.get("duration", 0) or 0
-            chapter.video_url = chapter_data.get("video_url", chapter.video_url)
-            chapter.doc_url = chapter_data.get("doc_url", chapter.doc_url)
-            chapter.file_id = chapter_data.get("file_id", chapter.file_id)
-            chapter.resource_id = chapter_data.get("resource_id", chapter.resource_id)
+            chapter.duration = 0
+            next_resource_id, next_file_id, next_content_type = self._resolve_chapter_binding(
+                chapter=chapter,
+                chapter_data=chapter_data,
+                chapter_index=idx,
+                actor_user_id=actor_user_id,
+            )
+            chapter.resource_id = next_resource_id
+            chapter.file_id = next_file_id
+
+            if next_resource_id:
+                chapter.video_url = None
+                chapter.doc_url = None
+            else:
+                chapter.video_url = chapter_data.get("video_url", chapter.video_url)
+                chapter.doc_url = chapter_data.get("doc_url", chapter.doc_url)
+                if next_content_type == "video" and not chapter.video_url and next_file_id:
+                    chapter.doc_url = None
+                if next_content_type == "document" and not chapter.doc_url and next_file_id:
+                    chapter.video_url = None
 
             if chapter.id is not None:
                 keep_ids.add(chapter.id)
@@ -793,8 +821,73 @@ class CourseService:
             self.db.delete(chapter)
 
         self.db.flush()
-        course.duration = sum(max(int((chapter.duration or 0)), 0) for chapter in active_chapters)
+        course.duration = 0
         self._refresh_student_count(course.id)
+
+    def _resolve_chapter_binding(
+        self,
+        chapter: Chapter,
+        chapter_data: dict,
+        chapter_index: int,
+        actor_user_id: Optional[int] = None,
+    ) -> tuple[Optional[int], Optional[int], Optional[str]]:
+        requested_resource_id = chapter_data.get("resource_id", chapter.resource_id)
+        requested_file_id = chapter_data.get("file_id", chapter.file_id)
+
+        if requested_resource_id:
+            resource = (
+                self.db.query(Resource)
+                .options(joinedload(Resource.media_links).joinedload(ResourceMediaLink.media_file))
+                .filter(Resource.id == requested_resource_id)
+                .first()
+            )
+            if not resource:
+                raise ValueError(f"第{chapter_index + 1}章所选资源不存在")
+
+            existing_resource_id = getattr(chapter, "resource_id", None)
+            existing_file_id = getattr(chapter, "file_id", None)
+            binding_changed = existing_resource_id != requested_resource_id or existing_file_id != requested_file_id
+            if actor_user_id and binding_changed:
+                if resource.uploader_id != actor_user_id:
+                    raise ValueError(f"第{chapter_index + 1}章只能引用当前用户自己上传的已发布资源")
+                if resource.status != "published":
+                    raise ValueError(f"第{chapter_index + 1}章只能引用已发布资源")
+
+            ordered_links = sorted((resource.media_links or []), key=lambda item: (item.sort_order, item.id))
+            if not ordered_links:
+                raise ValueError(f"第{chapter_index + 1}章所选资源没有可用文件")
+
+            media_by_id = {
+                int(link.media_file_id): link
+                for link in ordered_links
+                if link.media_file_id is not None
+            }
+            selected_link = None
+            if requested_file_id is not None:
+                selected_link = media_by_id.get(int(requested_file_id))
+                if not selected_link:
+                    raise ValueError(f"第{chapter_index + 1}章选择的文件不属于当前资源")
+
+            if not selected_link and existing_resource_id == requested_resource_id and existing_file_id is not None:
+                selected_link = media_by_id.get(int(existing_file_id))
+
+            if not selected_link:
+                selected_link = next((link for link in ordered_links if link.media_role == "main"), None) or ordered_links[0]
+
+            media = selected_link.media_file
+            content_type = self._guess_content_type(
+                getattr(media, "filename", None),
+                getattr(media, "mime_type", None),
+            ) or self._normalize_course_resource_content_type(resource.content_type)
+            return requested_resource_id, selected_link.media_file_id, content_type
+
+        if chapter.id and chapter.file_id:
+            content_type = self._guess_content_type(chapter.video_url) or self._guess_content_type(chapter.doc_url)
+            if not content_type and getattr(chapter, "file", None):
+                content_type = self._guess_content_type(chapter.file.filename, chapter.file.mime_type)
+            return None, chapter.file_id, content_type
+
+        raise ValueError(f"第{chapter_index + 1}章请从资源库选择当前用户已发布的资源")
 
     def _refresh_student_count(self, course_id: int) -> None:
         real_count = (
@@ -846,6 +939,23 @@ class CourseService:
             return "document"
         return None
 
+    def _normalize_course_resource_content_type(self, content_type: Optional[str]) -> Optional[str]:
+        if content_type == "image_text":
+            return "image"
+        return content_type
+
+    def _build_resource_file_label(
+        self,
+        media_links: List[ResourceMediaLink],
+        current_link: Optional[ResourceMediaLink],
+    ) -> Optional[str]:
+        if not current_link:
+            return None
+        for index, item in enumerate(media_links or [], start=1):
+            if item.id == current_link.id:
+                return f"文件{index}"
+        return "文件"
+
     def _chapter_to_response(
         self,
         chapter: Chapter,
@@ -854,21 +964,32 @@ class CourseService:
         """转换章节为响应，填充 file_url、类型和用户进度"""
         file_url = None
         content_type = None
+        resource_title = None
+        resource_file_name = None
+        resource_file_label = None
 
         if getattr(chapter, "resource_id", None):
-            resource = self.db.query(Resource).options(
-                joinedload(Resource.media_links).joinedload(ResourceMediaLink.media_file)
-            ).filter(Resource.id == chapter.resource_id).first()
+            resource = getattr(chapter, "resource", None)
             if resource and resource.status == "published":
-                links = sorted((resource.media_links or []), key=lambda item: item.sort_order)
-                main_link = next((item for item in links if item.media_role == "main"), None) or (links[0] if links else None)
-                media = main_link.media_file if main_link else None
+                links = sorted((resource.media_links or []), key=lambda item: (item.sort_order, item.id))
+                media_by_id = {
+                    int(link.media_file_id): link
+                    for link in links
+                    if link.media_file_id is not None
+                }
+                selected_link = media_by_id.get(int(chapter.file_id)) if chapter.file_id is not None else None
+                if not selected_link:
+                    selected_link = next((item for item in links if item.media_role == "main"), None) or (links[0] if links else None)
+                media = selected_link.media_file if selected_link else None
                 if media:
                     file_url = self._resolve_file_url(media.id, media.storage_path)
-                    content_type = self._guess_content_type(media.filename, media.mime_type) or resource.content_type
+                    content_type = self._guess_content_type(media.filename, media.mime_type) or self._normalize_course_resource_content_type(resource.content_type)
+                    resource_title = resource.title
+                    resource_file_name = media.filename
+                    resource_file_label = self._build_resource_file_label(links, selected_link)
 
         if not file_url and chapter.file_id:
-            media = self.db.query(MediaFile).filter(MediaFile.id == chapter.file_id).first()
+            media = getattr(chapter, "file", None) or self.db.query(MediaFile).filter(MediaFile.id == chapter.file_id).first()
             if media:
                 file_url = self._resolve_file_url(media.id, media.storage_path)
                 content_type = self._guess_content_type(media.filename, media.mime_type)
@@ -896,6 +1017,9 @@ class CourseService:
             doc_url=chapter.doc_url,
             file_id=chapter.file_id,
             resource_id=getattr(chapter, "resource_id", None),
+            resource_title=resource_title,
+            resource_file_name=resource_file_name,
+            resource_file_label=resource_file_label,
             file_url=file_url,
             content_type=content_type,
             progress=progress_record.progress if progress_record else 0,

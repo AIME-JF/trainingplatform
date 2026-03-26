@@ -1,9 +1,9 @@
 <template>
   <div class="course-list-page">
     <div class="page-header">
-      <h2>课程中心</h2>
+      <h2>课程资源</h2>
       <a-button v-if="authStore.isInstructor || authStore.isAdmin" type="primary" @click="openCreate">
-        <template #icon><PlusOutlined /></template>上传课程
+        <template #icon><PlusOutlined /></template>创建课程
       </a-button>
     </div>
 
@@ -14,11 +14,20 @@
     />
 
     <a-card class="filter-card" :bordered="false">
-      <a-row :gutter="16" align="middle">
-        <a-col :span="8">
+      <a-row :gutter="[16, 16]" align="middle">
+        <a-col :xxl="7" :xl="7" :lg="8" :md="12" :sm="24" :xs="24">
           <a-input-search v-model:value="searchText" placeholder="搜索课程名称、关键词..." allow-clear />
         </a-col>
-        <a-col :span="14">
+        <a-col :xxl="5" :xl="5" :lg="6" :md="12" :sm="24" :xs="24">
+          <a-select
+            v-model:value="selectedInstructorId"
+            :options="instructorOptions"
+            allow-clear
+            placeholder="按教官筛选"
+            style="width: 100%"
+          />
+        </a-col>
+        <a-col :xxl="10" :xl="10" :lg="8" :md="18" :sm="24" :xs="24">
           <div class="category-tabs">
             <a-tag
               v-for="cat in allCategories"
@@ -31,8 +40,8 @@
             </a-tag>
           </div>
         </a-col>
-        <a-col :span="2" style="text-align: right">
-          <a-select v-model:value="sortBy" size="small" style="width: 100px">
+        <a-col :xxl="2" :xl="2" :lg="2" :md="6" :sm="24" :xs="24" class="sort-col">
+          <a-select v-model:value="sortBy" size="small" style="width: 100%">
             <a-select-option value="default">默认排序</a-select-option>
             <a-select-option value="rating">按评分</a-select-option>
             <a-select-option value="students">按学员数</a-select-option>
@@ -43,74 +52,76 @@
 
     <div class="course-stats">
       共 <strong>{{ filteredCourses.length }}</strong> 门课程
-      <span v-if="authStore.isStudent" style="margin-left: 16px">
-        已学 <strong style="color: var(--police-gold)">{{ completedCount }}</strong> 门 ·
-        进行中 <strong style="color: #1890ff">{{ inProgressCount }}</strong> 门
+      <span v-if="authStore.isStudent" class="stats-progress">
+        已学 <strong class="gold-text">{{ completedCount }}</strong> 门 ·
+        进行中 <strong class="blue-text">{{ inProgressCount }}</strong> 门
       </span>
     </div>
 
     <div class="course-grid">
       <div v-for="course in filteredCourses" :key="course.id" class="course-card" @click="goDetail(course)">
-        <div class="course-cover" :style="{ background: course.coverColor }">
-          <div class="cover-icon">{{ getCoverIcon(course.category) }}</div>
-          <div class="cover-type-badge">
-            <a-tag :color="course.fileType === 'video' ? 'purple' : 'cyan'" style="font-size: 10px; margin: 0">
-              {{ course.fileType === 'video' ? '🎬 视频' : '📄 文档' }}
+        <div class="course-card-head">
+          <div class="course-badges">
+            <a-tag color="blue">{{ getCategoryLabel(course.category) }}</a-tag>
+            <a-tag :color="getCourseTypeTagColor(course.fileType)">
+              {{ getCourseTypeTagLabel(course.fileType) }}
             </a-tag>
+            <a-tag v-if="course.isRequired" color="red">必修</a-tag>
           </div>
-          <div v-if="course.isRequired" class="cover-badge">
-            <a-tag color="red" style="font-size: 11px">必修</a-tag>
+          <div v-if="authStore.isAdmin || authStore.isInstructor" class="course-actions" @click.stop>
+            <a-button size="small" type="text" @click="openEdit(course)">
+              <template #icon><EditOutlined /></template>编辑
+            </a-button>
+            <a-popconfirm
+              title="确定删除此课程吗？删除后不可恢复。"
+              ok-text="确认删除"
+              cancel-text="取消"
+              @confirm="handleDelete(course)"
+            >
+              <a-button size="small" danger type="text">
+                <template #icon><DeleteOutlined /></template>删除
+              </a-button>
+            </a-popconfirm>
           </div>
-          <div class="cover-duration">{{ formatDuration(course.duration) }}</div>
-
-          <div
-            v-if="authStore.isAdmin || authStore.isInstructor"
-            class="cover-edit-btn"
-            @click.stop="openEdit(course)"
-          >
-            <EditOutlined /> 编辑
-          </div>
-          <a-popconfirm
-            v-if="authStore.isAdmin || authStore.isInstructor"
-            title="确定删除此课程吗？删除后不可恢复。"
-            ok-text="确认删除"
-            cancel-text="取消"
-            @confirm="handleDelete(course)"
-          >
-            <div class="cover-delete-btn" @click.stop>
-              <DeleteOutlined /> 删除
-            </div>
-          </a-popconfirm>
         </div>
 
-        <div class="course-body">
-          <div class="course-category">{{ getCategoryLabel(course.category) }}</div>
-          <div class="course-title">{{ course.title }}</div>
-          <div class="course-tags">
-            <a-tag v-for="tag in (course.tags || []).slice(0, 3)" :key="tag">{{ tag }}</a-tag>
-          </div>
-          <div class="course-instructor">
+        <div class="course-title">{{ course.title }}</div>
+        <div class="course-description">{{ course.description || '暂无课程简介' }}</div>
+
+        <div class="course-tags">
+          <a-tag v-for="tag in (course.tags || []).slice(0, 4)" :key="tag">{{ tag }}</a-tag>
+        </div>
+
+        <div class="course-instructor">
+          <div class="instructor-main">
             <a-avatar size="small" :style="{ background: '#003087', fontSize: '10px' }">
               {{ getInstructorName(course).charAt(0) || '?' }}
             </a-avatar>
             <span class="instructor-name">{{ getInstructorName(course) || '未设置主讲教官' }}</span>
-            <span class="difficulty">
-              <span v-for="i in 5" :key="i" :class="i <= (course.difficulty || 0) ? 'star-filled' : 'star-empty'">★</span>
-            </span>
           </div>
-          <div v-if="authStore.isStudent" class="course-progress">
-            <a-progress
-              :percent="getCourseProgress(course)"
-              :stroke-color="getCourseProgress(course) === 100 ? '#52c41a' : '#003087'"
-              size="small"
-              :show-info="false"
-            />
-            <span class="progress-text">{{ getCourseProgress(course) }}% 完成</span>
-          </div>
-          <div class="course-footer">
-            <span><TeamOutlined /> {{ Number(course.studentCount || 0).toLocaleString() }} 人学过</span>
-            <span class="rating"><StarFilled style="color: #faad14" /> {{ course.rating || '新课' }}</span>
-          </div>
+          <span class="difficulty">
+            <span v-for="i in 5" :key="i" :class="i <= (course.difficulty || 0) ? 'star-filled' : 'star-empty'">★</span>
+          </span>
+        </div>
+
+        <div class="course-meta">
+          <span>章节 {{ course.chapterCount || 0 }}</span>
+          <span>创建于 {{ formatDate(course.createdAt) }}</span>
+        </div>
+
+        <div v-if="authStore.isStudent" class="course-progress">
+          <a-progress
+            :percent="getCourseProgress(course)"
+            :stroke-color="getCourseProgress(course) === 100 ? '#52c41a' : '#003087'"
+            size="small"
+            :show-info="false"
+          />
+          <span class="progress-text">{{ getCourseProgress(course) }}% 完成</span>
+        </div>
+
+        <div class="course-footer">
+          <span><TeamOutlined /> {{ Number(course.studentCount || 0).toLocaleString() }} 人学过</span>
+          <span class="rating"><StarFilled style="color: #faad14" /> {{ course.rating || '新课' }}</span>
         </div>
       </div>
     </div>
@@ -125,6 +136,7 @@ import { useRouter } from 'vue-router'
 import { DeleteOutlined, EditOutlined, PlusOutlined, StarFilled, TeamOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { deleteCourse as apiDeleteCourse, getCourses } from '@/api/course'
+import { getUsers } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
 import { COURSE_CATEGORIES } from '@/mock/courses'
 import CourseEditorModal from './components/CourseEditorModal.vue'
@@ -133,57 +145,53 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const courseList = ref([])
-const loading = ref(false)
 const searchText = ref('')
 const selectedCategory = ref('all')
+const selectedInstructorId = ref(undefined)
 const sortBy = ref('default')
 const editorVisible = ref(false)
 const editingCourseId = ref(null)
+const instructorOptions = ref([])
 
 const allCategories = COURSE_CATEGORIES.map((item) => (
   item.key === 'all' ? { key: 'all', label: '全部' } : item
 ))
-const categoryColorMap = {
-  law: '#003087',
-  fraud: '#8B1A1A',
-  traffic: '#0A6640',
-  community: '#4A3728',
-  cybersec: '#1A0A4A',
-  physical: '#2D4A1A',
-}
-const coverIcons = {
-  law: '⚖️',
-  fraud: '🔍',
-  traffic: '🚗',
-  community: '🏘️',
-  cybersec: '💻',
-  physical: '💪',
-}
 
 async function fetchCourses() {
-  loading.value = true
   try {
     const response = await getCourses({
       size: -1,
       search: searchText.value?.trim() || undefined,
       category: selectedCategory.value !== 'all' ? selectedCategory.value : undefined,
       sort: sortBy.value === 'default' ? undefined : sortBy.value,
+      instructorId: selectedInstructorId.value || undefined,
     })
     const items = response.items || response || []
-    courseList.value = items.map((course) => ({
-      ...course,
-      coverColor: course.coverColor || categoryColorMap[course.category] || '#003087',
-    }))
+    courseList.value = items
   } catch (error) {
     message.error(error?.message || '课程列表加载失败')
-  } finally {
-    loading.value = false
   }
 }
 
-onMounted(fetchCourses)
+async function fetchInstructors() {
+  try {
+    const response = await getUsers({ role: 'instructor', size: -1 })
+    const items = response.items || response || []
+    instructorOptions.value = items.map((item) => ({
+      value: item.id,
+      label: item.nickname || item.username || `教官#${item.id}`,
+    }))
+  } catch {
+    instructorOptions.value = []
+  }
+}
 
-watch([searchText, selectedCategory, sortBy], () => {
+onMounted(() => {
+  fetchCourses()
+  fetchInstructors()
+})
+
+watch([searchText, selectedCategory, sortBy, selectedInstructorId], () => {
   fetchCourses()
 })
 
@@ -217,7 +225,7 @@ function openEdit(course) {
 async function handleDelete(course) {
   try {
     await apiDeleteCourse(course.id)
-    message.success(`课程『${course.title}』已删除`)
+    message.success(`课程《${course.title}》已删除`)
     fetchCourses()
   } catch (error) {
     message.error(error?.message || '删除失败')
@@ -240,16 +248,41 @@ function getCategoryLabel(category) {
   return COURSE_CATEGORIES.find((item) => item.key === category)?.label ?? category
 }
 
-function formatDuration(minutes) {
-  const value = Number(minutes || 0)
-  if (value >= 60) {
-    return `${Math.floor(value / 60)}h${value % 60 > 0 ? `${value % 60}min` : ''}`
+function formatDate(value) {
+  if (!value) {
+    return '-'
   }
-  return `${value}min`
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return '-'
+  }
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
-function getCoverIcon(category) {
-  return coverIcons[category] ?? '📚'
+function getCourseTypeTagLabel(fileType) {
+  if (fileType === 'video') {
+    return '视频型'
+  }
+  if (fileType === 'image') {
+    return '图片型'
+  }
+  if (fileType === 'mixed') {
+    return '混合型'
+  }
+  return '文档型'
+}
+
+function getCourseTypeTagColor(fileType) {
+  if (fileType === 'video') {
+    return 'purple'
+  }
+  if (fileType === 'image') {
+    return 'green'
+  }
+  if (fileType === 'mixed') {
+    return 'orange'
+  }
+  return 'cyan'
 }
 
 function goDetail(course) {
@@ -259,50 +292,139 @@ function goDetail(course) {
 
 <style scoped>
 .course-list-page { padding: 0; }
-.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; gap: 12px; }
 .page-header h2 { margin: 0; font-size: 20px; font-weight: 600; color: var(--police-primary); }
 .filter-card { margin-bottom: 16px; }
 .category-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
 .cat-tag { cursor: pointer; font-size: 13px; padding: 2px 10px; border-radius: 12px; }
+.sort-col { text-align: right; }
 .course-stats { margin-bottom: 16px; color: #666; font-size: 13px; }
+.stats-progress { margin-left: 16px; }
+.gold-text { color: var(--police-gold); }
+.blue-text { color: #1890ff; }
 .course-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-.course-card { background: #fff; border-radius: 8px; overflow: hidden; cursor: pointer; transition: all 0.25s; border: 1px solid #e8e8e8; }
-.course-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,48,135,0.12); border-color: var(--police-primary); }
-.course-cover { height: 140px; position: relative; display: flex; align-items: center; justify-content: center; }
-.cover-icon { font-size: 48px; }
-.cover-badge { position: absolute; top: 10px; left: 10px; }
-.cover-type-badge { position: absolute; top: 10px; right: 10px; }
-.cover-duration { position: absolute; bottom: 8px; right: 10px; background: rgba(0,0,0,0.5); color: #fff; padding: 1px 8px; border-radius: 10px; font-size: 11px; }
-.cover-edit-btn {
-  position: absolute; bottom: 8px; left: 10px;
-  background: rgba(0,48,135,0.85); color: #fff;
-  padding: 2px 10px; border-radius: 10px; font-size: 11px;
-  opacity: 0; transition: opacity 0.2s; cursor: pointer;
+.course-card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.25s;
+  border: 1px solid #e8e8e8;
+  display: flex;
+  flex-direction: column;
+  min-height: 240px;
 }
-.course-card:hover .cover-edit-btn { opacity: 1; }
-.cover-delete-btn {
-  position: absolute; bottom: 8px; left: 80px;
-  background: rgba(207,19,34,0.85); color: #fff;
-  padding: 2px 10px; border-radius: 10px; font-size: 11px;
-  opacity: 0; transition: opacity 0.2s; cursor: pointer;
+.course-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 48, 135, 0.12);
+  border-color: var(--police-primary);
 }
-.course-card:hover .cover-delete-btn { opacity: 1; }
-.course-body { padding: 14px; }
-.course-category { color: var(--police-primary); font-size: 11px; font-weight: 600; margin-bottom: 4px; }
-.course-title { font-size: 15px; font-weight: 600; color: #1a1a1a; line-height: 1.4; margin-bottom: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.course-tags { margin-bottom: 10px; display: flex; gap: 4px; flex-wrap: wrap; }
-.course-instructor { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-.instructor-name { font-size: 12px; color: #666; flex: 1; }
+.course-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.course-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.course-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.course-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+  line-height: 1.5;
+  margin-bottom: 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.course-description {
+  font-size: 13px;
+  line-height: 1.7;
+  color: #666;
+  min-height: 44px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.course-tags {
+  margin-bottom: 12px;
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  min-height: 28px;
+}
+.course-instructor {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.instructor-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.instructor-name {
+  font-size: 12px;
+  color: #666;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .star-filled { color: #faad14; }
 .star-empty { color: #ddd; }
-.course-progress { margin-bottom: 10px; }
+.course-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: #7a8699;
+  margin-bottom: 12px;
+}
+.course-progress { margin-bottom: 12px; }
 .progress-text { font-size: 11px; color: #888; }
-.course-footer { display: flex; justify-content: space-between; font-size: 12px; color: #888; border-top: 1px solid #f0f0f0; padding-top: 10px; }
+.course-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: #888;
+  border-top: 1px solid #f0f0f0;
+  padding-top: 10px;
+  margin-top: auto;
+}
 .rating { font-weight: 600; color: #333; }
+
+@media (max-width: 992px) {
+  .course-grid { grid-template-columns: repeat(2, 1fr); }
+}
 
 @media (max-width: 768px) {
   .course-grid { grid-template-columns: 1fr !important; }
   .filter-card :deep(.ant-card-body) { padding: 12px !important; }
+  .page-header { flex-wrap: wrap; }
   .page-header h2 { font-size: 18px !important; }
+  .sort-col { text-align: left; }
+  .course-card-head,
+  .course-instructor,
+  .course-meta,
+  .course-footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
 }
 </style>

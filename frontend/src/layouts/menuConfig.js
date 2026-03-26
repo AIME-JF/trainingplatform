@@ -1,11 +1,10 @@
 import {
   HomeOutlined,
-  PlayCircleOutlined,
+  BookOutlined,
+  TeamOutlined,
   FormOutlined,
   DatabaseOutlined,
   FileTextOutlined,
-  TeamOutlined,
-  BookOutlined,
   UserOutlined,
   BarChartOutlined,
   SettingOutlined,
@@ -28,7 +27,6 @@ import {
   RESOURCE_MANAGE_PAGE_PERMISSIONS,
   RESOURCE_POLICY_PAGE_PERMISSIONS,
   RESOURCE_REVIEW_PAGE_PERMISSIONS,
-  RESOURCE_UPLOAD_PAGE_PERMISSIONS,
   ROLE_MANAGE_PAGE_PERMISSIONS,
   TALENT_PAGE_PERMISSIONS,
   TRAINING_BASE_PAGE_PERMISSIONS,
@@ -47,10 +45,73 @@ export const appMenuConfig = [
     anyPermissions: DASHBOARD_PAGE_PERMISSIONS,
   },
   {
-    key: '/courses',
-    label: '课程学习',
-    icon: PlayCircleOutlined,
-    anyPermissions: COURSE_PAGE_PERMISSIONS,
+    key: 'resource',
+    label: '资源中心',
+    icon: BookOutlined,
+    children: [
+      {
+        key: '/courses',
+        label: '课程资源',
+        anyPermissions: COURSE_PAGE_PERMISSIONS,
+      },
+      {
+        key: '/resource/library',
+        label: '资源库',
+        anyPermissions: [],
+      },
+      {
+        key: '/resource/recommend',
+        label: '资源推荐',
+        anyPermissions: [],
+      },
+      {
+        key: '/resource/my',
+        label: '我的资源',
+        anyPermissions: MY_RESOURCE_PAGE_PERMISSIONS,
+      },
+      {
+        key: '/resource/manage',
+        label: '资源管理',
+        anyPermissions: RESOURCE_MANAGE_PAGE_PERMISSIONS,
+      },
+      {
+        key: '/resource/review',
+        label: '审核工作台',
+        anyPermissions: RESOURCE_REVIEW_PAGE_PERMISSIONS,
+      },
+      {
+        key: '/resource/policy',
+        label: '审核策略',
+        anyPermissions: RESOURCE_POLICY_PAGE_PERMISSIONS,
+      },
+    ],
+  },
+  {
+    key: 'training',
+    label: '培训管理',
+    icon: TeamOutlined,
+    children: [
+      {
+        key: '/training',
+        label: '培训班列表',
+        anyPermissions: TRAINING_PAGE_PERMISSIONS,
+      },
+      {
+        key: '/training/base',
+        label: '培训基地',
+        anyPermissions: TRAINING_BASE_PAGE_PERMISSIONS,
+      },
+      {
+        key: '/training/schedule',
+        label: '周训练计划',
+        anyPermissions: TRAINING_SCHEDULE_PAGE_PERMISSIONS,
+      },
+      {
+        key: '/training/board',
+        label: '培训看板',
+        anyPermissions: REPORT_PAGE_PERMISSIONS,
+      },
+    ],
   },
   {
     key: 'examCenter',
@@ -110,75 +171,6 @@ export const appMenuConfig = [
         key: '/paper/ai-generate',
         label: 'AI 自动生成试卷',
         anyPermissions: AI_PAPER_GENERATE_PAGE_PERMISSIONS,
-      },
-    ],
-  },
-  {
-    key: 'training',
-    label: '培训管理',
-    icon: TeamOutlined,
-    children: [
-      {
-        key: '/training',
-        label: '培训班列表',
-        anyPermissions: TRAINING_PAGE_PERMISSIONS,
-      },
-      {
-        key: '/training/base',
-        label: '培训基地',
-        anyPermissions: TRAINING_BASE_PAGE_PERMISSIONS,
-      },
-      {
-        key: '/training/schedule',
-        label: '周训练计划',
-        anyPermissions: TRAINING_SCHEDULE_PAGE_PERMISSIONS,
-      },
-      {
-        key: '/training/board',
-        label: '培训看板',
-        anyPermissions: REPORT_PAGE_PERMISSIONS,
-      },
-    ],
-  },
-  {
-    key: 'resource',
-    label: '资源中心',
-    icon: BookOutlined,
-    children: [
-      {
-        key: '/resource/library',
-        label: '资源库',
-        anyPermissions: [],
-      },
-      {
-        key: '/resource/recommend',
-        label: '资源推荐',
-        anyPermissions: [],
-      },
-      {
-        key: '/resource/upload',
-        label: '上传资源',
-        anyPermissions: RESOURCE_UPLOAD_PAGE_PERMISSIONS,
-      },
-      {
-        key: '/resource/my',
-        label: '我的资源',
-        anyPermissions: MY_RESOURCE_PAGE_PERMISSIONS,
-      },
-      {
-        key: '/resource/manage',
-        label: '资源管理',
-        anyPermissions: RESOURCE_MANAGE_PAGE_PERMISSIONS,
-      },
-      {
-        key: '/resource/review',
-        label: '审核工作台',
-        anyPermissions: RESOURCE_REVIEW_PAGE_PERMISSIONS,
-      },
-      {
-        key: '/resource/policy',
-        label: '审核策略',
-        anyPermissions: RESOURCE_POLICY_PAGE_PERMISSIONS,
       },
     ],
   },

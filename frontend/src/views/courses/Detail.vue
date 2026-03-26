@@ -1,9 +1,9 @@
 <template>
   <div v-if="localCourse.title" class="course-detail-page">
     <div class="top-bar">
-      <a-breadcrumb>
+        <a-breadcrumb>
         <a-breadcrumb-item @click="$router.push('/courses')" style="cursor: pointer; color: var(--police-primary)">
-          课程中心
+          课程资源
         </a-breadcrumb-item>
         <a-breadcrumb-item>{{ localCourse.title }}</a-breadcrumb-item>
       </a-breadcrumb>
@@ -34,7 +34,7 @@
     <a-row :gutter="20">
       <a-col :span="16">
         <div class="viewer-card">
-          <template v-if="isVideo">
+          <template v-if="viewerType === 'video'">
             <video
               ref="videoRef"
               :src="currentVideoUrl"
@@ -47,11 +47,28 @@
               @loadedmetadata="onMetaLoaded"
             ></video>
           </template>
+          <template v-else-if="viewerType === 'image'">
+            <div class="doc-toolbar">
+              <div>
+                <div class="doc-title">{{ currentChapter.title || localCourse.title }}</div>
+                <div class="doc-subtitle">{{ currentChapterBindingText }}</div>
+              </div>
+              <div class="doc-actions">
+                <a-button size="small" @click="markDocProgress">标记已学习</a-button>
+                <a-button size="small" type="primary" ghost :href="currentImageUrl" target="_blank">
+                  <template #icon><DownloadOutlined /></template>查看原图
+                </a-button>
+              </div>
+            </div>
+            <div class="image-stage">
+              <img :src="currentImageUrl" class="course-image" :alt="currentChapter.title || localCourse.title" />
+            </div>
+          </template>
           <template v-else>
             <div class="doc-toolbar">
               <div>
                 <div class="doc-title">{{ currentChapter.title || localCourse.title }}</div>
-                <div class="doc-subtitle">文档章节，建议学习时长 {{ currentChapter.duration || 30 }} 分钟</div>
+                <div class="doc-subtitle">{{ currentChapterBindingText }}</div>
               </div>
               <div class="doc-actions">
                 <a-button size="small" @click="markDocProgress">标记已学习</a-button>
@@ -71,7 +88,7 @@
               <div class="meta-grid">
                 <div class="meta-item"><span class="meta-label">创建者</span><span>{{ localCourse.createdByName || '-' }}</span></div>
                 <div class="meta-item"><span class="meta-label">主讲教官</span><span>{{ localCourse.instructorName || '-' }}</span></div>
-                <div class="meta-item"><span class="meta-label">课程时长</span><span>{{ localCourse.duration || 0 }} 分钟</span></div>
+                <div class="meta-item"><span class="meta-label">章节数量</span><span>{{ localCourse.chapters?.length || 0 }} 章</span></div>
                 <div class="meta-item"><span class="meta-label">学习人数</span><span>{{ Number(localCourse.studentCount || 0).toLocaleString() }} 人</span></div>
                 <div class="meta-item"><span class="meta-label">课程标签</span><span>{{ (localCourse.tags || []).join('、') || '-' }}</span></div>
                 <div class="meta-item"><span class="meta-label">我的进度</span><span>{{ localCourse.progressPercent || 0 }}%</span></div>
@@ -182,7 +199,7 @@
                 <div class="chapter-index">{{ idx + 1 }}</div>
                 <div class="chapter-info">
                   <div class="chapter-title">{{ chapter.title }}</div>
-                  <div class="chapter-meta">{{ chapter.duration || 0 }} 分钟 · {{ chapter.contentType === 'document' ? '文档' : '视频' }}</div>
+                  <div class="chapter-meta">{{ getChapterMetaText(chapter) }}</div>
                 </div>
               </div>
               <div class="chapter-status">
@@ -264,9 +281,19 @@ const learningStatusLoading = ref(false)
 const learningStatusLoaded = ref(false)
 
 const currentChapter = computed(() => localCourse.value.chapters[currentChapterIdx.value] || {})
-const isVideo = computed(() => currentChapter.value.contentType !== 'document')
+const viewerType = computed(() => {
+  if (currentChapter.value.contentType === 'video') {
+    return 'video'
+  }
+  if (currentChapter.value.contentType === 'image') {
+    return 'image'
+  }
+  return 'document'
+})
 const currentVideoUrl = computed(() => currentChapter.value.fileUrl || currentChapter.value.videoUrl || '')
 const currentDocUrl = computed(() => currentChapter.value.fileUrl || currentChapter.value.docUrl || '')
+const currentImageUrl = computed(() => currentChapter.value.fileUrl || currentChapter.value.docUrl || '')
+const currentChapterBindingText = computed(() => getChapterBindingText(currentChapter.value))
 
 const resourceColumns = [
   { title: '标题', dataIndex: 'title', key: 'title' },
@@ -315,14 +342,46 @@ function calculateCourseProgress(chapters) {
   if (!list.length) {
     return 0
   }
-  const totalWeight = list.reduce((sum, chapter) => sum + Math.max(0, Number(chapter.duration || 0)), 0)
-  if (totalWeight > 0) {
-    const weighted = list.reduce((sum, chapter) => (
-      sum + Math.max(0, Number(chapter.duration || 0)) * Math.min(100, Math.max(0, Number(chapter.progress || 0)))
-    ), 0)
-    return Math.round(weighted / totalWeight)
-  }
   return Math.round(list.reduce((sum, chapter) => sum + Math.min(100, Math.max(0, Number(chapter.progress || 0))), 0) / list.length)
+}
+
+function getChapterTypeLabel(chapter) {
+  if (chapter?.contentType === 'image') {
+    return '图片'
+  }
+  if (chapter?.contentType === 'document') {
+    return '文档'
+  }
+  return '视频'
+}
+
+function getChapterBindingText(chapter) {
+  if (!chapter) {
+    return '请选择章节开始学习'
+  }
+  const bindingParts = [
+    chapter.resourceTitle,
+    chapter.resourceFileLabel,
+    chapter.resourceFileName,
+  ].filter(Boolean)
+  if (bindingParts.length) {
+    return `当前内容引用：${bindingParts.join(' / ')}`
+  }
+  if (chapter.fileId) {
+    return '当前内容沿用历史文件引用'
+  }
+  return `${getChapterTypeLabel(chapter)}章节`
+}
+
+function getChapterMetaText(chapter) {
+  const parts = [getChapterTypeLabel(chapter)]
+  if (chapter.resourceTitle) {
+    const resourceParts = [chapter.resourceTitle, chapter.resourceFileLabel || chapter.resourceFileName].filter(Boolean).join(' / ')
+    parts.push(resourceParts)
+  } else if (chapter.fileId) {
+    parts.push('历史文件')
+  }
+  return parts.join(' · ')
 }
 
 function resolveChapterIndex(course, chapters) {
@@ -338,7 +397,7 @@ function resetVideoResumeState() {
     : Math.max(0, Number(currentChapter.value?.playbackSeconds || 0))
   lastProgressAt = 0
   lastPersistSignature = ''
-  if (videoRef.value && isVideo.value) {
+  if (videoRef.value && viewerType.value === 'video') {
     videoRef.value.pause()
   }
 }
@@ -490,7 +549,7 @@ function buildProgressPayload() {
     return null
   }
 
-  if (isVideo.value) {
+  if (viewerType.value === 'video') {
     const duration = Number(videoRef.value?.duration || 0)
     const seconds = Math.max(0, Math.floor(Number(videoRef.value?.currentTime || chapter.playbackSeconds || 0)))
     const progress = duration > 0
@@ -699,6 +758,8 @@ onBeforeRouteLeave(async () => {
 .doc-subtitle { margin-top: 4px; font-size: 12px; color: #7a8699; }
 .doc-actions { display: flex; gap: 8px; }
 .doc-iframe { width: 100%; height: 560px; display: block; }
+.image-stage { display: flex; align-items: center; justify-content: center; min-height: 560px; padding: 24px; background: #f7f9fc; }
+.course-image { max-width: 100%; max-height: 520px; object-fit: contain; border-radius: 8px; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08); }
 .course-description { line-height: 1.8; color: #444; }
 .meta-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
 .meta-item { display: flex; gap: 8px; font-size: 13px; }
@@ -730,6 +791,8 @@ onBeforeRouteLeave(async () => {
   .doc-toolbar { flex-direction: column; align-items: flex-start; }
   .doc-actions { width: 100%; }
   .doc-iframe { height: 360px; }
+  .image-stage { min-height: 360px; padding: 16px; }
+  .course-image { max-height: 320px; }
   .meta-grid { grid-template-columns: 1fr; }
   .resource-bind-select { width: 100%; min-width: 0; }
 }

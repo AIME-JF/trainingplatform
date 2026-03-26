@@ -45,13 +45,13 @@
                     :rows="7"
                     placeholder="例：本周按工作日排满，上午 08:30-12:30，下午 14:00-17:30；一个课时 40 分钟，课间休息 10 分钟，一节课最多 3 个课时，尽量平分，避开考试。"
                   />
-                  <div class="field-help">这里只需要输入自然语言要求。提交后会创建异步任务，后台先解析规则，完成后再到任务页确认。</div>
+                  <div class="field-help">这里只需要输入排课要求。提交后会创建异步任务，后台先解析规则，完成后再到任务页确认。</div>
                 </a-form-item>
               </div>
               <a-form-item label="是否覆盖当前课表">
                 <a-switch v-model:checked="taskForm.overwriteExistingSchedule" />
                 <div class="field-help">
-                  开启后会按新课表重新生成，最终确认应用时还会再次提示是否覆盖；关闭后会保留当前已有课次，并把它们作为避让上下文一起提供给模型。
+                  开启后会按新课表重新生成，最终确认应用时还会再次提示是否覆盖；关闭后会保留当前已有课次。
                 </div>
               </a-form-item>
               <div data-tour-id="schedule-notes">

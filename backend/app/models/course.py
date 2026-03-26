@@ -14,7 +14,7 @@ class Course(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(200), nullable=False, comment='课程标题')
     category = Column(String(50), nullable=False, comment='课程分类: law/fraud/traffic/community/cybersec/physical')
-    file_type = Column(String(20), nullable=False, default='video', comment='文件类型: video/document')
+    file_type = Column(String(20), nullable=False, default='video', comment='文件类型: video/document/image/mixed')
     description = Column(Text, comment='课程描述')
     created_by = Column(Integer, ForeignKey('users.id'), nullable=True, index=True, comment='创建人ID')
     instructor_id = Column(Integer, ForeignKey('users.id'), nullable=True, comment='教官ID')

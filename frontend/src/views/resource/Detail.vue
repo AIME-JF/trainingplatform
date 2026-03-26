@@ -59,7 +59,7 @@
 
             <div class="info-item">
               <span class="label">可见范围</span>
-              <p class="value">{{ visibilityLabel(resource.visibilityType) }}</p>
+              <p class="value">{{ resource.scope || visibilityLabel(resource.scopeType || resource.visibilityType) }}</p>
             </div>
 
             <div class="info-item">
@@ -138,10 +138,13 @@ function statusLabel(status) {
 
 function visibilityLabel(type) {
   const map = {
-    public: '全员可见',
-    department: '部门可见',
-    police_type: '警种可见',
-    custom: '自定义范围',
+    all: '全部用户',
+    public: '全部用户',
+    user: '指定用户',
+    department: '指定部门',
+    role: '指定角色',
+    police_type: '历史警种范围',
+    custom: '历史自定义范围',
   }
   return map[type] || type || '-'
 }

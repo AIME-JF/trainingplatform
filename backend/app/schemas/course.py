@@ -50,6 +50,9 @@ class ChapterResponse(BaseModel):
     doc_url: Optional[str] = None
     file_id: Optional[int] = None
     resource_id: Optional[int] = None
+    resource_title: Optional[str] = None
+    resource_file_name: Optional[str] = None
+    resource_file_label: Optional[str] = None
     file_url: Optional[str] = None
     content_type: Optional[str] = None
     progress: int = 0  # 当前用户学习进度(0-100)
@@ -65,7 +68,7 @@ class CourseCreate(BaseModel):
     """创建课程"""
     title: str = Field(..., max_length=200, description="课程标题")
     category: str = Field(..., max_length=50, description="课程分类")
-    file_type: str = Field("video", description="文件类型")
+    file_type: str = Field("video", description="文件类型: video/document/image/mixed")
     description: Optional[str] = Field(None, description="课程描述")
     instructor_id: Optional[int] = Field(None, description="教官ID")
     duration: int = Field(0, description="总时长(分钟)")

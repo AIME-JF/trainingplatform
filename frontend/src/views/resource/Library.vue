@@ -10,7 +10,7 @@
           tips="需要 CREATE_RESOURCE 或 VIEW_RESOURCE_ALL 权限"
           v-slot="{ disabled }"
         >
-          <a-button type="primary" :disabled="disabled" @click="$router.push('/resource/upload')">上传资源</a-button>
+          <a-button type="primary" :disabled="disabled" @click="uploadModalOpen = true">上传资源</a-button>
         </permissions-tooltip>
       </a-space>
     </div>
@@ -88,6 +88,8 @@
       @change="onPageChange"
       @showSizeChange="onSizeChange"
     />
+
+    <resource-upload-modal v-model:open="uploadModalOpen" @success="handleUploadSuccess" />
   </div>
 </template>
 
@@ -98,6 +100,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { getResources, publishResource, offlineResource } from '@/api/resource'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
+import ResourceUploadModal from './components/ResourceUploadModal.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -105,6 +108,7 @@ const authStore = useAuthStore()
 const query = reactive({ page: 1, size: 10, search: '', status: '', contentType: '' })
 const resources = ref([])
 const total = ref(0)
+const uploadModalOpen = ref(false)
 const canUploadResource = computed(() => authStore.hasAnyPermission(['CREATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
 const canManageAnyResource = computed(() => authStore.hasAnyPermission(['UPDATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
 
@@ -197,6 +201,11 @@ function onPageChange(page, size) {
 function onSizeChange(_, size) {
   query.page = 1
   query.size = size
+  fetchResources()
+}
+
+function handleUploadSuccess() {
+  query.page = 1
   fetchResources()
 }
 </script>

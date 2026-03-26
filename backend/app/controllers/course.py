@@ -25,9 +25,10 @@ class CourseController:
         self.service = CourseService(db)
 
     def get_courses(self, page: int = 1, size: int = 10, search: Optional[str] = None,
-                    category: Optional[str] = None, sort: Optional[str] = None, user_id: Optional[int] = None):
+                    category: Optional[str] = None, sort: Optional[str] = None,
+                    instructor_id: Optional[int] = None, user_id: Optional[int] = None):
         try:
-            return self.service.get_courses(page, size, search, category, sort, user_id=user_id)
+            return self.service.get_courses(page, size, search, category, sort, instructor_id, user_id=user_id)
         except Exception as e:
             logger.error(f"获取课程列表异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取课程列表失败")
@@ -63,9 +64,9 @@ class CourseController:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="课程不存在")
         return result
 
-    def update_course(self, course_id: int, data: CourseUpdate):
+    def update_course(self, course_id: int, data: CourseUpdate, actor_user_id: Optional[int] = None):
         try:
-            result = self.service.update_course(course_id, data)
+            result = self.service.update_course(course_id, data, actor_user_id=actor_user_id)
             if not result:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="课程不存在")
             return result

@@ -174,7 +174,7 @@
               <a-descriptions-item label="警种">
                 {{ findPoliceTypeName(activeTask.requestPayload.policeTypeId) || '未设置' }}
               </a-descriptions-item>
-              <a-descriptions-item label="自然语言要求" :span="2">
+              <a-descriptions-item label="要求" :span="2">
                 {{ activeTask.requestPayload.requirements || '未填写' }}
               </a-descriptions-item>
             </a-descriptions>
