@@ -22,9 +22,9 @@ from app.schemas import (
     AITaskSummaryResponse,
     PaginatedResponse,
 )
-from app.services.personal_training_plan_agent import PersonalTrainingPlanAgentService
-from app.services.ai_schedule_config_parser import AIScheduleConfigParserService
-from app.services.schedule_agent import ScheduleAgentService
+from app.agents.personal_training_plan_agent import PersonalTrainingPlanAgentService
+from app.agents.schedule_config_parser import AIScheduleConfigParserService
+from app.agents.schedule_agent import ScheduleAgentService
 from app.services.training_schedule_rule import TrainingScheduleRuleService
 from app.utils.authz import can_manage_training
 from logger import logger

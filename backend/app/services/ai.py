@@ -26,7 +26,7 @@ from app.schemas import (
     PaginatedResponse,
     QuestionCreate,
 )
-from app.services.ai_paper_assembly_parser import AIPaperAssemblyParser
+from app.agents.paper_assembly_parser import AIPaperAssemblyParser
 from app.services.exam import ExamService
 from app.services.question import QuestionService, deduplicate_questions
 from app.utils.authz import can_view_question_with_context

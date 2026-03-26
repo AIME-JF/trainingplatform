@@ -14,16 +14,13 @@ from app.schemas import (
 )
 from logger import logger
 
-from .ai_question_generator import AIQuestionGenerator
+from .base import BaseAIAgent
 
 
-class AIPaperAssemblyParser:
+class AIPaperAssemblyParser(BaseAIAgent):
     """将自动组卷请求解析成结构化查题条件。"""
 
     SUPPORTED_TYPES = ("single", "multi", "judge")
-
-    def __init__(self) -> None:
-        self._runtime_helper = AIQuestionGenerator()
 
     def parse_request(
         self,
@@ -36,9 +33,10 @@ class AIPaperAssemblyParser:
 
         try:
             prompt = self._build_parse_prompt(request, fallback)
-            runtime_config = self._runtime_helper._load_runtime_config()
-            raw_content = self._runtime_helper._call_provider(runtime_config, prompt)
-            payload = self._runtime_helper._parse_json_payload(raw_content)
+            payload = self._generate_json_payload(
+                system_prompt="你是警务训练平台的自动组卷需求解析助手。你只能输出合法 JSON 对象，不能输出 Markdown、代码块或额外说明。",
+                user_prompt=prompt,
+            )
             return self._build_parsed_result(payload, request, fallback)
         except Exception as exc:
             logger.warning("AI 自动组卷需求解析失败，回退到显式字段: %s", exc)

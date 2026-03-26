@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from app.database import SessionLocal, get_redis
 from app.models import AITask
 from app.schemas import AIQuestionTaskCreateRequest
-from app.services.ai_question_generator import AIQuestionGenerator
+from app.agents.question_generator import AIQuestionGenerator
 from celery_app import celery_app
 from logger import logger
 

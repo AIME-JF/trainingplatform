@@ -5,30 +5,16 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 
-from openai import OpenAI
-
 from app.models import Training
 from app.schemas import AIScheduleTaskCreateRequest
-from app.services.system import get_config_value
 from app.services.training_schedule_rule import TrainingScheduleRuleService
 
+from .base import BaseAIAgent
 
-@dataclass
-class AIRuntimeConfig:
-    provider: str
-    base_url: str | None
-    api_key: str | None
-    model: str
-    max_tokens: int | None
-    temperature: float | None
-    timeout: int | float | None
-
-
-class AIScheduleConfigParserService:
+class AIScheduleConfigParserService(BaseAIAgent):
     """将自然语言排课要求解析为结构化配置，并用规则做兜底归一化"""
 
     DEFAULT_WINDOW_MAP = {
@@ -139,54 +125,21 @@ class AIScheduleConfigParserService:
         except Exception as exc:
             return {}, [f"AI 解析未启用，已按规则兜底：{exc}"]
 
-        request_kwargs: dict[str, Any] = {
-            "model": config.model,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": "你是警务培训排课配置解析器。你只能输出合法 JSON 对象，不能输出 Markdown 或说明文字。",
-                },
-                {
-                    "role": "user",
-                    "content": self._build_llm_prompt(prompt, training, request_payload),
-                },
-            ],
-        }
-        if config.max_tokens:
-            request_kwargs["max_tokens"] = config.max_tokens
-        if config.temperature is not None:
-            request_kwargs["temperature"] = config.temperature
-
         try:
-            if config.provider == "ollama":
-                from ollama import Client
-
-                client = Client(host=config.base_url, timeout=config.timeout)
-                ollama_kwargs: dict[str, Any] = {
-                    "model": config.model,
-                    "messages": request_kwargs["messages"],
-                }
-                options: dict[str, Any] = {}
-                if config.temperature is not None:
-                    options["temperature"] = config.temperature
-                if config.max_tokens:
-                    options["num_predict"] = config.max_tokens
-                if options:
-                    ollama_kwargs["options"] = options
-                response = client.chat(**ollama_kwargs)
-                content = (response.get("message") or {}).get("content", "")
-            else:
-                client = OpenAI(
-                    api_key=config.api_key,
-                    base_url=config.base_url,
-                    timeout=config.timeout,
-                    max_retries=0,
-                )
-                response = client.chat.completions.create(**request_kwargs)
-                content = response.choices[0].message.content if response.choices else ""
-            if not content:
-                raise ValueError("AI 未返回有效配置")
-            return self._parse_json_payload(str(content).strip()), warnings
+            payload = self._call_provider(
+                config,
+                [
+                    {
+                        "role": "system",
+                        "content": "你是警务培训排课配置解析器。你只能输出合法 JSON 对象，不能输出 Markdown 或说明文字。",
+                    },
+                    {
+                        "role": "user",
+                        "content": self._build_llm_prompt(prompt, training, request_payload),
+                    },
+                ],
+            )
+            return self._parse_json_payload(payload), warnings
         except Exception as exc:
             warnings.append(f"AI 解析失败，已按规则兜底：{exc}")
             return {}, warnings
@@ -910,22 +863,6 @@ class AIScheduleConfigParserService:
         return result
 
     @staticmethod
-    def _parse_json_payload(raw_content: str) -> dict[str, Any]:
-        json_text = raw_content.strip()
-        if json_text.startswith("```"):
-            json_text = re.sub(r"^```(?:json)?\s*|\s*```$", "", json_text, flags=re.IGNORECASE | re.DOTALL).strip()
-        try:
-            payload = json.loads(json_text)
-        except json.JSONDecodeError:
-            match = re.search(r"\{[\s\S]*\}", json_text)
-            if not match:
-                raise ValueError("AI 返回内容不是合法 JSON")
-            payload = json.loads(match.group(0))
-        if not isinstance(payload, dict):
-            raise ValueError("AI 返回的 JSON 顶层必须是对象")
-        return payload
-
-    @staticmethod
     def _to_int(value: Any) -> int | None:
         try:
             return int(value)
@@ -938,30 +875,3 @@ class AIScheduleConfigParserService:
             return float(value)
         except (TypeError, ValueError):
             return None
-
-    def _load_runtime_config(self) -> AIRuntimeConfig:
-        provider = str(get_config_value("ai", "llm_type", "openai") or "openai").strip().lower()
-        if provider not in {"openai", "ollama"}:
-            raise ValueError(f"未支持的 AI 提供商类型: {provider}")
-
-        model = str(get_config_value("ai", "default_text_model", "") or "").strip()
-        if not model:
-            raise ValueError("请先配置 AI 默认文本模型名称")
-
-        base_url = str(get_config_value("ai", "api_base_url", "") or "").strip() or None
-        api_key = str(get_config_value("ai", "api_key", "") or "").strip() or None
-        max_tokens = self._to_int(get_config_value("ai", "max_tokens"))
-        temperature = self._to_float(get_config_value("ai", "temperature"))
-        timeout = self._to_int(get_config_value("ai", "timeout")) or 600
-        if provider == "openai" and not api_key:
-            raise ValueError("OpenAI 模式下请先配置 API 密钥")
-
-        return AIRuntimeConfig(
-            provider=provider,
-            base_url=base_url,
-            api_key=api_key,
-            model=model,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            timeout=timeout,
-        )
