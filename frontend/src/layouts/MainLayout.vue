@@ -333,6 +333,7 @@ function getSelectedMenuKeyByPath(path) {
   if (path.startsWith('/system/users')) return '/system/users'
   if (path.startsWith('/system/roles')) return '/system/roles'
   if (path.startsWith('/system/departments')) return '/system/departments'
+  if (path.startsWith('/system/dict')) return '/system/dict'
   if (path.startsWith('/system/configs')) return '/system/configs'
   if (path.startsWith('/profile')) return '/profile'
   return path
@@ -341,8 +342,8 @@ function getSelectedMenuKeyByPath(path) {
 function getOpenKeysByPath(path) {
   if (path.startsWith('/courses')) return ['learn']
   if (path.startsWith('/resource/manage')) return ['manage']
-  if (path.startsWith('/resource/review')) return ['manage']
-  if (path.startsWith('/resource/policy')) return ['manage']
+  if (path.startsWith('/resource/review')) return ['review']
+  if (path.startsWith('/resource/policy')) return ['review']
   if (path.startsWith('/resource/')) return ['learn']
   if (path.startsWith('/exam/') || path.startsWith('/question/') || path.startsWith('/paper/')) return ['exam']
   if (path.startsWith('/training/board')) return ['evaluate']

@@ -4,6 +4,7 @@ import {
   TeamOutlined,
   EditOutlined,
   BarChartOutlined,
+  AuditOutlined,
   SettingOutlined,
 } from '@ant-design/icons-vue'
 
@@ -15,6 +16,7 @@ import {
   COURSE_PAGE_PERMISSIONS,
   DASHBOARD_PAGE_PERMISSIONS,
   DEPARTMENT_MANAGE_PAGE_PERMISSIONS,
+  DICT_MANAGE_PAGE_PERMISSIONS,
   EXAM_LIST_PAGE_PERMISSIONS,
   EXAM_MANAGE_PAGE_PERMISSIONS,
   PAPER_PAGE_PERMISSIONS,
@@ -181,10 +183,32 @@ export const appMenuConfig = [
     ],
   },
   {
+    key: 'review',
+    label: '审核管理',
+    icon: AuditOutlined,
+    children: [
+      {
+        key: '/resource/review',
+        label: '资源审核',
+        anyPermissions: RESOURCE_REVIEW_PAGE_PERMISSIONS,
+      },
+      {
+        key: '/resource/policy',
+        label: '审核策略',
+        anyPermissions: RESOURCE_POLICY_PAGE_PERMISSIONS,
+      },
+    ],
+  },
+  {
     key: 'manage',
     label: '系统管理',
     icon: SettingOutlined,
     children: [
+      {
+        key: '/resource/manage',
+        label: '资源管理',
+        anyPermissions: RESOURCE_MANAGE_PAGE_PERMISSIONS,
+      },
       {
         key: '/system/users',
         label: '用户管理',
@@ -201,24 +225,14 @@ export const appMenuConfig = [
         anyPermissions: DEPARTMENT_MANAGE_PAGE_PERMISSIONS,
       },
       {
+        key: '/system/dict',
+        label: '字典管理',
+        anyPermissions: DICT_MANAGE_PAGE_PERMISSIONS,
+      },
+      {
         key: '/system/configs',
         label: '配置管理',
         roles: ['admin'],
-      },
-      {
-        key: '/resource/manage',
-        label: '资源管理',
-        anyPermissions: RESOURCE_MANAGE_PAGE_PERMISSIONS,
-      },
-      {
-        key: '/resource/review',
-        label: '审核工作台',
-        anyPermissions: RESOURCE_REVIEW_PAGE_PERMISSIONS,
-      },
-      {
-        key: '/resource/policy',
-        label: '审核策略',
-        anyPermissions: RESOURCE_POLICY_PAGE_PERMISSIONS,
       },
     ],
   },

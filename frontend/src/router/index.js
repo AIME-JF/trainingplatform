@@ -8,6 +8,7 @@ import {
   COURSE_PAGE_PERMISSIONS,
   DASHBOARD_PAGE_PERMISSIONS,
   DEPARTMENT_MANAGE_PAGE_PERMISSIONS,
+  DICT_MANAGE_PAGE_PERMISSIONS,
   ENROLL_MANAGE_PAGE_PERMISSIONS,
   EXAM_LIST_PAGE_PERMISSIONS,
   EXAM_MANAGE_PAGE_PERMISSIONS,
@@ -298,6 +299,12 @@ const router = createRouter({
           name: 'ConfigManage',
           component: () => import('../views/system/ConfigManage.vue'),
           meta: { title: '配置管理', roles: ['admin'] },
+        },
+        {
+          path: 'system/dict',
+          name: 'DictManage',
+          component: () => import('../views/system/DictManage.vue'),
+          meta: { title: '字典管理', anyPermissions: DICT_MANAGE_PAGE_PERMISSIONS },
         },
         {
           path: 'profile',
