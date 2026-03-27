@@ -306,8 +306,9 @@ function getSelectedMenuKeyByPath(path) {
   if (path.startsWith('/courses')) return '/courses'
   if (path.startsWith('/exam/list')) return '/exam/list'
   if (path.startsWith('/exam/manage')) return '/exam/manage'
-  if (path.startsWith('/exam/scores')) return '/exam/scores'
+  if (path.startsWith('/exam/scores')) return '/exam/manage'
   if (path.startsWith('/question/repository')) return '/question/repository'
+  if (path.startsWith('/question/knowledge-points')) return '/question/knowledge-points'
   if (path.startsWith('/question/ai')) return '/question/ai'
   if (path.startsWith('/paper/repository')) return '/paper/repository'
   if (path.startsWith('/paper/ai-assemble')) return '/paper/ai-assemble'
@@ -319,6 +320,7 @@ function getSelectedMenuKeyByPath(path) {
   if (path.startsWith('/resource/library')) return '/resource/library'
   if (path.startsWith('/resource/recommend')) return '/resource/recommend'
   if (path.startsWith('/resource/my')) return '/resource/my'
+  if (path.startsWith('/resource/teaching-generate')) return '/resource/my'
   if (path.startsWith('/resource/manage')) return '/resource/manage'
   if (path.startsWith('/resource/review')) return '/resource/review'
   if (path.startsWith('/resource/policy')) return '/resource/policy'
@@ -336,29 +338,38 @@ function getSelectedMenuKeyByPath(path) {
 }
 
 function getOpenKeysByPath(path) {
-  if (path.startsWith('/exam/')) return ['examCenter']
-  if (path.startsWith('/question/')) return ['questionCenter']
-  if (path.startsWith('/paper/')) return ['paperCenter']
-  if (path.startsWith('/courses')) return ['resource']
-  if (path.startsWith('/training')) return ['training']
-  if (path.startsWith('/resource/')) return ['resource']
+  if (path.startsWith('/courses')) return ['learn']
+  if (path.startsWith('/resource/manage')) return ['manage']
+  if (path.startsWith('/resource/review')) return ['manage']
+  if (path.startsWith('/resource/policy')) return ['manage']
+  if (path.startsWith('/resource/')) return ['learn']
+  if (path.startsWith('/exam/') || path.startsWith('/question/') || path.startsWith('/paper/')) return ['exam']
+  if (path.startsWith('/training/board')) return ['evaluate']
+  if (path.startsWith('/training')) return ['train']
+  if (path.startsWith('/report')) return ['evaluate']
   if (
     path.startsWith('/trainee')
     || path.startsWith('/instructor')
     || path.startsWith('/talent')
     || path.startsWith('/certificate')
   ) {
-    return ['archives']
+    return ['evaluate']
   }
-  if (path.startsWith('/system/')) return ['system']
+  if (path.startsWith('/system/')) return ['manage']
   return []
 }
+
+const allSubMenuKeys = computed(() =>
+  visibleMenuItems.value.filter((item) => item.children?.length).map((item) => item.key)
+)
 
 watch(
   () => route.path,
   (path) => {
     selectedKeys.value = [getSelectedMenuKeyByPath(path)]
-    openKeys.value = getOpenKeysByPath(path)
+    const pathKeys = getOpenKeysByPath(path)
+    const merged = new Set([...allSubMenuKeys.value, ...pathKeys])
+    openKeys.value = [...merged]
   },
   { immediate: true }
 )

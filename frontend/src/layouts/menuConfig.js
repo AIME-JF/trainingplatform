@@ -1,11 +1,8 @@
 import {
   HomeOutlined,
-  BookOutlined,
+  ReadOutlined,
   TeamOutlined,
-  FormOutlined,
-  DatabaseOutlined,
-  FileTextOutlined,
-  UserOutlined,
+  EditOutlined,
   BarChartOutlined,
   SettingOutlined,
 } from '@ant-design/icons-vue'
@@ -45,9 +42,9 @@ export const appMenuConfig = [
     anyPermissions: DASHBOARD_PAGE_PERMISSIONS,
   },
   {
-    key: 'resource',
-    label: '资源中心',
-    icon: BookOutlined,
+    key: 'learn',
+    label: '学习资源',
+    icon: ReadOutlined,
     children: [
       {
         key: '/courses',
@@ -69,26 +66,11 @@ export const appMenuConfig = [
         label: '我的资源',
         anyPermissions: MY_RESOURCE_PAGE_PERMISSIONS,
       },
-      {
-        key: '/resource/manage',
-        label: '资源管理',
-        anyPermissions: RESOURCE_MANAGE_PAGE_PERMISSIONS,
-      },
-      {
-        key: '/resource/review',
-        label: '审核工作台',
-        anyPermissions: RESOURCE_REVIEW_PAGE_PERMISSIONS,
-      },
-      {
-        key: '/resource/policy',
-        label: '审核策略',
-        anyPermissions: RESOURCE_POLICY_PAGE_PERMISSIONS,
-      },
     ],
   },
   {
-    key: 'training',
-    label: '培训管理',
+    key: 'train',
+    label: '培训组织',
     icon: TeamOutlined,
     children: [
       {
@@ -106,35 +88,23 @@ export const appMenuConfig = [
         label: '周训练计划',
         anyPermissions: TRAINING_SCHEDULE_PAGE_PERMISSIONS,
       },
-      {
-        key: '/training/board',
-        label: '培训看板',
-        anyPermissions: REPORT_PAGE_PERMISSIONS,
-      },
     ],
   },
   {
-    key: 'examCenter',
-    label: '考试中心',
-    icon: FormOutlined,
+    key: 'exam',
+    label: '考试测评',
+    icon: EditOutlined,
     children: [
-      {
-        key: '/exam/manage',
-        label: '考试管理',
-        anyPermissions: EXAM_MANAGE_PAGE_PERMISSIONS,
-      },
       {
         key: '/exam/list',
         label: '参加考试',
         anyPermissions: EXAM_LIST_PAGE_PERMISSIONS,
       },
-    ],
-  },
-  {
-    key: 'questionCenter',
-    label: '题库管理',
-    icon: DatabaseOutlined,
-    children: [
+      {
+        key: '/exam/manage',
+        label: '考试管理',
+        anyPermissions: EXAM_MANAGE_PAGE_PERMISSIONS,
+      },
       {
         key: '/question/repository',
         label: '试题仓库',
@@ -146,39 +116,42 @@ export const appMenuConfig = [
         anyPermissions: KNOWLEDGE_POINT_PAGE_PERMISSIONS,
       },
       {
-        key: '/question/ai',
-        label: 'AI 智能出题',
-        anyPermissions: AI_QUESTION_PAGE_PERMISSIONS,
-      },
-    ],
-  },
-  {
-    key: 'paperCenter',
-    label: '卷库管理',
-    icon: FileTextOutlined,
-    children: [
-      {
         key: '/paper/repository',
         label: '试卷仓库',
         anyPermissions: PAPER_PAGE_PERMISSIONS,
       },
       {
+        key: '/question/ai',
+        label: '智能出题',
+        anyPermissions: AI_QUESTION_PAGE_PERMISSIONS,
+      },
+      {
         key: '/paper/ai-assemble',
-        label: 'AI 自动组卷',
+        label: '智能组卷',
         anyPermissions: AI_PAPER_ASSEMBLE_PAGE_PERMISSIONS,
       },
       {
         key: '/paper/ai-generate',
-        label: 'AI 自动生成试卷',
+        label: '智能生成试卷',
         anyPermissions: AI_PAPER_GENERATE_PAGE_PERMISSIONS,
       },
     ],
   },
   {
-    key: 'archives',
-    label: '人员档案',
-    icon: UserOutlined,
+    key: 'evaluate',
+    label: '评估分析',
+    icon: BarChartOutlined,
     children: [
+      {
+        key: '/report',
+        label: '数据看板',
+        anyPermissions: REPORT_PAGE_PERMISSIONS,
+      },
+      {
+        key: '/training/board',
+        label: '培训看板',
+        anyPermissions: REPORT_PAGE_PERMISSIONS,
+      },
       {
         key: '/trainee',
         label: '学员库',
@@ -202,13 +175,7 @@ export const appMenuConfig = [
     ],
   },
   {
-    key: '/report',
-    label: '数据看板',
-    icon: BarChartOutlined,
-    anyPermissions: REPORT_PAGE_PERMISSIONS,
-  },
-  {
-    key: 'system',
+    key: 'manage',
     label: '系统管理',
     icon: SettingOutlined,
     children: [
@@ -231,6 +198,21 @@ export const appMenuConfig = [
         key: '/system/configs',
         label: '配置管理',
         roles: ['admin'],
+      },
+      {
+        key: '/resource/manage',
+        label: '资源管理',
+        anyPermissions: RESOURCE_MANAGE_PAGE_PERMISSIONS,
+      },
+      {
+        key: '/resource/review',
+        label: '审核工作台',
+        anyPermissions: RESOURCE_REVIEW_PAGE_PERMISSIONS,
+      },
+      {
+        key: '/resource/policy',
+        label: '审核策略',
+        anyPermissions: RESOURCE_POLICY_PAGE_PERMISSIONS,
       },
     ],
   },

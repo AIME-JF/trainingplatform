@@ -3,7 +3,7 @@
     <div class="section-header" style="margin-bottom:16px">
       <div>
         <h4 style="margin:0">排课规则</h4>
-        <div class="section-helper">这里配置培训班默认排课规则。AI 排课会优先读取这里的规则，任务页仅做少量临时覆盖。</div>
+        <div class="section-helper">这里配置培训班默认排课规则。智能排课会优先读取这里的规则，任务页仅做少量临时覆盖。</div>
       </div>
       <permissions-tooltip :allowed="canEdit" :tips="editTooltip" v-slot="{ disabled }">
         <a-button type="primary" :disabled="disabled" :loading="saving" @click="handleSave">保存规则</a-button>

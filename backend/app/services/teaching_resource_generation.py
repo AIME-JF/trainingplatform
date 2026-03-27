@@ -194,8 +194,9 @@ class TeachingResourceGenerationService:
             raise ValueError("任务尚未生成预览，暂不能设置资源基础信息")
 
         current_meta = self._extract_resource_meta(task)
+        updated_title = (str(data.resource_title or "").strip() or None) if data.resource_title is not None else current_meta.resource_title
         next_meta = TeachingResourceGenerationResourceMeta(
-            resource_title=current_meta.resource_title,
+            resource_title=updated_title or current_meta.resource_title,
             resource_summary=(str(data.resource_summary or "").strip() or None),
             tags=data.tags,
             scope_type=data.scope_type,

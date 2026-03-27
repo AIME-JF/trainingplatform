@@ -123,7 +123,7 @@ const emit = defineEmits(['update:modelValue', 'edit-question', 'create-question
 
 const typeLabels = { single: '单选题', multi: '多选题', judge: '判断题' }
 const typeColors = { single: 'blue', multi: 'purple', judge: 'orange' }
-const originLabels = { existing: '题库题目', generated: 'AI生成', manual: '手动新增' }
+const originLabels = { existing: '题库题目', generated: '智能生成', manual: '手动新增' }
 
 const pickerVisible = ref(false)
 const pickerSearch = ref('')

@@ -1,8 +1,8 @@
 <template>
   <ai-task-tabs-layout
     v-model:active-tab="activeTab"
-    title="AI 自动生成试卷"
-    subtitle="先由 AI 生成试题，再形成试卷草稿，你可修改试题和试卷后确认入库"
+    title="智能生成试卷"
+    subtitle="先由系统智能生成试题，再形成试卷草稿，你可修改试题和试卷后确认入库"
     :task-list="taskList"
     :task-loading="taskLoading"
     :active-task-id="activeTask?.id || null"

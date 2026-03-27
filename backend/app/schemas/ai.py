@@ -309,6 +309,7 @@ class TeachingResourceGenerationResourceMeta(BaseModel):
 class TeachingResourceGenerationMetaUpdateRequest(BaseModel):
     """教学资源生成任务基础信息更新请求"""
 
+    resource_title: Optional[str] = Field(None, max_length=200, description="资源标题（可覆盖自动生成的标题）")
     resource_summary: Optional[str] = Field(None, max_length=1000, description="资源摘要")
     tags: List[str] = Field(default_factory=list, description="资源标签")
     scope_type: str = Field(ADMISSION_SCOPE_ALL, description="可见范围类型")

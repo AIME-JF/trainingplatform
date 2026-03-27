@@ -7,7 +7,7 @@
       </div>
       <a-space>
         <a-button v-if="authStore.isStudent && trainingId" type="primary" ghost @click="openAiPersonalPlan(authStore.currentUser?.id)">
-          AI个训方案
+          智能个训方案
         </a-button>
         <a-button @click="$router.back()">返回</a-button>
       </a-space>

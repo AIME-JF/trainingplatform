@@ -20,7 +20,7 @@
             <div class="stat-divider" />
             <div class="stat-item">
               <span class="stat-num">20</span>
-              <span class="stat-label">AI智能体</span>
+              <span class="stat-label">智能体</span>
             </div>
           </div>
         </div>
@@ -194,7 +194,7 @@ const countdown = ref(0)
 
 const roles = [
   { key: 'admin', name: '系统管理员', desc: '全平台管理·数据看板·人才库', icon: '管', color: '#003087' },
-  { key: 'instructor', name: '教官', desc: '课程管理·AI组卷·学情分析', icon: '教', color: '#1a7a3e' },
+  { key: 'instructor', name: '教官', desc: '课程管理·智能组卷·学情分析', icon: '教', color: '#1a7a3e' },
   { key: 'student', name: '学员（民警）', desc: '在线学习·考试·个人档案', icon: '警', color: '#8b1a1a' },
 ]
 

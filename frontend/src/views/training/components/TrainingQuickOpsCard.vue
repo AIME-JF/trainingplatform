@@ -27,7 +27,7 @@
         block
         v-slot="{ disabled }"
       >
-        <a-button :disabled="disabled" @click="$emit('open-ai-schedule')">AI排课建议</a-button>
+        <a-button :disabled="disabled" @click="$emit('open-ai-schedule')">智能排课</a-button>
       </permissions-tooltip>
       <a-button @click="$emit('change-tab', 'schedule')">课程安排</a-button>
       <a-button v-if="!isStudent" @click="$emit('change-tab', 'students')">学员名单</a-button>

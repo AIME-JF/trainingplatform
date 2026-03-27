@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h2>试题仓库</h2>
-        <p class="page-sub">统一维护题库题目，AI 智能出题任务确认后会进入这里</p>
+        <p class="page-sub">统一维护题库题目，智能出题任务确认后会进入这里</p>
       </div>
       <a-space>
         <permissions-tooltip
@@ -13,7 +13,7 @@
         >
           <a-button :disabled="disabled" @click="$router.push('/question/ai')">
             <template #icon><RobotOutlined /></template>
-            AI 智能出题
+            智能出题
           </a-button>
         </permissions-tooltip>
         <permissions-tooltip

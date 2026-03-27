@@ -9,7 +9,7 @@
             <a-radio-button value="timetable">按课表展示</a-radio-button>
           </a-radio-group>
         </a-space>
-        <div class="section-helper">建议先补课程计划课时。AI 排课任务支持排满、排满工作日、按课时排三种方式，其中按课时排会使用计划课时。</div>
+        <div class="section-helper">建议先补课程计划课时。智能排课任务支持排满、排满工作日、按课时排三种方式，其中按课时排会使用计划课时。</div>
       </div>
       <a-space v-if="!isStudent">
         <permissions-tooltip
@@ -18,7 +18,7 @@
           v-slot="{ disabled }"
         >
           <a-button size="small" :disabled="disabled" @click="$emit('open-ai-schedule')">
-            AI排课建议
+            智能排课
           </a-button>
         </permissions-tooltip>
         <permissions-tooltip

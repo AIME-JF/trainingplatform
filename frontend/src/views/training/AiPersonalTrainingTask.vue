@@ -1,7 +1,7 @@
 <template>
   <ai-task-tabs-layout
     v-model:active-tab="activeTab"
-    title="AI个训方案"
+    title="智能个训方案"
     subtitle="基于训历、考试和学习行为生成建议方案，确认后保存方案快照"
     tag-text="训练智能体"
     :task-list="taskList"

@@ -113,19 +113,19 @@ const router = createRouter({
           path: 'question/ai',
           name: 'AiQuestionTask',
           component: () => import('../views/exam/AiQuestionTask.vue'),
-          meta: { title: 'AI智能出题', anyPermissions: AI_QUESTION_PAGE_PERMISSIONS },
+          meta: { title: '智能出题', anyPermissions: AI_QUESTION_PAGE_PERMISSIONS },
         },
         {
           path: 'paper/ai-assemble',
           name: 'AiAssemblePaperTask',
           component: () => import('../views/exam/AiAssemblePaperTask.vue'),
-          meta: { title: 'AI自动组卷', anyPermissions: AI_PAPER_ASSEMBLE_PAGE_PERMISSIONS },
+          meta: { title: '智能组卷', anyPermissions: AI_PAPER_ASSEMBLE_PAGE_PERMISSIONS },
         },
         {
           path: 'paper/ai-generate',
           name: 'AiGeneratePaperTask',
           component: () => import('../views/exam/AiGeneratePaperTask.vue'),
-          meta: { title: 'AI自动生成试卷', anyPermissions: AI_PAPER_GENERATE_PAGE_PERMISSIONS },
+          meta: { title: '智能生成试卷', anyPermissions: AI_PAPER_GENERATE_PAGE_PERMISSIONS },
         },
         {
           path: 'training',
@@ -149,7 +149,7 @@ const router = createRouter({
           path: 'training/ai-schedule/:id?',
           name: 'AiScheduleTask',
           component: () => import('../views/training/AiScheduleTask.vue'),
-          meta: { title: 'AI排课建议', anyPermissions: TRAINING_MANAGE_PAGE_PERMISSIONS },
+          meta: { title: '智能排课', anyPermissions: TRAINING_MANAGE_PAGE_PERMISSIONS },
         },
         {
           path: 'training/board',
@@ -185,7 +185,7 @@ const router = createRouter({
           path: 'training/:id/ai-personal',
           name: 'AiPersonalTrainingTask',
           component: () => import('../views/training/AiPersonalTrainingTask.vue'),
-          meta: { title: 'AI个训方案', anyPermissions: TRAINING_PAGE_PERMISSIONS },
+          meta: { title: '智能个训方案', anyPermissions: TRAINING_PAGE_PERMISSIONS },
         },
         {
           path: 'resource/library',

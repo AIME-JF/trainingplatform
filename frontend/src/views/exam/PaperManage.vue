@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h2>试卷仓库</h2>
-        <p class="page-sub">统一维护试卷草稿，AI 自动组卷和 AI 自动生成试卷确认后会进入这里</p>
+        <p class="page-sub">统一维护试卷草稿，智能组卷和智能生成试卷确认后会进入这里</p>
       </div>
       <a-space>
         <permissions-tooltip
@@ -13,7 +13,7 @@
         >
           <a-button :disabled="disabled" @click="$router.push('/paper/ai-assemble')">
             <template #icon><RobotOutlined /></template>
-            AI 自动组卷
+            智能组卷
           </a-button>
         </permissions-tooltip>
         <permissions-tooltip
@@ -23,7 +23,7 @@
         >
           <a-button :disabled="disabled" @click="$router.push('/paper/ai-generate')">
             <template #icon><RobotOutlined /></template>
-            AI 自动生成试卷
+            智能生成试卷
           </a-button>
         </permissions-tooltip>
         <permissions-tooltip

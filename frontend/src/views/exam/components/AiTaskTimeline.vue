@@ -49,6 +49,13 @@ const currentStatusLabel = computed(() => {
     if (props.stage === 'schedule_generation') return props.status === 'processing' ? '生成课表中' : '待生成课表'
     if (props.stage === 'schedule_confirmation') return '待确认课表'
   }
+  if (props.mode === 'resource-generation') {
+    if (props.status === 'failed') return '生成失败'
+    if (props.status === 'confirmed') return '已保存草稿'
+    if (props.status === 'completed') return '生成完成'
+    if (props.status === 'processing') return '智能生成中'
+    if (props.status === 'pending') return '排队中'
+  }
   return statusLabels[props.status] || props.status
 })
 
@@ -60,12 +67,21 @@ const currentStatusColor = computed(() => {
     if (props.stage === 'schedule_confirmation') return 'blue'
     if (props.status === 'processing') return 'processing'
   }
+  if (props.mode === 'resource-generation') {
+    if (props.status === 'failed') return 'red'
+    if (props.status === 'confirmed') return 'green'
+    if (props.status === 'completed') return 'blue'
+    if (props.status === 'processing') return 'processing'
+  }
   return statusColors[props.status] || 'default'
 })
 
 const stepTitles = computed(() => {
   if (props.mode === 'schedule') {
     return ['创建任务', '解析规则', '确认规则', '生成课表', '确认应用']
+  }
+  if (props.mode === 'resource-generation') {
+    return ['创建任务', '智能生成', '查看结果', '预览', '确认完成']
   }
   return ['创建任务', '后端处理', '查看结果', '确认完成']
 })
@@ -80,6 +96,13 @@ const currentStep = computed(() => {
     if (props.status === 'failed') {
       return props.stage === 'schedule_generation' ? 3 : 1
     }
+    return 0
+  }
+  if (props.mode === 'resource-generation') {
+    if (props.status === 'confirmed') return 4
+    if (props.status === 'completed') return 2
+    if (props.status === 'processing') return 1
+    if (props.status === 'failed') return 1
     return 0
   }
   if (props.status === 'failed') return 1

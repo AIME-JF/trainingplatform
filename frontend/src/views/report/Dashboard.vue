@@ -73,8 +73,8 @@
 
       <!-- AI 洞察 -->
       <a-col :span="12">
-        <a-card title="AI 智能洞察" :bordered="false">
-          <template #extra><a-tag color="blue">M5 智能体</a-tag></template>
+        <a-card title="智能洞察" :bordered="false">
+          <template #extra><a-tag color="blue">智能分析</a-tag></template>
           <div class="insights-list">
             <div v-for="insight in aiInsights" :key="insight.id" class="insight-item" :class="insight.type">
               <div class="insight-icon">{{ insight.icon }}</div>
@@ -185,7 +185,7 @@ const aiInsights = [
   { id: 1, type: 'positive', icon: '🎯', title: '南宁市完成率持续领先', desc: '连续3个月在全区排名第一，学习积极性高，建议分享经验。' },
   { id: 2, type: 'warning', icon: '⚠️', title: '证据意识维度普遍偏低', desc: '全区平均得分仅64分，建议增加专项培训课程，重点补强。' },
   { id: 3, type: 'suggestion', icon: '💡', title: '体能训练参与率可提升', desc: '当前仅68%民警完成体能测试，建议结合培训班强制要求。' },
-  { id: 4, type: 'positive', icon: '📈', title: '在线考试通过率上升', desc: '本月通过率较上月提升5.3%，AI智能推荐有效提升复习效率。' },
+  { id: 4, type: 'positive', icon: '📈', title: '在线考试通过率上升', desc: '本月通过率较上月提升5.3%，智能推荐有效提升复习效率。' },
 ]
 
 function exportReport() {

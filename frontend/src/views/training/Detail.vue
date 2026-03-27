@@ -211,7 +211,7 @@
           <a-alert
             type="info"
             show-icon
-            message="计划课时用于 AI 排课任务的“按课时排”模式；如果选择排满或排满工作日，则不会按这里的课时限制生成。"
+            message=”计划课时用于智能排课任务的「按课时排」模式；如果选择排满或排满工作日，则不会按这里的课时限制生成。”
             style="margin-bottom:16px"
           />
           <a-form-item label="课程名称" required>

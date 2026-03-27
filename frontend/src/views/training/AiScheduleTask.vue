@@ -1,7 +1,7 @@
 <template>
   <ai-task-tabs-layout
     v-model:active-tab="activeTab"
-    title="AI排课建议"
+    title="智能排课"
     subtitle="智能排课会先异步解析规则，再确认生成课表，最后人工调整并应用到现有课表"
     tag-text="训练智能体"
     :task-list="taskList"
@@ -150,10 +150,10 @@
         </div>
 
         <div data-tour-id="schedule-parse-section" class="detail-section" v-if="showPrimaryParseSection">
-          <div class="detail-section-title">自然语言解析结果</div>
+          <div class="detail-section-title">需求解析结果</div>
           <a-alert v-if="activeTask.parseSummary" type="success" :message="activeTask.parseSummary" show-icon style="margin-bottom:12px" />
           <a-descriptions v-if="activeTask.understoodItems?.length" :column="1" size="small" bordered style="margin-bottom:12px">
-            <a-descriptions-item label="AI理解了什么">
+            <a-descriptions-item label="系统理解了什么">
               <div class="preview-list">
                 <div v-for="(item, index) in activeTask.understoodItems" :key="`task-understood-${index}`">{{ item }}</div>
               </div>
@@ -180,7 +180,7 @@
                 type="info"
                 show-icon
                 style="margin-bottom:16px"
-                message="当前规则来自自然语言解析结果"
+                message="当前规则来自需求解析结果"
                 description="你可以直接修改结构化字段。确认后仍停留在任务列表，等待后台继续生成课表。"
               />
             </template>
@@ -269,7 +269,7 @@
           <div v-if="activeTask.requestPayload" data-tour-id="schedule-request-section" class="detail-section">
             <div class="detail-section-title">任务请求</div>
             <a-descriptions :column="2" size="small" bordered>
-              <a-descriptions-item label="自然语言要求" :span="2">
+              <a-descriptions-item label="排课要求" :span="2">
                 {{ activeTask.requestPayload.naturalLanguagePrompt || '未填写' }}
               </a-descriptions-item>
               <a-descriptions-item label="排课范围">{{ scopeLabels[activeTask.requestPayload.scopeType] || activeTask.requestPayload.scopeType }}</a-descriptions-item>
@@ -309,10 +309,10 @@
           </div>
 
           <div data-tour-id="schedule-parse-section" class="detail-section" v-if="showDetailParseSection">
-            <div class="detail-section-title">自然语言解析结果</div>
+            <div class="detail-section-title">需求解析结果</div>
             <a-alert v-if="activeTask.parseSummary" type="success" :message="activeTask.parseSummary" show-icon style="margin-bottom:12px" />
             <a-descriptions v-if="activeTask.understoodItems?.length" :column="1" size="small" bordered style="margin-bottom:12px">
-              <a-descriptions-item label="AI理解了什么">
+              <a-descriptions-item label="系统理解了什么">
                 <div class="preview-list">
                   <div v-for="(item, index) in activeTask.understoodItems" :key="`task-understood-detail-${index}`">{{ item }}</div>
                 </div>
@@ -1065,7 +1065,7 @@ const scheduleTourSteps = computed(() => {
       return [
         createTourStep('这里看当前任务状态', '当前选中的任务名称、状态和刷新操作都集中在这里。', 'schedule-detail-header', 'bottom'),
         hasParseContent.value
-          ? createTourStep('先看解析结果', '这里会展示 AI 理解了什么，以及还需要你特别注意的警告。', 'schedule-parse-section', 'top')
+          ? createTourStep('先看解析结果', '这里会展示系统理解了什么，以及还需要你特别注意的警告。', 'schedule-parse-section', 'top')
           : null,
         createTourStep('直接在这里确认规则', '不需要再跳到创建区；就在当前任务详情里调整结构化规则。', 'schedule-rule-confirm-section', 'top'),
         createTourStep('确认后继续生成课表', '提交后仍停留在任务列表，后台会继续生成课表，完成后再预览并确认应用。', 'schedule-rule-confirm-create-button', 'top'),
@@ -1084,7 +1084,7 @@ const scheduleTourSteps = computed(() => {
       !hasPresetTrainingId.value
         ? createTourStep('先选择培训班', '智能排课会基于该培训班的培训周期、课程清单、考试安排和排课规则生成建议。', 'schedule-training', 'bottom')
         : null,
-      createTourStep('这里只写自然语言要求', '你可以直接写“本周按工作日排满，上午 08:30-12:30，一个课时 40 分钟，课间休息 10 分钟”这类自然语言。', 'schedule-natural-language', 'bottom'),
+      createTourStep('这里填写排课要求', '你可以直接写”本周按工作日排满，上午 08:30-12:30，一个课时 40 分钟，课间休息 10 分钟”这样的描述。', 'schedule-natural-language', 'bottom'),
       createTourStep('先创建智能排课任务', '提交后会进入任务列表，后台先解析规则；解析完成后再确认结构化规则，并继续生成课表。', 'schedule-create-button', 'top'),
     ].filter(Boolean)
   }
@@ -1149,7 +1149,7 @@ async function handleCreateTask() {
   }
   if (createMode.value === 'smart') {
     if (!taskForm.naturalLanguagePrompt.trim()) {
-      message.warning('请输入自然语言排课要求')
+      message.warning('请输入排课要求')
       return
     }
     creating.value = true

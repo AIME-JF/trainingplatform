@@ -33,3 +33,5 @@ venv/
 *.sln
 *.sw?
 *.bak
+
+.claude/

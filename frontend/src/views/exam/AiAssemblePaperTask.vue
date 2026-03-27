@@ -1,8 +1,8 @@
 <template>
   <ai-task-tabs-layout
     v-model:active-tab="activeTab"
-    title="AI 自动组卷"
-    subtitle="先解析自然语言组卷要求，再按题库条件筛题，并根据设置决定是否放宽条件，生成可编辑的试卷草稿"
+    title="智能组卷"
+    subtitle="先解析组卷要求，再按题库条件筛题，并根据设置决定是否放宽条件，生成可编辑的试卷草稿"
     :task-list="taskList"
     :task-loading="taskLoading"
     :active-task-id="activeTask?.id || null"
@@ -91,7 +91,7 @@
             description="这里决定每种题型要抽多少题、优先按几级难度查题，以及每道题按多少分计入试卷。"
           />
         </a-form-item>
-        <a-form-item label="自然语言组卷要求">
+        <a-form-item label="组卷要求描述">
           <a-textarea
             v-model:value="taskForm.requirements"
             :rows="4"
@@ -199,7 +199,7 @@
             <a-descriptions-item label="解析题型配置" :span="2">
               {{ formatParsedTypeConfigs(activeTask.parsedRequest.typeConfigs) }}
             </a-descriptions-item>
-            <a-descriptions-item label="AI 理解" :span="2">
+            <a-descriptions-item label="系统理解" :span="2">
               {{ activeTask.parsedRequest.understoodItems?.join('；') || '无' }}
             </a-descriptions-item>
             <a-descriptions-item label="解析告警" :span="2">

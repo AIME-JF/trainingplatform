@@ -1,8 +1,8 @@
 <template>
   <ai-task-tabs-layout
     v-model:active-tab="activeTab"
-    title="AI 智能出题"
-    subtitle="填写信息后创建任务，系统会按队列异步调用 AI 生成题目，你可调整题目后确认入库"
+    title="智能出题"
+    subtitle="填写信息后创建任务，系统会按队列异步生成题目，你可调整题目后确认入库"
     :task-list="taskList"
     :task-loading="taskLoading"
     :active-task-id="activeTask?.id || null"
