@@ -19,6 +19,7 @@ const props = defineProps({
   status: { type: String, default: 'pending' },
   stage: { type: String, default: '' },
   mode: { type: String, default: 'default' },
+  activeStep: { type: Number, default: -1 },
   createdAt: { type: String, default: '' },
   completedAt: { type: String, default: '' },
   confirmedAt: { type: String, default: '' },
@@ -99,6 +100,7 @@ const currentStep = computed(() => {
     return 0
   }
   if (props.mode === 'resource-generation') {
+    if (props.activeStep >= 0) return props.activeStep
     if (props.status === 'confirmed') return 4
     if (props.status === 'completed') return 2
     if (props.status === 'processing') return 1

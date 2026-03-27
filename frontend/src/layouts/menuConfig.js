@@ -117,14 +117,14 @@ export const appMenuConfig = [
         anyPermissions: QUESTION_BANK_PAGE_PERMISSIONS,
       },
       {
-        key: '/question/knowledge-points',
-        label: '知识点管理',
-        anyPermissions: KNOWLEDGE_POINT_PAGE_PERMISSIONS,
-      },
-      {
         key: '/paper/repository',
         label: '试卷仓库',
         anyPermissions: PAPER_PAGE_PERMISSIONS,
+      },
+      {
+        key: '/question/knowledge-points',
+        label: '知识点管理',
+        anyPermissions: KNOWLEDGE_POINT_PAGE_PERMISSIONS,
       },
       {
         key: '/question/ai',

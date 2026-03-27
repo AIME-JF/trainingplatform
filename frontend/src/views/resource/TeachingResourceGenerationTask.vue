@@ -89,6 +89,7 @@
           :created-at="activeTask.createdAt"
           :completed-at="activeTask.completedAt"
           :confirmed-at="activeTask.confirmedAt"
+          :active-step="currentDetailStep"
           mode="resource-generation"
         />
 

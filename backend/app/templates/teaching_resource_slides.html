@@ -218,16 +218,14 @@
       gap: 16px;
     }
 
-    .info-card,
-    .notes-card {
+    .info-card {
       border-radius: 22px;
       padding: 20px;
       background: rgba(255, 255, 255, 0.82);
       border: 1px solid rgba(20, 35, 60, 0.08);
     }
 
-    .info-card h3,
-    .notes-card h3 {
+    .info-card h3 {
       margin: 0 0 10px;
       font-size: 14px;
       color: var(--muted);
@@ -243,13 +241,6 @@
 
     .highlight-text strong {
       color: var(--accent);
-    }
-
-    .notes-card ul {
-      margin: 0;
-      padding-left: 18px;
-      color: var(--muted);
-      line-height: 1.8;
     }
 
     .deck-footer {
@@ -430,13 +421,6 @@
       return '<ul class="bullet-list">' + items.map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('') + '</ul>';
     }
 
-    function renderNotes(items) {
-      if (!Array.isArray(items) || !items.length) {
-        return '';
-      }
-      return '<div class="notes-card"><h3>教学备注</h3><ul>' + items.map(function (item) { return '<li>' + escapeHtml(item) + '</li>'; }).join('') + '</ul></div>';
-    }
-
     function renderSlide(page) {
       var layout = page.layout || 'focus-list';
       var isSingleColumn = ['cover', 'summary'].includes(layout);
@@ -444,7 +428,7 @@
       var subtitle = page.subtitle ? '<p class="slide-subtitle">' + escapeHtml(page.subtitle) + '</p>' : '';
       var highlight = page.highlight
         ? '<div class="info-card"><h3>重点提示</h3><div class="highlight-text">' + escapeHtml(page.highlight) + '</div></div>'
-        : '<div class="info-card"><h3>重点提示</h3><div class="highlight-text"><strong>请结合当前页要点进行讲解</strong></div></div>';
+        : '';
       slideRoot.innerHTML = ''
         + '<div class="slide-head">'
         + '  <div class="slide-kicker">' + escapeHtml(localizePageType(page.page_type)) + '</div>'
@@ -456,12 +440,12 @@
         +      subtitle
         +       renderList(page.bullets || [])
         + '  </div>'
-        + (!isSingleColumn
-            ? '<aside class="slide-side">' + highlight + renderNotes(page.notes || []) + '</aside>'
+        + (!isSingleColumn && highlight
+            ? '<aside class="slide-side">' + highlight + '</aside>'
             : '')
         + '</div>'
-        + (isSingleColumn
-            ? '<div class="slide-side">' + highlight + renderNotes(page.notes || []) + '</div>'
+        + (isSingleColumn && highlight
+            ? '<div class="slide-side">' + highlight + '</div>'
             : '');
     }
 
