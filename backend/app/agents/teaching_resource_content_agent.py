@@ -73,60 +73,60 @@ class TeachingResourceContentAgent(BaseAIAgent):
             highlight = None
             notes: list[str] = []
 
-            if slot.slot_key == “cover”:
+            if slot.slot_key == "cover":
                 subtitle = parsed_request.summary or request.resource_summary or parsed_request.usage_scenario
                 bullets = [
-                    parsed_request.target_audience or “适用对象：平台学员”,
-                    parsed_request.usage_scenario or “使用场景：课堂讲解”,
+                    parsed_request.target_audience or "适用对象：平台学员",
+                    parsed_request.usage_scenario or "使用场景：课堂讲解",
                 ]
-                highlight = parsed_request.tone or “建议课堂中结合业务案例讲解”
-                notes = [“开场时简要介绍课件主题和学习目标”, “可先提问引发学员思考再进入正文”]
-            elif slot.slot_key == “goals”:
+                highlight = parsed_request.tone or "建议课堂中结合业务案例讲解"
+                notes = ["开场时简要介绍课件主题和学习目标", "可先提问引发学员思考再进入正文"]
+            elif slot.slot_key == "goals":
                 bullets = goals[:4]
-                highlight = “先建立整体理解，再进入细项展开”
-                notes = [“逐条带领学员理解每个目标的含义”, “可让学员先自评对目标的熟悉程度”]
-            elif slot.slot_key == “background”:
+                highlight = "先建立整体理解，再进入细项展开"
+                notes = ["逐条带领学员理解每个目标的含义", "可让学员先自评对目标的熟悉程度"]
+            elif slot.slot_key == "background":
                 bullets = [
-                    f”主题背景：{parsed_request.theme}”,
-                    f”使用场景：{parsed_request.usage_scenario or '培训宣讲'}”,
-                    f”目标对象：{parsed_request.target_audience or '平台学员'}”,
+                    f"主题背景：{parsed_request.theme}",
+                    f"使用场景：{parsed_request.usage_scenario or '培训宣讲'}",
+                    f"目标对象：{parsed_request.target_audience or '平台学员'}",
                 ]
-                highlight = f”重点围绕”{primary_keyword}”展开”
-                notes = [“结合实际工作场景举例说明背景意义”, “引导学员理解为什么需要掌握此内容”]
-            elif slot.slot_key == “case”:
+                highlight = f"重点围绕「{primary_keyword}」展开"
+                notes = ["结合实际工作场景举例说明背景意义", "引导学员理解为什么需要掌握此内容"]
+            elif slot.slot_key == "case":
                 bullets = [
-                    f”案例场景：围绕”{primary_keyword}”设置一个典型情境”,
-                    “识别过程中的关键风险点”,
-                    “结合规范动作给出处置建议”,
+                    f"案例场景：围绕「{primary_keyword}」设置一个典型情境",
+                    "识别过程中的关键风险点",
+                    "结合规范动作给出处置建议",
                 ]
-                highlight = “案例页要突出易错点和纠偏动作”
-                notes = [“可组织学员分组讨论案例中的关键决策”, “引导学员分析错误做法的后果”]
-            elif slot.slot_key == “practice”:
+                highlight = "案例页要突出易错点和纠偏动作"
+                notes = ["可组织学员分组讨论案例中的关键决策", "引导学员分析错误做法的后果"]
+            elif slot.slot_key == "practice":
                 bullets = [
-                    “先明确适用条件和触发场景”,
-                    “按步骤执行并记录关键节点”,
-                    “遇到异常情况及时上报或复核”,
-                    “复盘时对照规范查缺补漏”,
+                    "先明确适用条件和触发场景",
+                    "按步骤执行并记录关键节点",
+                    "遇到异常情况及时上报或复核",
+                    "复盘时对照规范查缺补漏",
                 ]
-                highlight = “落地建议必须可执行”
-                notes = [“强调每个步骤的操作要领和注意事项”, “可安排现场模拟或角色扮演练习”]
-            elif slot.slot_key == “summary”:
+                highlight = "落地建议必须可执行"
+                notes = ["强调每个步骤的操作要领和注意事项", "可安排现场模拟或角色扮演练习"]
+            elif slot.slot_key == "summary":
                 bullets = [
-                    f”回顾主题：{parsed_request.theme}”,
-                    “记住最重要的三个动作要点”,
-                    “结合岗位实际持续复盘和巩固”,
+                    f"回顾主题：{parsed_request.theme}",
+                    "记住最重要的三个动作要点",
+                    "结合岗位实际持续复盘和巩固",
                 ]
-                highlight = “用一句话收束全篇，形成记忆锚点”
-                notes = [“快速回顾各页核心要点加深记忆”, “可布置课后练习或思考题”]
+                highlight = "用一句话收束全篇，形成记忆锚点"
+                notes = ["快速回顾各页核心要点加深记忆", "可布置课后练习或思考题"]
             else:
                 keyword = keywords[min(index - 1, len(keywords) - 1)]
                 bullets = [
-                    f”围绕”{keyword}”解释核心概念”,
-                    “拆分关键步骤或判断依据”,
-                    “强调常见误区与正确做法”,
+                    f"围绕「{keyword}」解释核心概念",
+                    "拆分关键步骤或判断依据",
+                    "强调常见误区与正确做法",
                 ]
-                highlight = f”本页核心：{keyword}”
-                notes = [f”讲解时重点围绕”{keyword}”展开”, “可结合实际案例辅助说明”]
+                highlight = f"本页核心：{keyword}"
+                notes = [f"讲解时重点围绕「{keyword}」展开", "可结合实际案例辅助说明"]
             pages.append(
                 TeachingResourceGenerationPagePlan(
                     page_no=slot.page_no,
