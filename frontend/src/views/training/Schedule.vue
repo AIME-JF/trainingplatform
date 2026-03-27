@@ -26,7 +26,7 @@
           导入课次
         </a-button>
         <a-button v-if="selectedTrainingId && canImportSchedule" type="primary" ghost @click="openAiSchedule">
-          AI建议排课
+          智能排课
         </a-button>
         <a-button @click="prevWeek" :disabled="currentWeek <= 0">‹</a-button>
         <span class="week-label">第 {{ currentWeek + 1 }} 周（{{ weekRange }}）</span>
@@ -37,7 +37,7 @@
     <!-- 空状态 -->
     <a-empty v-if="!selectedTraining" description="您暂无可查看的培训班课程计划" style="margin-top:60px" />
 
-    <template v-else>
+    <template v-else-if="initialized">
       <!-- 日历视图 -->
       <a-card :bordered="false" class="schedule-card">
         <div class="schedule-grid">
@@ -286,6 +286,25 @@ const selectedTraining = computed(() => {
 
 const currentWeek = ref(0)
 
+function calcCurrentWeekIndex(startDateStr) {
+  if (!startDateStr) return 0
+  const start = new Date(startDateStr.replace(/-/g, '/'))
+  const today = new Date()
+  // 将 start 对齐到所在周的周一
+  const startDay = start.getDay()
+  const startMonday = new Date(start)
+  startMonday.setDate(start.getDate() - ((startDay === 0 ? 7 : startDay) - 1))
+  startMonday.setHours(0, 0, 0, 0)
+  // 将 today 对齐到所在周的周一
+  const todayDay = today.getDay()
+  const todayMonday = new Date(today)
+  todayMonday.setDate(today.getDate() - ((todayDay === 0 ? 7 : todayDay) - 1))
+  todayMonday.setHours(0, 0, 0, 0)
+  const diffDays = Math.floor((todayMonday - startMonday) / (1000 * 60 * 60 * 24))
+  const weekIndex = Math.floor(diffDays / 7)
+  return Math.max(0, weekIndex)
+}
+
 async function loadTrainingDetail(id) {
   if (!id) return
   try {
@@ -295,8 +314,9 @@ async function loadTrainingDetail(id) {
 }
 
 async function onTrainingChange() {
-  currentWeek.value = 0
   await loadTrainingDetail(selectedTrainingId.value)
+  const training = availableTrainings.value.find(t => t.id === selectedTrainingId.value)
+  currentWeek.value = calcCurrentWeekIndex(training?.startDate)
 }
 
 function openAiSchedule() {
@@ -388,6 +408,8 @@ async function submitScheduleImport(file) {
   }
 }
 
+const initialized = ref(false)
+
 onMounted(async () => {
   await loadTrainings()
 
@@ -397,10 +419,14 @@ onMounted(async () => {
     : (availableTrainings.value.find(t => t.status === 'active')?.id || availableTrainings.value[0]?.id)
   selectedTrainingId.value = initId || null
 
-  // 加载详情（含 courses）
+  // 加载详情（含 courses）并定位到当前周
   if (selectedTrainingId.value) {
     await loadTrainingDetail(selectedTrainingId.value)
+    const training = availableTrainings.value.find(t => t.id === selectedTrainingId.value)
+    currentWeek.value = calcCurrentWeekIndex(training?.startDate)
   }
+
+  initialized.value = true
 })
 
 // 追踪调度更新
