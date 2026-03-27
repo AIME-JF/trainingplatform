@@ -778,9 +778,6 @@ class ResourceService:
             return True
 
         if resource.status != 'published':
-            if 'VIEW_RESOURCE_DEPARTMENT' in perms:
-                dept_ids = (user_ctx or {}).get('department_ids', set())
-                return bool(resource.owner_department_id and resource.owner_department_id in dept_ids)
             return False
 
         return self.can_user_access_published_resource(resource, user_id, user_ctx or self._get_user_context(user_id))

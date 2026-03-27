@@ -28,17 +28,6 @@
             <a-select-option value="image">图片</a-select-option>
           </a-select>
         </a-col>
-        <a-col :span="6">
-          <a-select v-model:value="query.status" style="width:100%" @change="fetchResources">
-            <a-select-option value="">全部状态</a-select-option>
-            <a-select-option value="published">已发布</a-select-option>
-            <a-select-option value="draft">草稿</a-select-option>
-            <a-select-option value="pending_review">待审核</a-select-option>
-            <a-select-option value="reviewing">审核中</a-select-option>
-            <a-select-option value="rejected">已驳回</a-select-option>
-            <a-select-option value="offline">已下线</a-select-option>
-          </a-select>
-        </a-col>
       </a-row>
     </a-card>
 
@@ -48,7 +37,6 @@
           <template #title>
             <div class="title-line">
               <span class="title-text">{{ item.title }}</span>
-              <a-tag>{{ statusLabel(item.status) }}</a-tag>
             </div>
           </template>
           <p class="summary">{{ item.summary || '暂无摘要' }}</p>
@@ -57,14 +45,6 @@
           <div class="actions">
             <a-space>
               <a-button size="small" @click="goDetail(item.id)">查看</a-button>
-              <permissions-tooltip
-                v-if="showPublish(item)"
-                :allowed="canPublish(item)"
-                tips="仅资源上传者或具备 UPDATE_RESOURCE / VIEW_RESOURCE_ALL 权限可执行该操作"
-                v-slot="{ disabled }"
-              >
-                <a-button size="small" type="primary" ghost :disabled="disabled" @click="publish(item.id)">发布</a-button>
-              </permissions-tooltip>
               <permissions-tooltip
                 v-if="showOffline(item)"
                 :allowed="canOffline(item)"
@@ -79,7 +59,10 @@
       </a-col>
     </a-row>
 
+    <a-empty v-if="!resources.length && !loading" description="暂无已发布的资源" />
+
     <a-pagination
+      v-if="total > 0"
       :current="query.page"
       :page-size="query.size"
       :total="total"
@@ -98,16 +81,17 @@ import { computed, ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { getResources, publishResource, offlineResource } from '@/api/resource'
+import { getResources, offlineResource } from '@/api/resource'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 import ResourceUploadModal from './components/ResourceUploadModal.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
-const query = reactive({ page: 1, size: 10, search: '', status: '', contentType: '' })
+const query = reactive({ page: 1, size: 10, search: '', contentType: '' })
 const resources = ref([])
 const total = ref(0)
+const loading = ref(false)
 const uploadModalOpen = ref(false)
 const canUploadResource = computed(() => authStore.hasAnyPermission(['CREATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
 const canManageAnyResource = computed(() => authStore.hasAnyPermission(['UPDATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
@@ -115,14 +99,6 @@ const canManageAnyResource = computed(() => authStore.hasAnyPermission(['UPDATE_
 onMounted(async () => {
   await fetchResources()
 })
-
-function statusLabel(status) {
-  const map = {
-    draft: '草稿', pendingReview: '待审核', pending_review: '待审核', reviewing: '审核中',
-    published: '已发布', rejected: '已驳回', offline: '已下线'
-  }
-  return map[status] || status
-}
 
 function contentTypeLabel(type) {
   const map = {
@@ -135,12 +111,15 @@ function contentTypeLabel(type) {
 }
 
 async function fetchResources() {
+  loading.value = true
   try {
-    const res = await getResources(query)
+    const res = await getResources({ ...query, status: 'published' })
     resources.value = res.items || []
     total.value = res.total || 0
   } catch (e) {
     message.error(e.message || '加载资源失败')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -148,32 +127,12 @@ function canEditResource(item) {
   return item?.uploaderId === authStore.currentUser?.id || canManageAnyResource.value
 }
 
-function showPublish(item) {
-  return ['draft', 'rejected', 'offline'].includes(item.status)
-}
-
 function showOffline(item) {
-  return item.status === 'published'
-}
-
-function canPublish(item) {
-  return showPublish(item) && canEditResource(item)
+  return item.status === 'published' && canEditResource(item)
 }
 
 function canOffline(item) {
-  return showOffline(item) && canEditResource(item)
-}
-
-async function publish(id) {
-  const item = resources.value.find((resource) => resource.id === id)
-  if (item && !canPublish(item)) return
-  try {
-    await publishResource(id)
-    message.success('发布成功')
-    fetchResources()
-  } catch (e) {
-    message.error(e.message || '发布失败')
-  }
+  return showOffline(item)
 }
 
 async function offline(id) {
