@@ -498,7 +498,8 @@ Authorization: Bearer <access_token>
   "summary": "资源摘要",
   "content_type": "video",
   "source_type": "ugc",
-  "visibility_type": "public",
+  "scope_type": "all",
+  "scope_target_ids": [],
   "owner_department_id": 1,
   "cover_media_file_id": 10,
   "tags": ["刑侦", "反诈"],
@@ -508,10 +509,19 @@ Authorization: Bearer <access_token>
       "media_role": "main",
       "sort_order": 0
     }
-  ],
-  "visibility_scopes": [1, 2]
+  ]
 }
 ```
+
+说明：
+
+- 当前资源可见范围统一使用 `scope_type + scope_target_ids`
+- `scope_type` 支持：
+  - `all`
+  - `user`
+  - `department`
+  - `role`
+- `visibility_type / visibility_scopes` 仅作为兼容旧前端的保留字段，新增接口应优先传 `scope_type / scope_target_ids`
 
 ## 10. 资源审核与推荐
 
@@ -582,7 +592,7 @@ Authorization: Bearer <access_token>
 
 ## 16. AI 模块
 
-当前 AI 能力已经统一改成任务流，不再使用同步生成接口。
+当前 AI 能力以任务流为主，但并不是所有任务都走异步 Worker。
 
 统一任务状态：
 
@@ -592,14 +602,14 @@ Authorization: Bearer <access_token>
 - `confirmed`
 - `failed`
 
-统一任务流程：
+当前任务处理差异：
 
-- 填写信息
-- 创建任务
-- 后端模拟生成结果
-- 查看任务
-- 编辑题目 / 试卷草稿
-- 确认写入题库 / 卷库
+- `AI 智能出题`：异步 Worker
+- `AI 自动组卷`：异步 Worker
+- `教学资源生成`：异步 Worker
+- `AI 排课建议`：异步 Worker，两阶段确认
+- `AI 自动生成试卷`：同步生成结果
+- `AI 个训方案`：同步生成结果
 
 ### 16.1 AI 智能出题任务
 
@@ -633,10 +643,35 @@ Authorization: Bearer <access_token>
 
 说明：
 
-- AI 结果当前由后端模拟生成，不接真实模型
 - 任务详情会返回请求快照、题目草稿或试卷草稿
 - 只有 `completed` 状态的任务才允许编辑结果
 - `confirm` 后任务会变成 `confirmed`
+
+### 16.4 教学资源生成任务
+
+主路径：
+
+- `/api/v1/ai/teaching-resource-generation-tasks`
+
+兼容旧路径：
+
+- `/api/v1/ai/resource-generation-tasks`
+
+| Method | Path | 说明 | 请求要点 |
+| --- | --- | --- | --- |
+| `GET` | `/api/v1/ai/teaching-resource-generation-tasks` | 教学资源生成任务列表 | Query：`page` `size` `status` |
+| `POST` | `/api/v1/ai/teaching-resource-generation-tasks` | 创建教学资源生成任务 | JSON：`requirements`；兼容字段仍接受 `task_name` `resource_title` `resource_summary` `tags[]` `scope_type` `scope_target_ids[]` `template_code` |
+| `GET` | `/api/v1/ai/teaching-resource-generation-tasks/{task_id}` | 教学资源生成任务详情 | 返回解析结果、模板、页面方案、HTML 预览、资源基础信息 |
+| `PUT` | `/api/v1/ai/teaching-resource-generation-tasks/{task_id}/resource-meta` | 更新教学资源基础信息 | JSON：`resource_summary` `tags[]` `scope_type` `scope_target_ids[]` |
+| `POST` | `/api/v1/ai/teaching-resource-generation-tasks/{task_id}/confirm` | 确认教学资源生成任务 | 把生成的 HTML 课件写成资源草稿 |
+
+当前行为：
+
+- 创建阶段前端只要求填写 `requirements`
+- 标题由系统在生成完成后自动给出
+- 任务会先解析自然语言需求，再按固定课件模板生成结构化页面方案，最后渲染成单文件 HTML 课件
+- `resource_meta` 在预览生成后补充，用于确认入资源草稿时的摘要、标签和可见范围
+- `confirm` 后不会直接发布资源，而是创建资源草稿，后续继续走资源审核流
 
 ## 17. 人才库模块
 

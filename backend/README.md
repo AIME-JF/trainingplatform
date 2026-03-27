@@ -10,7 +10,7 @@
 - 用户、角色、部门、权限、警种、培训基地、系统配置管理
 - 课程、培训、考试、证书、公告、个人中心、数据看板
 - 资源上传、资源库、推荐流、审核工作流
-- AI 任务流：智能出题、自动组卷、自动生成试卷、排课建议、个训方案
+- AI 任务流：智能出题、自动组卷、自动生成试卷、教学资源生成、排课建议、个训方案
 - PostgreSQL、Redis、MinIO、Celery 的集成
 
 ## 当前核心业务模型
@@ -45,6 +45,7 @@
 - `question_generation`
 - `paper_assembly`
 - `paper_generation`
+- `resource_generation`
 - `schedule_generation`
 - `personal_training_plan_generation`
 
@@ -79,6 +80,13 @@
   - 但创建任务时同步生成试卷草稿
   - 当前是规则 / 模拟生成，不走 Celery
   - 题型配置与自动组卷共用同一套标准化校验，允许单项数量为 `0`，但不能全部为 `0`
+- `教学资源生成`
+  - 创建任务后写入 `AITask`
+  - 通过 `app.tasks.teaching_resource_generation` 进入 Celery 队列
+  - 先解析自然语言需求，再按固定“通用教学课件模板”填充页面内容
+  - 服务端渲染成单个可翻页 HTML 课件
+  - 预览生成结果后，再补资源摘要、标签和可见范围
+  - 确认后创建资源草稿并挂接现有审核流
 - `AI 个训方案`
   - 创建任务时同步生成画像与方案
   - 确认后写入 `PersonalTrainingPlanSnapshot`
@@ -380,16 +388,18 @@ python main.py
 
 ### 当前注册到 Celery 的任务
 
-`celery_app.py` 当前显式注册了三类任务：
+`celery_app.py` 当前显式注册了四类任务：
 
 - `app.tasks.ai_paper_assembly`
 - `app.tasks.ai_question`
 - `app.tasks.ai_schedule`
+- `app.tasks.teaching_resource_generation`
 
 也就是说：
 
 - `AI 自动组卷` 依赖 Worker
 - `AI 智能出题` 依赖 Worker
+- `教学资源生成` 依赖 Worker
 - `AI 排课建议` 依赖 Worker
 - `AI 自动生成试卷`、`AI 个训方案` 不依赖 Worker
 - `app/tasks/recommendation.py` 目前只是占位脚本，没有注册成 Celery 定时任务
@@ -596,10 +606,11 @@ python migrate.py generate "your message"
 
 - `POST /api/v1/auth/login/phone` 目前不会校验验证码内容，只按手机号查用户并发 token。
 - `AI 智能出题`、`AI 自动组卷`、`AI 排课建议` 需要 Worker；只启动 API 时任务不会自动完成。
+- `教学资源生成` 同样依赖 Worker；不启动 Worker 时任务会停留在 `pending / processing`。
 - AI 智能出题依赖系统配置组 `ai` 中的模型配置；如果 `default_text_model`、`api_base_url` 或 `api_key` 未配置，任务会失败。
 - AI 排课自然语言解析未配置模型或调用失败时，会在任务详情里留下 `parse_warnings`，并按规则兜底继续生成。
 - 智能排课当前是两阶段异步任务流，不是同步接口。
-- `AI 自动组卷` 当前已经是异步队列任务；`AI 自动生成试卷`、`AI 个训方案` 仍是同步结果任务。
+- `AI 自动组卷` 和 `教学资源生成` 当前已经是异步队列任务；`AI 自动生成试卷`、`AI 个训方案` 仍是同步结果任务。
 - AI 自动组卷会先解析自然语言要求，再按题型、警种、难度、知识点关键词查题；题库不足时会放宽条件并把放宽记录写回任务结果。
 - AI 自动组卷、AI 自动生成试卷的题型配置在接口层允许单项题型数量为 `0`，但服务层会拦截“全部题型数量都为 `0`”的请求。
 - 资源审核策略页允许维护复杂规则，但如无明确业务需要，建议优先沿用现有规则；空规则场景由管理员默认审核兜底。

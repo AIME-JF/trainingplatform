@@ -262,10 +262,13 @@ AI 任务页：
 - 资源管理：`frontend/src/views/resource/Manage.vue`
 - 审核工作台：`frontend/src/views/resource/ReviewQueue.vue`
 - 审核策略：`frontend/src/views/resource/PolicyManage.vue`
+- 教学资源生成：`frontend/src/views/resource/TeachingResourceGenerationTask.vue`
 
 当前资源域前端已覆盖：
 
 - 资源库和我的资源通过弹窗上传资源，标签输入与课程标签交互一致，支持远程搜索已有标签并回车创建新标签
+- 我的资源提供“教学资源生成”入口，路由为 `/resource/teaching-generate`；旧 `/resource/ai-generate` 仅保留兼容跳转
+- 教学资源生成页当前只在创建阶段填写自然语言要求；生成预览后再补资源摘要、标签和可见范围，标题由系统自动生成
 - 资源标签逻辑已抽成公共组合式工具，课程和资源共用一套“可搜索、可创建”标签交互
 - 审核策略页支持作用域、上传者约束、审核路径预览和更完整的前端校验
 - 审核策略页会明确提示：空规则时系统回退到管理员默认审核；如无明确业务变更，建议优先沿用现有规则
