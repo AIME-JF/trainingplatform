@@ -83,6 +83,10 @@ from .ai import (
     AIPaperAssemblyParsedRequest, AIPaperAssemblyParsedTypeConfig,
     AIPaperAssemblyTaskCreateRequest, AIPaperAssemblyTypeConfig,
     AIPaperGenerationTaskCreateRequest, AIPaperTaskUpdateRequest,
+    TeachingResourceGenerationTaskCreateRequest, TeachingResourceGenerationParsedRequest,
+    TeachingResourceGenerationResourceMeta, TeachingResourceGenerationMetaUpdateRequest,
+    TeachingResourceGenerationTemplateSlot, TeachingResourceGenerationTemplatePayload,
+    TeachingResourceGenerationPagePlan,
     AIScheduleTaskCreateRequest, AIScheduleTaskConstraintPayload,
     AIScheduleCourseTypeTimePreference, AIScheduleExamWeekFocus,
     AIScheduleTaskStage,
@@ -96,7 +100,7 @@ from .ai import (
     AITaskQuestionDraft, AITaskPaperDraft, AITaskSummaryResponse,
     AIQuestionTaskDetailResponse, AIPaperAssemblyTaskDetailResponse,
     AIPaperGenerationTaskDetailResponse, AIScheduleTaskDetailResponse,
-    AIPersonalTrainingTaskDetailResponse
+    AIPersonalTrainingTaskDetailResponse, TeachingResourceGenerationTaskDetailResponse
 )
 # 人才库
 from .talent import TalentResponse, TalentStatsResponse
@@ -185,6 +189,10 @@ __all__ = [
     "AIPaperAssemblyParsedRequest", "AIPaperAssemblyParsedTypeConfig",
     "AIPaperAssemblyTaskCreateRequest", "AIPaperAssemblyTypeConfig",
     "AIPaperGenerationTaskCreateRequest", "AIPaperTaskUpdateRequest",
+    "TeachingResourceGenerationTaskCreateRequest", "TeachingResourceGenerationParsedRequest",
+    "TeachingResourceGenerationResourceMeta", "TeachingResourceGenerationMetaUpdateRequest",
+    "TeachingResourceGenerationTemplateSlot", "TeachingResourceGenerationTemplatePayload",
+    "TeachingResourceGenerationPagePlan",
     "AIScheduleTaskCreateRequest", "AIScheduleTaskConstraintPayload",
     "AIScheduleCourseTypeTimePreference", "AIScheduleExamWeekFocus",
     "AIScheduleTaskStage",
@@ -198,7 +206,7 @@ __all__ = [
     "AITaskQuestionDraft", "AITaskPaperDraft", "AITaskSummaryResponse",
     "AIQuestionTaskDetailResponse", "AIPaperAssemblyTaskDetailResponse",
     "AIPaperGenerationTaskDetailResponse", "AIScheduleTaskDetailResponse",
-    "AIPersonalTrainingTaskDetailResponse",
+    "AIPersonalTrainingTaskDetailResponse", "TeachingResourceGenerationTaskDetailResponse",
     # 人才库
     "TalentResponse", "TalentStatsResponse",
     # 文件管理

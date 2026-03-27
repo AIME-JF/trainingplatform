@@ -9,6 +9,13 @@
           tips="需要 CREATE_RESOURCE 或 VIEW_RESOURCE_ALL 权限"
           v-slot="{ disabled }"
         >
+          <a-button :disabled="disabled" @click="$router.push('/resource/teaching-generate')">教学资源生成</a-button>
+        </permissions-tooltip>
+        <permissions-tooltip
+          :allowed="canUploadResource"
+          tips="需要 CREATE_RESOURCE 或 VIEW_RESOURCE_ALL 权限"
+          v-slot="{ disabled }"
+        >
           <a-button type="primary" :disabled="disabled" @click="uploadModalOpen = true">上传资源</a-button>
         </permissions-tooltip>
       </a-space>

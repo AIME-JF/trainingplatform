@@ -216,7 +216,7 @@ function getMediaKind(url) {
   const ext = getExtension(url)
   if (ext === 'mp4') return 'video'
   if (['jpg', 'jpeg', 'png', 'webp'].includes(ext)) return 'image'
-  if (['pdf', 'doc', 'docx', 'ppt', 'pptx'].includes(ext)) return 'document'
+  if (['pdf', 'doc', 'docx', 'ppt', 'pptx', 'html', 'htm'].includes(ext)) return 'document'
   return 'unknown'
 }
 

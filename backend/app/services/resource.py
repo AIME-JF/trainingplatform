@@ -42,7 +42,7 @@ RESOURCE_ALLOWED_TRANSITIONS = {
 
 RESOURCE_CONTENT_FILE_EXTENSIONS = {
     'video': {'.mp4'},
-    'document': {'.pdf', '.doc', '.docx', '.ppt', '.pptx'},
+    'document': {'.pdf', '.doc', '.docx', '.ppt', '.pptx', '.html', '.htm'},
     'image': {'.jpg', '.jpeg', '.png', '.webp'},
     'image_text': {'.jpg', '.jpeg', '.png', '.webp'},
 }
@@ -135,6 +135,13 @@ class ResourceService:
         return ResourceTagResponse.model_validate(tag)
 
     def create_resource(self, data: ResourceCreate, current_user_id: int) -> ResourceDetailResponse:
+        resource = self.create_resource_entity(data, current_user_id)
+        self.db.commit()
+        self.db.refresh(resource)
+        resource = self._get_resource_entity(resource.id)
+        return self._to_detail_response(resource)
+
+    def create_resource_entity(self, data: ResourceCreate, current_user_id: int) -> Resource:
         user_ctx = self._get_user_context(current_user_id)
         owner_department_id = data.owner_department_id or (next(iter(user_ctx['department_ids'])) if user_ctx['department_ids'] else None)
         normalized_content_type = self._normalize_content_type(data.content_type)
@@ -162,11 +169,8 @@ class ResourceService:
         self._sync_tags(resource, data.tags)
         self._sync_media_links(resource, data.media_links)
         self._sync_visibility_scopes(resource, scope_type, scope_target_ids)
-
-        self.db.commit()
-        self.db.refresh(resource)
-        resource = self._get_resource_entity(resource.id)
-        return self._to_detail_response(resource)
+        self.db.flush()
+        return resource
 
     def get_resource_by_id(
         self,
@@ -844,9 +848,9 @@ class ResourceService:
         mime_type = str(getattr(media, 'mime_type', '') or '').lower()
         if 'video' in mime_type or filename.endswith('.mp4'):
             return 'video'
-        if any(token in mime_type for token in ('pdf', 'msword', 'powerpoint', 'document')):
+        if any(token in mime_type for token in ('pdf', 'msword', 'powerpoint', 'document', 'html')):
             return 'document'
-        if any(filename.endswith(ext) for ext in ('.pdf', '.doc', '.docx', '.ppt', '.pptx')):
+        if any(filename.endswith(ext) for ext in ('.pdf', '.doc', '.docx', '.ppt', '.pptx', '.html', '.htm')):
             return 'document'
         if any(token in mime_type for token in ('image', 'png', 'jpeg', 'jpg', 'webp')):
             return 'image'

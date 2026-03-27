@@ -5,6 +5,8 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.schemas import (
+    TeachingResourceGenerationMetaUpdateRequest,
+    TeachingResourceGenerationTaskCreateRequest,
     AIPersonalTrainingTaskCreateRequest,
     AIPersonalTrainingTaskUpdateRequest,
     AIPaperAssemblyTaskCreateRequest,
@@ -16,7 +18,7 @@ from app.schemas import (
     AIScheduleParsePreviewResponse,
     AIScheduleTaskUpdateRequest,
 )
-from app.services import AIService, TrainingAIService
+from app.services import TeachingResourceGenerationService, AIService, TrainingAIService
 from logger import logger
 
 
@@ -26,6 +28,7 @@ class AIController:
     def __init__(self, db: Session):
         self.db = db
         self.service = AIService(db)
+        self.teaching_resource_generation_service = TeachingResourceGenerationService(db)
         self.training_ai_service = TrainingAIService(db)
 
     def list_question_tasks(self, page: int, size: int, status_value: str | None, current_user_id: int):
@@ -152,6 +155,54 @@ class AIController:
         except Exception as exc:
             logger.error("确认 AI 自动生成试卷任务异常: %s", exc)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="确认任务失败")
+
+    def list_teaching_resource_generation_tasks(self, page: int, size: int, status_value: str | None, current_user_id: int):
+        try:
+            return self.teaching_resource_generation_service.list_tasks(page, size, status_value, current_user_id)
+        except Exception as exc:
+            logger.error("获取教学资源生成任务列表异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取任务列表失败")
+
+    def get_teaching_resource_generation_task_detail(self, task_id: int, current_user_id: int):
+        try:
+            return self.teaching_resource_generation_service.get_task_detail(task_id, current_user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+        except Exception as exc:
+            logger.error("获取教学资源生成任务详情异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取任务详情失败")
+
+    def create_teaching_resource_generation_task(self, data: TeachingResourceGenerationTaskCreateRequest, current_user_id: int):
+        try:
+            return self.teaching_resource_generation_service.create_task(data, current_user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("创建教学资源生成任务异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建任务失败")
+
+    def confirm_teaching_resource_generation_task(self, task_id: int, current_user_id: int):
+        try:
+            return self.teaching_resource_generation_service.confirm_task(task_id, current_user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("确认教学资源生成任务异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="确认任务失败")
+
+    def update_teaching_resource_generation_task_meta(
+        self,
+        task_id: int,
+        data: TeachingResourceGenerationMetaUpdateRequest,
+        current_user_id: int,
+    ):
+        try:
+            return self.teaching_resource_generation_service.update_task_meta(task_id, data, current_user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("更新教学资源生成任务基础信息异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新基础信息失败")
 
     def list_schedule_tasks(self, page: int, size: int, status_value: str | None, current_user_id: int):
         try:

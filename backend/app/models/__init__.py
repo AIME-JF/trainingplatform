@@ -21,6 +21,7 @@ from .exam import (
     question_knowledge_point_relations,
 )
 from .ai_task import AITask
+from .teaching_resource_generation_snapshot import TeachingResourceGenerationSnapshot
 from .personal_training_plan_snapshot import PersonalTrainingPlanSnapshot
 from .certificate import Certificate
 from .media import MediaFile
@@ -61,6 +62,7 @@ __all__ = [
     "Exam", "ExamQuestion", "ExamRecord",
     "question_knowledge_point_relations",
     "AITask",
+    "TeachingResourceGenerationSnapshot",
     "PersonalTrainingPlanSnapshot",
     # 证书
     "Certificate",

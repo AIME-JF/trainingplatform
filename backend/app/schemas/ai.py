@@ -7,6 +7,11 @@ from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from .exam import (
+    ADMISSION_SCOPE_ALL,
+    _normalize_admission_scope_target_ids,
+    _normalize_admission_scope_type,
+)
 from .training import TrainingCourseCreate, TrainingScheduleRuleConfig
 
 
@@ -14,11 +19,27 @@ AITaskType = Literal[
     "question_generation",
     "paper_assembly",
     "paper_generation",
+    "resource_generation",
     "schedule_generation",
     "personal_training_plan_generation",
 ]
 AITaskStatus = Literal["pending", "processing", "completed", "confirmed", "failed"]
 AIScheduleTaskStage = Literal["rule_parsing", "rule_confirmation", "schedule_generation", "schedule_confirmation"]
+
+
+def _normalize_short_string_list(value: Any, *, max_length: int) -> List[str]:
+    if value is None:
+        return []
+    raw_items = [value] if isinstance(value, str) else list(value or [])
+    normalized: List[str] = []
+    seen = set()
+    for raw_item in raw_items:
+        item = str(raw_item or "").strip()
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        normalized.append(item[:max_length])
+    return normalized
 
 
 class AITaskQuestionDraft(BaseModel):
@@ -230,6 +251,169 @@ class AIPaperGenerationTaskCreateRequest(BaseModel):
     police_type_id: Optional[int] = Field(None, description="警种 ID")
     type_configs: List[AIPaperAssemblyTypeConfig] = Field(default_factory=list, description="题型配置")
     requirements: Optional[str] = Field(None, max_length=1000, description="补充要求")
+
+
+class TeachingResourceGenerationTaskCreateRequest(BaseModel):
+    """教学资源生成任务创建请求"""
+
+    task_name: Optional[str] = Field(None, max_length=200, description="任务名称")
+    resource_title: Optional[str] = Field(None, max_length=200, description="资源标题")
+    resource_summary: Optional[str] = Field(None, max_length=1000, description="资源摘要")
+    tags: List[str] = Field(default_factory=list, description="资源标签")
+    scope_type: str = Field(ADMISSION_SCOPE_ALL, description="可见范围类型: all/user/department/role")
+    scope_target_ids: List[int] = Field(default_factory=list, description="可见范围目标 ID 列表")
+    requirements: str = Field(..., max_length=4000, description="自然语言生成要求")
+    template_code: str = Field("general_teaching_slides", max_length=100, description="课件内容模板编码")
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def validate_tags(cls, value: Any) -> List[str]:
+        return _normalize_short_string_list(value, max_length=50)
+
+    @field_validator("scope_type", mode="before")
+    @classmethod
+    def validate_scope_type(cls, value: Optional[str]) -> str:
+        return _normalize_admission_scope_type(value, allow_none=False) or ADMISSION_SCOPE_ALL
+
+    @field_validator("scope_target_ids", mode="before")
+    @classmethod
+    def validate_scope_target_ids(cls, value: Any) -> List[int]:
+        return _normalize_admission_scope_target_ids(value) or []
+
+
+class TeachingResourceGenerationResourceMeta(BaseModel):
+    """教学资源生成后的资源基础信息"""
+
+    resource_title: Optional[str] = Field(None, max_length=200, description="自动生成的资源标题")
+    resource_summary: Optional[str] = Field(None, max_length=1000, description="资源摘要")
+    tags: List[str] = Field(default_factory=list, description="资源标签")
+    scope_type: str = Field(ADMISSION_SCOPE_ALL, description="可见范围类型")
+    scope_target_ids: List[int] = Field(default_factory=list, description="可见范围目标 ID 列表")
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def validate_meta_tags(cls, value: Any) -> List[str]:
+        return _normalize_short_string_list(value, max_length=50)
+
+    @field_validator("scope_type", mode="before")
+    @classmethod
+    def validate_meta_scope_type(cls, value: Optional[str]) -> str:
+        return _normalize_admission_scope_type(value, allow_none=False) or ADMISSION_SCOPE_ALL
+
+    @field_validator("scope_target_ids", mode="before")
+    @classmethod
+    def validate_meta_scope_target_ids(cls, value: Any) -> List[int]:
+        return _normalize_admission_scope_target_ids(value) or []
+
+
+class TeachingResourceGenerationMetaUpdateRequest(BaseModel):
+    """教学资源生成任务基础信息更新请求"""
+
+    resource_summary: Optional[str] = Field(None, max_length=1000, description="资源摘要")
+    tags: List[str] = Field(default_factory=list, description="资源标签")
+    scope_type: str = Field(ADMISSION_SCOPE_ALL, description="可见范围类型")
+    scope_target_ids: List[int] = Field(default_factory=list, description="可见范围目标 ID 列表")
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def validate_update_tags(cls, value: Any) -> List[str]:
+        return _normalize_short_string_list(value, max_length=50)
+
+    @field_validator("scope_type", mode="before")
+    @classmethod
+    def validate_update_scope_type(cls, value: Optional[str]) -> str:
+        return _normalize_admission_scope_type(value, allow_none=False) or ADMISSION_SCOPE_ALL
+
+    @field_validator("scope_target_ids", mode="before")
+    @classmethod
+    def validate_update_scope_target_ids(cls, value: Any) -> List[int]:
+        return _normalize_admission_scope_target_ids(value) or []
+
+
+class TeachingResourceGenerationParsedRequest(BaseModel):
+    """教学资源生成需求解析结果"""
+
+    theme: str = Field(..., description="课件主题")
+    target_audience: Optional[str] = Field(None, description="适用对象")
+    usage_scenario: Optional[str] = Field(None, description="使用场景")
+    tone: Optional[str] = Field(None, description="表达风格")
+    page_count: int = Field(8, ge=4, le=20, description="目标页数")
+    keywords: List[str] = Field(default_factory=list, description="核心关键词")
+    learning_goals: List[str] = Field(default_factory=list, description="学习目标")
+    summary: Optional[str] = Field(None, description="解析摘要")
+
+    @field_validator("keywords", "learning_goals", mode="before")
+    @classmethod
+    def validate_string_items(cls, value: Any) -> List[str]:
+        if value is None:
+            return []
+        raw_items = [value] if isinstance(value, str) else list(value or [])
+        normalized: List[str] = []
+        seen = set()
+        for raw_item in raw_items:
+            item = str(raw_item or "").strip()
+            if not item or item in seen:
+                continue
+            seen.add(item)
+            normalized.append(item[:200])
+        return normalized
+
+
+class TeachingResourceGenerationTemplateSlot(BaseModel):
+    """课件内容模板页槽位"""
+
+    page_no: int = Field(..., ge=1, description="页码")
+    slot_key: str = Field(..., description="模板槽位键")
+    page_type: str = Field(..., description="页面类型")
+    layout: str = Field(..., description="布局类型")
+    purpose: str = Field(..., description="页面用途")
+    content_requirements: List[str] = Field(default_factory=list, description="内容要求")
+
+    @field_validator("content_requirements", mode="before")
+    @classmethod
+    def validate_requirements(cls, value: Any) -> List[str]:
+        if value is None:
+            return []
+        raw_items = [value] if isinstance(value, str) else list(value or [])
+        return [str(item or "").strip()[:200] for item in raw_items if str(item or "").strip()]
+
+
+class TeachingResourceGenerationTemplatePayload(BaseModel):
+    """课件内容模板"""
+
+    code: str = Field(..., description="模板编码")
+    name: str = Field(..., description="模板名称")
+    description: Optional[str] = Field(None, description="模板描述")
+    page_count: int = Field(..., ge=1, description="模板页数")
+    slots: List[TeachingResourceGenerationTemplateSlot] = Field(default_factory=list, description="模板页槽位")
+
+
+class TeachingResourceGenerationPagePlan(BaseModel):
+    """教学资源生成后的页面内容方案"""
+
+    page_no: int = Field(..., ge=1, description="页码")
+    slot_key: str = Field(..., description="模板槽位键")
+    page_type: str = Field(..., description="页面类型")
+    layout: str = Field(..., description="布局类型")
+    title: str = Field(..., description="页面标题")
+    subtitle: Optional[str] = Field(None, description="页面副标题")
+    bullets: List[str] = Field(default_factory=list, description="要点列表")
+    highlight: Optional[str] = Field(None, description="强调内容")
+    notes: List[str] = Field(default_factory=list, description="补充说明")
+
+    @field_validator("bullets", "notes", mode="before")
+    @classmethod
+    def validate_page_list(cls, value: Any) -> List[str]:
+        if value is None:
+            return []
+        raw_items = [value] if isinstance(value, str) else list(value or [])
+        normalized: List[str] = []
+        for raw_item in raw_items:
+            item = str(raw_item or "").strip()
+            if not item:
+                continue
+            normalized.append(item[:300])
+        return normalized
 
 
 class AIScheduleUnavailableSlot(BaseModel):
@@ -532,4 +716,18 @@ class AIPersonalTrainingTaskDetailResponse(AITaskSummaryResponse):
     request_payload: AIPersonalTrainingTaskCreateRequest
     portrait: Optional[AIPersonalTrainingPortrait] = None
     plan: Optional[AIPersonalTrainingPlan] = None
+    error_message: Optional[str] = None
+
+
+class TeachingResourceGenerationTaskDetailResponse(AITaskSummaryResponse):
+    """教学资源生成任务详情响应"""
+
+    request_payload: TeachingResourceGenerationTaskCreateRequest
+    resource_meta: TeachingResourceGenerationResourceMeta
+    parsed_request: Optional[TeachingResourceGenerationParsedRequest] = None
+    selected_template: Optional[TeachingResourceGenerationTemplatePayload] = None
+    page_plan: List[TeachingResourceGenerationPagePlan] = Field(default_factory=list)
+    html_content: Optional[str] = None
+    preview_title: Optional[str] = None
+    confirmed_resource_id: Optional[int] = None
     error_message: Optional[str] = None

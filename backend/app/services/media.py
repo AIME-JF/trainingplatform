@@ -1,8 +1,9 @@
 """
 文件管理服务
 """
-import json
 import hashlib
+import io
+import json
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -171,6 +172,48 @@ class MediaService:
             return f"{base}/{bucket}/{path}"
 
         return f"{settings.API_V1_STR}/media/files/{media.id}"
+
+    def create_generated_text_file(
+        self,
+        *,
+        filename: str,
+        content: str,
+        uploader_id: int,
+        mime_type: str = "text/plain; charset=utf-8",
+    ) -> MediaFile:
+        """将服务端生成的文本内容直接写入对象存储并入库。"""
+        now = datetime.now()
+        date_dir = f"{now.year}/{now.month:02d}/{now.day:02d}"
+        ext = Path(filename or "generated.txt").suffix.lower() or ".txt"
+        object_key = f"{date_dir}/{uuid.uuid4().hex}{ext}"
+        content_bytes = str(content or "").encode("utf-8")
+        file_hash = hashlib.sha256(content_bytes).hexdigest()
+
+        existing = self.db.query(MediaFile).filter(MediaFile.hash == file_hash).first()
+        if existing:
+            logger.info("生成文件秒传命中: %s -> id=%s", filename, existing.id)
+            return existing
+
+        stream = io.BytesIO(content_bytes)
+        self.minio.put_object(
+            bucket_name=settings.MINIO_BUCKET,
+            object_name=object_key,
+            data=stream,
+            length=len(content_bytes),
+            content_type=mime_type,
+        )
+
+        media = MediaFile(
+            filename=filename or Path(object_key).name,
+            storage_path=object_key,
+            mime_type=mime_type,
+            size=len(content_bytes),
+            hash=file_hash,
+            uploader_id=uploader_id,
+        )
+        self.db.add(media)
+        self.db.flush()
+        return media
 
     def _to_response(self, media: MediaFile) -> MediaFileResponse:
         return MediaFileResponse(

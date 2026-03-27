@@ -9,7 +9,7 @@ from app.schemas.media import MediaFileResponse
 from logger import logger
 
 # 允许的文件类型
-ALLOWED_EXTENSIONS = {'.mp4', '.pdf', '.ppt', '.pptx', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.webp'}
+ALLOWED_EXTENSIONS = {'.mp4', '.pdf', '.ppt', '.pptx', '.doc', '.docx', '.html', '.htm', '.jpg', '.jpeg', '.png', '.webp'}
 MAX_UPLOAD_SIZE = 500 * 1024 * 1024  # 500MB
 
 

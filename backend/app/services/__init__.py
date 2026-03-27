@@ -21,6 +21,7 @@ from .profile import ProfileService
 from .dashboard import DashboardService
 from .report import ReportService
 from .ai import AIService
+from .teaching_resource_generation import TeachingResourceGenerationService
 from .training_portrait_aggregator import TrainingPortraitAggregator
 from .training_ai import TrainingAIService
 from .talent import TalentService
@@ -35,7 +36,7 @@ __all__ = [
     "CourseService", "CourseProgressService", "ExamService", "QuestionService", "TrainingService",
     "TrainingCourseChangeService", "TrainingBaseService",
     "CertificateService", "ProfileService",
-    "DashboardService", "ReportService", "AIService",
+    "DashboardService", "ReportService", "AIService", "TeachingResourceGenerationService",
     "TrainingPortraitAggregator", "TrainingAIService", "TalentService",
     "MediaService",
     "ResourceService", "ReviewService", "RecommendationService",

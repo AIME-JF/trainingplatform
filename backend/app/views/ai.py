@@ -11,6 +11,9 @@ from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.models import Permission, Role, User
 from app.schemas import (
+    TeachingResourceGenerationMetaUpdateRequest,
+    TeachingResourceGenerationTaskCreateRequest,
+    TeachingResourceGenerationTaskDetailResponse,
     AIPersonalTrainingTaskCreateRequest,
     AIPersonalTrainingTaskDetailResponse,
     AIPersonalTrainingTaskUpdateRequest,
@@ -58,6 +61,15 @@ def _require_schedule_task_permission(db: Session, current_user: TokenData):
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail="权限不足，需要 UPDATE_TRAINING 或 MANAGE_TRAINING",
+    )
+
+
+def _require_teaching_resource_generation_permission(db: Session, current_user: TokenData):
+    if _has_permission(db, current_user, "CREATE_RESOURCE") or _has_permission(db, current_user, "VIEW_RESOURCE_ALL"):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="权限不足，需要 CREATE_RESOURCE 或 VIEW_RESOURCE_ALL",
     )
 
 
@@ -307,6 +319,114 @@ def confirm_paper_generation_task(
     _require_admin_or_instructor(db, current_user.user_id)
     controller = AIController(db)
     result = controller.confirm_paper_generation_task(task_id, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.get(
+    "/teaching-resource-generation-tasks",
+    response_model=StandardResponse[PaginatedResponse[AITaskSummaryResponse]],
+    summary="教学资源生成任务列表",
+)
+@router.get(
+    "/resource-generation-tasks",
+    response_model=StandardResponse[PaginatedResponse[AITaskSummaryResponse]],
+    summary="教学资源生成任务列表（兼容旧路径）",
+)
+def list_teaching_resource_generation_tasks(
+    page: int = Query(1, ge=1),
+    size: int = Query(10, ge=-1),
+    status_value: Optional[str] = Query(None, alias="status"),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_teaching_resource_generation_permission(db, current_user)
+    controller = AIController(db)
+    data = controller.list_teaching_resource_generation_tasks(page, size, status_value, current_user.user_id)
+    return StandardResponse(data=data)
+
+
+@router.post(
+    "/teaching-resource-generation-tasks",
+    response_model=StandardResponse[TeachingResourceGenerationTaskDetailResponse],
+    summary="创建教学资源生成任务",
+)
+@router.post(
+    "/resource-generation-tasks",
+    response_model=StandardResponse[TeachingResourceGenerationTaskDetailResponse],
+    summary="创建教学资源生成任务（兼容旧路径）",
+)
+def create_teaching_resource_generation_task(
+    data: TeachingResourceGenerationTaskCreateRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_teaching_resource_generation_permission(db, current_user)
+    controller = AIController(db)
+    result = controller.create_teaching_resource_generation_task(data, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.get(
+    "/teaching-resource-generation-tasks/{task_id}",
+    response_model=StandardResponse[TeachingResourceGenerationTaskDetailResponse],
+    summary="教学资源生成任务详情",
+)
+@router.get(
+    "/resource-generation-tasks/{task_id}",
+    response_model=StandardResponse[TeachingResourceGenerationTaskDetailResponse],
+    summary="教学资源生成任务详情（兼容旧路径）",
+)
+def get_teaching_resource_generation_task_detail(
+    task_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_teaching_resource_generation_permission(db, current_user)
+    controller = AIController(db)
+    data = controller.get_teaching_resource_generation_task_detail(task_id, current_user.user_id)
+    return StandardResponse(data=data)
+
+
+@router.post(
+    "/teaching-resource-generation-tasks/{task_id}/confirm",
+    response_model=StandardResponse[TeachingResourceGenerationTaskDetailResponse],
+    summary="确认教学资源生成任务",
+)
+@router.post(
+    "/resource-generation-tasks/{task_id}/confirm",
+    response_model=StandardResponse[TeachingResourceGenerationTaskDetailResponse],
+    summary="确认教学资源生成任务（兼容旧路径）",
+)
+def confirm_teaching_resource_generation_task(
+    task_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_teaching_resource_generation_permission(db, current_user)
+    controller = AIController(db)
+    result = controller.confirm_teaching_resource_generation_task(task_id, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.put(
+    "/teaching-resource-generation-tasks/{task_id}/resource-meta",
+    response_model=StandardResponse[TeachingResourceGenerationTaskDetailResponse],
+    summary="更新教学资源生成任务基础信息",
+)
+@router.put(
+    "/resource-generation-tasks/{task_id}/resource-meta",
+    response_model=StandardResponse[TeachingResourceGenerationTaskDetailResponse],
+    summary="更新教学资源生成任务基础信息（兼容旧路径）",
+)
+def update_teaching_resource_generation_task_meta(
+    task_id: int,
+    data: TeachingResourceGenerationMetaUpdateRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_teaching_resource_generation_permission(db, current_user)
+    controller = AIController(db)
+    result = controller.update_teaching_resource_generation_task_meta(task_id, data, current_user.user_id)
     return StandardResponse(data=result)
 
 

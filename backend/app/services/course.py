@@ -935,7 +935,7 @@ class CourseService:
         mime = (mime_type or "").lower()
         if "video" in mime or source.endswith(".mp4"):
             return "video"
-        if "pdf" in mime or any(source.endswith(ext) for ext in (".pdf", ".ppt", ".pptx", ".doc", ".docx")):
+        if "html" in mime or "pdf" in mime or any(source.endswith(ext) for ext in (".pdf", ".ppt", ".pptx", ".doc", ".docx", ".html", ".htm")):
             return "document"
         return None
 

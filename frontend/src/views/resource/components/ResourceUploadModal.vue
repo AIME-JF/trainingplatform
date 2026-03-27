@@ -131,7 +131,7 @@ const canSubmitReview = computed(() => authStore.hasAllPermissions(['CREATE_RESO
 
 const ALLOWED_EXTENSIONS = {
   video: ['mp4'],
-  document: ['pdf', 'doc', 'docx', 'ppt', 'pptx'],
+  document: ['pdf', 'doc', 'docx', 'ppt', 'pptx', 'html', 'htm'],
   image: ['jpg', 'jpeg', 'png', 'webp'],
 }
 
