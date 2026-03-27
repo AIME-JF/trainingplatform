@@ -109,7 +109,7 @@ function hydrateUserInfo() {
   try {
     const saved = JSON.parse(localStorage.getItem('userInfo') || '{}')
     userName.value = saved.name || saved.nickname || saved.username || '未登录用户'
-    userPoliceId.value = saved.policeId || saved.police_id || ''
+    userPoliceId.value = saved.idCardNumber || saved.id_card_number || ''
   } catch {
     userName.value = '未登录用户'
     userPoliceId.value = ''

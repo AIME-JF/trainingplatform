@@ -31,6 +31,7 @@ from app.schemas.exam import (
 from app.schemas.resource import CourseResourceBindRequest, ResourceListItemResponse
 from app.services.auth import auth_service
 from app.services.course_progress import CourseProgressService
+from app.utils.data_scope import DataScopeContext, build_data_scope_context, can_access_scoped_object
 from config import settings
 from logger import logger
 
@@ -53,7 +54,8 @@ class CourseService:
         if not course or not user_id:
             return False
         current_user = self._get_scope_user(user_id)
-        return self._can_view_course(course, current_user)
+        scope_context = build_data_scope_context(self.db, user_id)
+        return self._can_view_course(course, current_user, scope_context)
 
     def can_manage_course(self, course: Optional[Course], user_id: Optional[int]) -> bool:
         """判断用户是否可管理课程。"""
@@ -111,9 +113,10 @@ class CourseService:
         if user_id and not current_user:
             return PaginatedResponse(page=page, size=0 if size == -1 else size, total=0, items=[])
         can_manage_all = self._is_admin_user(current_user)
+        scope_context = build_data_scope_context(self.db, user_id) if user_id else None
         courses = query.all()
         if current_user and not can_manage_all:
-            courses = [course for course in courses if self._can_view_course(course, current_user)]
+            courses = [course for course in courses if self._can_view_course(course, current_user, scope_context)]
 
         total = len(courses)
         if size != -1:
@@ -690,11 +693,31 @@ class CourseService:
             return True
         return user.id in {course.created_by, course.instructor_id}
 
-    def _can_view_course(self, course: Optional[Course], user: Optional[User]) -> bool:
+    def _can_view_course(
+        self,
+        course: Optional[Course],
+        user: Optional[User],
+        scope_context: Optional[DataScopeContext] = None,
+    ) -> bool:
         if not course or not user or not user.is_active:
             return False
         if self._can_manage_course(course, user):
             return True
+
+        # 角色数据范围过滤：按课程创建者的部门和警种判断
+        if scope_context and not scope_context.is_admin:
+            creator = self._get_scope_user(course.created_by) if course.created_by else None
+            if creator:
+                creator_dept_id = creator.departments[0].id if creator.departments else None
+                creator_pt_id = creator.police_types[0].id if creator.police_types else None
+                if not can_access_scoped_object(
+                    scope_context,
+                    department_id=creator_dept_id,
+                    police_type_id=creator_pt_id,
+                    owner_user_ids=[course.created_by, course.instructor_id],
+                    dimension_mode="any",
+                ):
+                    return False
 
         scope_type = course.scope_type or ADMISSION_SCOPE_ALL
         target_ids = set(self._normalize_scope_target_ids(course.scope_target_ids))

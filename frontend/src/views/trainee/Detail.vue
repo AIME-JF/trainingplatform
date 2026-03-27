@@ -17,7 +17,7 @@
               <div class="traineebadge-large" :class="getLevelClass(trainee.level)">{{ trainee.level || '学员' }}</div>
             </div>
             <div class="profile-name">{{ trainee.nickname || trainee.username }}</div>
-            <div class="profile-title">{{ trainee.policeId }}</div>
+            <div class="profile-title">{{ trainee.idCardNumber }}</div>
 
             <a-divider />
 

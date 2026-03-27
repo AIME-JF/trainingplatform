@@ -29,7 +29,7 @@
         <a-col :span="10">
           <a-input-search
             v-model:value="filters.search"
-            placeholder="搜索姓名/用户名/警号"
+            placeholder="搜索姓名/用户名/身份证号"
             allow-clear
             @search="handleSearch"
           />
@@ -175,8 +175,8 @@
         <a-form-item label="手机号">
           <a-input v-model:value="editDialog.form.phone" placeholder="请输入手机号" />
         </a-form-item>
-        <a-form-item label="警号">
-          <a-input v-model:value="editDialog.form.policeId" placeholder="请输入警号" />
+        <a-form-item label="身份证号">
+          <a-input v-model:value="editDialog.form.idCardNumber" placeholder="请输入身份证号" />
         </a-form-item>
         <a-form-item label="邮箱">
           <a-input v-model:value="editDialog.form.email" placeholder="请输入邮箱" />
@@ -290,7 +290,7 @@ const columns = [
   { title: '姓名', dataIndex: 'nickname', key: 'nickname' },
   { title: '角色', key: 'roles' },
   { title: '所属单位', key: 'departments' },
-  { title: '警号', dataIndex: 'policeId', key: 'policeId' },
+  { title: '身份证号', dataIndex: 'idCardNumber', key: 'idCardNumber' },
   { title: '手机号', dataIndex: 'phone', key: 'phone' },
   { title: '状态', key: 'isActive', width: 90 },
   { title: '操作', key: 'action', width: 220 },
@@ -334,7 +334,7 @@ const editDialog = reactive({
     policeTypeIds: [],
     gender: undefined,
     phone: '',
-    policeId: '',
+    idCardNumber: '',
     email: '',
     joinDate: null,
   },
@@ -439,7 +439,7 @@ function resetEditForm() {
   editDialog.form.policeTypeIds = []
   editDialog.form.gender = undefined
   editDialog.form.phone = ''
-  editDialog.form.policeId = ''
+  editDialog.form.idCardNumber = ''
   editDialog.form.email = ''
   editDialog.form.joinDate = null
 }
@@ -464,7 +464,7 @@ function openEditModal(record) {
   editDialog.form.policeTypeIds = (record.policeTypes || []).map((item) => item.id)
   editDialog.form.gender = record.gender || undefined
   editDialog.form.phone = record.phone || ''
-  editDialog.form.policeId = record.policeId || ''
+  editDialog.form.idCardNumber = record.idCardNumber || ''
   editDialog.form.email = record.email || ''
   editDialog.form.joinDate = record.joinDate || null
   editDialog.visible = true
@@ -498,7 +498,7 @@ async function submitUser() {
         policeTypeIds: editDialog.form.policeTypeIds,
         gender: editDialog.form.gender || undefined,
         phone: editDialog.form.phone || undefined,
-        policeId: editDialog.form.policeId || undefined,
+        idCardNumber: editDialog.form.idCardNumber || undefined,
         email: editDialog.form.email || undefined,
         joinDate: editDialog.form.joinDate || undefined,
       })
@@ -512,7 +512,7 @@ async function submitUser() {
         nickname: editDialog.form.nickname || undefined,
         gender: editDialog.form.gender || undefined,
         phone: editDialog.form.phone || undefined,
-        policeId: editDialog.form.policeId || undefined,
+        idCardNumber: editDialog.form.idCardNumber || undefined,
         email: editDialog.form.email || undefined,
         joinDate: editDialog.form.joinDate || undefined,
       })

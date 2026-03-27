@@ -219,7 +219,7 @@ function buildUserOption(item) {
   }
   return {
     value: item.id,
-    label: item.policeId ? `${item.nickname || item.username}（${item.policeId}）` : (item.nickname || item.username || `用户#${item.id}`),
+    label: item.idCardNumber ? `${item.nickname || item.username}（${item.idCardNumber}）` : (item.nickname || item.username || `用户#${item.id}`),
   }
 }
 

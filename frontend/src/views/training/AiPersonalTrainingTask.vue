@@ -186,7 +186,7 @@ const taskForm = reactive({
 
 const trainingOptions = computed(() => (trainings.value || []).map(item => ({ label: item.name, value: item.id })))
 const studentOptions = computed(() => (students.value || []).map(item => ({
-  label: `${item.userNickname || item.userName} (${item.policeId || '无警号'})`,
+  label: `${item.userNickname || item.userName} (${item.idCardNumber || item.policeId || ''})`,
   value: item.userId,
 })))
 const canEditCurrentTask = computed(() => activeTask.value?.status === 'completed' && activeTask.value?.createdBy === authStore.currentUser?.id)

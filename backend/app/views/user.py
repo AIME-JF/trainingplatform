@@ -90,6 +90,7 @@ def get_users(
         query = query.filter(
             (User.nickname.ilike(f"%{search}%")) |
             (User.username.ilike(f"%{search}%")) |
+            (User.id_card_number.ilike(f"%{search}%")) |
             (User.police_id.ilike(f"%{search}%"))
         )
 

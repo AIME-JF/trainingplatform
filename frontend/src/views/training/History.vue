@@ -49,7 +49,7 @@ const histories = ref([])
 const columns = computed(() => {
   const base = [
     { title: '姓名', dataIndex: 'userNickname', key: 'userNickname', width: 120 },
-    { title: '警号', dataIndex: 'policeId', key: 'policeId', width: 120 },
+    { title: '身份证号', dataIndex: 'idCardNumber', key: 'idCardNumber', width: 180 },
     { title: '单位', key: 'departments' },
     { title: '出勤率', key: 'attendanceRate', width: 180 },
     { title: '完成课次', dataIndex: 'completedSessions', key: 'completedSessions', width: 100 },
@@ -60,7 +60,7 @@ const columns = computed(() => {
   if (!authStore.isStudent) {
     base.push({ title: '操作', key: 'action', width: 140 })
   }
-  return authStore.isStudent ? base.filter(item => !['userNickname', 'policeId', 'departments'].includes(item.key)) : base
+  return authStore.isStudent ? base.filter(item => !['userNickname', 'idCardNumber', 'departments'].includes(item.key)) : base
 })
 
 function openAiPersonalPlan(userId) {

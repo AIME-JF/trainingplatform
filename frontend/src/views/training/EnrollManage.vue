@@ -36,7 +36,7 @@
 
     <a-card :bordered="false">
       <div class="toolbar">
-        <a-input-search v-model:value="searchText" placeholder="搜索姓名/警号/单位" style="width:240px" allow-clear />
+        <a-input-search v-model:value="searchText" placeholder="搜索姓名/身份证号/单位" style="width:240px" allow-clear />
         <a-radio-group v-model:value="statusFilter">
           <a-radio-button value="all">全部</a-radio-button>
           <a-radio-button value="pending">待审核</a-radio-button>
@@ -157,7 +157,7 @@ const statusColors = { pending: 'orange', approved: 'green', rejected: 'red' }
 
 const columns = [
   { title: '姓名', dataIndex: 'userNickname', key: 'userNickname', width: 120 },
-  { title: '警号', dataIndex: 'policeId', key: 'policeId', width: 120 },
+  { title: '身份证号', dataIndex: 'idCardNumber', key: 'idCardNumber', width: 180 },
   { title: '单位', key: 'departments' },
   { title: '电话', dataIndex: 'contactPhone', key: 'contactPhone', width: 140 },
   { title: '住宿', dataIndex: 'needAccommodation', key: 'needAccommodation', width: 80, customRender: ({ text }) => text ? '需要' : '无需' },
@@ -197,9 +197,9 @@ const filteredList = computed(() => {
     const keyword = searchText.value.toLowerCase()
     rows = rows.filter(item => {
       const name = (item.userNickname || item.userName || '').toLowerCase()
-      const policeId = (item.policeId || '').toLowerCase()
+      const idCardNumber = (item.idCardNumber || '').toLowerCase()
       const departments = (item.departments || []).join(' ').toLowerCase()
-      return name.includes(keyword) || policeId.includes(keyword) || departments.includes(keyword)
+      return name.includes(keyword) || idCardNumber.includes(keyword) || departments.includes(keyword)
     })
   }
   return rows

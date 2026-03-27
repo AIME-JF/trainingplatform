@@ -27,6 +27,7 @@ class User(Base):
 
     # 警务相关字段
     police_id = Column(String(50), unique=True, index=True, nullable=True, comment='警号')
+    id_card_number = Column(String(18), unique=True, index=True, nullable=True, comment='身份证号')
     avatar = Column(String(500), nullable=True, comment='头像URL')
     join_date = Column(Date, nullable=True, comment='入警日期')
     level = Column(String(50), nullable=True, comment='学员等级')

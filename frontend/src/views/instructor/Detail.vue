@@ -47,8 +47,8 @@
 
             <div class="profile-info">
               <div class="pi-row">
-                <span class="pi-label">警号</span>
-                <span>{{ instructor.policeId || '未设置' }}</span>
+                <span class="pi-label">身份证号</span>
+                <span>{{ instructor.idCardNumber || '未设置' }}</span>
               </div>
               <div class="pi-row">
                 <span class="pi-label">警种</span>
@@ -139,7 +139,7 @@ const instructor = ref({
   name: '',
   title: '',
   unit: '',
-  policeId: '',
+  idCardNumber: '',
   phone: '',
   joinDate: '',
   level: '',
@@ -194,7 +194,7 @@ async function loadInstructorDetail() {
       name: data.nickname || data.username,
       title: data.instructorTitle || data.level || '教官',
       unit: (data.departments && data.departments.length > 0) ? data.departments[0].name : '未分配',
-      policeId: data.policeId,
+      idCardNumber: data.idCardNumber,
       phone: data.phone,
       joinDate: data.joinDate,
       level: data.instructorLevel || data.level || '',
@@ -213,7 +213,7 @@ async function loadInstructorDetail() {
       name: '教官不存在',
       title: '',
       unit: '',
-      policeId: '',
+      idCardNumber: '',
       phone: '',
       joinDate: '',
       level: '',

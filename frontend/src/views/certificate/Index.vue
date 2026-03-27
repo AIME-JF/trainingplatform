@@ -54,7 +54,7 @@
         <a-form-item label="选择学员">
           <a-select v-model:value="issueForm.studentId" placeholder="请选择学员" show-search :filter-option="filterStudent">
             <a-select-option v-for="u in studentOptions" :key="u.id" :value="u.id">
-              {{ u.name }} · {{ u.policeId }}
+              {{ u.name }} · {{ u.idCardNumber }}
             </a-select-option>
           </a-select>
         </a-form-item>
@@ -114,7 +114,7 @@ onMounted(async () => {
 
 function filterStudent(input, option) {
   const u = studentOptions.find(s => s.id === option.value)
-  return u && (u.name.includes(input) || u.policeId.toLowerCase().includes(input.toLowerCase()))
+  return u && (u.name.includes(input) || (u.idCardNumber || '').toLowerCase().includes(input.toLowerCase()))
 }
 
 const issueVisible = ref(false)

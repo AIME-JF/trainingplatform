@@ -58,16 +58,18 @@ class AuthService:
 
     def authenticate_user(self, db: Session, username: str, password: str) -> Optional[User]:
         try:
-            user = (
+            base_query = (
                 db.query(User)
                 .options(
                     selectinload(User.roles).selectinload(Role.permissions),
                     selectinload(User.departments).selectinload(Department.permissions),
                     selectinload(User.police_types),
                 )
-                .filter(User.username == username)
-                .first()
             )
+            # 先按用户名查找，再按身份证号查找
+            user = base_query.filter(User.username == username).first()
+            if not user:
+                user = base_query.filter(User.id_card_number == username).first()
 
             if not user:
                 raise HTTPException(status_code=400, detail="用户不存在")

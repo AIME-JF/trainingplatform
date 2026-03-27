@@ -21,7 +21,7 @@ class TokenData(BaseModel):
 
 class UserLogin(BaseModel):
     """用户登录请求"""
-    username: str = Field(..., description="用户名")
+    username: str = Field(..., description="用户名或身份证号")
     password: str = Field(..., description="密码")
 
 
@@ -34,6 +34,7 @@ class UserCreate(BaseModel):
     email: Optional[str] = Field(None, description="邮箱")
     phone: Optional[str] = Field(None, description="手机号")
     police_id: Optional[str] = Field(None, max_length=50, description="警号")
+    id_card_number: Optional[str] = Field(None, max_length=18, description="身份证号")
     avatar: Optional[str] = Field(None, description="头像URL")
     join_date: Optional[date] = Field(None, description="入警日期")
     level: Optional[str] = Field(None, description="学员等级")
@@ -62,6 +63,7 @@ class UserUpdate(BaseModel):
     phone: Optional[str] = Field(None, description="手机号")
     is_active: Optional[bool] = Field(None, description="是否激活")
     police_id: Optional[str] = Field(None, max_length=50, description="警号")
+    id_card_number: Optional[str] = Field(None, max_length=18, description="身份证号")
     avatar: Optional[str] = Field(None, description="头像URL")
     join_date: Optional[date] = Field(None, description="入警日期")
     level: Optional[str] = Field(None, description="学员等级")
@@ -109,6 +111,7 @@ class UserSimpleResponse(BaseModel):
     phone: Optional[str] = None
     is_active: bool
     police_id: Optional[str] = None
+    id_card_number: Optional[str] = None
     avatar: Optional[str] = None
     join_date: Optional[date] = None
     level: Optional[str] = None
@@ -146,6 +149,7 @@ class UserResponse(BaseModel):
     phone: Optional[str] = None
     is_active: bool
     police_id: Optional[str] = None
+    id_card_number: Optional[str] = None
     avatar: Optional[str] = None
     join_date: Optional[date] = None
     level: Optional[str] = None

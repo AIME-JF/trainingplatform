@@ -109,18 +109,7 @@
           <span>创建于 {{ formatDate(course.createdAt) }}</span>
         </div>
 
-        <div v-if="authStore.isStudent" class="course-progress">
-          <a-progress
-            :percent="getCourseProgress(course)"
-            :stroke-color="getCourseProgress(course) === 100 ? '#52c41a' : '#003087'"
-            size="small"
-            :show-info="false"
-          />
-          <span class="progress-text">{{ getCourseProgress(course) }}% 完成</span>
-        </div>
-
         <div class="course-footer">
-          <span><TeamOutlined /> {{ Number(course.studentCount || 0).toLocaleString() }} 人学过</span>
           <span class="rating"><StarFilled style="color: #faad14" /> {{ course.rating || '新课' }}</span>
         </div>
       </div>

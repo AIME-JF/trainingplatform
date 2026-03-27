@@ -86,7 +86,7 @@
       <div v-if="detailStudent" style="padding:8px 0">
         <a-descriptions :column="2" bordered size="small">
           <a-descriptions-item label="姓名">{{ detailStudent.name }}</a-descriptions-item>
-          <a-descriptions-item label="警号">{{ detailStudent.policeId }}</a-descriptions-item>
+          <a-descriptions-item label="身份证号">{{ detailStudent.idCardNumber }}</a-descriptions-item>
           <a-descriptions-item label="单位" :span="2">{{ detailStudent.unit }}</a-descriptions-item>
           <a-descriptions-item label="总分"><span style="font-size:18px;font-weight:700" :style="{color: detailStudent.score >= 80 ? '#52c41a' : detailStudent.score >= 60 ? '#fa8c16' : '#ff4d4f'}">{{ detailStudent.score }}</span></a-descriptions-item>
           <a-descriptions-item label="用时">{{ detailStudent.time }}</a-descriptions-item>
@@ -198,7 +198,7 @@ const updateCharts = () => {
 
 const columns = [
   { title: '姓名', dataIndex: 'name', key: 'name', width: 80, sorter: (a, b) => a.name.localeCompare(b.name) },
-  { title: '警号', dataIndex: 'policeId', key: 'policeId', width: 120 },
+  { title: '身份证号', dataIndex: 'idCardNumber', key: 'idCardNumber', width: 180 },
   { title: '所属单位', dataIndex: 'unit', key: 'unit' },
   { title: '总分', key: 'score', width: 80, sorter: (a, b) => a.score - b.score },
   { title: '法律法规', dataIndex: 'law', key: 'law', width: 90 },
@@ -212,7 +212,7 @@ const columns = [
 
 const filteredStudents = computed(() => {
   if (!searchText.value) return students.value
-  return students.value.filter(s => s.name.includes(searchText.value) || s.policeId.includes(searchText.value))
+  return students.value.filter(s => s.name.includes(searchText.value) || (s.idCardNumber || '').includes(searchText.value))
 })
 
 async function loadExamList() {
@@ -249,9 +249,9 @@ onMounted(() => {
 // 导出 CSV
 function exportCSV() {
   if (!canExportScores.value) return
-  const header = ['姓名', '警号', '所属单位', '总分', '法律法规', '执法程序', '证据规则', '体能技能', '职业道德', '用时', '结果']
+  const header = ['姓名', '身份证号', '所属单位', '总分', '法律法规', '执法程序', '证据规则', '体能技能', '职业道德', '用时', '结果']
   const rows = filteredStudents.value.map(s => [
-    s.name, s.policeId, s.unit, s.score, s.law, s.enforce, s.evidence, s.physical, s.ethic, s.time, s.score >= 60 ? '通过' : '不合格'
+    s.name, s.idCardNumber, s.unit, s.score, s.law, s.enforce, s.evidence, s.physical, s.ethic, s.time, s.score >= 60 ? '通过' : '不合格'
   ])
   const csv = '\uFEFF' + [header, ...rows].map(r => r.join(',')).join('\n')
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })

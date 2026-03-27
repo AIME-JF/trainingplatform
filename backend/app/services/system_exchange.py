@@ -28,10 +28,10 @@ USER_TEMPLATE_HEADERS = [
     "用户名",
     "密码",
     "姓名",
+    "身份证号",
     "角色",
     "性别",
     "手机号",
-    "警号",
     "邮箱",
     "部门",
     "警种",
@@ -41,9 +41,9 @@ TRAINING_STUDENT_TEMPLATE_HEADERS = [
     "用户名",
     "密码",
     "姓名",
+    "身份证号",
     "性别",
     "手机号",
-    "警号",
     "邮箱",
     "部门",
     "警种",
@@ -53,9 +53,9 @@ TRAINING_INSTRUCTOR_TEMPLATE_HEADERS = [
     "用户名",
     "密码",
     "姓名",
+    "身份证号",
     "性别",
     "手机号",
-    "警号",
     "邮箱",
     "部门",
     "警种",
@@ -80,15 +80,15 @@ TRAINING_SESSION_TEMPLATE_HEADERS = [
 ]
 
 USER_TEMPLATE_SAMPLE_ROWS = [
-    ["【示例】zhangsan", "Police@123456", "张三", "学员", "男", "13800138000", "110001", "zhangsan@example.com", "刑侦总队", "治安"],
+    ["【示例】zhangsan", "Police@123456", "张三", "430102199001011234", "学员", "男", "13800138000", "zhangsan@example.com", "刑侦总队", "治安"],
 ]
 
 TRAINING_STUDENT_TEMPLATE_SAMPLE_ROWS = [
-    ["【示例】student001", "Police@123456", "李四", "男", "13800138001", "110002", "student001@example.com", "治安支队", "治安"],
+    ["【示例】student001", "Police@123456", "李四", "430102199201021234", "男", "13800138001", "student001@example.com", "治安支队", "治安"],
 ]
 
 TRAINING_INSTRUCTOR_TEMPLATE_SAMPLE_ROWS = [
-    ["【示例】instructor001", "Police@123456", "王教官", "男", "13800138002", "210001", "instructor001@example.com", "警务实战教研室", "特警"],
+    ["【示例】instructor001", "Police@123456", "王教官", "430102198501031234", "男", "13800138002", "instructor001@example.com", "警务实战教研室", "特警"],
 ]
 
 TRAINING_COURSE_TEMPLATE_SAMPLE_ROWS = [
@@ -192,6 +192,7 @@ class SystemExchangeService(BatchImportService):
         "username": {"用户名", "账号", "登录名", "user_name"},
         "password": {"密码", "登录密码", "password"},
         "name": {"姓名", "名字", "昵称", "name", "nickname"},
+        "id_card_number": {"身份证号", "身份证", "身份证号码", "证件号码", "证件号", "idcard", "idcardnumber", "id_card"},
         "role": {"角色", "账号角色", "用户角色", "role"},
         "gender": {"性别", "gender", "sex"},
         "phone": {"手机号", "手机", "联系电话", "phone", "mobile", "tel"},
@@ -311,6 +312,7 @@ class SystemExchangeService(BatchImportService):
             query = query.filter(
                 (User.nickname.ilike(keyword))
                 | (User.username.ilike(keyword))
+                | (User.id_card_number.ilike(keyword))
                 | (User.police_id.ilike(keyword))
             )
 
@@ -320,10 +322,10 @@ class SystemExchangeService(BatchImportService):
                 user.username or "",
                 "",
                 user.nickname or "",
+                user.id_card_number or "",
                 "、".join(role.name for role in user.roles or []),
                 user.gender or "",
                 user.phone or "",
-                user.police_id or "",
                 user.email or "",
                 self._join_related_names(user.departments),
                 self._join_related_names(user.police_types),
@@ -825,9 +827,9 @@ class SystemExchangeService(BatchImportService):
             instructions.append(("角色", f"固定为{fixed_role_label}，无需填写"))
         instructions.extend(
             [
+                ("身份证号", "必填，18 位身份证号码，支持作为登录账号"),
                 ("性别", "选填，可填 男/女"),
                 ("手机号", "选填，可作为辅助匹配字段"),
-                ("警号", "选填，可作为辅助匹配字段"),
                 ("邮箱", "选填"),
                 ("部门", "选填，多个部门可用中文顿号、逗号分隔；建议填写，避免数据域下不可见"),
                 ("警种", "选填，多个警种可用中文顿号、逗号分隔；建议填写，避免数据域下不可见"),

@@ -56,6 +56,16 @@ class BatchImportService:
             "badge",
             "badgeid",
         },
+        "id_card_number": {
+            "身份证号",
+            "身份证",
+            "身份证号码",
+            "证件号码",
+            "证件号",
+            "idcard",
+            "idcardnumber",
+            "id_card",
+        },
         "phone": {"手机号", "手机", "联系电话", "phone", "mobile", "tel"},
         "email": {"邮箱", "电子邮箱", "mail", "email"},
         "gender": {"性别", "gender", "sex"},
@@ -495,12 +505,13 @@ class BatchImportService:
         username = self._to_text(row.get("username"))
         password = self._to_text(row.get("password"))
         police_id = self._to_text(row.get("police_id"))
+        id_card_number = self._to_text(row.get("id_card_number"))
         phone = self._normalize_phone(row.get("phone"))
         email = self._to_text(row.get("email"))
         gender = self._normalize_gender(row.get("gender"))
 
-        if not any([name, username, police_id, phone]):
-            raise ValueError("缺少身份字段（姓名/警号/账号/手机号）")
+        if not any([name, username, police_id, id_card_number, phone]):
+            raise ValueError("缺少身份字段（姓名/身份证号/警号/账号/手机号）")
 
         role_code = force_role_code or self._parse_role_code(row.get("role"), default_role_code)
         roles = self._resolve_roles([role_code])
@@ -521,6 +532,10 @@ class BatchImportService:
 
             if police_id and police_id != (user.police_id or "") and self._field_available("police_id", police_id, user.id):
                 user.police_id = police_id
+                updated = True
+
+            if id_card_number and id_card_number != (user.id_card_number or "") and self._field_available("id_card_number", id_card_number, user.id):
+                user.id_card_number = id_card_number
                 updated = True
 
             if phone and phone != (user.phone or "") and self._field_available("phone", phone, user.id):
@@ -556,6 +571,7 @@ class BatchImportService:
             phone=phone,
             email=email,
             police_id=police_id,
+            id_card_number=id_card_number,
             is_active=True,
         )
         if roles:

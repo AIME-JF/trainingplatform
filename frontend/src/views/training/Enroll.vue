@@ -39,8 +39,8 @@
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="警号">
-              <a-input v-model:value="formData.policeId" disabled />
+            <a-form-item label="身份证号">
+              <a-input v-model:value="formData.idCardNumber" disabled />
             </a-form-item>
           </a-col>
           <a-col :span="12">
@@ -100,7 +100,7 @@ const submitSubtitle = ref('')
 
 const formData = ref({
   name: authStore.currentUser?.name || '',
-  policeId: authStore.currentUser?.username || '',
+  idCardNumber: authStore.currentUser?.idCardNumber || '',
   unit: authStore.currentUser?.unit || '',
   phone: authStore.currentUser?.phone || '',
   note: '',

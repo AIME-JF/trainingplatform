@@ -22,7 +22,7 @@
             <div class="traineebadge" :class="getLevelClass(trainee.level)">{{ trainee.level || '学员' }}</div>
           </div>
           <div class="traineename">{{ trainee.nickname || trainee.username }}</div>
-          <div class="traineetitle">{{ trainee.policeId }}</div>
+          <div class="traineetitle">{{ trainee.idCardNumber }}</div>
 
           <div class="traineestats" style="margin-top: 16px;">
             <div class="is-item">

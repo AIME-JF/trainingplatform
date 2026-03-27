@@ -11,7 +11,7 @@
           <div class="banner-meta">
             <a-tag color="blue">{{ user.roleLabel }}</a-tag>
             <span>{{ user.unit }}</span>
-            <span>警号 {{ user.policeId }}</span>
+            <span>{{ user.idCardNumber }}</span>
           </div>
           <div class="banner-sub">{{ user.policeType }} · 入警 {{ user.joinDate }}</div>
         </div>

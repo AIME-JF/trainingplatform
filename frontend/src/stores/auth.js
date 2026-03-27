@@ -39,6 +39,7 @@ export const useAuthStore = defineStore('auth', () => {
       roleCodes: (user.roles || []).map((item) => item.code).filter(Boolean),
       permissions: permissionCodes,
       policeId: user.policeId || user.police_id,
+      idCardNumber: user.idCardNumber || user.id_card_number,
       unit: user.departments?.[0]?.name || user.unit || '',
       studyHours: user.studyHours ?? 0,
       examCount: user.examCount ?? 0,

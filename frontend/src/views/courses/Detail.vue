@@ -41,10 +41,6 @@
               class="course-video"
               controls
               preload="metadata"
-              @pause="handleVideoPause"
-              @ended="onVideoEnded"
-              @timeupdate="onTimeUpdate"
-              @loadedmetadata="onMetaLoaded"
             ></video>
           </template>
           <template v-else-if="viewerType === 'image'">
@@ -54,7 +50,6 @@
                 <div class="doc-subtitle">{{ currentChapterBindingText }}</div>
               </div>
               <div class="doc-actions">
-                <a-button size="small" @click="markDocProgress">标记已学习</a-button>
                 <a-button size="small" type="primary" ghost :href="currentImageUrl" target="_blank">
                   <template #icon><DownloadOutlined /></template>查看原图
                 </a-button>
@@ -71,7 +66,6 @@
                 <div class="doc-subtitle">{{ currentChapterBindingText }}</div>
               </div>
               <div class="doc-actions">
-                <a-button size="small" @click="markDocProgress">标记已学习</a-button>
                 <a-button size="small" type="primary" ghost :href="currentDocUrl" target="_blank">
                   <template #icon><DownloadOutlined /></template>下载文档
                 </a-button>
@@ -89,17 +83,8 @@
                 <div class="meta-item"><span class="meta-label">创建者</span><span>{{ localCourse.createdByName || '-' }}</span></div>
                 <div class="meta-item"><span class="meta-label">主讲教官</span><span>{{ localCourse.instructorName || '-' }}</span></div>
                 <div class="meta-item"><span class="meta-label">章节数量</span><span>{{ localCourse.chapters?.length || 0 }} 章</span></div>
-                <div class="meta-item"><span class="meta-label">学习人数</span><span>{{ Number(localCourse.studentCount || 0).toLocaleString() }} 人</span></div>
                 <div class="meta-item"><span class="meta-label">课程标签</span><span>{{ (localCourse.tags || []).join('、') || '-' }}</span></div>
-                <div class="meta-item"><span class="meta-label">我的进度</span><span>{{ localCourse.progressPercent || 0 }}%</span></div>
               </div>
-            </a-tab-pane>
-
-            <a-tab-pane key="notes" tab="笔记">
-              <a-textarea v-model:value="noteContent" placeholder="记录学习笔记..." :rows="5" />
-              <a-button type="primary" style="margin-top: 8px" :loading="noteSaving" @click="handleSaveNote">
-                {{ notesSaved ? '已保存' : '保存笔记' }}
-              </a-button>
             </a-tab-pane>
 
             <a-tab-pane v-if="localCourse.canViewLearningStatus" key="learning" tab="学习情况">
@@ -192,7 +177,7 @@
               v-for="(chapter, idx) in localCourse.chapters"
               :key="chapter.id || idx"
               class="chapter-item"
-              :class="{ active: currentChapterIdx === idx, locked: chapter.locked }"
+              :class="{ active: currentChapterIdx === idx }"
               @click="selectChapter(idx)"
             >
               <div class="chapter-main">
@@ -201,16 +186,6 @@
                   <div class="chapter-title">{{ chapter.title }}</div>
                   <div class="chapter-meta">{{ getChapterMetaText(chapter) }}</div>
                 </div>
-              </div>
-              <div class="chapter-status">
-                <LockOutlined v-if="chapter.locked" style="color: #bbb" />
-                <CheckCircleFilled v-else-if="chapter.progress >= 100" style="color: #52c41a; font-size: 18px" />
-                <a-progress
-                  v-else-if="chapter.progress > 0"
-                  type="circle"
-                  :percent="chapter.progress"
-                  :width="32"
-                />
               </div>
             </div>
           </div>
@@ -223,7 +198,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
-import { CheckCircleFilled, DeleteOutlined, DownloadOutlined, EditOutlined, LockOutlined } from '@ant-design/icons-vue'
+import { DeleteOutlined, DownloadOutlined, EditOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import {
   bindCourseResource,
@@ -304,7 +279,7 @@ const resourceColumns = [
 ]
 const learningStatusColumns = [
   { title: '学员', dataIndex: 'userName', key: 'userName', width: 140 },
-  { title: '警号', dataIndex: 'policeId', key: 'policeId', width: 120 },
+  { title: '身份证号', dataIndex: 'idCardNumber', key: 'idCardNumber', width: 180 },
   { title: '部门', dataIndex: 'departmentName', key: 'departmentName', width: 180 },
   { title: '课程进度', dataIndex: 'progressPercent', key: 'progressPercent', width: 240 },
   { title: '最近章节', dataIndex: 'lastStudiedChapterTitle', key: 'lastStudiedChapterTitle' },
@@ -611,11 +586,11 @@ async function persistCurrentProgress(options = {}) {
 
 async function selectChapter(index) {
   const chapter = localCourse.value.chapters[index]
-  if (!chapter || chapter.locked || index === currentChapterIdx.value) {
+  if (!chapter || index === currentChapterIdx.value) {
     return
   }
   try {
-    await persistCurrentProgress({ force: true })
+    // 保留接口调用能力，未来可在培训班场景恢复进度记录
   } catch {
     message.warning('上一章节进度保存失败，已继续切换章节')
   }
@@ -695,13 +670,11 @@ async function handleEditorSuccess() {
 }
 
 function handleVisibilityChange() {
-  if (document.visibilityState === 'hidden') {
-    persistCurrentProgress({ force: true, preferKeepalive: true }).catch(() => {})
-  }
+  // 学员进度记录已移至培训班，保留函数占位
 }
 
 function handleBeforeUnload() {
-  persistCurrentProgress({ force: true, preferKeepalive: true }).catch(() => {})
+  // 学员进度记录已移至培训班，保留函数占位
 }
 
 watch(activeTab, (tab) => {
@@ -737,12 +710,8 @@ onBeforeUnmount(() => {
   window.removeEventListener('pagehide', handleBeforeUnload)
 })
 
-onBeforeRouteLeave(async () => {
-  try {
-    await persistCurrentProgress({ force: true })
-  } catch {
-    // 路由离开时不阻塞导航。
-  }
+onBeforeRouteLeave(() => {
+  // 学员进度记录已移至培训班，此处保留钩子占位
   return true
 })
 </script>

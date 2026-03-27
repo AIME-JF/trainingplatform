@@ -57,7 +57,7 @@
           <a-input
             v-model:value="username"
             size="large"
-            placeholder="请输入账号"
+            placeholder="请输入用户名或身份证号"
             allow-clear
             @press-enter="handlePasswordLogin"
           >

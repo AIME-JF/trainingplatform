@@ -592,7 +592,7 @@
         size="small"
       >
         <a-table-column title="姓名" data-index="userNickname" key="userNickname" />
-        <a-table-column title="警号" data-index="policeId" key="policeId" width="120" />
+        <a-table-column title="身份证号" data-index="idCardNumber" key="idCardNumber" width="180" />
         <a-table-column title="单位" key="departments" :custom-render="({ record }) => (record.departments || []).join(' / ') || '-'" />
         <a-table-column title="联系电话" data-index="contactPhone" key="contactPhone" width="140" />
         <a-table-column title="住宿" key="needAccommodation" width="80" :custom-render="({ record }) => (record.needAccommodation ? '需要' : '无需')" />
@@ -833,7 +833,7 @@ function syncTrainingRoster(students = [], studentIds = []) {
     id: item.userId,
     username: item.userName,
     nickname: item.userNickname,
-    policeId: item.policeId,
+    idCardNumber: item.idCardNumber,
     departments: (item.departments || []).map((name) => ({ name })),
   }))
   rosterUserList.value = mappedStudents.length
@@ -1592,7 +1592,7 @@ async function maybeAutoOpenDetailTour() {
 const mockStudents = computed(() => trainingData.studentIds.map(userId => {
   const u = userMap.value[userId] || {}
   const name = u.nickname || u.username || '未知学员'
-  const policeId = u.policeId || String(userId)
+  const idCardNumber = u.idCardNumber || String(userId)
   const unit = (u.departments && u.departments.length > 0) ? u.departments[0].name : '未分配'
   // 计算该学员所有的记录
   const records = (trainingData.checkinRecords || []).filter(cr => cr.studentId === userId)
@@ -1601,11 +1601,11 @@ const mockStudents = computed(() => trainingData.studentIds.map(userId => {
     const score = records.reduce((acc, r) => acc + (r.status === 'on_time' ? 100 : r.status === 'late' ? 80 : 0), 0)
     cRate = Math.round(score / records.length)
   }
-  return { key: userId, name, policeId, unit, progress: Math.floor(Math.random() * 20 + 80), checkinRate: cRate }
+  return { key: userId, name, idCardNumber, unit, progress: Math.floor(Math.random() * 20 + 80), checkinRate: cRate }
 }))
 
 const filteredStudents = computed(() =>
-  studentSearch.value ? mockStudents.value.filter(s => s.name.includes(studentSearch.value) || s.policeId.includes(studentSearch.value)) : mockStudents.value
+  studentSearch.value ? mockStudents.value.filter(s => s.name.includes(studentSearch.value) || (s.idCardNumber || '').includes(studentSearch.value)) : mockStudents.value
 )
 
 function handleGlobalCheckin() {
@@ -1818,7 +1818,7 @@ function handleSkipCurrentSession() {
 
 const baseStudentColumns = [
   { title: '姓名', dataIndex: 'name', key: 'name' },
-  { title: '工号', dataIndex: 'policeId', key: 'policeId' },
+  { title: '身份证号', dataIndex: 'idCardNumber', key: 'idCardNumber' },
   { title: '单位', dataIndex: 'unit', key: 'unit' },
   { title: '学习进度', key: 'progress', width: 120 },
   { title: '签到率', key: 'checkin', width: 80 },
@@ -1923,19 +1923,19 @@ const availableStudents = computed(() => {
   let list = allUserList.value.filter(u => !existing.has(u.id)).map(u => ({
     id: u.id,
     name: u.nickname || u.username,
-    policeId: u.policeId || '',
+    idCardNumber: u.idCardNumber || '',
     unit: (u.departments && u.departments.length > 0) ? u.departments[0].name : '未分配'
   }))
   if (addStudentSearch.value) {
     const q = addStudentSearch.value.toLowerCase()
-    list = list.filter(u => u.name.includes(q) || u.policeId.toLowerCase().includes(q))
+    list = list.filter(u => u.name.includes(q) || (u.idCardNumber || '').toLowerCase().includes(q))
   }
   return list
 })
 
 const addStudentColumns = [
   { title: '姓名', dataIndex: 'name', key: 'name' },
-  { title: '工号', dataIndex: 'policeId', key: 'policeId' },
+  { title: '身份证号', dataIndex: 'idCardNumber', key: 'idCardNumber' },
   { title: '单位', dataIndex: 'unit', key: 'unit' },
 ]
 
@@ -2729,10 +2729,10 @@ function exportMsg() {
     ['准入考试', trainingData.admissionExamTitle || '无'],
     [],
   ]
-  const headers = ['姓名', '警号/工号', '单位', '学习进度', '总签到率']
+  const headers = ['姓名', '身份证号', '单位', '学习进度', '总签到率']
   const rows = filteredStudents.value.map(s => [
     s.name, 
-    `\t${s.policeId}`, // 防止长数字科学计数法
+    `\t${s.idCardNumber}`, // 防止长数字科学计数法
     s.unit, 
     `${s.progress}%`, 
     `${s.checkinRate}%`
