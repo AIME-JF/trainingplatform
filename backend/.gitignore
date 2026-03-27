@@ -190,3 +190,4 @@ dmypy.json
 *.xlsx
 
 volumes/
+.claude/
