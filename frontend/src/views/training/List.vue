@@ -147,7 +147,7 @@
               <a-textarea
                 v-model:value="aiChatInput"
                 :rows="5"
-                :maxlength="2000"
+                :maxlength="AI_CHAT_MAX_INPUT_LENGTH"
                 show-count
                 placeholder="例如：下周一开始办一个为期两周的新警执法规范化培训，地点在第一培训基地，30人"
               />
@@ -194,17 +194,21 @@
                   <a-input
                     v-model:value="aiChatInput"
                     placeholder="补充信息..."
-                    :disabled="aiChatSending"
+                    :maxlength="AI_CHAT_MAX_INPUT_LENGTH"
+                    :disabled="aiChatSending || aiChatRoundExceeded"
                     @press-enter="sendAiMessage"
                   />
                   <a-button
                     type="primary"
                     :loading="aiChatSending"
-                    :disabled="!aiChatInput.trim()"
+                    :disabled="!aiChatInput.trim() || aiChatRoundExceeded"
                     @click="sendAiMessage"
                   >
                     <template #icon><SendOutlined /></template>
                   </a-button>
+                </div>
+                <div v-if="aiChatRoundExceeded" class="ai-chat-round-hint">
+                  对话轮次已达上限，请关闭后重新开始新对话
                 </div>
               </div>
             </template>
@@ -529,6 +533,10 @@ const aiChatSessionId = ref(null)
 const aiChatMessages = ref([])
 const aiChatAbortController = ref(null)
 const aiChatMessagesRef = ref(null)
+const AI_CHAT_MAX_ROUNDS = 12
+const AI_CHAT_MAX_INPUT_LENGTH = 500
+const aiChatRoundCount = computed(() => aiChatMessages.value.filter(m => m.role === 'user').length)
+const aiChatRoundExceeded = computed(() => aiChatRoundCount.value >= AI_CHAT_MAX_ROUNDS)
 
 function scrollChatToBottom() {
   nextTick(() => {
@@ -576,6 +584,11 @@ function openAiCreateModal() {
 async function sendAiMessage() {
   const text = aiChatInput.value.trim()
   if (!text || aiChatSending.value) return
+  if (aiChatRoundExceeded.value) {
+    aiChatMessages.value.push({ role: 'assistant', content: '对话轮次已达上限，请关闭后重新开始新对话。', type: 'error' })
+    scrollChatToBottom()
+    return
+  }
 
   aiChatMessages.value.push({ role: 'user', content: text })
   aiChatInput.value = ''
@@ -602,8 +615,9 @@ async function sendAiMessage() {
     })
 
     if (!response.ok) {
-      const err = await response.text().catch(() => '请求失败')
-      aiChatMessages.value.push({ role: 'assistant', content: `请求失败：${err}`, type: 'error' })
+      const err = await response.text().catch(() => '')
+      console.error('[智能建班] 请求失败:', response.status, err)
+      aiChatMessages.value.push({ role: 'assistant', content: '服务器繁忙，请稍后重试', type: 'error' })
       return
     }
 
@@ -636,7 +650,8 @@ async function sendAiMessage() {
     }
   } catch (e) {
     if (e.name !== 'AbortError') {
-      aiChatMessages.value.push({ role: 'assistant', content: `连接异常：${e.message}`, type: 'error' })
+      console.error('[智能建班] 连接异常:', e)
+      aiChatMessages.value.push({ role: 'assistant', content: '服务器繁忙，请稍后重试', type: 'error' })
     }
   } finally {
     aiChatSending.value = false
@@ -668,7 +683,8 @@ function handleSseEvent(event, data) {
     fetchTrainingStats()
   } else if (event === 'error') {
     aiChatMessages.value = aiChatMessages.value.filter(m => m.type !== 'thinking')
-    aiChatMessages.value.push({ role: 'assistant', content: data.text, type: 'error' })
+    console.error('[智能建班] 后端错误:', data.text)
+    aiChatMessages.value.push({ role: 'assistant', content: '服务器繁忙，请稍后重试', type: 'error' })
   } else if (event === 'done') {
     return
   }
@@ -1338,5 +1354,12 @@ watch(
   gap: 8px;
   padding-top: 12px;
   border-top: 1px solid #f0f0f0;
+}
+
+.ai-chat-round-hint {
+  text-align: center;
+  font-size: 12px;
+  color: #cf1322;
+  padding-top: 8px;
 }
 </style>

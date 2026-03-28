@@ -90,6 +90,10 @@ class TrainingCreateParser(BaseAIAgent):
         conversation: list[dict[str, str]],
     ) -> dict[str, Any]:
         today = date.today()
+        context_hint = ""
+        if context:
+            context_hint = f"\n\n当前已提取的信息：\n{json.dumps(context, ensure_ascii=False, default=str)}\n请在此基础上合并用户新提供的字段。"
+
         system_prompt = (
             "你是培训班创建助手。根据用户输入提取培训班信息，仅返回 JSON 对象。\n"
             f"今天日期：{today.isoformat()}（{['周一','周二','周三','周四','周五','周六','周日'][today.weekday()]}）\n"
@@ -111,17 +115,17 @@ class TrainingCreateParser(BaseAIAgent):
             "- 如果说「两周」「10天」等时长，结合开始日期推算结束日期\n"
             "- 只返回用户明确提到的字段，未提到的不要返回\n"
             "- 仅返回 JSON，不要附加任何解释文字\n"
+            + context_hint
         )
 
-        # 构建对话历史
+        # 构建多轮对话：1 个 system + 历史 user/assistant 交替 + 当前 user
         messages = [{"role": "system", "content": system_prompt}]
-        for msg in conversation:
-            messages.append(msg)
-        if context:
-            messages.append({
-                "role": "system",
-                "content": f"已提取的信息：{json.dumps(context, ensure_ascii=False, default=str)}"
-            })
+        # 取最近的对话历史（不含本轮，因为本轮 user 单独追加）
+        # conversation 中最后一条是本轮 user 消息（由 views 层追加），取之前的历史
+        history = conversation[:-1] if conversation else []
+        for msg in history:
+            if msg.get("role") in ("user", "assistant"):
+                messages.append({"role": msg["role"], "content": msg["content"]})
         messages.append({"role": "user", "content": user_input})
 
         try:
