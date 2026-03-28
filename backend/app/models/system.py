@@ -70,3 +70,19 @@ class Config(Base):
 
     # 关系
     group = relationship("ConfigGroup", back_populates="configs")
+
+
+class DashboardModuleConfig(Base):
+    """看板模块配置表"""
+    __tablename__ = "dashboard_module_configs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    module_key = Column(String(50), unique=True, nullable=False, index=True, comment="模块标识")
+    module_name = Column(String(100), nullable=False, comment="模块名称")
+    module_description = Column(Text, comment="模块描述")
+    category = Column(String(50), nullable=False, default="general", comment="模块分类: general/training")
+    visible_role_codes = Column(JSON, nullable=False, default=list, comment="可见角色编码列表")
+    sort_order = Column(Integer, default=0, comment="排序号")
+    is_active = Column(Boolean, default=True, comment="是否启用")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), comment="更新时间")

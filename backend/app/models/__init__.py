@@ -6,7 +6,7 @@ from .role import Role, user_roles
 from .permission import Permission, role_permissions, department_permissions
 from .department import Department, user_departments
 from .police_type import PoliceType, user_police_types
-from .system import Config, ConfigGroup, ConfigFormat
+from .system import Config, ConfigGroup, ConfigFormat, DashboardModuleConfig
 from .course import (
     Course, Chapter, CourseNote, CourseProgress, CourseTag, CourseTagRelation, CourseQA
 )
@@ -46,6 +46,7 @@ __all__ = [
     "Config",
     "ConfigGroup",
     "ConfigFormat",
+    "DashboardModuleConfig",
     "user_roles",
     "role_permissions",
     "user_departments",

@@ -334,6 +334,7 @@ function getSelectedMenuKeyByPath(path) {
   if (path.startsWith('/system/roles')) return '/system/roles'
   if (path.startsWith('/system/departments')) return '/system/departments'
   if (path.startsWith('/system/dict')) return '/system/dict'
+  if (path.startsWith('/system/dashboard-modules')) return '/system/dashboard-modules'
   if (path.startsWith('/system/configs')) return '/system/configs'
   if (path.startsWith('/profile')) return '/profile'
   return path

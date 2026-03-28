@@ -95,4 +95,43 @@ class PublicConfigResponse(BaseModel):
     group_key: str = Field(..., description="配置组标识")
 
     class Config:
-        from_attributes = True 
+        from_attributes = True
+
+
+# 看板模块配置
+class DashboardModuleConfigCreate(BaseModel):
+    """创建看板模块配置"""
+    module_key: str = Field(..., max_length=50, description="模块标识")
+    module_name: str = Field(..., max_length=100, description="模块名称")
+    module_description: Optional[str] = Field(None, description="模块描述")
+    category: str = Field("general", description="模块分类: general/training")
+    visible_role_codes: List[str] = Field(default_factory=list, description="可见角色编码列表")
+    sort_order: int = Field(0, description="排序号")
+    is_active: bool = Field(True, description="是否启用")
+
+
+class DashboardModuleConfigUpdate(BaseModel):
+    """更新看板模块配置"""
+    module_name: Optional[str] = Field(None, max_length=100, description="模块名称")
+    module_description: Optional[str] = Field(None, description="模块描述")
+    category: Optional[str] = Field(None, description="模块分类")
+    visible_role_codes: Optional[List[str]] = Field(None, description="可见角色编码列表")
+    sort_order: Optional[int] = Field(None, description="排序号")
+    is_active: Optional[bool] = Field(None, description="是否启用")
+
+
+class DashboardModuleConfigResponse(BaseModel):
+    """看板模块配置响应"""
+    id: int
+    module_key: str
+    module_name: str
+    module_description: Optional[str] = None
+    category: str
+    visible_role_codes: List[str] = []
+    sort_order: int = 0
+    is_active: bool = True
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True

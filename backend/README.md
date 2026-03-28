@@ -290,6 +290,14 @@ AI 个训任务支持：
 - `init_data.py` 会执行配置模板同步，并刷新 Redis 缓存
 - 所有系统配置接口目前都只允许 `admin` 使用
 
+### 看板模块配置域
+
+- 看板模块配置表：`DashboardModuleConfig`
+- 接口：`GET /api/v1/system/dashboard-modules`（普通用户按角色过滤，管理员获取全部）、`PUT /api/v1/system/dashboard-modules/{id}`（仅管理员）
+- 模块为系统预置，不支持前端新增或删除；首次访问时自动初始化 8 个默认模块
+- 每个模块包含：`module_key`（标识）、`module_name`（名称）、`category`（综合数据 / 培训运营）、`visible_role_codes`（可见角色列表，空则全部可见）、`sort_order`（排序）、`is_active`（启停）
+- 前端数据看板页面根据后端返回的模块列表动态渲染，只请求可见模块对应的数据接口
+
 ### 数据范围域
 
 系统把"功能权限"和"数据范围"拆开：

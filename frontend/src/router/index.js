@@ -154,9 +154,7 @@ const router = createRouter({
         },
         {
           path: 'training/board',
-          name: 'TrainingBoard',
-          component: () => import('../views/training/Board.vue'),
-          meta: { title: '培训看板', anyPermissions: REPORT_PAGE_PERMISSIONS },
+          redirect: '/report',
         },
         {
           path: 'training/:id',
@@ -273,8 +271,14 @@ const router = createRouter({
         {
           path: 'report',
           name: 'Report',
-          component: () => import('../views/report/Dashboard.vue'),
+          component: () => import('../views/report/DataBoard.vue'),
           meta: { title: '数据看板', anyPermissions: REPORT_PAGE_PERMISSIONS },
+        },
+        {
+          path: 'system/dashboard-modules',
+          name: 'DashboardModuleManage',
+          component: () => import('../views/system/DashboardModuleManage.vue'),
+          meta: { title: '看板配置', roles: ['admin'] },
         },
         {
           path: 'system/users',

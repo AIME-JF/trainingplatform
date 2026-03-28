@@ -23,3 +23,12 @@ export function getConfigDetail(configId) {
 export function updateConfig(configId, data) {
   return request.put(`/system/configs/${configId}`, data)
 }
+
+// 看板模块配置
+export function getDashboardModules() {
+  return request.get('/system/dashboard-modules')
+}
+
+export function updateDashboardModule(id, data) {
+  return request.put(`/system/dashboard-modules/${id}`, data)
+}

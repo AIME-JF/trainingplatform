@@ -156,11 +156,6 @@ export const appMenuConfig = [
         anyPermissions: REPORT_PAGE_PERMISSIONS,
       },
       {
-        key: '/training/board',
-        label: '培训看板',
-        anyPermissions: REPORT_PAGE_PERMISSIONS,
-      },
-      {
         key: '/trainee',
         label: '学员库',
         anyPermissions: USER_ARCHIVE_PAGE_PERMISSIONS,
@@ -228,6 +223,11 @@ export const appMenuConfig = [
         key: '/system/dict',
         label: '字典管理',
         anyPermissions: DICT_MANAGE_PAGE_PERMISSIONS,
+      },
+      {
+        key: '/system/dashboard-modules',
+        label: '看板配置',
+        roles: ['admin'],
       },
       {
         key: '/system/configs',

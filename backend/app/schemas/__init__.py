@@ -26,7 +26,8 @@ from .knowledge_point import (
 from .system import (
     ConfigCreate, ConfigUpdate, ConfigResponse,
     ConfigGroupCreate, ConfigGroupUpdate, ConfigGroupResponse, ConfigGroupDetailResponse,
-    PublicConfigResponse
+    PublicConfigResponse,
+    DashboardModuleConfigCreate, DashboardModuleConfigUpdate, DashboardModuleConfigResponse,
 )
 from .response import StandardResponse, PaginatedResponse
 

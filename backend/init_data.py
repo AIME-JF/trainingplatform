@@ -468,6 +468,50 @@ def mark_db_initialized():
         db.commit()
 
 
+def init_dashboard_modules():
+    """初始化看板模块默认配置"""
+    from app.models.system import DashboardModuleConfig
+
+    DEFAULT_MODULES = [
+        {"module_key": "kpi_overview", "module_name": "核心指标概览", "category": "general", "sort_order": 1,
+         "module_description": "参训总数、课程完成率、平均考核分、考试通过率",
+         "visible_role_codes": ["admin", "instructor", "student"]},
+        {"module_key": "training_kpi", "module_name": "培训运营指标", "category": "training", "sort_order": 2,
+         "module_description": "进行中培训班、本月参训人数、培训完成率、待审核学员",
+         "visible_role_codes": ["admin", "instructor"]},
+        {"module_key": "completion_trend", "module_name": "完成率趋势", "category": "general", "sort_order": 3,
+         "module_description": "按月统计课程完成率变化趋势",
+         "visible_role_codes": ["admin", "instructor"]},
+        {"module_key": "training_trend", "module_name": "培训趋势", "category": "training", "sort_order": 4,
+         "module_description": "近 6 个月培训完成率变化趋势",
+         "visible_role_codes": ["admin", "instructor"]},
+        {"module_key": "police_type_dist", "module_name": "警种分布", "category": "general", "sort_order": 5,
+         "module_description": "按警种统计学习时长分布",
+         "visible_role_codes": ["admin"]},
+        {"module_key": "city_attendance", "module_name": "各单位参训人数", "category": "training", "sort_order": 6,
+         "module_description": "各部门本月参训人数排名",
+         "visible_role_codes": ["admin"]},
+        {"module_key": "city_ranking", "module_name": "各单位考核排名", "category": "general", "sort_order": 7,
+         "module_description": "各部门平均考核得分排名",
+         "visible_role_codes": ["admin"]},
+        {"module_key": "city_completion", "module_name": "各单位完成率排名", "category": "training", "sort_order": 8,
+         "module_description": "各部门培训完成率排名",
+         "visible_role_codes": ["admin"]},
+    ]
+
+    with Session(engine) as db:
+        for item in DEFAULT_MODULES:
+            existing = db.query(DashboardModuleConfig).filter(
+                DashboardModuleConfig.module_key == item["module_key"]
+            ).first()
+            if existing:
+                continue
+            record = DashboardModuleConfig(**item, is_active=True)
+            db.add(record)
+        db.commit()
+        logger.info(f"看板模块配置初始化完成")
+
+
 def main():
     """主函数"""
     try:
@@ -485,6 +529,7 @@ def main():
         init_police_types()
         init_roles()
         init_users()
+        init_dashboard_modules()
         mark_db_initialized()
 
         logger.info("数据库初始化完成！")
