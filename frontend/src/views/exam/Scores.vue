@@ -111,7 +111,6 @@ import { BarChart, RadarChart } from 'echarts/charts'
 import { GridComponent, TooltipComponent, RadarComponent, LegendComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import { DownloadOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
-import { computeScoreKPI } from '@/mock/scores'
 import { getExams, getExamRecordsAnalysis } from '@/api/exam'
 import { useAuthStore } from '@/stores/auth'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
@@ -125,7 +124,25 @@ const examList = ref([])
 const students = ref([])
 const canExportScores = computed(() => authStore.hasPermission('GET_EXAM_SCORES'))
 
-const kpiCards = computed(() => computeScoreKPI(filteredStudents.value))
+const kpiCards = computed(() => {
+  const list = filteredStudents.value
+  const count = list.length
+  if (!count) return [
+    { label: '参考人数', value: 0, unit: '人', color: '#003087' },
+    { label: '班级平均分', value: 0, unit: '分', color: '#52c41a' },
+    { label: '最高分', value: 0, unit: '分', color: '#c8a84b' },
+    { label: '通过率', value: 0, unit: '%', color: '#fa8c16' },
+  ]
+  const avg = (list.reduce((s, x) => s + (x.score || 0), 0) / count).toFixed(1)
+  const max = Math.max(...list.map(s => s.score || 0))
+  const passRate = ((list.filter(s => (s.score || 0) >= 60).length / count) * 100).toFixed(1)
+  return [
+    { label: '参考人数', value: count, unit: '人', color: '#003087' },
+    { label: '班级平均分', value: avg, unit: '分', color: '#52c41a' },
+    { label: '最高分', value: max, unit: '分', color: '#c8a84b' },
+    { label: '通过率', value: passRate, unit: '%', color: '#fa8c16' },
+  ]
+})
 
 const barOption = ref({})
 const radarOption = ref({})

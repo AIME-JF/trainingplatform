@@ -198,7 +198,6 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { MOCK_WEEK_SCHEDULE } from '@/mock/schedules'
 import {
   getTrainings,
   getTraining,
@@ -665,7 +664,7 @@ const currentScheduleItems = computed(() => {
     })
     return items
   }
-  return MOCK_WEEK_SCHEDULE.items || []
+  return []
 })
 
 const getScheduleForDay = (weekday) => currentScheduleItems.value.filter(s => s.day === weekday)

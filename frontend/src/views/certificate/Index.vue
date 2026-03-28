@@ -89,26 +89,26 @@ import { PlusOutlined, DownloadOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '../../stores/auth.js'
 import { getCertificates, createCertificate } from '@/api/certificate'
 import { getTrainings } from '@/api/training'
-import { MOCK_USER_LIST } from '../../mock/users.js'
+import { getUsers } from '@/api/user'
 
 const authStore = useAuthStore()
 const isAdmin = authStore.isAdmin
 
 const certificates = ref([])
 const endedTrainings = ref([])
-
-// 动态下拉数据
-const studentOptions = MOCK_USER_LIST.filter(u => u.status === 'active')
+const studentOptions = ref([])
 
 onMounted(async () => {
   try {
-    const [certRes, trainingRes] = await Promise.all([
+    const [certRes, trainingRes, userRes] = await Promise.all([
       getCertificates({ size: -1 }),
-      getTrainings({ size: -1 })
+      getTrainings({ size: -1 }),
+      getUsers({ size: -1, role: 'student' }),
     ])
     certificates.value = certRes.items || certRes || []
     const allTrainings = trainingRes.items || trainingRes || []
     endedTrainings.value = allTrainings.filter(t => t.status === 'ended' || t.status === 'active')
+    studentOptions.value = (userRes.items || []).filter(u => u.isActive !== false)
   } catch { /* ignore */ }
 })
 

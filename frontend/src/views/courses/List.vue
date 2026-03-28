@@ -127,8 +127,17 @@ import { message } from 'ant-design-vue'
 import { deleteCourse as apiDeleteCourse, getCourses } from '@/api/course'
 import { getUsers } from '@/api/user'
 import { useAuthStore } from '@/stores/auth'
-import { COURSE_CATEGORIES } from '@/mock/courses'
 import CourseEditorModal from './components/CourseEditorModal.vue'
+
+const COURSE_CATEGORIES = [
+  { key: 'all', label: '全部课程' },
+  { key: 'law', label: '法律法规' },
+  { key: 'fraud', label: '专项业务' },
+  { key: 'traffic', label: '交通管理' },
+  { key: 'community', label: '基层警务' },
+  { key: 'cybersec', label: '科技应用' },
+  { key: 'physical', label: '体能技能' },
+]
 
 const router = useRouter()
 const authStore = useAuthStore()

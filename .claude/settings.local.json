@@ -3,7 +3,8 @@
     "allow": [
       "Bash(ls backend/alembic/versions/*.py)",
       "Bash(python -c \"import py_compile; py_compile.compile\\(''backend/app/agents/teaching_resource_content_agent.py'', doraise=True\\); print\\(''OK''\\)\")",
-      "Bash(find /g/exam/police-training-platform/police-training-platform/backend -type f -name *report* -o -name *board* -o -name *dashboard*)"
+      "Bash(find /g/exam/police-training-platform/police-training-platform/backend -type f -name *report* -o -name *board* -o -name *dashboard*)",
+      "Bash(cd:*)"
     ]
   }
 }

@@ -146,26 +146,30 @@ import VChart from 'vue-echarts'
 import { useAuthStore } from '@/stores/auth'
 import { getProfile, getStudyStats, getExamHistory } from '@/api/profile'
 import { getCertificates } from '@/api/certificate'
-import { MOCK_ABILITIES, MOCK_POINT_HISTORY } from '@/mock/profile'
-
 use([CanvasRenderer, RadarChart, TooltipComponent])
 
 const authStore = useAuthStore()
 const user = authStore.currentUser
 const activeTab = ref('study')
 const editMode = ref(false)
-const points = user.studyHours ? user.studyHours * 10 + 6 : 1286
-const rank = user.role === 'student' ? 3 : 1
-const globalRankPercent = user.role === 'student' ? 12 : 5
+const points = user.studyHours ? user.studyHours * 10 + 6 : 0
+const rank = 0
+const globalRankPercent = 0
 
 const studyStats = [
-  { icon: '📚', label: '已学课程', value: (user.examCount || 12) + '门', color: '#003087' },
-  { icon: '⏱', label: '总学时', value: (user.studyHours || 48) + 'h', color: '#52c41a' },
-  { icon: '✅', label: '平均分', value: (user.avgScore || 86) + '分', color: '#faad14' },
-  { icon: '🏆', label: '通过考试', value: Math.round((user.examCount || 8) * 0.6) + '次', color: '#c8a84b' },
+  { icon: '📚', label: '已学课程', value: (user.examCount || 0) + '门', color: '#003087' },
+  { icon: '⏱', label: '总学时', value: (user.studyHours || 0) + 'h', color: '#52c41a' },
+  { icon: '✅', label: '平均分', value: (user.avgScore || 0) + '分', color: '#faad14' },
+  { icon: '🏆', label: '通过考试', value: (user.examCount || 0) + '次', color: '#c8a84b' },
 ]
 
-const abilities = MOCK_ABILITIES
+const abilities = [
+  { label: '法律知识', score: 0 },
+  { label: '执法规范', score: 0 },
+  { label: '证据意识', score: 0 },
+  { label: '体能标准', score: 0 },
+  { label: '警察素养', score: 0 },
+]
 
 const radarOption = {
   radar: {
@@ -213,7 +217,7 @@ const examColumns = [
 
 const certList = ref([])
 
-const pointHistory = MOCK_POINT_HISTORY
+const pointHistory = []
 </script>
 
 <style scoped>

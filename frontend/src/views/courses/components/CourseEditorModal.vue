@@ -150,8 +150,16 @@ import { createCourse, createCourseTag, getCourse, getCourseTags, updateCourse }
 import { getResource, getResources } from '@/api/resource'
 import { getUsers } from '@/api/user'
 import AdmissionScopeSelector from '@/views/exam/components/AdmissionScopeSelector.vue'
-import { COURSE_CATEGORIES } from '@/mock/courses'
 import { useCreatableTagSelect } from '@/utils/creatableTagSelect'
+
+const COURSE_CATEGORIES = [
+  { key: 'law', label: '法律法规' },
+  { key: 'fraud', label: '专项业务' },
+  { key: 'traffic', label: '交通管理' },
+  { key: 'community', label: '基层警务' },
+  { key: 'cybersec', label: '科技应用' },
+  { key: 'physical', label: '体能技能' },
+]
 import CourseChapterResourceSelector from './CourseChapterResourceSelector.vue'
 
 const props = defineProps({
@@ -167,7 +175,7 @@ const props = defineProps({
 
 const emit = defineEmits(['update:open', 'success'])
 
-const courseCategories = COURSE_CATEGORIES.filter((item) => item.key !== 'all')
+const courseCategories = COURSE_CATEGORIES
 const categoryColorMap = {
   law: '#003087',
   fraud: '#8B1A1A',
