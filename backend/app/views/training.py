@@ -41,6 +41,7 @@ from app.schemas import (
 )
 from app.services.training import TrainingService
 from app.utils.authz import can_manage_training, can_update_training, can_view_training, is_admin_user, is_instructor_user
+from logger import logger
 
 router = APIRouter(prefix="/trainings", tags=["培训管理"])
 
@@ -780,3 +781,149 @@ def remove_training_resource(
     if not ok:
         return StandardResponse(code=404, message="绑定关系不存在")
     return StandardResponse(message="解绑成功")
+
+
+# ===== 智能创建培训班（SSE 流式） =====
+
+import asyncio
+import json as _json
+import uuid as _uuid
+
+from fastapi import Request
+from fastapi.responses import StreamingResponse as _StreamingResponse
+from pydantic import BaseModel as _BaseModel
+
+from app.agents.training_create_parser import TrainingCreateParser
+from app.database import get_redis
+
+
+class _AiCreateRequest(_BaseModel):
+    session_id: Optional[str] = None
+    message: str
+
+
+@router.post("/ai-create", summary="智能创建培训班（SSE）")
+async def ai_create_training(
+    data: _AiCreateRequest,
+    request: Request,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_permission(db, current_user, "CREATE_TRAINING")
+    _require_admin_or_instructor(db, current_user.user_id)
+
+    redis = get_redis()
+    session_id = data.session_id or str(_uuid.uuid4())
+    cache_key = f"training_ai_create:{session_id}"
+
+    # 加载或初始化会话上下文
+    raw = redis.get(cache_key)
+    session_data = _json.loads(raw) if raw else {"fields": {}, "conversation": []}
+    context = session_data["fields"]
+    conversation = session_data["conversation"]
+
+    # 追加用户消息到对话历史
+    conversation.append({"role": "user", "content": data.message})
+
+    parser = TrainingCreateParser(db)
+    event_queue = asyncio.Queue()
+
+    def _worker():
+        """在子线程中执行同步 LLM 调用，通过 queue 推送 SSE 事件"""
+        try:
+            event_queue.put_nowait(_sse_event("thinking", {"text": "正在分析您的需求..."}))
+
+            result = parser.parse_round(data.message, context, conversation)
+
+            if result.get("cancelled"):
+                event_queue.put_nowait(_sse_event("cancelled", {"text": "已取消"}))
+                return
+
+            fields = result["fields"]
+
+            conversation.append({
+                "role": "assistant",
+                "content": _json.dumps(fields, ensure_ascii=False, default=str),
+            })
+            redis.setex(cache_key, 600, _json.dumps(
+                {"fields": fields, "conversation": conversation},
+                ensure_ascii=False, default=str,
+            ))
+
+            if result["complete"]:
+                event_queue.put_nowait(_sse_event("thinking", {"text": "信息已齐全，正在创建培训班..."}))
+
+                try:
+                    payload = parser.build_training_create_payload(fields)
+                    training_data = TrainingCreate(**payload)
+                    controller = TrainingController(db)
+                    training = controller.create_training(training_data, current_user.user_id)
+                    redis.delete(cache_key)
+                    event_queue.put_nowait(_sse_event("created", {
+                        "training_id": training.id,
+                        "training_name": training.name,
+                        "text": f"培训班「{training.name}」创建成功",
+                    }))
+                except Exception as e:
+                    logger.error(f"智能创建培训班失败: {e}")
+                    event_queue.put_nowait(_sse_event("error", {"text": f"创建失败：{str(e)}"}))
+            else:
+                questions = result.get("questions", ["请补充缺失信息"])
+                event_queue.put_nowait(_sse_event("question", {
+                    "session_id": session_id,
+                    "fields": _serialize_fields(fields),
+                    "missing": result["missing"],
+                    "questions": questions,
+                    "text": questions[0] if questions else "请补充缺失信息",
+                }))
+
+            event_queue.put_nowait(_sse_event("done", {}))
+        except Exception as e:
+            logger.error(f"智能创建培训班 SSE 异常: {e}")
+            event_queue.put_nowait(_sse_event("error", {"text": f"系统异常：{str(e)}"}))
+        finally:
+            event_queue.put_nowait(None)  # 结束信号
+
+    async def async_generate():
+        loop = asyncio.get_event_loop()
+        loop.run_in_executor(None, _worker)
+
+        while True:
+            if await request.is_disconnected():
+                parser.cancel()
+                redis.delete(cache_key)
+                break
+
+            try:
+                chunk = await asyncio.wait_for(event_queue.get(), timeout=0.5)
+            except asyncio.TimeoutError:
+                continue
+
+            if chunk is None:
+                break
+            yield chunk
+
+    return _StreamingResponse(
+        async_generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+def _sse_event(event: str, data: dict) -> str:
+    return f"event: {event}\ndata: {_json.dumps(data, ensure_ascii=False, default=str)}\n\n"
+
+
+def _serialize_fields(fields: dict) -> dict:
+    """确保字段可 JSON 序列化"""
+    result = {}
+    for k, v in fields.items():
+        if isinstance(v, (date,)):
+            result[k] = v.isoformat()
+        else:
+            result[k] = v
+    return result

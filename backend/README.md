@@ -83,7 +83,8 @@ backend/
 │   │   ├── paper_assembly_parser.py    # 组卷需求解析
 │   │   ├── personal_training_plan_agent.py  # 个训方案生成
 │   │   ├── teaching_resource_parser.py      # 教学资源需求解析
-│   │   └── teaching_resource_content_agent.py  # 教学资源内容生成
+│   │   ├── teaching_resource_content_agent.py  # 教学资源内容生成
+│   │   └── training_create_parser.py   # 培训班智能创建解析（多轮对话）
 │   ├── tasks/                      # Celery 异步任务（5 个任务模块）
 │   │   ├── ai_question.py          # 智能出题
 │   │   ├── ai_paper_assembly.py    # 自动组卷
@@ -246,7 +247,18 @@ AI 运行时配置：
 - 培训班开班后，课程和课次的任何变更都会写入 `TrainingCourseChangeLog`
 - 培训班支持 `schedule_rule_config`（AI 排课、手工排课、课时换算共用，系统默认值来自配置组 `training_schedule`）
 
-AI 排课任务支持的结构化约束：
+智能建班（`POST /api/v1/trainings/ai-create`，SSE 流式）：
+
+- 用户用自然语言描述培训班需求，系统 LLM 解析为结构化字段
+- 必填项：培训班名称、开始日期、结束日期、培训地点；不全时自动追问
+- 支持实体匹配：培训基地、部门、警种、教官自动查库关联
+- 信息齐全后直接创建培训班，无需手动填表
+- 会话上下文存储在 Redis（TTL 10 分钟），支持多轮对话
+- LLM 调用在子线程执行（`run_in_executor`），不阻塞事件循环
+- 客户端断开时自动中止 LLM 请求并清理 Redis
+- 权限与创建培训班接口一致（需 `CREATE_TRAINING` + 管理员或教官身份）
+
+智能排课任务支持的结构化约束：
 
 - 自然语言要求解析、任务级规则覆盖、固定课程键锁定
 - 主方案 / 备选方案 / 冲突清单

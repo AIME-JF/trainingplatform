@@ -5,16 +5,14 @@
         <h2>{{ authStore.isStudent ? '我的培训' : '培训班管理' }}</h2>
         <p class="page-sub">支持发布挂网、准入考试绑定、名单锁定和训历归档</p>
       </div>
-      <permissions-tooltip
-        v-if="!authStore.isStudent"
-        :allowed="canCreateTraining"
-        tips="需要 CREATE_TRAINING 权限"
-        v-slot="{ disabled }"
-      >
-        <a-button type="primary" :disabled="disabled" @click="openCreateModal">
+      <a-space v-if="canCreateTraining">
+        <a-button @click="openAiCreateModal">
+          <template #icon><RobotOutlined /></template>智能创建
+        </a-button>
+        <a-button type="primary" @click="openCreateModal">
           <template #icon><PlusOutlined /></template>新建培训班
         </a-button>
-      </permissions-tooltip>
+      </a-space>
     </div>
 
     <a-row :gutter="16" style="margin-bottom:20px">
@@ -135,8 +133,87 @@
       width="860px"
       :footer="null"
       @cancel="resetForm"
+      @afterOpenChange="(open) => { if (open && !editingTraining) { /* keep tab */ } }"
     >
-      <div class="create-training-modal">
+      <a-tabs v-if="!editingTraining" v-model:activeKey="createModalTab" style="margin-top: -8px" @change="onCreateTabChange">
+        <a-tab-pane key="ai" tab="智能创建">
+          <div class="ai-create-tab">
+            <!-- 初始输入阶段 -->
+            <template v-if="!aiChatStarted">
+              <div class="ai-create-intro">
+                <div class="ai-create-intro-title">描述您的培训班需求</div>
+                <div class="ai-create-intro-sub">系统将智能解析并创建培训班，信息不全时会自动追问</div>
+              </div>
+              <a-textarea
+                v-model:value="aiChatInput"
+                :rows="5"
+                :maxlength="2000"
+                show-count
+                placeholder="例如：下周一开始办一个为期两周的新警执法规范化培训，地点在第一培训基地，30人"
+              />
+              <a-button
+                type="primary"
+                block
+                style="margin-top: 12px"
+                :disabled="!aiChatInput.trim()"
+                @click="startAiChat"
+              >开始智能创建</a-button>
+            </template>
+
+            <!-- 对话阶段 -->
+            <template v-else>
+              <div class="ai-chat-panel">
+                <div class="ai-chat-messages" ref="aiChatMessagesRef">
+                  <div
+                    v-for="(msg, idx) in aiChatMessages"
+                    :key="idx"
+                    class="ai-chat-msg"
+                    :class="[msg.role, msg.type || '']"
+                  >
+                    <div class="ai-msg-content">
+                      <template v-if="msg.type === 'thinking'">
+                        <a-spin size="small" style="margin-right: 8px" />{{ msg.content }}
+                      </template>
+                      <template v-else-if="msg.type === 'success'">
+                        <div>{{ msg.content }}</div>
+                        <a-button
+                          v-if="msg.trainingId"
+                          type="primary"
+                          size="small"
+                          style="margin-top: 8px"
+                          @click="showCreateModal = false; $router.push(`/training/${msg.trainingId}`)"
+                        >查看详情</a-button>
+                      </template>
+                      <template v-else>
+                        <div style="white-space: pre-wrap">{{ msg.content }}</div>
+                      </template>
+                    </div>
+                  </div>
+                </div>
+                <div class="ai-chat-input">
+                  <a-input
+                    v-model:value="aiChatInput"
+                    placeholder="补充信息..."
+                    :disabled="aiChatSending"
+                    @press-enter="sendAiMessage"
+                  />
+                  <a-button
+                    type="primary"
+                    :loading="aiChatSending"
+                    :disabled="!aiChatInput.trim()"
+                    @click="sendAiMessage"
+                  >
+                    <template #icon><SendOutlined /></template>
+                  </a-button>
+                </div>
+              </div>
+            </template>
+          </div>
+        </a-tab-pane>
+        <a-tab-pane key="form" tab="表单创建" />
+      </a-tabs>
+
+      <div v-show="editingTraining || createModalTab === 'form'" class="create-training-modal">
         <div class="wizard-head">
           <div>
             <div class="wizard-kicker">{{ editingTraining ? '编辑模式' : '快速建班' }}</div>
@@ -144,7 +221,6 @@
           </div>
           <div class="wizard-badge">第 {{ createWizardStep + 1 }}/{{ createWizardItems.length }} 步</div>
         </div>
-
         <a-steps :current="createWizardStep" :items="createWizardItems" size="small" class="wizard-steps" />
 
         <a-form :model="trainingForm" layout="vertical" class="wizard-form">
@@ -354,7 +430,7 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref, onMounted, watch } from 'vue'
+import { computed, nextTick, reactive, ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import dayjs from 'dayjs'
@@ -363,6 +439,8 @@ import {
   DownloadOutlined,
   EnvironmentOutlined,
   PlusOutlined,
+  RobotOutlined,
+  SendOutlined,
   TeamOutlined,
   UserOutlined,
 } from '@ant-design/icons-vue'
@@ -441,6 +519,162 @@ const enrollmentWindow = ref([])
 const locationSourceMode = ref('manual')
 const createWizardStep = ref(0)
 const canCreateTraining = computed(() => authStore.hasPermission('CREATE_TRAINING'))
+
+// ===== 智能创建对话 =====
+const createModalTab = ref('ai')
+const aiChatStarted = ref(false)
+const aiChatInput = ref('')
+const aiChatSending = ref(false)
+const aiChatSessionId = ref(null)
+const aiChatMessages = ref([])
+const aiChatAbortController = ref(null)
+const aiChatMessagesRef = ref(null)
+
+function scrollChatToBottom() {
+  nextTick(() => {
+    const el = aiChatMessagesRef.value
+    if (el) el.scrollTop = el.scrollHeight
+  })
+}
+
+function resetAiChat() {
+  aiChatInput.value = ''
+  aiChatSending.value = false
+  aiChatSessionId.value = null
+  aiChatStarted.value = false
+  aiChatMessages.value = []
+  if (aiChatAbortController.value) {
+    aiChatAbortController.value.abort()
+    aiChatAbortController.value = null
+  }
+}
+
+function onCreateTabChange(key) {
+  if (key === 'ai') {
+    resetAiChat()
+  }
+}
+
+function startAiChat() {
+  const text = aiChatInput.value.trim()
+  if (!text) return
+  aiChatStarted.value = true
+  aiChatInput.value = ''
+  // 把初始输入作为第一条用户消息发送
+  nextTick(() => {
+    aiChatInput.value = text
+    sendAiMessage()
+  })
+}
+
+function openAiCreateModal() {
+  createModalTab.value = 'ai'
+  resetAiChat()
+  showCreateModal.value = true
+}
+
+async function sendAiMessage() {
+  const text = aiChatInput.value.trim()
+  if (!text || aiChatSending.value) return
+
+  aiChatMessages.value.push({ role: 'user', content: text })
+  aiChatInput.value = ''
+  aiChatSending.value = true
+  scrollChatToBottom()
+
+  const controller = new AbortController()
+  aiChatAbortController.value = controller
+
+  try {
+    const token = localStorage.getItem('token')
+    const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+    const response = await fetch(`${baseUrl}/trainings/ai-create`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        session_id: aiChatSessionId.value,
+        message: text,
+      }),
+      signal: controller.signal,
+    })
+
+    if (!response.ok) {
+      const err = await response.text().catch(() => '请求失败')
+      aiChatMessages.value.push({ role: 'assistant', content: `请求失败：${err}`, type: 'error' })
+      return
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+
+      // SSE 以双换行分隔事件块
+      const blocks = buffer.split('\n\n')
+      buffer = blocks.pop() || ''
+
+      for (const block of blocks) {
+        let eventName = ''
+        let eventData = ''
+        for (const line of block.split('\n')) {
+          if (line.startsWith('event: ')) eventName = line.slice(7).trim()
+          else if (line.startsWith('data: ')) eventData = line.slice(6)
+        }
+        if (eventName && eventData) {
+          try {
+            handleSseEvent(eventName, JSON.parse(eventData))
+          } catch { /* ignore parse error */ }
+        }
+      }
+    }
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      aiChatMessages.value.push({ role: 'assistant', content: `连接异常：${e.message}`, type: 'error' })
+    }
+  } finally {
+    aiChatSending.value = false
+    aiChatAbortController.value = null
+  }
+}
+
+function handleSseEvent(event, data) {
+  if (event === 'thinking') {
+    const last = aiChatMessages.value[aiChatMessages.value.length - 1]
+    if (last?.type === 'thinking') {
+      last.content = data.text
+    } else {
+      aiChatMessages.value.push({ role: 'assistant', content: data.text, type: 'thinking' })
+    }
+  } else if (event === 'question') {
+    aiChatSessionId.value = data.session_id
+    aiChatMessages.value = aiChatMessages.value.filter(m => m.type !== 'thinking')
+    aiChatMessages.value.push({ role: 'assistant', content: data.text, type: 'question' })
+  } else if (event === 'created') {
+    aiChatMessages.value = aiChatMessages.value.filter(m => m.type !== 'thinking')
+    aiChatMessages.value.push({
+      role: 'assistant',
+      content: data.text,
+      type: 'success',
+      trainingId: data.training_id,
+    })
+    fetchTrainings()
+    fetchTrainingStats()
+  } else if (event === 'error') {
+    aiChatMessages.value = aiChatMessages.value.filter(m => m.type !== 'thinking')
+    aiChatMessages.value.push({ role: 'assistant', content: data.text, type: 'error' })
+  } else if (event === 'done') {
+    return
+  }
+  scrollChatToBottom()
+}
+
 const createWizardItems = [
   { title: '基础信息', description: '班级名称、时间、地点' },
   { title: '招生设置', description: '报名方式、准入考试' },
@@ -621,11 +855,13 @@ function resetForm() {
   studentImportFileName.value = ''
   createWizardStep.value = 0
   showCreateModal.value = false
+  resetAiChat()
 }
 
 function openCreateModal() {
   if (!canCreateTraining.value) return
   resetForm()
+  createModalTab.value = 'form'
   createWizardStep.value = 0
   showCreateModal.value = true
   ensureInstructorOptionsLoaded(true)
@@ -1007,5 +1243,100 @@ watch(
   .wizard-head,
   .wizard-footer { flex-direction: column; align-items: stretch; }
   .wizard-badge { align-self: flex-start; }
+}
+
+/* 智能创建标签页 */
+.ai-create-tab {
+  padding: 0;
+}
+
+.ai-create-intro {
+  text-align: center;
+  padding: 32px 0 20px;
+}
+
+.ai-create-intro-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #001234;
+  margin-bottom: 8px;
+}
+
+.ai-create-intro-sub {
+  font-size: 13px;
+  color: #8c8c8c;
+}
+
+/* 智能创建对话面板 */
+.ai-chat-panel {
+  display: flex;
+  flex-direction: column;
+  height: 460px;
+}
+
+.ai-chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ai-chat-msg {
+  display: flex;
+  max-width: 85%;
+}
+
+.ai-chat-msg.user {
+  align-self: flex-end;
+}
+
+.ai-chat-msg.assistant {
+  align-self: flex-start;
+}
+
+.ai-msg-content {
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.ai-chat-msg.user .ai-msg-content {
+  background: #003087;
+  color: #fff;
+  border-bottom-right-radius: 4px;
+}
+
+.ai-chat-msg.assistant .ai-msg-content {
+  background: #f5f7fa;
+  color: #333;
+  border-bottom-left-radius: 4px;
+}
+
+.ai-chat-msg.thinking .ai-msg-content {
+  background: #f0f5ff;
+  color: #8c8c8c;
+  font-style: italic;
+}
+
+.ai-chat-msg.success .ai-msg-content {
+  background: #f6ffed;
+  color: #135200;
+  border: 1px solid #b7eb8f;
+}
+
+.ai-chat-msg.error .ai-msg-content {
+  background: #fff2f0;
+  color: #820014;
+  border: 1px solid #ffa39e;
+}
+
+.ai-chat-input {
+  display: flex;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
 }
 </style>
