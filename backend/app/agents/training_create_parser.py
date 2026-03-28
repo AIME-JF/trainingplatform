@@ -130,10 +130,17 @@ class TrainingCreateParser(BaseAIAgent):
 
         try:
             config = self._load_runtime_config()
+            logger.debug(f"[智能建班] provider={config.provider}, model={config.model}, base_url={config.base_url}")
+            logger.debug(f"[智能建班] messages count={len(messages)}")
+            for i, msg in enumerate(messages):
+                logger.debug(f"[智能建班] messages[{i}] role={msg['role']} content_len={len(msg.get('content', ''))}")
+                if len(msg.get("content", "")) < 500:
+                    logger.debug(f"[智能建班] messages[{i}] content={msg['content']}")
             raw = self._call_provider(config, messages)
+            logger.debug(f"[智能建班] LLM raw response length={len(raw)}, content={raw[:500]}")
             return self._parse_json_payload(raw)
         except Exception as e:
-            logger.warning(f"培训班智能创建 LLM 解析失败: {e}")
+            logger.warning(f"培训班智能创建 LLM 解析失败: {e}", exc_info=True)
             return self._parse_with_rules(user_input)
 
     def _parse_with_rules(self, text: str) -> dict[str, Any]:

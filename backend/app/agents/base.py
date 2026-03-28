@@ -61,8 +61,13 @@ class BaseAIAgent:
         if config.temperature is not None:
             request_kwargs["temperature"] = config.temperature
 
+        from logger import logger as _base_logger
+        _base_logger.debug(f"[BaseAIAgent] calling {config.base_url} model={config.model} messages_count={len(messages)}")
         response = client.chat.completions.create(**request_kwargs)
+        choices_count = len(response.choices) if response.choices else 0
         content = response.choices[0].message.content if response.choices else ""
+        finish_reason = response.choices[0].finish_reason if response.choices else "N/A"
+        _base_logger.debug(f"[BaseAIAgent] response choices={choices_count} finish_reason={finish_reason} content_len={len(content or '')} content_preview={str(content or '')[:200]}")
         if not content:
             raise ValueError("OpenAI 未返回有效内容")
         return str(content).strip()
