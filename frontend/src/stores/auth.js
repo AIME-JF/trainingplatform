@@ -127,14 +127,6 @@ export const useAuthStore = defineStore('auth', () => {
     return list.every((permission) => hasPermission(permission))
   }
 
-  function switchRole(roleKey) {
-    // For dev/demo convenience: update role in current user
-    if (currentUser.value) {
-      currentUser.value = { ...currentUser.value, role: roleKey }
-      localStorage.setItem('userInfo', JSON.stringify(currentUser.value))
-    }
-  }
-
   return {
     currentUser,
     isLoggedIn,
@@ -150,6 +142,5 @@ export const useAuthStore = defineStore('auth', () => {
     loginWithPhone,
     logout,
     restoreFromStorage,
-    switchRole,
   }
 })

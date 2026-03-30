@@ -95,22 +95,6 @@
         </div>
 
         <div class="topbar-right">
-          <!-- 演示角色切换 -->
-          <div class="demo-switcher">
-            <span class="demo-label">演示角色：</span>
-            <a-space>
-              <a-tag
-                v-for="r in roles"
-                :key="r.key"
-                :color="currentRole === r.key ? 'blue' : 'default'"
-                class="role-tag"
-                @click="switchRole(r.key)"
-              >{{ r.label }}</a-tag>
-            </a-space>
-          </div>
-
-          <a-divider type="vertical" />
-
           <!-- 用户信息 -->
           <a-dropdown :trigger="['click']">
             <div class="user-info">
@@ -235,13 +219,6 @@ onMounted(() => {
 
 onUnmounted(() => window.removeEventListener('resize', onResize))
 
-const currentRole = computed(() => authStore.role)
-
-const roles = [
-  { key: 'admin', label: '管理员' },
-  { key: 'instructor', label: '教官' },
-  { key: 'student', label: '学员' },
-]
 
 const currentPageTitle = computed(() => {
   return route.meta?.title || '智慧教育训练平台'
@@ -386,10 +363,6 @@ function handleDrawerMenuClick({ key }) {
   mobileDrawerOpen.value = false
 }
 
-function switchRole(roleKey) {
-  authStore.switchRole(roleKey)
-  router.push('/')
-}
 
 function handleLogout() {
   authStore.logout()
@@ -533,27 +506,6 @@ function handleLogout() {
   display: flex;
   align-items: center;
   gap: 12px;
-}
-
-.demo-switcher {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  background: #f0f4ff;
-  padding: 4px 12px;
-  border-radius: 20px;
-  border: 1px dashed #aabbdd;
-}
-
-.demo-label {
-  font-size: 12px;
-  color: var(--police-text-muted);
-  white-space: nowrap;
-}
-
-.role-tag {
-  cursor: pointer;
-  font-size: 12px;
 }
 
 .user-info {

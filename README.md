@@ -397,7 +397,6 @@ docker compose --env-file .env -f docker-compose.yaml up -d --build
 额外说明：
 
 - 登录页保留了"快速演示登录"
-- 顶部"演示角色切换"只改前端缓存展示，不会修改后端真实权限
 - `init_data.py` 同时会同步系统配置模板到数据库
 
 ## 关键配置文件

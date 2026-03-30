@@ -36,11 +36,6 @@
     min-width: 0;
   }
 
-  /* 演示角色切换 - 移动端简化 */
-  .demo-switcher {
-    display: none !important;
-  }
-
   /* 用户名在移动端隐藏（只显示头像） */
   .user-name {
     display: none !important;
