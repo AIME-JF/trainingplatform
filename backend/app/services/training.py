@@ -263,6 +263,8 @@ class TrainingService:
             police_type_id=data.police_type_id,
             training_base_id=data.training_base_id,
         )
+        training.visibility_scope = data.visibility_scope or "all"
+        training.visibility_department_ids = data.visibility_department_ids if data.visibility_scope != "all" else None
         self._ensure_actor_can_assign_training_scope(user_id, training.department_id, training.police_type_id)
         self.db.add(training)
         self.db.flush()
@@ -353,6 +355,9 @@ class TrainingService:
 
         for field, value in update_data.items():
             setattr(training, field, value)
+
+        if (training.visibility_scope or "all") == "all":
+            training.visibility_department_ids = None
 
         if schedule_rule_config is not _UNSET:
             training.schedule_rule_config = TrainingScheduleRuleService.normalize_rule_config(
@@ -2203,6 +2208,16 @@ class TrainingService:
             }
             enrollment.archived_at = datetime.now()
 
+    def _resolve_department_names(self, department_ids: Optional[List[int]]) -> Optional[List[str]]:
+        if not department_ids:
+            return None
+        from app.models import Department
+        rows = self.db.query(Department.id, Department.name).filter(
+            Department.id.in_(department_ids)
+        ).all()
+        name_map = {row.id: row.name for row in rows}
+        return [name_map.get(did, str(did)) for did in department_ids if did in name_map]
+
     def _load_user_name_map(self, user_ids: List[int]) -> Dict[int, str]:
         wanted_ids = sorted({int(user_id) for user_id in user_ids if user_id})
         if not wanted_ids:
@@ -2362,6 +2377,9 @@ class TrainingService:
             location=training.location,
             department_id=training.department_id,
             department_name=training.department.name if training.department else None,
+            visibility_scope=training.visibility_scope or "all",
+            visibility_department_ids=training.visibility_department_ids,
+            visibility_department_names=self._resolve_department_names(training.visibility_department_ids),
             police_type_id=training.police_type_id,
             police_type_name=training.police_type.name if training.police_type else None,
             training_base_id=training.training_base_id,
@@ -2450,6 +2468,9 @@ class TrainingService:
             location=training.location,
             department_id=training.department_id,
             department_name=training.department.name if training.department else None,
+            visibility_scope=training.visibility_scope or "all",
+            visibility_department_ids=training.visibility_department_ids,
+            visibility_department_names=self._resolve_department_names(training.visibility_department_ids),
             police_type_id=training.police_type_id,
             police_type_name=training.police_type.name if training.police_type else None,
             training_base_id=training.training_base_id,

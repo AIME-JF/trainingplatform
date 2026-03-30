@@ -710,6 +710,7 @@ import { useAuthStore } from '@/stores/auth'
 import { formatDateTime } from '@/utils/datetime'
 import { downloadBlob } from '@/utils/download'
 import ExcelImportModal from '@/views/system/components/ExcelImportModal.vue'
+import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 import TrainingOverviewContent from './components/TrainingOverviewContent.vue'
 import TrainingScheduleContent from './components/TrainingScheduleContent.vue'
 import TrainingScheduleRuleContent from './components/TrainingScheduleRuleContent.vue'
@@ -1601,7 +1602,7 @@ const mockStudents = computed(() => trainingData.studentIds.map(userId => {
     const score = records.reduce((acc, r) => acc + (r.status === 'on_time' ? 100 : r.status === 'late' ? 80 : 0), 0)
     cRate = Math.round(score / records.length)
   }
-  return { key: userId, name, idCardNumber, unit, progress: Math.floor(Math.random() * 20 + 80), checkinRate: cRate }
+  return { key: userId, name, idCardNumber, unit, checkinRate: cRate }
 }))
 
 const filteredStudents = computed(() =>
@@ -1820,7 +1821,6 @@ const baseStudentColumns = [
   { title: '姓名', dataIndex: 'name', key: 'name' },
   { title: '身份证号', dataIndex: 'idCardNumber', key: 'idCardNumber' },
   { title: '单位', dataIndex: 'unit', key: 'unit' },
-  { title: '学习进度', key: 'progress', width: 120 },
   { title: '签到率', key: 'checkin', width: 80 },
 ]
 const studentColumnsWithAction = computed(() =>
@@ -2729,12 +2729,11 @@ function exportMsg() {
     ['准入考试', trainingData.admissionExamTitle || '无'],
     [],
   ]
-  const headers = ['姓名', '身份证号', '单位', '学习进度', '总签到率']
+  const headers = ['姓名', '身份证号', '单位', '总签到率']
   const rows = filteredStudents.value.map(s => [
-    s.name, 
+    s.name,
     `\t${s.idCardNumber}`, // 防止长数字科学计数法
-    s.unit, 
-    `${s.progress}%`, 
+    s.unit,
     `${s.checkinRate}%`
   ])
   

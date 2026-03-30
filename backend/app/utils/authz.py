@@ -64,14 +64,35 @@ def can_operate_training_course(
 def can_view_training_with_context(context: DataScopeContext, training: Optional[Training]) -> bool:
     if not training:
         return False
-    return can_access_scoped_object(
-        context,
-        department_id=training.department_id,
-        police_type_id=training.police_type_id,
-        owner_user_ids=[training.created_by, training.instructor_id],
-        dimension_mode="all",
-        treat_missing_as_unrestricted=True,
-    )
+    if context.is_admin:
+        return True
+    # 已审批学员始终可见自己加入的培训班
+    for enrollment in (training.enrollments or []):
+        if enrollment.user_id == context.user_id and enrollment.status == "approved":
+            return True
+    # 创建人或班主任始终可见
+    owner_ids = {uid for uid in [training.created_by, training.instructor_id] if uid is not None}
+    if context.user_id in owner_ids:
+        return True
+    # 根据培训班的可见范围配置判断
+    scope = getattr(training, "visibility_scope", None) or "all"
+    scope_dept_ids = set(getattr(training, "visibility_department_ids", None) or [])
+    if scope == "all":
+        return can_access_scoped_object(
+            context,
+            department_id=training.department_id,
+            police_type_id=training.police_type_id,
+            owner_user_ids=[training.created_by, training.instructor_id],
+            dimension_mode="all",
+            treat_missing_as_unrestricted=True,
+        )
+    if not scope_dept_ids:
+        return False
+    if scope == "department":
+        return bool(context.department_ids & scope_dept_ids)
+    if scope == "department_and_sub":
+        return bool(context.department_ids & scope_dept_ids) or bool(context.department_with_sub_ids & scope_dept_ids)
+    return False
 
 
 def can_view_training(db: Session, training: Optional[Training], user_id: int) -> bool:

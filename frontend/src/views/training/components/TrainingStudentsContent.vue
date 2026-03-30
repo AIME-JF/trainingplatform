@@ -39,9 +39,6 @@
             {{ record.name }}
           </a-button>
         </template>
-        <template v-if="column.key === 'progress'">
-          <a-progress :percent="record.progress" size="small" />
-        </template>
         <template v-if="column.key === 'checkin'">
           <span :style="{ color: record.checkinRate >= 90 ? '#52c41a' : record.checkinRate >= 70 ? '#faad14' : '#ff4d4f' }">
             {{ record.checkinRate }}%

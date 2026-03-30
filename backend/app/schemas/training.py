@@ -196,6 +196,8 @@ class TrainingCreate(BaseModel):
     end_date: Optional[DateType] = None
     location: Optional[str] = Field(None, max_length=200)
     department_id: Optional[int] = None
+    visibility_scope: str = Field("all", description="可见范围: all/department/department_and_sub")
+    visibility_department_ids: Optional[List[int]] = Field(None, description="可见部门ID列表")
     police_type_id: Optional[int] = None
     training_base_id: Optional[int] = None
     class_code: Optional[str] = Field(None, max_length=100)
@@ -230,6 +232,8 @@ class TrainingUpdate(BaseModel):
     end_date: Optional[DateType] = None
     location: Optional[str] = None
     department_id: Optional[int] = None
+    visibility_scope: Optional[str] = Field(None, description="可见范围: all/department/department_and_sub")
+    visibility_department_ids: Optional[List[int]] = Field(None, description="可见部门ID列表")
     police_type_id: Optional[int] = None
     training_base_id: Optional[int] = None
     class_code: Optional[str] = None
@@ -351,6 +355,9 @@ class TrainingResponse(BaseModel):
     location: Optional[str] = None
     department_id: Optional[int] = None
     department_name: Optional[str] = None
+    visibility_scope: str = "all"
+    visibility_department_ids: Optional[List[int]] = None
+    visibility_department_names: Optional[List[str]] = None
     police_type_id: Optional[int] = None
     police_type_name: Optional[str] = None
     training_base_id: Optional[int] = None
@@ -412,6 +419,9 @@ class TrainingListResponse(BaseModel):
     location: Optional[str] = None
     department_id: Optional[int] = None
     department_name: Optional[str] = None
+    visibility_scope: str = "all"
+    visibility_department_ids: Optional[List[int]] = None
+    visibility_department_names: Optional[List[str]] = None
     police_type_id: Optional[int] = None
     police_type_name: Optional[str] = None
     training_base_id: Optional[int] = None

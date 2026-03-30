@@ -35,6 +35,8 @@ class Training(Base):
     end_date = Column(Date, nullable=True, comment="结束日期")
     location = Column(String(200), nullable=True, comment="培训地点")
     department_id = Column(Integer, ForeignKey("departments.id"), nullable=True, comment="归属部门ID")
+    visibility_scope = Column(String(30), default="all", comment="可见范围: all/department/department_and_sub")
+    visibility_department_ids = Column(JSON, nullable=True, comment="可见部门ID列表，visibility_scope非all时生效")
     police_type_id = Column(Integer, ForeignKey("police_types.id"), nullable=True, comment="警种ID")
     training_base_id = Column(Integer, ForeignKey("training_bases.id"), nullable=True, comment="培训基地ID")
     class_code = Column(String(100), nullable=True, comment="班次编号")

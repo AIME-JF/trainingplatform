@@ -382,8 +382,36 @@
                 </a-form-item>
               </a-col>
               <a-col :span="12">
-                <a-form-item label="部门">
+                <a-form-item label="归属部门">
                   <a-select v-model:value="trainingForm.departmentId" allow-clear placeholder="可选，可被培训基地自动带出">
+                    <a-select-option v-for="item in departmentOptions" :key="item.id" :value="item.id">
+                      {{ item.name }}
+                    </a-select-option>
+                  </a-select>
+                </a-form-item>
+              </a-col>
+              <a-col :span="12">
+                <a-form-item label="可见范围">
+                  <a-tooltip title="控制哪些部门的用户可以在培训班列表中看到本培训班">
+                    <a-select v-model:value="trainingForm.visibilityScope" @change="handleVisibilityScopeChange">
+                      <a-select-option value="all">全部可见</a-select-option>
+                      <a-select-option value="department">仅指定部门可见</a-select-option>
+                      <a-select-option value="department_and_sub">仅指定部门及其下属可见</a-select-option>
+                    </a-select>
+                  </a-tooltip>
+                </a-form-item>
+              </a-col>
+              <a-col :span="24" v-if="trainingForm.visibilityScope !== 'all'">
+                <a-form-item label="可见部门">
+                  <a-select
+                    v-model:value="trainingForm.visibilityDepartmentIds"
+                    mode="multiple"
+                    allow-clear
+                    placeholder="请选择可见部门"
+                    :max-tag-count="3"
+                    :max-tag-text-length="8"
+                    :max-tag-placeholder="(omittedValues) => `等 ${omittedValues.length} 个部门`"
+                  >
                     <a-select-option v-for="item in departmentOptions" :key="item.id" :value="item.id">
                       {{ item.name }}
                     </a-select-option>
@@ -715,6 +743,8 @@ const trainingForm = reactive({
   endDate: '',
   location: '',
   departmentId: undefined,
+  visibilityScope: 'all',
+  visibilityDepartmentIds: [],
   policeTypeId: undefined,
   trainingBaseId: undefined,
   instructorId: null,
@@ -826,6 +856,12 @@ function onTrainingBaseChange(baseId) {
   trainingForm.departmentId = base.departmentId || undefined
 }
 
+function handleVisibilityScopeChange(scope) {
+  if (scope === 'all') {
+    trainingForm.visibilityDepartmentIds = []
+  }
+}
+
 function handleStudentImportBeforeUpload(file) {
   studentImportFile.value = file
   studentImportFileName.value = file.name
@@ -853,6 +889,8 @@ function resetForm() {
     endDate: '',
     location: '',
     departmentId: undefined,
+    visibilityScope: 'all',
+    visibilityDepartmentIds: [],
     policeTypeId: undefined,
     trainingBaseId: undefined,
     instructorId: null,
@@ -895,6 +933,8 @@ function openEditModal(training) {
     endDate: training.endDate || '',
     location: training.location || '',
     departmentId: training.departmentId,
+    visibilityScope: training.visibilityScope || 'all',
+    visibilityDepartmentIds: training.visibilityDepartmentIds || [],
     policeTypeId: training.policeTypeId,
     trainingBaseId: training.trainingBaseId,
     instructorId: training.instructorId || null,
@@ -1087,6 +1127,8 @@ async function handleSubmitTraining() {
     endDate: trainingForm.endDate,
     location: trainingForm.location,
     departmentId: trainingForm.departmentId || undefined,
+    visibilityScope: trainingForm.visibilityScope || 'all',
+    visibilityDepartmentIds: trainingForm.visibilityScope !== 'all' ? (trainingForm.visibilityDepartmentIds || []) : undefined,
     policeTypeId: trainingForm.policeTypeId || undefined,
     trainingBaseId: locationSourceMode.value === 'base' ? (trainingForm.trainingBaseId || undefined) : undefined,
     instructorId: trainingForm.instructorId || undefined,
