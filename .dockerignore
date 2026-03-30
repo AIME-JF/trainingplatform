@@ -11,3 +11,4 @@
 docker/volumes/
 backend/data/
 backend/logs/
+docs/daily/*
