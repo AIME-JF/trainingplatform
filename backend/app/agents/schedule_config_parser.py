@@ -4,7 +4,6 @@ AI 自然语言转排课配置服务
 from __future__ import annotations
 
 import json
-import re
 from datetime import date, timedelta
 from typing import Any, Dict, List, Optional
 
@@ -14,16 +13,10 @@ from app.services.training_schedule_rule import TrainingScheduleRuleService
 
 from .base import BaseAIAgent
 
-class AIScheduleConfigParserService(BaseAIAgent):
-    """将自然语言排课要求解析为结构化配置，并用规则做兜底归一化"""
 
-    DEFAULT_WINDOW_MAP = {
-        "上午": ("08:30", "12:30"),
-        "早上": ("08:30", "12:30"),
-        "下午": ("14:00", "17:30"),
-        "晚上": ("19:00", "21:00"),
-        "晚间": ("19:00", "21:00"),
-    }
+class AIScheduleConfigParserService(BaseAIAgent):
+    """将自然语言排课要求通过 LLM 解析为结构化配置"""
+
     SCOPE_LABELS = {
         "all": "全班次",
         "current_week": "指定周",
@@ -54,17 +47,6 @@ class AIScheduleConfigParserService(BaseAIAgent):
         6: "周六",
         7: "周日",
     }
-    WEEKDAY_CHAR_MAP = {
-        "一": 1,
-        "二": 2,
-        "三": 3,
-        "四": 4,
-        "五": 5,
-        "六": 6,
-        "日": 7,
-        "天": 7,
-    }
-    UNAVAILABLE_KEYWORDS = ("不可用", "不能用", "禁用", "禁排", "不排课", "不上课")
 
     def preview_task_request(
         self,
@@ -78,10 +60,8 @@ class AIScheduleConfigParserService(BaseAIAgent):
         warnings: List[str] = []
 
         if should_parse_prompt:
-            heuristic_payload = self._parse_with_rules(prompt, training, base_request)
-            ai_payload, warnings = self._parse_with_llm(prompt, training, base_request)
-            merged_payload = self._merge_dicts(heuristic_payload, ai_payload)
-            next_request_payload = self._apply_prompt_payload(base_request, merged_payload, training)
+            parsed_payload, warnings = self._parse_with_llm(prompt, training, base_request)
+            next_request_payload = self._apply_prompt_payload(base_request, parsed_payload, training)
         else:
             next_request_payload = self._apply_prompt_payload(base_request, {}, training)
 
@@ -113,6 +93,10 @@ class AIScheduleConfigParserService(BaseAIAgent):
             "effective_rule_config": preview["effective_rule_config"],
         }
 
+    # ------------------------------------------------------------------
+    # LLM 解析
+    # ------------------------------------------------------------------
+
     def _parse_with_llm(
         self,
         prompt: str,
@@ -123,7 +107,7 @@ class AIScheduleConfigParserService(BaseAIAgent):
         try:
             config = self._load_runtime_config()
         except Exception as exc:
-            return {}, [f"AI 解析未启用，已按规则兜底：{exc}"]
+            return {}, [f"AI 解析未启用：{exc}"]
 
         try:
             payload = self._call_provider(
@@ -131,131 +115,142 @@ class AIScheduleConfigParserService(BaseAIAgent):
                 [
                     {
                         "role": "system",
-                        "content": "你是警务培训排课配置解析器。你只能输出合法 JSON 对象，不能输出 Markdown 或说明文字。",
+                        "content": self._build_system_prompt(),
                     },
                     {
                         "role": "user",
-                        "content": self._build_llm_prompt(prompt, training, request_payload),
+                        "content": self._build_user_prompt(prompt, training, request_payload),
                     },
                 ],
             )
             return self._parse_json_payload(payload), warnings
         except Exception as exc:
-            warnings.append(f"AI 解析失败，已按规则兜底：{exc}")
+            warnings.append(f"AI 解析失败：{exc}")
             return {}, warnings
 
-    def _parse_with_rules(
-        self,
-        prompt: str,
-        training: Training,
-        base_request_payload: dict[str, Any],
-    ) -> dict[str, Any]:
-        payload: Dict[str, Any] = {}
-        lower_prompt = prompt.lower()
-
-        if any(keyword in prompt for keyword in ("仅未排课", "未排课课次", "补排")):
-            payload["scope_type"] = "unscheduled"
-        elif any(keyword in prompt for keyword in ("本周", "这周", "指定周")):
-            payload["scope_type"] = "current_week"
-        elif any(keyword in prompt for keyword in ("全班次", "全部课次", "整个班")):
-            payload["scope_type"] = "all"
-
-        if any(keyword in prompt for keyword in ("考前", "冲刺", "考前强化")):
-            payload["goal"] = "exam_intensive"
-        elif "实战" in prompt or "实操" in prompt:
-            payload["goal"] = "practice_first"
-        elif "理论" in prompt:
-            payload["goal"] = "theory_first"
-
-        constraint_payload = payload.setdefault("constraint_payload", {})
-        if "按课时" in prompt:
-            payload["planning_mode"] = "by_hours"
-        elif "工作日" in prompt:
-            payload["planning_mode"] = "fill_workdays"
-        elif "排满" in prompt or "排满所有" in prompt or "排满全部" in prompt:
-            payload["planning_mode"] = "fill_all_days"
-
-        if any(keyword in prompt for keyword in ("避开考试", "不要和考试冲突", "避开考试日")):
-            constraint_payload["avoid_exam_days"] = True
-        elif any(keyword in prompt for keyword in ("不避开考试", "无需避开考试")):
-            constraint_payload["avoid_exam_days"] = False
-
-        daily_limit_match = re.search(r"单日[^0-9]{0,6}(\d+(?:\.\d+)?)\s*课时", prompt)
-        if daily_limit_match:
-            constraint_payload["daily_max_hours"] = float(daily_limit_match.group(1))
-
-        rule_payload: Dict[str, Any] = {}
-        lesson_unit_match = (
-            re.search(r"(?:一|每|单个?)课时[^0-9]{0,6}(\d+)\s*分钟", prompt)
-            or re.search(r"(\d+)\s*分钟[^。；，,\n]{0,20}(?:一|每)课时", prompt)
-        )
-        if lesson_unit_match:
-            rule_payload["lesson_unit_minutes"] = int(lesson_unit_match.group(1))
-
-        break_match = re.search(r"课间[^0-9]{0,6}(\d+)\s*分钟", prompt)
-        if break_match:
-            rule_payload["break_minutes"] = int(break_match.group(1))
-
-        max_units_match = re.search(r"一节课最多[^0-9]{0,6}(\d+)\s*课时", prompt)
-        if max_units_match:
-            rule_payload["max_units_per_session"] = int(max_units_match.group(1))
-
-        daily_units_match = re.search(r"单日最多[^0-9]{0,6}(\d+)\s*课时", prompt)
-        if daily_units_match:
-            rule_payload["daily_max_units"] = int(daily_units_match.group(1))
-
-        if any(keyword in lower_prompt for keyword in ("均衡", "平分", "尽量平均")):
-            rule_payload["split_strategy"] = "balanced"
-
-        windows = self._extract_windows(prompt)
-        if windows:
-            rule_payload["teaching_windows"] = windows
-
-        course_keys = re.findall(r"course[_-]?key[:：]?\s*([0-9a-zA-Z-]+)", prompt, re.IGNORECASE)
-        if course_keys:
-            constraint_payload["fixed_course_keys"] = list(dict.fromkeys(course_keys))
-
-        if rule_payload:
-            payload["schedule_rule_override"] = rule_payload
-
-        temp_request_payload = self._apply_prompt_payload(base_request_payload, payload, training)
-        temp_rule_config = TrainingScheduleRuleService.resolve_effective_rule_config(
-            training.schedule_rule_config,
-            temp_request_payload.get("schedule_rule_override"),
+    def _build_system_prompt(self) -> str:
+        return (
+            "你是警务培训排课配置解析器。\n"
+            "用户会用自然语言描述排课要求，你需要将其转换为结构化 JSON 配置。\n"
+            "你只能输出合法 JSON 对象，不要输出 Markdown 代码块、说明文字或任何其他非 JSON 内容。\n"
+            "对于用户未明确提及的字段，不要在 JSON 中输出该字段（即省略它），让系统使用默认值。\n"
+            "只输出你有信心从用户要求中提取到的字段。"
         )
 
-        blocked_time_slots = self._extract_blocked_time_slots(prompt, training, temp_request_payload, temp_rule_config)
-        if blocked_time_slots:
-            constraint_payload["blocked_time_slots"] = blocked_time_slots
+    def _build_user_prompt(self, prompt: str, training: Training, request_payload: dict[str, Any]) -> str:
+        training_rule = TrainingScheduleRuleService.resolve_effective_rule_config(training.schedule_rule_config)
+        preserve_existing_schedule = not bool(request_payload.get("overwrite_existing_schedule"))
+        existing_schedule_context = self._build_existing_schedule_context(training) if preserve_existing_schedule else ""
 
-        course_type_preferences = self._extract_course_type_preferences(prompt, temp_rule_config)
-        if course_type_preferences:
-            constraint_payload["course_type_time_preferences"] = course_type_preferences
+        date_reference = self._build_date_reference(training)
 
-        instructor_slots = self._extract_named_unavailable_slots(
+        return "\n".join([
+            "请将下面的自然语言排课要求解析成 JSON 配置。只输出 JSON 对象，不要输出其他文字。",
+            "",
+            "# 可输出的顶层字段",
+            "",
+            "## scope_type (string, 可省略)",
+            "排课范围。可选值：",
+            '- "all": 全班次，对培训周期内全部日期排课',
+            '- "current_week": 仅对指定周排课',
+            '- "unscheduled": 仅对未排课的课次排课',
+            "",
+            "## scope_start_date (string, 可省略)",
+            '仅当 scope_type 为 "current_week" 时有效，格式 YYYY-MM-DD，表示指定周内的任意一天',
+            "",
+            "## goal (string, 可省略)",
+            "排课优化目标。可选值：",
+            '- "balanced": 均衡排课（默认）',
+            '- "practice_first": 优先安排实操/实战课程',
+            '- "theory_first": 优先安排理论课程',
+            '- "exam_intensive": 考前强化模式',
+            "",
+            "## planning_mode (string, 可省略)",
+            "排课方式。可选值：",
+            '- "fill_all_days": 排满所有日期（含周末）',
+            '- "fill_workdays": 只排满工作日',
+            '- "by_hours": 按每门课程声明的计划课时来排',
+            "",
+            "## overwrite_existing_schedule (boolean, 可省略)",
+            "是否覆盖当前已有课表。true 表示重新排课，false 表示保留已有课次",
+            "",
+            "## constraint_payload (object, 可省略)",
+            "排课约束参数，包含以下子字段：",
+            "",
+            "### daily_max_hours (number, 可省略)",
+            "单日最大课时数，范围 1-12",
+            "",
+            "### avoid_exam_days (boolean, 可省略)",
+            "是否避开考试日排课",
+            "",
+            "### fixed_course_keys (string[], 可省略)",
+            "需要锁定不动的课程键列表",
+            "",
+            "### blocked_time_slots (array, 可省略)",
+            "全局禁止排课的时间段列表。每项格式：",
+            '  {"date": "YYYY-MM-DD", "time_range": "HH:MM~HH:MM", "label": "描述"}',
+            "如果用户说某个日期或星期几不排课，需要展开为培训周期内所有匹配的具体日期。",
+            "如果用户没有指定具体时间段，则 time_range 设为 \"00:00~23:59\" 表示全天禁排。",
+            "",
+            "### instructor_unavailable_slots (array, 可省略)",
+            "教官不可用时间段列表，格式同 blocked_time_slots。label 填教官姓名。",
+            "",
+            "### location_unavailable_slots (array, 可省略)",
+            "场地不可用时间段列表，格式同 blocked_time_slots。label 填场地名称。",
+            "",
+            "### course_type_time_preferences (array, 可省略)",
+            "课程类型的时间段偏好列表。每项格式：",
+            "  {",
+            '    "course_type": "theory" 或 "practice",',
+            '    "start_time": "HH:MM",',
+            '    "end_time": "HH:MM",',
+            '    "weekdays": [1,2,3,4,5],  // 1=周一 ... 7=周日，空数组表示所有日期',
+            '    "priority": "prefer" 或 "only",  // prefer=优先, only=仅允许在此时段',
+            '    "label": "描述"',
+            "  }",
+            "",
+            "### exam_week_focus (object, 可省略)",
+            "考前强化偏好。格式：",
+            "  {",
+            '    "course_type": "theory" 或 "practice",  // 可省略',
+            '    "course_keywords": ["关键词1", "关键词2"],  // 可省略',
+            '    "days_before_exam": 7,  // 考前多少天，1-30',
+            '    "label": "描述"',
+            "  }",
+            "",
+            "## schedule_rule_override (object, 可省略)",
+            "任务级排课规则覆盖，可包含以下字段：",
+            "- lesson_unit_minutes: 每课时分钟数（如 40、45）",
+            "- break_minutes: 课间休息分钟数",
+            "- max_units_per_session: 一节课最多几个课时",
+            "- daily_max_units: 单日最多几个课时",
+            "- preferred_planning_mode: fill_all_days / fill_workdays / by_hours",
+            "- split_strategy: balanced",
+            '- teaching_windows: [{"label": "上午", "start_time": "08:30", "end_time": "12:30"}, ...]',
+            "",
+            "# 上下文信息",
+            "",
+            f"培训班名称：{training.name}",
+            f"培训周期：{training.start_date} 至 {training.end_date}",
+            f"当前培训班默认排课规则：{json.dumps(training_rule, ensure_ascii=False)}",
+            "",
+            date_reference,
+            "",
+            (
+                "当前课表处理策略：保留当前课表，已有课次需要在排课中避开。"
+                if preserve_existing_schedule
+                else "当前课表处理策略：允许覆盖当前课表，重新生成新的排课方案。"
+            ),
+            existing_schedule_context or "当前已有课次：无。",
+            "",
+            "# 用户的排课要求",
+            "",
             prompt,
-            training,
-            temp_request_payload,
-            temp_rule_config,
-            resource_type="instructor",
-        )
-        if instructor_slots:
-            constraint_payload["instructor_unavailable_slots"] = instructor_slots
+        ])
 
-        location_slots = self._extract_named_unavailable_slots(
-            prompt,
-            training,
-            temp_request_payload,
-            temp_rule_config,
-            resource_type="location",
-        )
-        if location_slots:
-            constraint_payload["location_unavailable_slots"] = location_slots
-
-        exam_week_focus = self._extract_exam_week_focus(prompt)
-        if exam_week_focus:
-            constraint_payload["exam_week_focus"] = exam_week_focus
-        return payload
+    # ------------------------------------------------------------------
+    # 请求归一化
+    # ------------------------------------------------------------------
 
     def _apply_prompt_payload(
         self,
@@ -300,42 +295,9 @@ class AIScheduleConfigParserService(BaseAIAgent):
         result["parsed_request_confirmed"] = bool(result.get("parsed_request_confirmed"))
         return result
 
-    def _build_llm_prompt(self, prompt: str, training: Training, request_payload: dict[str, Any]) -> str:
-        training_rule = TrainingScheduleRuleService.resolve_effective_rule_config(training.schedule_rule_config)
-        preserve_existing_schedule = not bool(request_payload.get("overwrite_existing_schedule"))
-        existing_schedule_context = self._build_existing_schedule_context(training) if preserve_existing_schedule else ""
-        return "\n".join(
-            [
-                "请把下面的自然语言排课要求解析成 JSON 配置。",
-                "只输出 JSON 对象，不要输出其他文字。",
-                "字段说明：",
-                '- scope_type: all/current_week/unscheduled，可省略',
-                '- goal: balanced/practice_first/theory_first/exam_intensive，可省略',
-                '- planning_mode: fill_all_days/fill_workdays/by_hours，可省略',
-                '- constraint_payload.daily_max_hours: 数字，可省略',
-                "- constraint_payload.avoid_exam_days: true/false，可省略",
-                '- constraint_payload.fixed_course_keys: 字符串数组，可省略',
-                '- constraint_payload.blocked_time_slots: [{"date":"2026-03-25","time_range":"14:00~17:30","label":"周三下午"}]',
-                '- constraint_payload.course_type_time_preferences: [{"course_type":"theory","start_time":"08:30","end_time":"12:30","weekdays":[1,2,3,4,5],"priority":"only","label":"上午只排理论"}]',
-                '- constraint_payload.instructor_unavailable_slots: [{"date":"2026-03-25","time_range":"14:00~17:30","label":"张三"}]',
-                '- constraint_payload.location_unavailable_slots: [{"date":"2026-03-25","time_range":"14:00~17:30","label":"靶场"}]',
-                '- constraint_payload.exam_week_focus: {"course_type":"practice","course_keywords":["警械"],"days_before_exam":7,"label":"考前强化"}',
-                "- schedule_rule_override: 对象，可包含 lesson_unit_minutes, break_minutes, max_units_per_session, daily_max_units, preferred_planning_mode, split_strategy, teaching_windows",
-                '- teaching_windows: [{\"label\":\"上午\",\"start_time\":\"08:30\",\"end_time\":\"12:30\"}]',
-                "- overwrite_existing_schedule: true/false，可省略",
-                f"当前培训班默认规则：{json.dumps(training_rule, ensure_ascii=False)}",
-                f"培训班名称：{training.name}",
-                f"培训周期：{training.start_date} 至 {training.end_date}",
-                (
-                    "当前课表处理策略：保留当前课表，已有课次需要在后续排课中尽量避开。"
-                    if preserve_existing_schedule
-                    else "当前课表处理策略：允许覆盖当前课表，重新生成新的排课方案。"
-                ),
-                existing_schedule_context or "当前已有课次：无或无需额外参考。",
-                "用户要求：",
-                prompt,
-            ]
-        )
+    # ------------------------------------------------------------------
+    # 展示与摘要
+    # ------------------------------------------------------------------
 
     def _build_parse_summary(self, request_payload: dict[str, Any]) -> str:
         rule_override = request_payload.get("schedule_rule_override") or {}
@@ -363,30 +325,6 @@ class AIScheduleConfigParserService(BaseAIAgent):
             f"单日最大课时 {(constraint_payload.get('daily_max_hours') or 0)}，"
             f"时间段 {window_text}{extra_text}。"
         )
-
-    def _extract_windows(self, prompt: str) -> List[Dict[str, Any]]:
-        windows: List[Dict[str, Any]] = []
-        for match in re.finditer(r"(\d{1,2}:\d{2})\s*[-~到至]\s*(\d{1,2}:\d{2})", prompt):
-            start_time = TrainingScheduleRuleService._normalize_clock(match.group(1))
-            end_time = TrainingScheduleRuleService._normalize_clock(match.group(2))
-            if not start_time or not end_time or start_time >= end_time:
-                continue
-            label = ""
-            prefix = prompt[max(match.start() - 6, 0):match.start()]
-            if "上午" in prefix:
-                label = "上午"
-            elif "下午" in prefix:
-                label = "下午"
-            elif "晚上" in prefix or "晚间" in prefix:
-                label = "晚上"
-            windows.append(
-                {
-                    "label": label,
-                    "start_time": start_time,
-                    "end_time": end_time,
-                }
-            )
-        return windows
 
     def _build_understood_items(self, request_payload: dict[str, Any]) -> List[str]:
         constraint_payload = request_payload.get("constraint_payload") or {}
@@ -453,280 +391,25 @@ class AIScheduleConfigParserService(BaseAIAgent):
             preview_lines.append(f"- 其余 {len(summaries) - len(preview_lines)} 条已有课次省略")
         return "当前已有课次：\n" + "\n".join(preview_lines)
 
-    def _extract_course_type_preferences(self, prompt: str, rule_config: dict[str, Any]) -> List[dict[str, Any]]:
-        preferences: List[dict[str, Any]] = []
-        for fragment in self._split_prompt_fragments(prompt):
-            course_type = self._extract_course_type(fragment)
-            if not course_type:
-                continue
-            if any(keyword in fragment for keyword in self.UNAVAILABLE_KEYWORDS):
-                continue
-            time_window = self._resolve_window_from_text(fragment, rule_config)
-            if not time_window:
-                continue
-            has_preference_intent = any(keyword in fragment for keyword in ("只排", "仅排", "只能排", "优先", "尽量", "安排", "放在", "集中"))
-            has_window_mapping_intent = bool(
-                re.search(r"(上午|早上|下午|晚上|晚间).{0,6}(理论|实操|实战)", fragment)
-                or re.search(r"(理论|实操|实战).{0,6}(上午|早上|下午|晚上|晚间)", fragment)
-            )
-            if not has_preference_intent and not has_window_mapping_intent:
-                continue
-            weekdays = self._extract_weekdays(fragment)
-            priority = "only" if any(keyword in fragment for keyword in ("只排", "仅排", "只能排")) else "prefer"
-            preferences.append(
-                {
-                    "course_type": course_type,
-                    "start_time": time_window["start_time"],
-                    "end_time": time_window["end_time"],
-                    "weekdays": weekdays,
-                    "priority": priority,
-                    "label": fragment[:40],
-                }
-            )
-        return self._normalize_course_type_preferences(preferences)
-
-    def _extract_blocked_time_slots(
-        self,
-        prompt: str,
-        training: Training,
-        request_payload: dict[str, Any],
-        rule_config: dict[str, Any],
-    ) -> List[dict[str, Any]]:
-        slots: List[dict[str, Any]] = []
-        for fragment in self._split_prompt_fragments(prompt):
-            if not any(keyword in fragment for keyword in self.UNAVAILABLE_KEYWORDS):
-                continue
-            if "教官" in fragment or "场地" in fragment:
-                continue
-            dates = self._resolve_dates_from_fragment(fragment, training, request_payload)
-            if not dates:
-                continue
-            time_window = self._resolve_window_from_text(fragment, rule_config, full_day_default=True)
-            if not time_window:
-                continue
-            for slot_date in dates:
-                slots.append(
-                    {
-                        "date": slot_date.isoformat(),
-                        "time_range": f"{time_window['start_time']}~{time_window['end_time']}",
-                        "label": fragment[:40],
-                    }
-                )
-        return self._normalize_unavailable_slots(slots)
-
-    def _extract_named_unavailable_slots(
-        self,
-        prompt: str,
-        training: Training,
-        request_payload: dict[str, Any],
-        rule_config: dict[str, Any],
-        resource_type: str,
-    ) -> List[dict[str, Any]]:
-        keyword = "教官" if resource_type == "instructor" else "场地"
-        slots: List[dict[str, Any]] = []
-        for fragment in self._split_prompt_fragments(prompt):
-            if keyword not in fragment or not any(item in fragment for item in self.UNAVAILABLE_KEYWORDS):
-                continue
-            label = self._extract_resource_label(fragment, keyword)
-            if not label:
-                continue
-            dates = self._resolve_dates_from_fragment(fragment, training, request_payload)
-            if not dates:
-                continue
-            time_window = self._resolve_window_from_text(fragment, rule_config, full_day_default=True)
-            if not time_window:
-                continue
-            for slot_date in dates:
-                slots.append(
-                    {
-                        "date": slot_date.isoformat(),
-                        "time_range": f"{time_window['start_time']}~{time_window['end_time']}",
-                        "label": label,
-                    }
-                )
-        return self._normalize_unavailable_slots(slots)
-
-    def _extract_exam_week_focus(self, prompt: str) -> Optional[dict[str, Any]]:
-        if not (
-            re.search(r"(?:考前|考试前)\s*\d+\s*天", prompt)
-            or any(keyword in prompt for keyword in ("考前一周", "考试前一周", "考前强化", "冲刺阶段"))
-        ):
-            return None
-        focus_payload: dict[str, Any] = {
-            "days_before_exam": 7,
-            "course_keywords": [],
-            "label": "考前强化",
-        }
-        day_match = re.search(r"(?:考前|考试前)\s*(\d+)\s*天", prompt)
-        if day_match:
-            focus_payload["days_before_exam"] = max(1, min(int(day_match.group(1)), 30))
-        elif "考前一周" in prompt or "考试前一周" in prompt:
-            focus_payload["days_before_exam"] = 7
-        course_type = self._extract_course_type(prompt)
-        if course_type:
-            focus_payload["course_type"] = course_type
-        keyword_match = re.search(
-            r"(?:考前|考试前)(?:一周|\s*\d+\s*天)?[^。；，,\n]{0,12}(?:优先|重点|强化)(.*?)(?:课程|训练|科目)",
-            prompt,
-        )
-        if keyword_match:
-            focus_payload["course_keywords"] = list(dict.fromkeys(
-                item.strip()
-                for item in re.split(r"[、,，/和及]", keyword_match.group(1))
-                if item and item.strip() and item.strip() not in {"某类", "某些", "相关", "专项"}
-            ))
-        if not focus_payload.get("course_type") and not focus_payload.get("course_keywords"):
-            focus_payload["course_type"] = "practice" if "实" in prompt else "theory"
-        return self._normalize_exam_week_focus(focus_payload)
-
-    def _resolve_dates_from_fragment(
-        self,
-        fragment: str,
-        training: Training,
-        request_payload: dict[str, Any],
-    ) -> List[date]:
-        explicit_dates = self._extract_explicit_dates(fragment)
-        if explicit_dates:
-            return explicit_dates
-        weekdays = self._extract_weekdays(fragment)
-        if not weekdays:
-            return []
-        planning_dates = self._resolve_preview_dates(training, request_payload)
-        return [item for item in planning_dates if item.isoweekday() in weekdays]
-
-    def _resolve_preview_dates(self, training: Training, request_payload: dict[str, Any]) -> List[date]:
-        start_date = training.start_date
-        end_date = training.end_date
-        if request_payload.get("scope_type") == "current_week":
-            start_date = self._resolve_scope_week_start(training, request_payload.get("scope_start_date"))
-            end_date = min(training.end_date, start_date + timedelta(days=6))
-        dates: List[date] = []
-        current = start_date
-        while current <= end_date:
-            if training.start_date <= current <= training.end_date:
-                dates.append(current)
+    def _build_date_reference(self, training: Training) -> str:
+        """构建培训周期内的日期与星期参考信息，帮助 LLM 将星期几映射为具体日期"""
+        if not training.start_date or not training.end_date:
+            return ""
+        weekday_names = {0: "周一", 1: "周二", 2: "周三", 3: "周四", 4: "周五", 5: "周六", 6: "周日"}
+        lines: List[str] = []
+        current = training.start_date
+        count = 0
+        while current <= training.end_date and count < 120:
+            lines.append(f"  {current.isoformat()} ({weekday_names[current.weekday()]})")
             current += timedelta(days=1)
-        return dates
+            count += 1
+        if current <= training.end_date:
+            lines.append(f"  ... 后续日期省略，培训结束日期为 {training.end_date.isoformat()}")
+        return "培训周期内的日期列表（供你将星期几、工作日等映射为具体日期）：\n" + "\n".join(lines)
 
-    def _resolve_scope_week_start(self, training: Training, raw_value: Any) -> date:
-        requested_date = self._parse_date(raw_value)
-        current_week_start = date.today() - timedelta(days=date.today().weekday())
-        min_week_start = training.start_date - timedelta(days=training.start_date.weekday())
-        max_week_start = training.end_date - timedelta(days=training.end_date.weekday())
-        default_week_start = min(max(current_week_start, min_week_start), max_week_start)
-        if requested_date is None:
-            return default_week_start
-        normalized_requested = requested_date - timedelta(days=requested_date.weekday())
-        return min(max(normalized_requested, min_week_start), max_week_start)
-
-    def _resolve_window_from_text(
-        self,
-        text: str,
-        rule_config: dict[str, Any],
-        full_day_default: bool = False,
-    ) -> Optional[dict[str, str]]:
-        time_match = re.search(r"(\d{1,2}:\d{2})\s*[-~到至]\s*(\d{1,2}:\d{2})", text)
-        if time_match:
-            start_time = TrainingScheduleRuleService._normalize_clock(time_match.group(1))
-            end_time = TrainingScheduleRuleService._normalize_clock(time_match.group(2))
-            if start_time and end_time and start_time < end_time:
-                return {
-                    "label": "",
-                    "start_time": start_time,
-                    "end_time": end_time,
-                }
-
-        for label in ("上午", "早上", "下午", "晚上", "晚间"):
-            if label not in text:
-                continue
-            normalized_label = "上午" if label == "早上" else "晚上" if label == "晚间" else label
-            matched = self._match_window_by_label(rule_config, normalized_label)
-            if matched:
-                return matched
-            start_time, end_time = self.DEFAULT_WINDOW_MAP.get(normalized_label, ("08:30", "12:30"))
-            return {
-                "label": normalized_label,
-                "start_time": start_time,
-                "end_time": end_time,
-            }
-
-        if full_day_default:
-            return {
-                "label": "全天",
-                "start_time": "00:00",
-                "end_time": "23:59",
-            }
-        return None
-
-    def _match_window_by_label(self, rule_config: dict[str, Any], target_label: str) -> Optional[dict[str, str]]:
-        normalized_target = target_label.strip()
-        for item in rule_config.get("teaching_windows") or []:
-            label = str(item.get("label") or "").strip()
-            if not label:
-                continue
-            if normalized_target in label or label in normalized_target:
-                return {
-                    "label": label,
-                    "start_time": item.get("start_time"),
-                    "end_time": item.get("end_time"),
-                }
-        return None
-
-    def _extract_course_type(self, text: str) -> Optional[str]:
-        if any(keyword in text for keyword in ("实操", "实战")):
-            return "practice"
-        if "理论" in text:
-            return "theory"
-        return None
-
-    def _extract_resource_label(self, fragment: str, keyword: str) -> str:
-        prefix_match = re.search(rf"{keyword}\s*([^\s，。；,;]+)", fragment)
-        if prefix_match:
-            return prefix_match.group(1).strip()
-        suffix_match = re.search(rf"([^\s，。；,;]+)\s*{keyword}", fragment)
-        if suffix_match:
-            return suffix_match.group(1).strip()
-        return ""
-
-    def _extract_weekdays(self, text: str) -> List[int]:
-        weekdays: List[int] = []
-        if "工作日" in text:
-            weekdays.extend([1, 2, 3, 4, 5])
-        if "周末" in text:
-            weekdays.extend([6, 7])
-
-        range_match = re.search(r"(?:周|星期)([一二三四五六日天])\s*[到至-]\s*(?:周|星期)?([一二三四五六日天])", text)
-        if range_match:
-            start_value = self.WEEKDAY_CHAR_MAP.get(range_match.group(1))
-            end_value = self.WEEKDAY_CHAR_MAP.get(range_match.group(2))
-            if start_value and end_value:
-                if start_value <= end_value:
-                    weekdays.extend(range(start_value, end_value + 1))
-                else:
-                    weekdays.extend(list(range(start_value, 8)) + list(range(1, end_value + 1)))
-
-        for match in re.finditer(r"(?:周|星期)([一二三四五六日天])", text):
-            mapped = self.WEEKDAY_CHAR_MAP.get(match.group(1))
-            if mapped:
-                weekdays.append(mapped)
-        return sorted(dict.fromkeys(weekdays))
-
-    def _extract_explicit_dates(self, text: str) -> List[date]:
-        dates: List[date] = []
-        for match in re.finditer(r"(\d{4})[-/年](\d{1,2})[-/月](\d{1,2})", text):
-            try:
-                dates.append(date(int(match.group(1)), int(match.group(2)), int(match.group(3))))
-            except ValueError:
-                continue
-        return dates
-
-    @staticmethod
-    def _split_prompt_fragments(prompt: str) -> List[str]:
-        fragments = [item.strip() for item in re.split(r"[。；;\n]", prompt) if item and item.strip()]
-        result: List[str] = []
-        for fragment in fragments:
-            result.extend([item.strip() for item in re.split(r"[，,]", fragment) if item and item.strip()])
-        return result
+    # ------------------------------------------------------------------
+    # 归一化方法
+    # ------------------------------------------------------------------
 
     def _normalize_unavailable_slots(self, raw_slots: Any) -> List[dict[str, Any]]:
         normalized: List[dict[str, Any]] = []
@@ -826,6 +509,10 @@ class AIScheduleConfigParserService(BaseAIAgent):
         if not start_time or not end_time or start_time >= end_time:
             return None
         return f"{start_time}~{end_time}"
+
+    # ------------------------------------------------------------------
+    # 工具方法
+    # ------------------------------------------------------------------
 
     def _parse_date(self, raw_value: Any) -> Optional[date]:
         if raw_value is None:
