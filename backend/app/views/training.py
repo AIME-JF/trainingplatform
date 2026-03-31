@@ -32,6 +32,7 @@ from app.schemas import (
     TrainingHistoryResponse,
     TrainingListResponse,
     TrainingStatsResponse,
+    CalendarEventResponse,
     TrainingResourceBindRequest,
     TrainingResponse,
     TrainingRosterAssignment,
@@ -159,6 +160,17 @@ def get_training_stats(
 ):
     controller = TrainingController(db)
     data = controller.get_training_stats(current_user.user_id)
+    return StandardResponse(data=data)
+
+
+@router.get("/calendar", response_model=StandardResponse[List[CalendarEventResponse]], summary="聚合日历")
+def get_calendar_events(
+    training_id: Optional[int] = Query(None, description="指定班级ID，不传则返回所有相关班级"),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    service = TrainingService(db)
+    data = service.get_calendar_events(current_user.user_id, training_id)
     return StandardResponse(data=data)
 
 

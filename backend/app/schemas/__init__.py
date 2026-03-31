@@ -54,6 +54,7 @@ from .training import (
     CheckinCreate, CheckoutCreate, TrainingEvaluationCreate, CheckinResponse,
     TrainingAttendanceSummaryResponse,
     TrainingCheckinQrResponse,
+    CalendarEventResponse,
     ScheduleItemCreate, ScheduleItemResponse,
     TrainingExamSummary, TrainingHistoryResponse, TrainingCourseChangeLogResponse
 )
@@ -170,6 +171,7 @@ __all__ = [
     "TrainingRosterAssignment",
     "CheckinCreate", "CheckoutCreate", "TrainingEvaluationCreate", "CheckinResponse",
     "TrainingAttendanceSummaryResponse", "TrainingCheckinQrResponse",
+    "CalendarEventResponse",
     "ScheduleItemCreate", "ScheduleItemResponse",
     "TrainingExamSummary", "TrainingHistoryResponse", "TrainingCourseChangeLogResponse",
     # 考试相关

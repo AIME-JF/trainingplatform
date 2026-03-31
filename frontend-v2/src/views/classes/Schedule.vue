@@ -1,416 +1,284 @@
 <template>
   <section class="page-content schedule-page">
+    <!-- 页头 -->
     <div class="page-header">
-      <div>
-        <h1 class="page-title">周训练计划</h1>
-        <p class="page-subtitle">按培训班查看本周课程安排和每日训练节次。</p>
-      </div>
-
+      <h1 class="page-title">训练日历</h1>
       <div class="header-actions">
         <a-select
           v-model:value="selectedTrainingId"
           class="training-select"
-          :options="trainingOptions"
-          placeholder="请选择培训班"
-          :loading="trainingLoading"
+          placeholder="全部班级"
+          allow-clear
           show-search
           option-filter-prop="label"
-          @change="handleTrainingChange"
+          :options="trainingOptions"
+          :loading="trainingLoading"
+          @change="fetchCalendar"
         />
       </div>
     </div>
 
-    <div v-if="selectedTraining" class="hero-strip">
-      <div class="hero-main">
-        <div class="hero-badges">
-          <span v-if="selectedTraining.status" class="hero-badge" :class="`badge-${selectedTraining.status}`">
-            {{ statusLabels[selectedTraining.status] || selectedTraining.status }}
-          </span>
-          <span class="hero-badge subtle">{{ typeLabels[selectedTraining.type] || selectedTraining.type || '训练班' }}</span>
-        </div>
-        <h2 class="hero-title">{{ selectedTraining.name }}</h2>
-        <div class="hero-meta">
-          <span><UserOutlined /> {{ selectedTraining.instructor_name || '未指定教官' }}</span>
-          <span><EnvironmentOutlined /> {{ selectedTraining.location || '未设置地点' }}</span>
-          <span><TeamOutlined /> {{ selectedTraining.enrolled_count ?? 0 }}{{ selectedTraining.capacity ? ` / ${selectedTraining.capacity}` : '' }} 人</span>
-        </div>
+    <!-- 周切换条（参考图二） -->
+    <div class="week-switcher">
+      <button class="week-arrow" @click="goPrevWeek">&lt;</button>
+      <div
+        v-for="day in weekDays"
+        :key="day.dateKey"
+        class="week-day-cell"
+        :class="{ today: day.isToday }"
+      >
+        <strong class="week-day-num">{{ day.dayNum }}</strong>
+        <span class="week-day-label">{{ day.label }}</span>
       </div>
-
-      <div class="week-switcher">
-        <a-button :disabled="weekStartList.length <= 1 || currentWeekIndex <= 0" @click="goPrevWeek">上一周</a-button>
-        <div class="week-current">
-          <strong>{{ currentWeekLabel }}</strong>
-          <span>{{ currentWeekRange }}</span>
-        </div>
-        <a-button :disabled="weekStartList.length <= 1 || currentWeekIndex >= weekStartList.length - 1" @click="goNextWeek">下一周</a-button>
-      </div>
+      <button class="week-arrow" @click="goNextWeek">&gt;</button>
     </div>
 
-    <div v-if="trainingLoading || scheduleLoading" class="loading-wrapper">
-      <a-spin size="large" />
-    </div>
+    <!-- 加载 -->
+    <div v-if="loading" class="loading-wrapper"><a-spin size="large" /></div>
 
-    <a-empty
-      v-else-if="!trainingOptions.length"
-      description="暂无可查看的培训班"
-      class="empty-block"
-    />
-
-    <a-empty
-      v-else-if="!selectedTraining"
-      description="请选择培训班查看课表"
-      class="empty-block"
-    />
-
-    <template v-else>
-      <a-empty
-        v-if="!normalizedScheduleItems.length"
-        description="当前培训班暂无训练安排"
-        class="empty-block"
-      />
-
-      <template v-else>
-        <div class="stats-row">
-          <div class="stat-card">
-            <span class="stat-label">本周课程</span>
-            <strong class="stat-value">{{ currentWeekItems.length }}</strong>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">理论课程</span>
-            <strong class="stat-value">{{ currentWeekItems.filter((item) => item.type === 'theory').length }}</strong>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">技能课程</span>
-            <strong class="stat-value">{{ currentWeekItems.filter((item) => item.type === 'skill').length }}</strong>
-          </div>
-          <div class="stat-card">
-            <span class="stat-label">训练地点</span>
-            <strong class="stat-value stat-text">{{ distinctLocations }}</strong>
-          </div>
+    <!-- 时间网格日历（参考图一） -->
+    <div v-else class="cal-wrapper">
+      <div class="cal-grid">
+        <!-- 表头行 -->
+        <div class="cal-corner" />
+        <div
+          v-for="day in weekDays"
+          :key="'h-' + day.dateKey"
+          class="cal-col-head"
+          :class="{ today: day.isToday }"
+        >
+          <span class="col-head-name">{{ day.label }}</span>
+          <strong class="col-head-date">{{ day.displayDate }}</strong>
         </div>
 
-        <div class="schedule-board">
-          <article
-            v-for="day in currentWeekDays"
-            :key="day.dateKey"
-            class="day-column"
+        <!-- 时间行 -->
+        <template v-for="hour in timeSlots" :key="hour">
+          <div class="cal-time-label">{{ hour }}:00</div>
+          <div
+            v-for="day in weekDays"
+            :key="hour + '-' + day.dateKey"
+            class="cal-cell"
             :class="{ today: day.isToday }"
-          >
-            <header class="day-head">
-              <span class="day-name">{{ day.label }}</span>
-              <strong class="day-date">{{ day.displayDate }}</strong>
-            </header>
+          />
+        </template>
+      </div>
 
-            <div v-if="getItemsForDay(day.dateKey).length" class="day-list">
-              <div
-                v-for="item in getItemsForDay(day.dateKey)"
-                :key="item.id"
-                class="schedule-item"
-                :class="`type-${item.type}`"
-              >
-                <div class="schedule-item-top">
-                  <strong>{{ item.title }}</strong>
-                  <a-tag :color="typeTagColors[item.type] || 'blue'">{{ typeTagLabels[item.type] || '课程' }}</a-tag>
-                </div>
-                <div class="schedule-item-meta">
-                  <span><ClockCircleOutlined /> {{ item.timeText }}</span>
-                  <span><EnvironmentOutlined /> {{ item.location || '地点待定' }}</span>
-                </div>
-                <div class="schedule-item-meta secondary">
-                  <span><UserOutlined /> {{ item.instructor || selectedTraining.instructor_name || '待安排' }}</span>
-                  <span v-if="item.status">{{ statusLabels[item.status] || item.status }}</span>
-                </div>
-              </div>
-            </div>
+      <!-- 事件层：绝对定位在网格之上 -->
+      <div class="cal-events-layer">
+        <div
+          v-for="ev in positionedEvents"
+          :key="ev.key"
+          class="cal-event"
+          :class="`type-${ev.data.course_type}`"
+          :style="ev.style"
+          @dblclick="openDetail(ev.data)"
+        >
+          <strong class="ev-title">{{ ev.data.course_name }}</strong>
+          <span class="ev-meta">{{ ev.timeLabel }}{{ ev.data.location ? ' · ' + ev.data.location : '' }}</span>
+          <span class="ev-meta">{{ ev.data.instructor || '' }}</span>
+        </div>
+      </div>
+    </div>
 
-            <a-empty v-else :image="simpleImage" description="当天无安排" class="day-empty" />
-          </article>
+    <!-- 详情弹窗 -->
+    <a-modal v-model:open="detailVisible" title="课时详情" :footer="null" width="480px">
+      <template v-if="detailItem">
+        <a-descriptions :column="1" size="small" bordered>
+          <a-descriptions-item label="课程名称">{{ detailItem.course_name }}</a-descriptions-item>
+          <a-descriptions-item label="所属班级">{{ detailItem.training_name }}</a-descriptions-item>
+          <a-descriptions-item label="课程类型">
+            <a-tag :color="detailItem.course_type === 'theory' ? 'blue' : 'green'" size="small">
+              {{ detailItem.course_type === 'theory' ? '理论课' : '实操课' }}
+            </a-tag>
+          </a-descriptions-item>
+          <a-descriptions-item label="日期">{{ detailItem.date }}</a-descriptions-item>
+          <a-descriptions-item label="时间">{{ detailItem.time_range.replace('~', ' - ') }}</a-descriptions-item>
+          <a-descriptions-item label="课时">{{ detailItem.hours || '-' }} 课时</a-descriptions-item>
+          <a-descriptions-item label="教官">{{ detailItem.instructor || '未指定' }}</a-descriptions-item>
+          <a-descriptions-item label="地点">{{ detailItem.location || '未指定' }}</a-descriptions-item>
+          <a-descriptions-item label="状态">
+            <a-tag size="small">{{ statusLabels[detailItem.status] || detailItem.status }}</a-tag>
+          </a-descriptions-item>
+        </a-descriptions>
+        <div style="margin-top: 16px; text-align: right">
+          <a-button type="primary" @click="goToClass(detailItem.training_id)">进入班级</a-button>
         </div>
       </template>
-    </template>
+    </a-modal>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, computed, onMounted, type CSSProperties } from 'vue'
+import { useRouter } from 'vue-router'
 import dayjs from 'dayjs'
-import { Empty, message } from 'ant-design-vue'
-import {
-  ClockCircleOutlined,
-  EnvironmentOutlined,
-  TeamOutlined,
-  UserOutlined,
-} from '@ant-design/icons-vue'
-import {
-  getScheduleApiV1TrainingsTrainingIdScheduleGet,
-  getTrainingsApiV1TrainingsGet,
-} from '@/api/generated/training-management/training-management'
-import type { ScheduleItemResponse, TrainingListResponse } from '@/api/generated/model'
+import { message } from 'ant-design-vue'
+import axiosInstance from '@/api/custom-instance'
 
-interface NormalizedScheduleItem {
-  id: number
-  dateKey: string
-  title: string
-  type: string
-  timeText: string
-  location: string
-  instructor: string
-  status: string
-}
-
-interface WeekDayInfo {
-  label: string
-  dateKey: string
-  displayDate: string
-  isToday: boolean
-}
-
-const route = useRoute()
 const router = useRouter()
 
+const loading = ref(false)
 const trainingLoading = ref(false)
-const scheduleLoading = ref(false)
-const trainingList = ref<TrainingListResponse[]>([])
-const selectedTrainingId = ref<number | undefined>()
-const rawScheduleItems = ref<ScheduleItemResponse[]>([])
-const currentWeekIndex = ref(0)
+const selectedTrainingId = ref<number | undefined>(undefined)
+const trainingOptions = ref<{ value: number; label: string }[]>([])
+const weekOffset = ref(0)
 
-const simpleImage = Empty.PRESENTED_IMAGE_SIMPLE
+interface CalendarEvent {
+  training_id: number
+  training_name: string
+  course_name: string
+  course_type: string
+  date: string
+  time_range: string
+  hours: number | null
+  location: string | null
+  instructor: string | null
+  status: string
+  session_id: string | null
+}
+
+const allEvents = ref<CalendarEvent[]>([])
+const detailVisible = ref(false)
+const detailItem = ref<CalendarEvent | null>(null)
 
 const statusLabels: Record<string, string> = {
-  active: '进行中',
-  upcoming: '未开始',
-  ended: '已结束',
-  draft: '草稿',
   pending: '待开始',
+  checkin_open: '签到中',
+  checkin_closed: '进行中',
+  checkout_open: '签退中',
+  completed: '已完成',
+  skipped: '已跳过',
 }
 
-const typeLabels: Record<string, string> = {
-  basic: '基础训练',
-  special: '专项训练',
-  promotion: '晋升培训',
-  online: '线上培训',
-}
+// 时间网格配置
+const HOUR_START = 8
+const HOUR_END = 19
+const HOUR_HEIGHT = 60 // px per hour
+const HEADER_HEIGHT = 50 // col header row height
+const timeSlots = Array.from({ length: HOUR_END - HOUR_START }, (_, i) => HOUR_START + i)
 
-const typeTagLabels: Record<string, string> = {
-  theory: '理论课',
-  skill: '技能课',
-  practice: '实训课',
-}
-
-const typeTagColors: Record<string, string> = {
-  theory: 'blue',
-  skill: 'green',
-  practice: 'orange',
-}
-
-const trainingOptions = computed(() =>
-  trainingList.value.map((item) => ({
-    value: item.id,
-    label: item.name,
-  })),
+// 当前周周一
+const currentWeekStart = computed(() =>
+  dayjs().startOf('week').add(1, 'day').add(weekOffset.value, 'week'),
 )
 
-const selectedTraining = computed(() =>
-  trainingList.value.find((item) => item.id === selectedTrainingId.value) || null,
-)
-
-const normalizedScheduleItems = computed<NormalizedScheduleItem[]>(() =>
-  rawScheduleItems.value
-    .map((item) => {
-      const dateValue = resolveItemDate(item)
-      if (!dateValue) return null
-
-      const timeStart = normalizeClock(item.time_start)
-      const timeEnd = normalizeClock(item.time_end)
-      const timeText = timeStart && timeEnd ? `${timeStart} - ${timeEnd}` : (timeStart || timeEnd || '时间待定')
-
-      return {
-        id: item.id,
-        dateKey: dateValue.format('YYYY-MM-DD'),
-        title: item.title || '未命名课程',
-        type: item.type || 'theory',
-        timeText,
-        location: item.location || '',
-        instructor: item.instructor || '',
-        status: item.status || '',
-      }
-    })
-    .filter((item): item is NormalizedScheduleItem => Boolean(item))
-    .sort((left, right) => `${left.dateKey} ${left.timeText}`.localeCompare(`${right.dateKey} ${right.timeText}`)),
-)
-
-const weekStartList = computed(() => {
-  const weekMap = new Map<string, dayjs.Dayjs>()
-  for (const item of rawScheduleItems.value) {
-    const dateValue = resolveItemDate(item)
-    if (!dateValue) continue
-    const start = dateValue.startOf('week').add(1, 'day')
-    weekMap.set(start.format('YYYY-MM-DD'), start)
-  }
-
-  if (!weekMap.size && selectedTraining.value?.start_date) {
-    const fallback = dayjs(selectedTraining.value.start_date).startOf('week').add(1, 'day')
-    weekMap.set(fallback.format('YYYY-MM-DD'), fallback)
-  }
-
-  return [...weekMap.values()].sort((left, right) => left.valueOf() - right.valueOf())
-})
-
-const currentWeekStart = computed(() => weekStartList.value[currentWeekIndex.value] || null)
-
-const currentWeekDays = computed<WeekDayInfo[]>(() => {
-  const base = currentWeekStart.value || dayjs().startOf('week').add(1, 'day')
-  return Array.from({ length: 7 }, (_, index) => {
-    const day = base.add(index, 'day')
+const weekDays = computed(() =>
+  Array.from({ length: 7 }, (_, i) => {
+    const d = currentWeekStart.value.add(i, 'day')
     return {
-      label: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][index],
-      dateKey: day.format('YYYY-MM-DD'),
-      displayDate: day.format('MM/DD'),
-      isToday: day.isSame(dayjs(), 'day'),
+      label: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][i],
+      dateKey: d.format('YYYY-MM-DD'),
+      displayDate: d.format('MM/DD'),
+      dayNum: d.date(),
+      colIndex: i,
+      isToday: d.isSame(dayjs(), 'day'),
     }
-  })
-})
-
-const currentWeekItems = computed(() => {
-  const validKeys = new Set(currentWeekDays.value.map((item) => item.dateKey))
-  return normalizedScheduleItems.value.filter((item) => validKeys.has(item.dateKey))
-})
-
-const currentWeekLabel = computed(() =>
-  currentWeekStart.value ? `第 ${currentWeekIndex.value + 1} 周` : '本周',
+  }),
 )
 
-const currentWeekRange = computed(() => {
-  if (!currentWeekDays.value.length) return ''
-  return `${currentWeekDays.value[0].displayDate} - ${currentWeekDays.value[6].displayDate}`
+const weekItems = computed(() => {
+  const keys = new Set(weekDays.value.map((d) => d.dateKey))
+  return allEvents.value.filter((e) => keys.has(e.date))
 })
 
-const distinctLocations = computed(() => {
-  const values = [...new Set(currentWeekItems.value.map((item) => item.location).filter(Boolean))]
-  if (!values.length) return '待定'
-  if (values.length === 1) return values[0]
-  return `${values[0]} 等 ${values.length} 处`
+// 将事件转化为绝对定位样式
+interface PositionedEvent {
+  key: string
+  data: CalendarEvent
+  style: CSSProperties
+  timeLabel: string
+}
+
+const positionedEvents = computed<PositionedEvent[]>(() => {
+  const dateToCol = new Map(weekDays.value.map((d) => [d.dateKey, d.colIndex]))
+  const colCount = 7
+  const result: PositionedEvent[] = []
+
+  for (const ev of weekItems.value) {
+    const col = dateToCol.get(ev.date)
+    if (col === undefined) continue
+
+    const { startMin, endMin, startLabel } = parseTimeRange(ev.time_range)
+    if (startMin < 0) continue
+
+    const topPx = (startMin - HOUR_START * 60) / 60 * HOUR_HEIGHT + HEADER_HEIGHT
+    const heightPx = Math.max((endMin - startMin) / 60 * HOUR_HEIGHT, 24)
+
+    // Position within the 7-column area (after the 60px time-label gutter)
+    const colWidthCalc = `(100% - 60px) / ${colCount}`
+    const leftCalc = `calc(60px + ${col} * ${colWidthCalc})`
+    const widthCalc = `calc(${colWidthCalc})`
+
+    result.push({
+      key: ev.session_id || `${ev.training_id}-${ev.course_name}-${ev.time_range}-${ev.date}`,
+      data: ev,
+      timeLabel: startLabel,
+      style: {
+        position: 'absolute',
+        top: `${topPx}px`,
+        height: `${heightPx}px`,
+        left: leftCalc,
+        width: widthCalc,
+      },
+    })
+  }
+  return result
 })
 
-function normalizeClock(value?: string | null) {
-  if (!value) return ''
-  return value.slice(0, 5)
+function parseTimeRange(tr: string): { startMin: number; endMin: number; startLabel: string } {
+  if (!tr || !tr.includes('~')) return { startMin: -1, endMin: -1, startLabel: '' }
+  const [s, e] = tr.split('~').map((p) => p.trim())
+  const toMin = (t: string) => {
+    const [h, m] = t.split(':').map(Number)
+    return h * 60 + (m || 0)
+  }
+  return { startMin: toMin(s), endMin: toMin(e), startLabel: s.slice(0, 5) }
 }
 
-function resolveItemDate(item: ScheduleItemResponse) {
-  if (item.date) return dayjs(item.date)
-  if (item.week_start && typeof item.day === 'number') {
-    return dayjs(item.week_start).add(Math.max(item.day - 1, 0), 'day')
-  }
-  return null
+function openDetail(item: CalendarEvent) {
+  detailItem.value = item
+  detailVisible.value = true
 }
 
-function getItemsForDay(dateKey: string) {
-  return currentWeekItems.value.filter((item) => item.dateKey === dateKey)
+function goToClass(id: number) {
+  detailVisible.value = false
+  router.push(`/classes/${id}`)
 }
 
-function syncRouteWithTraining(trainingId?: number) {
-  const currentId = route.params.id ? Number(route.params.id) : undefined
-  if (!trainingId) {
-    if (currentId) {
-      router.replace({ name: 'ClassSchedule' })
-    }
-    return
-  }
-  if (currentId !== trainingId) {
-    router.replace({ name: 'ClassSchedule', params: { id: trainingId } })
-  }
-}
-
-function chooseInitialTrainingId() {
-  const routeId = route.params.id ? Number(route.params.id) : undefined
-  if (routeId && trainingList.value.some((item) => item.id === routeId)) {
-    return routeId
-  }
-  return trainingList.value.find((item) => item.status === 'active')?.id || trainingList.value[0]?.id
-}
-
-function chooseInitialWeekIndex() {
-  if (!weekStartList.value.length) {
-    currentWeekIndex.value = 0
-    return
-  }
-  const todayIndex = weekStartList.value.findIndex((item) => dayjs().isSame(item, 'week'))
-  currentWeekIndex.value = todayIndex >= 0 ? todayIndex : 0
-}
+function goPrevWeek() { weekOffset.value -= 1 }
+function goNextWeek() { weekOffset.value += 1 }
 
 async function fetchTrainings() {
   trainingLoading.value = true
   try {
-    const response = await getTrainingsApiV1TrainingsGet({ page: 1, size: -1 })
-    trainingList.value = response?.items || []
-    selectedTrainingId.value = chooseInitialTrainingId()
-    syncRouteWithTraining(selectedTrainingId.value)
-  } catch (error) {
-    trainingList.value = []
-    message.error(error instanceof Error ? error.message : '加载培训班失败')
+    const res = await axiosInstance.get('/trainings', { params: { page: 1, size: -1 } })
+    const data = res.data as { items: { id: number; name: string }[] }
+    trainingOptions.value = (data.items || []).map((t) => ({ value: t.id, label: t.name }))
+  } catch {
+    trainingOptions.value = []
   } finally {
     trainingLoading.value = false
   }
 }
 
-async function fetchSchedule(trainingId?: number) {
-  if (!trainingId) {
-    rawScheduleItems.value = []
-    currentWeekIndex.value = 0
-    return
-  }
-
-  scheduleLoading.value = true
+async function fetchCalendar() {
+  loading.value = true
   try {
-    rawScheduleItems.value = (await getScheduleApiV1TrainingsTrainingIdScheduleGet(trainingId)) || []
-    chooseInitialWeekIndex()
-  } catch (error) {
-    rawScheduleItems.value = []
-    currentWeekIndex.value = 0
-    message.error(error instanceof Error ? error.message : '加载周训练计划失败')
+    const params: Record<string, unknown> = {}
+    if (selectedTrainingId.value) params.training_id = selectedTrainingId.value
+    const res = await axiosInstance.get('/trainings/calendar', { params })
+    allEvents.value = (res.data as CalendarEvent[]) || []
+  } catch (err: unknown) {
+    message.error(err instanceof Error ? err.message : '加载日历失败')
+    allEvents.value = []
   } finally {
-    scheduleLoading.value = false
+    loading.value = false
   }
 }
-
-async function handleTrainingChange(value: number) {
-  selectedTrainingId.value = value
-  syncRouteWithTraining(value)
-  await fetchSchedule(value)
-}
-
-function goPrevWeek() {
-  if (currentWeekIndex.value > 0) {
-    currentWeekIndex.value -= 1
-  }
-}
-
-function goNextWeek() {
-  if (currentWeekIndex.value < weekStartList.value.length - 1) {
-    currentWeekIndex.value += 1
-  }
-}
-
-watch(
-  () => route.params.id,
-  async (value) => {
-    const nextId = value ? Number(value) : undefined
-    if (!nextId || nextId === selectedTrainingId.value) {
-      return
-    }
-    if (trainingList.value.some((item) => item.id === nextId)) {
-      selectedTrainingId.value = nextId
-      await fetchSchedule(nextId)
-    }
-  },
-)
 
 onMounted(async () => {
   await fetchTrainings()
-  await fetchSchedule(selectedTrainingId.value)
+  await fetchCalendar()
 })
 </script>
 
@@ -418,322 +286,252 @@ onMounted(async () => {
 .schedule-page {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
+/* -- 页头 -- */
 .page-header {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
 }
 
 .page-title {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
   color: var(--v2-text-primary);
-  margin-bottom: 6px;
 }
 
-.page-subtitle {
-  color: var(--v2-text-secondary);
-  line-height: 1.7;
-}
+.header-actions { display: flex; gap: 12px; }
+.training-select { width: 220px; max-width: 100%; }
 
-.header-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.training-select {
-  width: 320px;
-  max-width: 100%;
-}
-
-.hero-strip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  flex-wrap: wrap;
-  padding: 24px;
-  border-radius: 24px;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(240, 243, 255, 0.88) 100%);
-  box-shadow: var(--v2-shadow);
-}
-
-.hero-main {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.hero-badges {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.hero-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 10px;
-  border-radius: var(--v2-radius-full);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.hero-badge.subtle {
-  background: rgba(75, 110, 245, 0.1);
-  color: var(--v2-primary);
-}
-
-.badge-active {
-  background: rgba(52, 199, 89, 0.14);
-  color: #278947;
-}
-
-.badge-upcoming {
-  background: rgba(75, 110, 245, 0.14);
-  color: var(--v2-primary);
-}
-
-.badge-ended {
-  background: rgba(142, 142, 147, 0.14);
-  color: #6f6f75;
-}
-
-.hero-title {
-  font-size: 28px;
-  line-height: 1.1;
-  color: var(--v2-text-primary);
-}
-
-.hero-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  color: var(--v2-text-secondary);
-  font-size: 13px;
-}
-
-.hero-meta span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
+/* ====== 周切换条（图二样式） ====== */
 .week-switcher {
   display: flex;
   align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.week-current {
-  min-width: 180px;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.week-current strong {
-  font-size: 16px;
-  color: var(--v2-text-primary);
-}
-
-.week-current span {
-  font-size: 12px;
-  color: var(--v2-text-secondary);
-}
-
-.loading-wrapper,
-.empty-block {
-  padding: 80px 0;
-}
-
-.stats-row {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.stat-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 18px 20px;
-  border-radius: 20px;
   background: var(--v2-bg-card);
+  border-radius: var(--v2-radius);
+  padding: 10px 6px;
   box-shadow: var(--v2-shadow-sm);
 }
 
-.stat-label {
-  font-size: 13px;
-  color: var(--v2-text-secondary);
+.week-arrow {
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: none;
+  font-size: 16px;
+  color: var(--v2-text-muted);
+  cursor: pointer;
+  border-radius: var(--v2-radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
 }
 
-.stat-value {
-  font-size: 28px;
-  line-height: 1;
+.week-arrow:hover {
+  background: var(--v2-bg);
   color: var(--v2-text-primary);
 }
 
-.stat-text {
-  font-size: 18px;
-  line-height: 1.4;
-}
-
-.schedule-board {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.day-column {
+.week-day-cell {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 360px;
-  border-radius: 22px;
-  padding: 14px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(245, 246, 250, 0.92) 100%);
+  align-items: center;
+  gap: 2px;
+  padding: 6px 0;
+  border-radius: var(--v2-radius-sm);
+  cursor: default;
+}
+
+.week-day-num {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--v2-text-primary);
+  line-height: 1.2;
+}
+
+.week-day-label {
+  font-size: 11px;
+  color: var(--v2-text-muted);
+}
+
+.week-day-cell.today {
+  background: var(--v2-primary);
+  border-radius: var(--v2-radius);
+}
+
+.week-day-cell.today .week-day-num {
+  color: #fff;
+}
+
+.week-day-cell.today .week-day-label {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* ====== 时间网格日历（图一样式） ====== */
+.loading-wrapper { padding: 80px 0; display: flex; justify-content: center; }
+
+.cal-wrapper {
+  position: relative;
+  background: var(--v2-bg-card);
+  border-radius: var(--v2-radius);
+  overflow: hidden;
   box-shadow: var(--v2-shadow-sm);
 }
 
-.day-column.today {
-  box-shadow: 0 0 0 1px rgba(75, 110, 245, 0.14), var(--v2-shadow);
-  background: linear-gradient(180deg, rgba(238, 242, 255, 0.88) 0%, rgba(255, 255, 255, 0.96) 100%);
+.cal-grid {
+  display: grid;
+  /* 60px for time label + 7 equal columns */
+  grid-template-columns: 60px repeat(7, 1fr);
 }
 
-.day-head {
+/* -- 左上角空格 -- */
+.cal-corner {
+  height: 50px;
+  border-bottom: 2px solid var(--v2-primary);
+  background: var(--v2-bg-card);
+  position: sticky;
+  top: 0;
+  z-index: 3;
+}
+
+/* -- 列头 -- */
+.cal-col-head {
+  height: 50px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding-bottom: 12px;
-  margin-bottom: 12px;
-  border-bottom: 1px solid rgba(229, 229, 234, 0.85);
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border-bottom: 2px solid var(--v2-primary);
+  background: var(--v2-bg-card);
+  position: sticky;
+  top: 0;
+  z-index: 3;
 }
 
-.day-name {
+.cal-col-head.today {
+  background: var(--v2-primary-light);
+}
+
+.col-head-name {
   font-size: 12px;
   color: var(--v2-text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
-.day-date {
-  font-size: 20px;
+.cal-col-head.today .col-head-name {
+  color: var(--v2-primary);
+  font-weight: 600;
+}
+
+.col-head-date {
+  font-size: 14px;
+  font-weight: 600;
   color: var(--v2-text-primary);
 }
 
-.day-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.cal-col-head.today .col-head-date {
+  color: var(--v2-primary);
 }
 
-.schedule-item {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 14px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(229, 229, 234, 0.82);
-}
-
-.schedule-item.type-theory {
-  border-color: rgba(75, 110, 245, 0.16);
-  background: linear-gradient(180deg, rgba(238, 242, 255, 0.86) 0%, rgba(255, 255, 255, 0.96) 100%);
-}
-
-.schedule-item.type-skill,
-.schedule-item.type-practice {
-  border-color: rgba(52, 199, 89, 0.18);
-  background: linear-gradient(180deg, rgba(241, 253, 245, 0.92) 0%, rgba(255, 255, 255, 0.98) 100%);
-}
-
-.schedule-item-top {
+/* -- 时间标签 -- */
+.cal-time-label {
+  height: 60px;
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
+  justify-content: flex-end;
+  padding: 0 8px;
+  font-size: 11px;
+  color: var(--v2-text-muted);
+  border-top: 1px solid var(--v2-border-light);
+  transform: translateY(-7px);
 }
 
-.schedule-item-top strong {
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--v2-text-primary);
+/* -- 单元格 -- */
+.cal-cell {
+  height: 60px;
+  border-top: 1px solid var(--v2-border-light);
+  border-left: 1px solid var(--v2-border-light);
 }
 
-.schedule-item-meta {
+.cal-cell.today {
+  background: rgba(75, 110, 245, 0.02);
+}
+
+/* ====== 事件层 ====== */
+.cal-events-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+
+.cal-event {
+  position: absolute;
+  /* left/top/width/height set by inline style */
+  pointer-events: auto;
+  border-radius: 4px;
+  padding: 4px 6px;
+  overflow: hidden;
+  cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 1px;
+  border-left: 3px solid var(--v2-primary);
+  background: rgba(219, 234, 254, 0.7);
+  transition: box-shadow 0.15s;
+  margin: 0 2px;
+}
+
+.cal-event:hover {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  z-index: 5;
+}
+
+.cal-event.type-theory {
+  border-left-color: var(--v2-primary);
+  background: rgba(219, 234, 254, 0.7);
+}
+
+.cal-event.type-practice,
+.cal-event.type-skill {
+  border-left-color: var(--v2-success);
+  background: rgba(209, 250, 229, 0.7);
+}
+
+.ev-title {
   font-size: 12px;
+  font-weight: 600;
+  color: var(--v2-text-primary);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ev-meta {
+  font-size: 10px;
   color: var(--v2-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.schedule-item-meta span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.schedule-item-meta.secondary {
-  padding-top: 6px;
-  border-top: 1px dashed rgba(229, 229, 234, 0.9);
-}
-
-.day-empty {
-  margin: auto 0;
-  padding: 32px 0 16px;
-}
-
-@media (max-width: 1400px) {
-  .schedule-board {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 1024px) {
-  .stats-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .schedule-board {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
+/* ====== 响应式 ====== */
 @media (max-width: 768px) {
-  .page-header,
-  .hero-strip {
-    align-items: flex-start;
-  }
-
-  .training-select {
-    width: 100%;
-  }
-
-  .header-actions,
-  .week-switcher {
-    width: 100%;
-  }
-
-  .week-switcher {
-    justify-content: space-between;
-  }
-
-  .stats-row,
-  .schedule-board {
-    grid-template-columns: 1fr;
-  }
-
-  .hero-strip,
-  .day-column {
-    padding: 18px;
-  }
+  .training-select { width: 100%; }
+  .cal-grid { grid-template-columns: 40px repeat(7, 1fr); }
+  .cal-time-label { padding: 0 4px; font-size: 10px; }
+  .week-day-num { font-size: 15px; }
 }
 </style>
