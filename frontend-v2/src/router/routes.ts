@@ -38,6 +38,10 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/dashboard/Index.vue'),
         meta: { title: '工作台', anyPermissions: DASHBOARD_PERMISSIONS },
       },
+      {
+        path: 'calendar',
+        redirect: { name: 'ClassSchedule' },
+      },
       // -- 班级 --
       {
         path: 'classes',
@@ -54,7 +58,7 @@ export const routes: RouteRecordRaw[] = [
       {
         path: 'classes/schedule/:id?',
         name: 'ClassSchedule',
-        component: () => import('@/views/dashboard/Index.vue'),
+        component: () => import('@/views/classes/Schedule.vue'),
         meta: { title: '周训练计划', anyPermissions: TRAINING_SCHEDULE_PERMISSIONS },
       },
       {
