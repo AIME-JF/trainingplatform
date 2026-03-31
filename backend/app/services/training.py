@@ -35,6 +35,7 @@ from app.models.resource import Resource, ResourceTagRelation, TrainingResourceR
 from app.schemas import PaginatedResponse
 from app.schemas.resource import ResourceListItemResponse, TrainingResourceBindRequest
 from app.schemas.training import (
+    CalendarEventResponse,
     CheckinCreate,
     CheckinResponse,
     TrainingCheckinQrResponse,
@@ -743,6 +744,52 @@ class TrainingService:
             ScheduleItem.training_id == training_id
         ).order_by(ScheduleItem.day, ScheduleItem.time_start).all()
         return [ScheduleItemResponse.model_validate(item) for item in items]
+
+    def get_calendar_events(self, user_id: int, training_id: Optional[int] = None) -> List[CalendarEventResponse]:
+        """获取用户可见班级的聚合日历事件（从 course.schedules JSON 展开）"""
+        query = self.db.query(Training).options(
+            joinedload(Training.courses).joinedload(TrainingCourse.primary_instructor),
+            joinedload(Training.enrollments),
+        )
+        if training_id:
+            query = query.filter(Training.id == training_id)
+
+        trainings = query.all()
+
+        context = build_data_scope_context(self.db, user_id)
+        events: List[CalendarEventResponse] = []
+        for training in trainings:
+            # 只返回与用户相关的班级的课时
+            related = is_training_related_user(training, user_id)
+            if not (context.is_admin or related):
+                continue
+            for course in (training.courses or []):
+                for schedule in (course.schedules or []):
+                    schedule_data = schedule if isinstance(schedule, dict) else {}
+                    date_val = schedule_data.get("date")
+                    time_range = schedule_data.get("time_range")
+                    if not date_val or not time_range:
+                        continue
+                    instructor_name = None
+                    if course.primary_instructor:
+                        instructor_name = course.primary_instructor.nickname or course.primary_instructor.username
+                    elif course.instructor:
+                        instructor_name = course.instructor
+                    events.append(CalendarEventResponse(
+                        training_id=training.id,
+                        training_name=training.name,
+                        course_name=course.name or "未命名课程",
+                        course_type=course.type or "theory",
+                        date=date_val,
+                        time_range=time_range,
+                        hours=schedule_data.get("hours"),
+                        location=schedule_data.get("location") or course.location,
+                        instructor=instructor_name,
+                        status=schedule_data.get("status") or "pending",
+                        session_id=schedule_data.get("session_id"),
+                    ))
+        events.sort(key=lambda e: f"{e.date} {e.time_range}")
+        return events
 
     def enroll(self, training_id: int, user_id: int, data: EnrollmentCreate) -> EnrollmentResponse:
         """学员报名"""

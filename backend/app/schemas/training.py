@@ -524,6 +524,22 @@ class ScheduleItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CalendarEventResponse(BaseModel):
+    """聚合日历事件（跨班级合并课时）"""
+
+    training_id: int
+    training_name: str
+    course_name: str
+    course_type: str = "theory"
+    date: DateType
+    time_range: str
+    hours: Optional[float] = 0
+    location: Optional[str] = None
+    instructor: Optional[str] = None
+    status: str = "pending"
+    session_id: Optional[str] = None
+
+
 class TrainingHistoryResponse(BaseModel):
     """训历响应"""
 
