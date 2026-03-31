@@ -5,6 +5,8 @@ __version__ = "1.0.0"
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 
 from app.database import init_db
 from app.middleware import RequestLoggingMiddleware, register_exception_handlers
@@ -21,6 +23,11 @@ app = FastAPI(
     docs_url=f"{settings.API_V1_STR}/docs",
     redoc_url=f"{settings.API_V1_STR}/redoc",
 )
+
+# Mount docs folder for template downloads
+docs_path = Path(__file__).parent.parent.parent / "docs"
+if docs_path.exists():
+    app.mount("/docs", StaticFiles(directory=str(docs_path)), name="docs")
 
 app.add_middleware(
     CORSMiddleware,

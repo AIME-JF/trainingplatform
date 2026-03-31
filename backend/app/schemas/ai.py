@@ -253,6 +253,24 @@ class AIPaperGenerationTaskCreateRequest(BaseModel):
     requirements: Optional[str] = Field(None, max_length=1000, description="补充要求")
 
 
+class AIPaperDocumentGenerationTaskCreateRequest(BaseModel):
+    """AI 根据文档生成试卷创建请求"""
+
+    task_name: str = Field(..., max_length=200, description="任务名称")
+    paper_title: str = Field(..., max_length=200, description="试卷名称")
+    paper_type: str = Field("formal", description="试卷类型: formal/quiz")
+    description: Optional[str] = Field(None, description="试卷说明")
+    duration: int = Field(60, ge=10, le=300, description="考试时长")
+    passing_score: int = Field(60, ge=1, description="及格分")
+    document_id: Optional[int] = Field(None, description="已上传文档 ID")
+    document_url: Optional[str] = Field(None, max_length=500, description="文档 URL")
+    source_text: Optional[str] = Field(None, max_length=8000, description="文档内容文本")
+    difficulty: int = Field(3, ge=1, le=5, description="整体难度")
+    police_type_id: Optional[int] = Field(None, description="警种 ID")
+    type_configs: List[AIPaperAssemblyTypeConfig] = Field(default_factory=list, description="题型配置")
+    requirements: Optional[str] = Field(None, max_length=1000, description="补充要求")
+
+
 class TeachingResourceGenerationTaskCreateRequest(BaseModel):
     """教学资源生成任务创建请求"""
 
@@ -680,6 +698,14 @@ class AIPaperGenerationTaskDetailResponse(AITaskSummaryResponse):
     """AI 自动生成试卷任务详情响应"""
 
     request_payload: AIPaperGenerationTaskCreateRequest
+    paper_draft: Optional[AITaskPaperDraft] = None
+    error_message: Optional[str] = None
+
+
+class AIPaperDocumentGenerationTaskDetailResponse(AITaskSummaryResponse):
+    """AI 根据文档生成试卷任务详情响应"""
+
+    request_payload: AIPaperDocumentGenerationTaskCreateRequest
     paper_draft: Optional[AITaskPaperDraft] = None
     error_message: Optional[str] = None
 

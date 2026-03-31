@@ -65,7 +65,9 @@ from .exam import (
     AdmissionExamDetailResponse, AdmissionExamRecordResponse,
     ExamCreate, ExamUpdate, ExamResponse, ExamDetailResponse,
     ExamSubmit, ExamRecordResponse, ExamQuestionSnapshotResponse,
-    ExamWrongQuestionResponse
+    ExamWrongQuestionResponse,
+    PaperFolderCreate, PaperFolderUpdate, PaperFolderResponse, PaperMoveRequest,
+    QuestionFolderCreate, QuestionFolderUpdate, QuestionFolderResponse, QuestionMoveRequest
 )
 # 证书相关
 from .certificate import CertificateCreate, CertificateResponse
@@ -83,7 +85,8 @@ from .ai import (
     AIQuestionTaskCreateRequest, AIQuestionTaskUpdateRequest,
     AIPaperAssemblyParsedRequest, AIPaperAssemblyParsedTypeConfig,
     AIPaperAssemblyTaskCreateRequest, AIPaperAssemblyTypeConfig,
-    AIPaperGenerationTaskCreateRequest, AIPaperTaskUpdateRequest,
+    AIPaperGenerationTaskCreateRequest, AIPaperDocumentGenerationTaskCreateRequest,
+    AIPaperTaskUpdateRequest,
     TeachingResourceGenerationTaskCreateRequest, TeachingResourceGenerationParsedRequest,
     TeachingResourceGenerationResourceMeta, TeachingResourceGenerationMetaUpdateRequest,
     TeachingResourceGenerationTemplateSlot, TeachingResourceGenerationTemplatePayload,
@@ -100,7 +103,8 @@ from .ai import (
     AIPersonalTrainingAction, AIPersonalTrainingResourceRecommendation,
     AITaskQuestionDraft, AITaskPaperDraft, AITaskSummaryResponse,
     AIQuestionTaskDetailResponse, AIPaperAssemblyTaskDetailResponse,
-    AIPaperGenerationTaskDetailResponse, AIScheduleTaskDetailResponse,
+    AIPaperGenerationTaskDetailResponse, AIPaperDocumentGenerationTaskDetailResponse,
+    AIScheduleTaskDetailResponse,
     AIPersonalTrainingTaskDetailResponse, TeachingResourceGenerationTaskDetailResponse
 )
 # 人才库
@@ -176,6 +180,8 @@ __all__ = [
     "ExamCreate", "ExamUpdate", "ExamResponse", "ExamDetailResponse",
     "ExamSubmit", "ExamRecordResponse", "ExamQuestionSnapshotResponse",
     "ExamWrongQuestionResponse",
+    "PaperFolderCreate", "PaperFolderUpdate", "PaperFolderResponse", "PaperMoveRequest",
+    "QuestionFolderCreate", "QuestionFolderUpdate", "QuestionFolderResponse", "QuestionMoveRequest",
     # 证书相关
     "CertificateCreate", "CertificateResponse",
     # 个人中心
@@ -189,7 +195,8 @@ __all__ = [
     "AIQuestionTaskCreateRequest", "AIQuestionTaskUpdateRequest",
     "AIPaperAssemblyParsedRequest", "AIPaperAssemblyParsedTypeConfig",
     "AIPaperAssemblyTaskCreateRequest", "AIPaperAssemblyTypeConfig",
-    "AIPaperGenerationTaskCreateRequest", "AIPaperTaskUpdateRequest",
+    "AIPaperGenerationTaskCreateRequest", "AIPaperDocumentGenerationTaskCreateRequest",
+    "AIPaperTaskUpdateRequest",
     "TeachingResourceGenerationTaskCreateRequest", "TeachingResourceGenerationParsedRequest",
     "TeachingResourceGenerationResourceMeta", "TeachingResourceGenerationMetaUpdateRequest",
     "TeachingResourceGenerationTemplateSlot", "TeachingResourceGenerationTemplatePayload",
@@ -206,7 +213,8 @@ __all__ = [
     "AIPersonalTrainingAction", "AIPersonalTrainingResourceRecommendation",
     "AITaskQuestionDraft", "AITaskPaperDraft", "AITaskSummaryResponse",
     "AIQuestionTaskDetailResponse", "AIPaperAssemblyTaskDetailResponse",
-    "AIPaperGenerationTaskDetailResponse", "AIScheduleTaskDetailResponse",
+    "AIPaperGenerationTaskDetailResponse", "AIPaperDocumentGenerationTaskDetailResponse",
+    "AIScheduleTaskDetailResponse",
     "AIPersonalTrainingTaskDetailResponse", "TeachingResourceGenerationTaskDetailResponse",
     # 人才库
     "TalentResponse", "TalentStatsResponse",

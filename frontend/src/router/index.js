@@ -118,15 +118,13 @@ const router = createRouter({
         },
         {
           path: 'paper/ai-assemble',
-          name: 'AiAssemblePaperTask',
-          component: () => import('../views/exam/AiAssemblePaperTask.vue'),
-          meta: { title: '智能组卷', anyPermissions: AI_PAPER_ASSEMBLE_PAGE_PERMISSIONS },
+          name: 'AiPaperTask',
+          component: () => import('../views/exam/AiPaperTask.vue'),
+          meta: { title: '智能出卷', anyPermissions: [...AI_PAPER_ASSEMBLE_PAGE_PERMISSIONS, ...AI_PAPER_GENERATE_PAGE_PERMISSIONS] },
         },
         {
           path: 'paper/ai-generate',
-          name: 'AiGeneratePaperTask',
-          component: () => import('../views/exam/AiGeneratePaperTask.vue'),
-          meta: { title: '智能生成试卷', anyPermissions: AI_PAPER_GENERATE_PAGE_PERMISSIONS },
+          redirect: '/paper/ai-assemble',
         },
         {
           path: 'training',
@@ -348,7 +346,7 @@ const router = createRouter({
       component: () => import('../views/mobile/Checkin.vue'),
       meta: { title: '扫码签到' },
     },
-    { path: '/:pathMatch(.*)*', redirect: '/' },
+    { path: '/:pathMatch(.*)*', redirect: '/login' },
   ],
 })
 
@@ -409,13 +407,13 @@ router.beforeEach((to) => {
   }
 
   if (to.meta.anyPermissions && !hasAnyPermission(to.meta.anyPermissions)) {
-    return '/'
+    return '/login'
   }
   if (to.meta.allPermissions && !hasAllPermissions(to.meta.allPermissions)) {
-    return '/'
+    return '/login'
   }
   if (to.meta.roles && !hasAllowedRole(to.meta.roles)) {
-    return '/'
+    return '/login'
   }
   return true
 })

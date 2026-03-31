@@ -61,17 +61,55 @@ class Question(Base):
     difficulty = Column(Integer, default=1, comment="难度1-5")
     police_type_id = Column(Integer, ForeignKey("police_types.id"), nullable=True, comment="警种ID")
     score = Column(Integer, default=1, comment="分值")
+    folder_id = Column(Integer, ForeignKey("question_folders.id"), nullable=True, comment="所属文件夹ID")
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True, comment="创建人ID")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), comment="更新时间")
 
     creator = relationship("User", foreign_keys=[created_by])
     police_type = relationship("PoliceType", foreign_keys=[police_type_id])
+    folder = relationship("QuestionFolder", back_populates="questions")
     knowledge_points = relationship(
         "KnowledgePoint",
         secondary=question_knowledge_point_relations,
         back_populates="questions",
     )
+
+
+class QuestionFolder(Base):
+    """试题文件夹表"""
+
+    __tablename__ = "question_folders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False, comment="文件夹名称")
+    parent_id = Column(Integer, ForeignKey("question_folders.id"), nullable=True, comment="父文件夹ID")
+    sort_order = Column(Integer, default=0, comment="排序")
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True, comment="创建人ID")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), comment="更新时间")
+
+    creator = relationship("User", foreign_keys=[created_by])
+    parent = relationship("QuestionFolder", remote_side=[id], backref="children")
+    questions = relationship("Question", back_populates="folder")
+
+
+class PaperFolder(Base):
+    """试卷文件夹表"""
+
+    __tablename__ = "paper_folders"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(100), nullable=False, comment="文件夹名称")
+    parent_id = Column(Integer, ForeignKey("paper_folders.id"), nullable=True, comment="父文件夹ID")
+    sort_order = Column(Integer, default=0, comment="排序")
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True, comment="创建人ID")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), comment="更新时间")
+
+    creator = relationship("User", foreign_keys=[created_by])
+    parent = relationship("PaperFolder", remote_side=[id], backref="children")
+    papers = relationship("ExamPaper", back_populates="folder")
 
 
 class ExamPaper(Base):
@@ -87,12 +125,14 @@ class ExamPaper(Base):
     passing_score = Column(Integer, default=60, comment="及格分")
     type = Column(String(50), default="formal", comment="试卷类型: formal/quiz")
     status = Column(String(20), default="draft", comment="试卷状态: draft/published/archived")
+    folder_id = Column(Integer, ForeignKey("paper_folders.id"), nullable=True, comment="所属文件夹ID")
     published_at = Column(DateTime(timezone=True), nullable=True, comment="发布时间")
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True, comment="创建人ID")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), comment="更新时间")
 
     creator = relationship("User", foreign_keys=[created_by])
+    folder = relationship("PaperFolder", back_populates="papers")
     paper_questions = relationship(
         "ExamPaperQuestion",
         back_populates="paper",

@@ -273,7 +273,6 @@ const primaryExamRoute = computed(() => {
     '/paper/repository',
     '/question/ai',
     '/paper/ai-assemble',
-    '/paper/ai-generate',
   ]
   return preferredRoutes.find((item) => visibleMenuKeys.value.includes(item)) || ''
 })
@@ -289,7 +288,6 @@ function getSelectedMenuKeyByPath(path) {
   if (path.startsWith('/question/ai')) return '/question/ai'
   if (path.startsWith('/paper/repository')) return '/paper/repository'
   if (path.startsWith('/paper/ai-assemble')) return '/paper/ai-assemble'
-  if (path.startsWith('/paper/ai-generate')) return '/paper/ai-generate'
   if (path.startsWith('/training/base')) return '/training/base'
   if (path.startsWith('/training/schedule')) return '/training/schedule'
   if (path.startsWith('/training/board')) return '/training/board'

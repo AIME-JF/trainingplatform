@@ -26,6 +26,10 @@ from app.schemas import (
     ExamSubmit,
     ExamUpdate,
     PaginatedResponse,
+    PaperFolderCreate,
+    PaperFolderResponse,
+    PaperFolderUpdate,
+    PaperMoveRequest,
     StandardResponse,
     TokenData,
 )
@@ -46,12 +50,13 @@ def get_exam_papers(
     status: Optional[str] = None,
     type: Optional[str] = None,
     search: Optional[str] = None,
+    folder_id: Optional[int] = None,
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     _require_admin_or_instructor(db, current_user.user_id)
     controller = ExamController(db)
-    data = controller.get_exam_papers(page, size, status, type, search, current_user.user_id)
+    data = controller.get_exam_papers(page, size, status, type, search, current_user.user_id, folder_id)
     return StandardResponse(data=data)
 
 
@@ -125,6 +130,69 @@ def delete_exam_paper(
     _require_admin_or_instructor(db, current_user.user_id)
     controller = ExamController(db)
     result = controller.delete_exam_paper(paper_id)
+    return StandardResponse(data=result)
+
+
+# ============== 文件夹管理 ==============
+
+@router.get("/paper-folders", response_model=StandardResponse[list[PaperFolderResponse]], summary="获取文件夹树")
+def get_paper_folders(
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = ExamController(db)
+    data = controller.get_paper_folders(current_user.user_id)
+    return StandardResponse(data=data)
+
+
+@router.post("/paper-folders", response_model=StandardResponse[PaperFolderResponse], summary="创建文件夹")
+def create_paper_folder(
+    data: PaperFolderCreate,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = ExamController(db)
+    result = controller.create_paper_folder(data, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.put("/paper-folders/{folder_id}", response_model=StandardResponse[PaperFolderResponse], summary="更新文件夹")
+def update_paper_folder(
+    folder_id: int,
+    data: PaperFolderUpdate,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = ExamController(db)
+    result = controller.update_paper_folder(folder_id, data)
+    return StandardResponse(data=result)
+
+
+@router.delete("/paper-folders/{folder_id}", response_model=StandardResponse[dict], summary="删除文件夹")
+def delete_paper_folder(
+    folder_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = ExamController(db)
+    result = controller.delete_paper_folder(folder_id)
+    return StandardResponse(data=result)
+
+
+@router.patch("/papers/{paper_id}/folder", response_model=StandardResponse[ExamPaperDetailResponse], summary="移动试卷到文件夹")
+def move_paper_to_folder(
+    paper_id: int,
+    data: PaperMoveRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = ExamController(db)
+    result = controller.move_paper_to_folder(paper_id, data)
     return StandardResponse(data=result)
 
 

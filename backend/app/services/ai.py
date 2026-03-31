@@ -16,6 +16,8 @@ from app.schemas import (
     AIPaperAssemblyTypeConfig,
     AIPaperGenerationTaskCreateRequest,
     AIPaperGenerationTaskDetailResponse,
+    AIPaperDocumentGenerationTaskCreateRequest,
+    AIPaperDocumentGenerationTaskDetailResponse,
     AIPaperTaskUpdateRequest,
     AIQuestionTaskCreateRequest,
     AIQuestionTaskDetailResponse,
@@ -40,6 +42,7 @@ class AIService:
     QUESTION_TASK_TYPE = "question_generation"
     PAPER_ASSEMBLY_TASK_TYPE = "paper_assembly"
     PAPER_GENERATION_TASK_TYPE = "paper_generation"
+    PAPER_DOCUMENT_GENERATION_TASK_TYPE = "paper_document_generation"
     QUESTION_TASK_MAX_COUNT = 20
     SUPPORTED_QUESTION_TYPES = ("single", "multi", "judge")
     QUESTION_TYPE_ORDER = {
@@ -85,6 +88,15 @@ class AIService:
     ) -> PaginatedResponse[AITaskSummaryResponse]:
         return self._list_tasks(self.PAPER_GENERATION_TASK_TYPE, page, size, status, current_user_id)
 
+    def list_paper_document_generation_tasks(
+        self,
+        page: int,
+        size: int,
+        status: Optional[str],
+        current_user_id: int,
+    ) -> PaginatedResponse[AITaskSummaryResponse]:
+        return self._list_tasks(self.PAPER_DOCUMENT_GENERATION_TASK_TYPE, page, size, status, current_user_id)
+
     def get_question_task_detail(self, task_id: int, current_user_id: int) -> AIQuestionTaskDetailResponse:
         task = self._get_task_or_raise(task_id, self.QUESTION_TASK_TYPE, current_user_id)
         return self._to_question_task_detail(task)
@@ -104,6 +116,14 @@ class AIService:
     ) -> AIPaperGenerationTaskDetailResponse:
         task = self._get_task_or_raise(task_id, self.PAPER_GENERATION_TASK_TYPE, current_user_id)
         return self._to_paper_generation_task_detail(task)
+
+    def get_paper_document_generation_task_detail(
+        self,
+        task_id: int,
+        current_user_id: int,
+    ) -> AIPaperDocumentGenerationTaskDetailResponse:
+        task = self._get_task_or_raise(task_id, self.PAPER_DOCUMENT_GENERATION_TASK_TYPE, current_user_id)
+        return self._to_paper_document_generation_task_detail(task)
 
     def create_question_task(
         self,
@@ -222,6 +242,28 @@ class AIService:
         self.db.commit()
         return self.get_paper_generation_task_detail(task.id, current_user_id)
 
+    def create_paper_document_generation_task(
+        self,
+        data: AIPaperDocumentGenerationTaskCreateRequest,
+        current_user_id: int,
+    ) -> AIPaperDocumentGenerationTaskDetailResponse:
+        normalized_data = self._normalize_paper_document_generation_task_request(data)
+        task = self._create_task_entity(
+            normalized_data.task_name,
+            self.PAPER_DOCUMENT_GENERATION_TASK_TYPE,
+            normalized_data.model_dump(mode="python"),
+            current_user_id,
+        )
+        try:
+            paper_draft = self._simulate_paper_document_generation_result(normalized_data)
+            task.result_payload = {"paper_draft": paper_draft.model_dump(mode="python")}
+            self._mark_task_completed(task)
+        except Exception as exc:
+            self._mark_task_failed(task, str(exc))
+            logger.error("AI 根据文档生成试卷任务失败: %s", exc)
+        self.db.commit()
+        return self.get_paper_document_generation_task_detail(task.id, current_user_id)
+
     def update_question_task(
         self,
         task_id: int,
@@ -272,6 +314,22 @@ class AIService:
         self.db.commit()
         return self.get_paper_generation_task_detail(task_id, current_user_id)
 
+    def update_paper_document_generation_task(
+        self,
+        task_id: int,
+        data: AIPaperTaskUpdateRequest,
+        current_user_id: int,
+    ) -> AIPaperDocumentGenerationTaskDetailResponse:
+        task = self._get_task_or_raise(task_id, self.PAPER_DOCUMENT_GENERATION_TASK_TYPE, current_user_id)
+        self._ensure_task_editable(task)
+        if data.task_name:
+            task.task_name = data.task_name
+        task.result_payload = {
+            "paper_draft": self._sanitize_paper_draft(data.paper_draft).model_dump(mode="python"),
+        }
+        self.db.commit()
+        return self.get_paper_document_generation_task_detail(task_id, current_user_id)
+
     def confirm_question_task(self, task_id: int, current_user_id: int) -> AIQuestionTaskDetailResponse:
         task = self._get_task_or_raise(task_id, self.QUESTION_TASK_TYPE, current_user_id)
         self._ensure_task_confirmable(task)
@@ -319,6 +377,21 @@ class AIService:
         task.confirmed_at = datetime.now()
         self.db.commit()
         return self.get_paper_generation_task_detail(task_id, current_user_id)
+
+    def confirm_paper_document_generation_task(
+        self,
+        task_id: int,
+        current_user_id: int,
+    ) -> AIPaperDocumentGenerationTaskDetailResponse:
+        task = self._get_task_or_raise(task_id, self.PAPER_DOCUMENT_GENERATION_TASK_TYPE, current_user_id)
+        self._ensure_task_confirmable(task)
+        paper_id, question_ids = self._confirm_paper_task(task, current_user_id)
+        task.confirmed_paper_id = paper_id
+        task.confirmed_question_ids = question_ids
+        task.status = "confirmed"
+        task.confirmed_at = datetime.now()
+        self.db.commit()
+        return self.get_paper_document_generation_task_detail(task_id, current_user_id)
 
     def _confirm_paper_task(self, task: AITask, current_user_id: int) -> tuple[int, List[int]]:
         paper_payload = (task.result_payload or {}).get("paper_draft")
@@ -486,6 +559,15 @@ class AIService:
             error_message=task.error_message,
         )
 
+    def _to_paper_document_generation_task_detail(self, task: AITask) -> AIPaperDocumentGenerationTaskDetailResponse:
+        paper_draft = self._extract_paper_draft(task)
+        return AIPaperDocumentGenerationTaskDetailResponse(
+            **self._to_task_summary(task).model_dump(),
+            request_payload=AIPaperDocumentGenerationTaskCreateRequest.model_validate(task.request_payload or {}),
+            paper_draft=paper_draft,
+            error_message=task.error_message,
+        )
+
     def _extract_paper_draft(self, task: AITask) -> Optional[AITaskPaperDraft]:
         paper_payload = (task.result_payload or {}).get("paper_draft")
         if not paper_payload:
@@ -609,6 +691,70 @@ class AIService:
         payload["requirements"] = (data.requirements or "").strip() or None
         payload["type_configs"] = [item.model_dump(mode="python") for item in type_configs]
         return AIPaperGenerationTaskCreateRequest.model_validate(payload)
+
+    def _normalize_paper_document_generation_task_request(
+        self,
+        data: AIPaperDocumentGenerationTaskCreateRequest,
+    ) -> AIPaperDocumentGenerationTaskCreateRequest:
+        task_name = str(data.task_name or "").strip()
+        paper_title = str(data.paper_title or "").strip()
+        if not task_name or not paper_title:
+            raise ValueError("请填写任务名称和试卷名称")
+        if not (data.source_text or "").strip():
+            raise ValueError("请上传文档或输入文档内容")
+
+        type_configs = self._normalize_task_type_configs(
+            data.type_configs or list(self.DEFAULT_TYPE_CONFIGS),
+            "AI 文档生成试卷仅支持 single、multi、judge 三种题型",
+        )
+
+        payload = data.model_dump(mode="python")
+        payload["task_name"] = task_name
+        payload["paper_title"] = paper_title
+        payload["paper_type"] = str(data.paper_type or "formal").strip() or "formal"
+        payload["description"] = (data.description or "").strip() or None
+        payload["source_text"] = (data.source_text or "").strip() or None
+        payload["requirements"] = (data.requirements or "").strip() or None
+        payload["type_configs"] = [item.model_dump(mode="python") for item in type_configs]
+        return AIPaperDocumentGenerationTaskCreateRequest.model_validate(payload)
+
+    def _simulate_paper_document_generation_result(
+        self,
+        data: AIPaperDocumentGenerationTaskCreateRequest,
+    ) -> AITaskPaperDraft:
+        """根据文档生成试卷草稿"""
+        type_configs = data.type_configs or list(self.DEFAULT_TYPE_CONFIGS)
+        # 从文档内容中提取前50个字符作为主题描述
+        source_preview = (data.source_text or "")[:50].replace("\n", " ").strip()
+        topic = source_preview if source_preview else "文档内容相关"
+        knowledge_points = [topic]
+        drafts: List[AITaskQuestionDraft] = []
+
+        for config in type_configs:
+            for _ in range(config.count):
+                knowledge_point = knowledge_points[len(drafts) % len(knowledge_points)]
+                drafts.append(
+                    self._build_generated_question_draft(
+                        index=len(drafts),
+                        question_type=config.type,
+                        topic=topic,
+                        knowledge_points=[knowledge_point],
+                        difficulty=config.difficulty or data.difficulty,
+                        police_type_id=data.police_type_id,
+                        score=config.score,
+                        source_text=data.source_text,
+                        requirements=data.requirements,
+                    )
+                )
+
+        return self._build_paper_draft(
+            title=data.paper_title,
+            description=data.description,
+            paper_type=data.paper_type,
+            duration=data.duration,
+            passing_score=data.passing_score,
+            questions=drafts,
+        )
 
     def _normalize_task_type_configs(
         self,

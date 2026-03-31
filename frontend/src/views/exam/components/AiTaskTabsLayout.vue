@@ -105,6 +105,8 @@ function resolveStatusColor(item) {
 <style scoped>
 .ai-task-page {
   padding: 0;
+  margin: -24px;
+  min-height: calc(100vh - 64px);
 }
 
 .page-header {
@@ -141,6 +143,10 @@ function resolveStatusColor(item) {
 .task-list-card,
 .task-detail-card {
   border-radius: 12px;
+}
+
+.tab-card {
+  width: 100%;
 }
 
 .task-list-item {

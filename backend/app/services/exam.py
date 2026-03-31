@@ -16,6 +16,7 @@ from app.models import (
     ExamPaper,
     ExamPaperQuestion,
     ExamRecord,
+    PaperFolder,
     Question,
     Role,
     Training,
@@ -44,6 +45,9 @@ from app.schemas.exam import (
     ExamSubmit,
     ExamUpdate,
     ExamWrongQuestionResponse,
+    PaperFolderCreate,
+    PaperFolderResponse,
+    PaperFolderUpdate,
 )
 from app.utils.authz import (
     can_view_question_with_context,
@@ -82,6 +86,7 @@ class ExamService:
         paper_type: Optional[str] = None,
         search: Optional[str] = None,
         current_user_id: Optional[int] = None,
+        folder_id: Optional[int] = None,
     ) -> PaginatedResponse[ExamPaperResponse]:
         """获取试卷列表"""
         query = self.db.query(ExamPaper).options(*self._paper_load_options())
@@ -92,6 +97,8 @@ class ExamService:
             query = query.filter(ExamPaper.type == paper_type)
         if search:
             query = query.filter(ExamPaper.title.contains(search))
+        if folder_id is not None:
+            query = query.filter(ExamPaper.folder_id == folder_id)
 
         papers = query.order_by(ExamPaper.created_at.desc(), ExamPaper.id.desc()).all()
         scope_context = self._get_scope_context(current_user_id)
@@ -125,6 +132,7 @@ class ExamService:
             passing_score=data.passing_score or 60,
             type=data.type,
             status="draft",
+            folder_id=data.folder_id,
             created_by=user_id,
         )
         self.db.add(paper)
@@ -216,6 +224,118 @@ class ExamService:
 
         self.db.delete(paper)
         self.db.commit()
+
+    # ============== 文件夹管理 ==============
+
+    def get_paper_folders(self, current_user_id: Optional[int] = None) -> List[PaperFolderResponse]:
+        """获取文件夹树"""
+        folders = self.db.query(PaperFolder).order_by(PaperFolder.sort_order, PaperFolder.id).all()
+        folder_responses = []
+        for folder in folders:
+            paper_count = self.db.query(ExamPaper).filter(ExamPaper.folder_id == folder.id).count()
+            folder_responses.append(PaperFolderResponse(
+                id=folder.id,
+                name=folder.name,
+                parent_id=folder.parent_id,
+                sort_order=folder.sort_order,
+                paper_count=paper_count,
+                children=[],
+            ))
+        return self._build_folder_tree(folder_responses)
+
+    def _build_folder_tree(self, folders: List[PaperFolderResponse]) -> List[PaperFolderResponse]:
+        """构建文件夹树"""
+        folder_map = {f.id: f for f in folders}
+        root_folders = []
+        for folder in folders:
+            if folder.parent_id and folder.parent_id in folder_map:
+                folder_map[folder.parent_id].children.append(folder)
+            else:
+                root_folders.append(folder)
+        return root_folders
+
+    def create_paper_folder(self, data: PaperFolderCreate, user_id: int) -> PaperFolderResponse:
+        """创建文件夹"""
+        if data.parent_id:
+            parent = self.db.query(PaperFolder).filter(PaperFolder.id == data.parent_id).first()
+            if not parent:
+                raise ValueError("父文件夹不存在")
+        folder = PaperFolder(
+            name=data.name,
+            parent_id=data.parent_id,
+            sort_order=data.sort_order,
+            created_by=user_id,
+        )
+        self.db.add(folder)
+        self.db.commit()
+        paper_count = self.db.query(ExamPaper).filter(ExamPaper.folder_id == folder.id).count()
+        return PaperFolderResponse(
+            id=folder.id,
+            name=folder.name,
+            parent_id=folder.parent_id,
+            sort_order=folder.sort_order,
+            paper_count=paper_count,
+            children=[],
+        )
+
+    def update_paper_folder(self, folder_id: int, data: PaperFolderUpdate) -> PaperFolderResponse:
+        """更新文件夹"""
+        folder = self.db.query(PaperFolder).filter(PaperFolder.id == folder_id).first()
+        if not folder:
+            raise ValueError("文件夹不存在")
+        if data.name is not None:
+            folder.name = data.name
+        if data.parent_id is not None:
+            if data.parent_id == folder_id:
+                raise ValueError("不能将文件夹设置为自己的子文件夹")
+            parent = self.db.query(PaperFolder).filter(PaperFolder.id == data.parent_id).first()
+            if not parent:
+                raise ValueError("父文件夹不存在")
+            folder.parent_id = data.parent_id
+        if data.sort_order is not None:
+            folder.sort_order = data.sort_order
+        self.db.commit()
+        paper_count = self.db.query(ExamPaper).filter(ExamPaper.folder_id == folder.id).count()
+        return PaperFolderResponse(
+            id=folder.id,
+            name=folder.name,
+            parent_id=folder.parent_id,
+            sort_order=folder.sort_order,
+            paper_count=paper_count,
+            children=[],
+        )
+
+    def delete_paper_folder(self, folder_id: int) -> None:
+        """删除文件夹"""
+        folder = self.db.query(PaperFolder).filter(PaperFolder.id == folder_id).first()
+        if not folder:
+            raise ValueError("文件夹不存在")
+        # 检查是否有子文件夹
+        children = self.db.query(PaperFolder).filter(PaperFolder.parent_id == folder_id).count()
+        if children > 0:
+            raise ValueError("请先删除子文件夹")
+        # 检查是否有试卷
+        paper_count = self.db.query(ExamPaper).filter(ExamPaper.folder_id == folder_id).count()
+        if paper_count > 0:
+            raise ValueError("请先将文件夹内的试卷移出后再删除")
+        self.db.delete(folder)
+        self.db.commit()
+
+    def move_paper_to_folder(self, paper_id: int, folder_id: Optional[int]) -> ExamPaperDetailResponse:
+        """移动试卷到文件夹"""
+        paper = self._get_paper_detail_entity(paper_id)
+        if not paper:
+            raise ValueError("试卷不存在")
+        if folder_id is not None:
+            folder = self.db.query(PaperFolder).filter(PaperFolder.id == folder_id).first()
+            if not folder:
+                raise ValueError("目标文件夹不存在")
+        paper.folder_id = folder_id
+        self.db.commit()
+        detail = self.get_exam_paper_detail(paper.id, paper.created_by)
+        if not detail:
+            raise ValueError("试卷不存在")
+        return detail
 
     def get_exams(
         self,

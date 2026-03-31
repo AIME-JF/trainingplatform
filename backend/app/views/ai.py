@@ -21,6 +21,8 @@ from app.schemas import (
     AIPaperAssemblyTaskDetailResponse,
     AIPaperGenerationTaskCreateRequest,
     AIPaperGenerationTaskDetailResponse,
+    AIPaperDocumentGenerationTaskCreateRequest,
+    AIPaperDocumentGenerationTaskDetailResponse,
     AIPaperTaskUpdateRequest,
     AIQuestionTaskCreateRequest,
     AIQuestionTaskDetailResponse,
@@ -319,6 +321,89 @@ def confirm_paper_generation_task(
     _require_admin_or_instructor(db, current_user.user_id)
     controller = AIController(db)
     result = controller.confirm_paper_generation_task(task_id, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.get(
+    "/paper-document-generation-tasks",
+    response_model=StandardResponse[PaginatedResponse[AITaskSummaryResponse]],
+    summary="AI 文档生成试卷任务列表",
+)
+def list_paper_document_generation_tasks(
+    page: int = Query(1, ge=1),
+    size: int = Query(10, ge=-1),
+    status_value: Optional[str] = Query(None, alias="status"),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = AIController(db)
+    data = controller.list_paper_document_generation_tasks(page, size, status_value, current_user.user_id)
+    return StandardResponse(data=data)
+
+
+@router.post(
+    "/paper-document-generation-tasks",
+    response_model=StandardResponse[AIPaperDocumentGenerationTaskDetailResponse],
+    summary="创建 AI 文档生成试卷任务",
+)
+def create_paper_document_generation_task(
+    data: AIPaperDocumentGenerationTaskCreateRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = AIController(db)
+    result = controller.create_paper_document_generation_task(data, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.get(
+    "/paper-document-generation-tasks/{task_id}",
+    response_model=StandardResponse[AIPaperDocumentGenerationTaskDetailResponse],
+    summary="AI 文档生成试卷任务详情",
+)
+def get_paper_document_generation_task_detail(
+    task_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = AIController(db)
+    data = controller.get_paper_document_generation_task_detail(task_id, current_user.user_id)
+    return StandardResponse(data=data)
+
+
+@router.put(
+    "/paper-document-generation-tasks/{task_id}/result",
+    response_model=StandardResponse[AIPaperDocumentGenerationTaskDetailResponse],
+    summary="更新 AI 文档生成试卷任务结果",
+)
+def update_paper_document_generation_task(
+    task_id: int,
+    data: AIPaperTaskUpdateRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = AIController(db)
+    result = controller.update_paper_document_generation_task(task_id, data, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.post(
+    "/paper-document-generation-tasks/{task_id}/confirm",
+    response_model=StandardResponse[AIPaperDocumentGenerationTaskDetailResponse],
+    summary="确认 AI 文档生成试卷任务",
+)
+def confirm_paper_document_generation_task(
+    task_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = AIController(db)
+    result = controller.confirm_paper_document_generation_task(task_id, current_user.user_id)
     return StandardResponse(data=result)
 
 

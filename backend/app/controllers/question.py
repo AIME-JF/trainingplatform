@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
 from app.services import QuestionService
-from app.schemas import QuestionCreate, QuestionUpdate, QuestionBatchCreate, PaginatedResponse
+from app.schemas import QuestionCreate, QuestionUpdate, QuestionBatchCreate, PaginatedResponse, QuestionFolderCreate, QuestionFolderUpdate, QuestionMoveRequest
 from logger import logger
 
 
@@ -62,3 +62,49 @@ class QuestionController:
         except Exception as e:
             logger.error(f"批量导入题目异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="批量导入题目失败")
+
+    # ============== 文件夹管理 ==============
+
+    def get_question_folders(self):
+        try:
+            return self.service.get_question_folders()
+        except Exception as e:
+            logger.error(f"获取文件夹列表异常: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取文件夹列表失败")
+
+    def create_question_folder(self, data: QuestionFolderCreate, user_id: int):
+        try:
+            return self.service.create_question_folder(data, user_id)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        except Exception as e:
+            logger.error(f"创建文件夹异常: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建文件夹失败")
+
+    def update_question_folder(self, folder_id: int, data: QuestionFolderUpdate):
+        try:
+            return self.service.update_question_folder(folder_id, data)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        except Exception as e:
+            logger.error(f"更新文件夹异常: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新文件夹失败")
+
+    def delete_question_folder(self, folder_id: int):
+        try:
+            self.service.delete_question_folder(folder_id)
+            return {"deleted": True}
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        except Exception as e:
+            logger.error(f"删除文件夹异常: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="删除文件夹失败")
+
+    def move_question_to_folder(self, question_id: int, data: QuestionMoveRequest):
+        try:
+            return self.service.move_question_to_folder(question_id, data.folder_id)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        except Exception as e:
+            logger.error(f"移动试题异常: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="移动试题失败")

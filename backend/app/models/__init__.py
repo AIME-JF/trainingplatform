@@ -15,7 +15,7 @@ from .training import (
     TrainingCourseChangeLog,
 )
 from .exam import (
-    KnowledgePoint, Question, ExamPaper, ExamPaperQuestion,
+    KnowledgePoint, Question, QuestionFolder, ExamPaper, PaperFolder, ExamPaperQuestion,
     AdmissionExam, AdmissionExamRecord,
     Exam, ExamQuestion, ExamRecord,
     question_knowledge_point_relations,
@@ -58,7 +58,7 @@ __all__ = [
     "Training", "TrainingBase", "TrainingCourse", "Enrollment", "CheckinRecord", "ScheduleItem", "TrainingHistory",
     "TrainingCourseChangeLog",
     # 考试相关
-    "KnowledgePoint", "Question", "ExamPaper", "ExamPaperQuestion",
+    "KnowledgePoint", "Question", "QuestionFolder", "ExamPaper", "PaperFolder", "ExamPaperQuestion",
     "AdmissionExam", "AdmissionExamRecord",
     "Exam", "ExamQuestion", "ExamRecord",
     "question_knowledge_point_relations",

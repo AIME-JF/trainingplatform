@@ -10,7 +10,8 @@ from app.middleware.auth import get_current_user
 from app.models import Question
 from app.schemas import (
     StandardResponse, TokenData, PaginatedResponse,
-    QuestionCreate, QuestionUpdate, QuestionResponse, QuestionBatchCreate
+    QuestionCreate, QuestionUpdate, QuestionResponse, QuestionBatchCreate,
+    QuestionFolderCreate, QuestionFolderUpdate, QuestionFolderResponse, QuestionMoveRequest
 )
 from app.controllers import QuestionController
 from app.utils.authz import can_view_question
@@ -100,4 +101,72 @@ def batch_create(
     _require_permission(current_user, "BATCH_CREATE_QUESTIONS")
     controller = QuestionController(db)
     result = controller.batch_create(data, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+# ============== 文件夹管理 ==============
+
+@router.get("/folders", response_model=StandardResponse[list], summary="获取试题文件夹树")
+def get_question_folders(
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取试题文件夹树"""
+    _require_permission(current_user, "GET_QUESTIONS")
+    controller = QuestionController(db)
+    data = controller.get_question_folders()
+    return StandardResponse(data=data)
+
+
+@router.post("/folders", response_model=StandardResponse, summary="创建试题文件夹")
+def create_question_folder(
+    data: QuestionFolderCreate,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """创建试题文件夹"""
+    _require_permission(current_user, "CREATE_QUESTION")
+    controller = QuestionController(db)
+    result = controller.create_question_folder(data, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.put("/folders/{folder_id}", response_model=StandardResponse, summary="更新试题文件夹")
+def update_question_folder(
+    folder_id: int,
+    data: QuestionFolderUpdate,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """更新试题文件夹"""
+    _require_permission(current_user, "UPDATE_QUESTION")
+    controller = QuestionController(db)
+    result = controller.update_question_folder(folder_id, data)
+    return StandardResponse(data=result)
+
+
+@router.delete("/folders/{folder_id}", response_model=StandardResponse, summary="删除试题文件夹")
+def delete_question_folder(
+    folder_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """删除试题文件夹"""
+    _require_permission(current_user, "DELETE_QUESTION")
+    controller = QuestionController(db)
+    result = controller.delete_question_folder(folder_id)
+    return StandardResponse(data=result)
+
+
+@router.patch("/{question_id}/folder", response_model=StandardResponse[QuestionResponse], summary="移动试题到文件夹")
+def move_question_to_folder(
+    question_id: int,
+    data: QuestionMoveRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """移动试题到文件夹"""
+    _require_permission(current_user, "UPDATE_QUESTION")
+    controller = QuestionController(db)
+    result = controller.move_question_to_folder(question_id, data)
     return StandardResponse(data=result)
