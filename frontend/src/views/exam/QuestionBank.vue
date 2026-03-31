@@ -377,11 +377,13 @@ function handleQuestionDragStart(event, question, folder) {
 
 function handleDragOver(event, folder) {
   event.preventDefault()
+  event.stopPropagation()
   event.dataTransfer.dropEffect = 'move'
   dragOverFolderId.value = folder.id
 }
 
 function handleDragLeave(event, folder) {
+  event.stopPropagation()
   // 只有当鼠标离开文件夹标题本身时才清除
   if (!event.currentTarget.contains(event.relatedTarget)) {
     dragOverFolderId.value = null
@@ -896,6 +898,8 @@ onMounted(async () => {
 .folder-title.folder-drag-over {
   background: #EFF6FF;
   border-color: #2563EB;
+  outline: 2px dashed #2563EB;
+  outline-offset: -2px;
 }
 
 .folder-title-left {
@@ -958,16 +962,20 @@ onMounted(async () => {
 /* 文件夹内容 */
 .folder-content {
   max-height: 2000px;
-  overflow: hidden;
+  overflow: visible;
   transition: max-height 0.3s ease-out, background-color 0.15s;
+  min-height: 1px;
 }
 
 .folder-content.folder-drag-over {
   background: #EFF6FF;
+  outline: 2px dashed #2563EB;
+  outline-offset: -2px;
 }
 
 .folder-collapsed .folder-content {
   max-height: 0;
+  overflow: hidden;
 }
 
 .question-row {
@@ -994,6 +1002,19 @@ onMounted(async () => {
   text-align: center;
   color: #94A3B8;
   font-size: 14px;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.folder-content:not(.folder-drag-over) .empty-folder {
+  color: #94A3B8;
+}
+
+.folder-content.folder-drag-over .empty-folder {
+  color: #2563EB;
+  font-weight: 500;
 }
 
 /* 标签样式 */
