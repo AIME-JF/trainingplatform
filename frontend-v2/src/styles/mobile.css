@@ -1,0 +1,89 @@
+/* ========================================================
+   移动优先响应式
+   基础样式面向移动端，桌面端 ≥ 769px 增强
+   ======================================================== */
+
+/* -- 底部导航栏（移动端默认显示） -- */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--v2-bottomnav-height);
+  background: var(--v2-bg-card);
+  border-top: 1px solid var(--v2-border-light);
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  z-index: 100;
+  box-shadow: 0 -1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  height: 100%;
+  color: var(--v2-text-muted);
+  font-size: 10px;
+  line-height: 1;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: color 0.15s;
+}
+
+.bottom-nav-item .nav-icon {
+  font-size: 22px;
+  margin-bottom: 3px;
+}
+
+.bottom-nav-item.active {
+  color: var(--v2-primary);
+}
+
+/* -- 图标侧栏（移动端隐藏） -- */
+.icon-sidebar {
+  display: none;
+}
+
+/* -- 主内容区（移动端留出底部导航） -- */
+.page-content {
+  padding: 16px;
+  padding-bottom: calc(var(--v2-bottomnav-height) + 16px);
+  min-height: 100vh;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ========================================================
+   桌面端 ≥ 769px
+   ======================================================== */
+@media (min-width: 769px) {
+  .bottom-nav {
+    display: none;
+  }
+
+  .icon-sidebar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: var(--v2-sidebar-width);
+    background: var(--v2-bg-card);
+    border-right: 1px solid var(--v2-border-light);
+    z-index: 200;
+    padding-top: 12px;
+    gap: 4px;
+    overflow-y: auto;
+  }
+
+  .page-content {
+    margin-left: var(--v2-sidebar-width);
+    padding: 24px 32px;
+    padding-bottom: 32px;
+  }
+}

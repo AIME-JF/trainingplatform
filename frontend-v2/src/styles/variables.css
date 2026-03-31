@@ -1,0 +1,67 @@
+:root {
+  /* ===== 主色 ===== */
+  --v2-primary: #4B6EF5;
+  --v2-primary-hover: #3B5DE0;
+  --v2-primary-light: #EEF2FF;
+  --v2-primary-bg: #F0F3FF;
+
+  /* ===== 功能色 ===== */
+  --v2-success: #34C759;
+  --v2-warning: #FF9500;
+  --v2-danger: #FF3B30;
+  --v2-info: #5AC8FA;
+
+  /* ===== 中性色 ===== */
+  --v2-bg: #F5F6FA;
+  --v2-bg-card: #FFFFFF;
+  --v2-bg-header: linear-gradient(135deg, #1A1A2E 0%, #16213E 40%, #0F3460 100%);
+
+  /* ===== 文字色 ===== */
+  --v2-text-primary: #1D1D1F;
+  --v2-text-secondary: #6E6E73;
+  --v2-text-muted: #AEAEB2;
+  --v2-text-white: #FFFFFF;
+
+  /* ===== 边框 ===== */
+  --v2-border: #E5E5EA;
+  --v2-border-light: #F2F2F7;
+
+  /* ===== 圆角 ===== */
+  --v2-radius-xs: 4px;
+  --v2-radius-sm: 8px;
+  --v2-radius: 12px;
+  --v2-radius-lg: 16px;
+  --v2-radius-xl: 20px;
+  --v2-radius-full: 9999px;
+
+  /* ===== 字体 ===== */
+  --v2-font: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+
+  /* ===== 阴影 ===== */
+  --v2-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+  --v2-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  --v2-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.08);
+
+  /* ===== 布局 ===== */
+  --v2-sidebar-width: 72px;
+  --v2-topbar-height: 0px;
+  --v2-bottomnav-height: 64px;
+
+  /* ===== 卡片封面渐变预设 ===== */
+  --v2-cover-blue: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%);
+  --v2-cover-green: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%);
+  --v2-cover-pink: linear-gradient(135deg, #FCE7F3 0%, #FBCFE8 100%);
+  --v2-cover-purple: linear-gradient(135deg, #EDE9FE 0%, #DDD6FE 100%);
+  --v2-cover-yellow: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+  --v2-cover-orange: linear-gradient(135deg, #FFEDD5 0%, #FED7AA 100%);
+  --v2-cover-teal: linear-gradient(135deg, #CCFBF1 0%, #99F6E4 100%);
+  --v2-cover-rose: linear-gradient(135deg, #FFE4E6 0%, #FECDD3 100%);
+
+  /* ===== 工具图标色 ===== */
+  --v2-icon-red: #FF3B30;
+  --v2-icon-orange: #FF9500;
+  --v2-icon-green: #34C759;
+  --v2-icon-blue: #007AFF;
+  --v2-icon-teal: #5AC8FA;
+  --v2-icon-purple: #AF52DE;
+}

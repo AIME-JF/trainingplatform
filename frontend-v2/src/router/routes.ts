@@ -1,0 +1,129 @@
+import type { RouteRecordRaw } from 'vue-router'
+import {
+  DASHBOARD_PERMISSIONS,
+  TRAINING_PERMISSIONS,
+  TRAINING_SCHEDULE_PERMISSIONS,
+  EXAM_LIST_PERMISSIONS,
+  RESOURCE_LIBRARY_PERMISSIONS,
+  MY_RESOURCE_PERMISSIONS,
+} from '@/constants/permissions'
+
+const MobileLayout = () => import('@/layouts/MobileLayout.vue')
+const AuthLayout = () => import('@/layouts/AuthLayout.vue')
+
+export const routes: RouteRecordRaw[] = [
+  {
+    path: '/login',
+    component: AuthLayout,
+    children: [
+      {
+        path: '',
+        name: 'Login',
+        component: () => import('@/views/auth/Login.vue'),
+        meta: { title: '登录' },
+      },
+    ],
+  },
+  {
+    path: '/',
+    component: MobileLayout,
+    meta: { requiresAuth: true },
+    children: [
+      // -- 首页 --
+      {
+        path: '',
+        name: 'Dashboard',
+        component: () => import('@/views/dashboard/Index.vue'),
+        meta: { title: '工作台', anyPermissions: DASHBOARD_PERMISSIONS },
+      },
+      // -- 班级 --
+      {
+        path: 'classes',
+        name: 'ClassList',
+        component: () => import('@/views/classes/List.vue'),
+        meta: { title: '班级列表', anyPermissions: TRAINING_PERMISSIONS },
+      },
+      {
+        path: 'classes/:id',
+        name: 'ClassDetail',
+        component: () => import('@/views/classes/Detail.vue'),
+        meta: { title: '班级详情', anyPermissions: TRAINING_PERMISSIONS },
+      },
+      {
+        path: 'classes/schedule/:id?',
+        name: 'ClassSchedule',
+        component: () => import('@/views/dashboard/Index.vue'),
+        meta: { title: '周训练计划', anyPermissions: TRAINING_SCHEDULE_PERMISSIONS },
+      },
+      {
+        path: 'classes/:id/enroll',
+        name: 'ClassEnroll',
+        component: () => import('@/views/dashboard/Index.vue'),
+        meta: { title: '报名', roles: ['student'] },
+      },
+      {
+        path: 'classes/:id/checkin',
+        name: 'ClassCheckin',
+        component: () => import('@/views/dashboard/Index.vue'),
+        meta: { title: '签到' },
+      },
+      {
+        path: 'classes/:id/checkout',
+        name: 'ClassCheckout',
+        component: () => import('@/views/dashboard/Index.vue'),
+        meta: { title: '签退' },
+      },
+      // -- 考试 --
+      {
+        path: 'exam/list',
+        name: 'ExamList',
+        component: () => import('@/views/dashboard/Index.vue'),
+        meta: { title: '在线考试', anyPermissions: EXAM_LIST_PERMISSIONS },
+      },
+      {
+        path: 'exam/do/:id',
+        name: 'ExamDo',
+        component: () => import('@/views/dashboard/Index.vue'),
+        meta: { title: '考试作答' },
+      },
+      {
+        path: 'exam/result/:id',
+        name: 'ExamResult',
+        component: () => import('@/views/dashboard/Index.vue'),
+        meta: { title: '考试结果' },
+      },
+      // -- 资源 --
+      {
+        path: 'resource/library',
+        name: 'ResourceLibrary',
+        component: () => import('@/views/dashboard/Index.vue'),
+        meta: { title: '学习资源', anyPermissions: RESOURCE_LIBRARY_PERMISSIONS },
+      },
+      {
+        path: 'resource/recommend',
+        name: 'ResourceRecommend',
+        component: () => import('@/views/dashboard/Index.vue'),
+        meta: { title: '资源推荐' },
+      },
+      {
+        path: 'resource/detail/:id',
+        name: 'ResourceDetail',
+        component: () => import('@/views/dashboard/Index.vue'),
+        meta: { title: '资源详情' },
+      },
+      {
+        path: 'resource/my',
+        name: 'MyResources',
+        component: () => import('@/views/dashboard/Index.vue'),
+        meta: { title: '我的资源', anyPermissions: MY_RESOURCE_PERMISSIONS },
+      },
+      // -- 个人中心 --
+      {
+        path: 'profile',
+        name: 'Profile',
+        component: () => import('@/views/dashboard/Index.vue'),
+        meta: { title: '个人中心' },
+      },
+    ],
+  },
+]
