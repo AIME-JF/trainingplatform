@@ -15,7 +15,7 @@ from app.schemas import (
 from app.controllers import QuestionController
 from app.utils.authz import can_view_question
 
-router = APIRouter(prefix="/questions", tags=["题库管理"])
+router = APIRouter(prefix="/questions", tags=["question_management"])
 
 
 def _require_permission(current_user: TokenData, permission: str):

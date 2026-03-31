@@ -43,7 +43,7 @@ from app.services.training import TrainingService
 from app.utils.authz import can_manage_training, can_update_training, can_view_training, is_admin_user, is_instructor_user
 from logger import logger
 
-router = APIRouter(prefix="/trainings", tags=["培训管理"])
+router = APIRouter(prefix="/trainings", tags=["training_management"])
 
 
 def _excel_response(data: bytes, filename: str) -> StreamingResponse:

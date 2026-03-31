@@ -12,7 +12,7 @@ from app.schemas.media import MediaFileResponse
 from app.controllers.media import MediaController
 from app.services.media import MediaService
 
-router = APIRouter(prefix="/media", tags=["文件管理"])
+router = APIRouter(prefix="/media", tags=["media_management"])
 
 
 @router.post("/upload", response_model=StandardResponse[MediaFileResponse], summary="上传文件")

@@ -25,7 +25,7 @@ from app.utils.data_scope import (
 )
 from logger import logger
 
-router = APIRouter(prefix="/users", tags=["用户管理"])
+router = APIRouter(prefix="/users", tags=["user_management"])
 
 
 def _excel_response(data: bytes, filename: str) -> StreamingResponse:

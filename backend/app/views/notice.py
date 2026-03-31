@@ -11,7 +11,7 @@ from app.schemas import StandardResponse, PaginatedResponse, TokenData
 from app.schemas.notice import NoticeCreate, NoticeUpdate, NoticeResponse
 from app.models import Notice
 
-router = APIRouter(prefix="/notices", tags=["公告管理"])
+router = APIRouter(prefix="/notices", tags=["notice_management"])
 
 
 def _to_response(notice: Notice) -> NoticeResponse:

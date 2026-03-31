@@ -11,7 +11,7 @@ from app.schemas.recommendation import ResourceBehaviorEventCreate
 from app.controllers.recommendation import RecommendationController
 
 
-router = APIRouter(tags=['资源推荐'])
+router = APIRouter(tags=['resource_recommendation'])
 
 
 @router.post('/resources/{resource_id}/events', response_model=StandardResponse, summary='记录资源行为事件')

@@ -10,7 +10,7 @@ from app.schemas import StandardResponse, TokenData, UserLogin, LoginResponse, U
 from app.services.auth import auth_service
 from app.services import UserService
 
-router = APIRouter(prefix="/auth", tags=["认证"])
+router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/login", response_model=StandardResponse[LoginResponse], summary="账号密码登录")

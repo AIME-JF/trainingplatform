@@ -18,7 +18,7 @@ from app.schemas import (
     TokenData,
 )
 
-router = APIRouter(prefix="/knowledge-points", tags=["知识点管理"])
+router = APIRouter(prefix="/knowledge-points", tags=["knowledge_point_management"])
 
 
 def _require_permission(current_user: TokenData, permission: str):

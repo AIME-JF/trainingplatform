@@ -36,7 +36,7 @@ from app.schemas import (
 )
 from app.utils.authz import is_admin_user, is_instructor_user
 
-router = APIRouter(prefix="/ai", tags=["AI任务"])
+router = APIRouter(prefix="/ai", tags=["ai_tasks"])
 
 
 def _require_admin_or_instructor(db: Session, user_id: int):

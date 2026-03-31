@@ -16,7 +16,7 @@ from app.schemas.resource import (
 from app.controllers.resource import ResourceController
 
 
-router = APIRouter(prefix='/resources', tags=['资源库'])
+router = APIRouter(prefix='/resources', tags=['resource_library'])
 
 
 @router.get('', response_model=StandardResponse[PaginatedResponse[ResourceListItemResponse]], summary='资源列表')

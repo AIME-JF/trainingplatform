@@ -13,7 +13,7 @@ from app.schemas import (
 )
 from app.controllers import TalentController
 
-router = APIRouter(prefix="/talent", tags=["人才库"])
+router = APIRouter(prefix="/talent", tags=["talent_management"])
 
 
 @router.get("", response_model=StandardResponse[PaginatedResponse[TalentResponse]], summary="人才列表")

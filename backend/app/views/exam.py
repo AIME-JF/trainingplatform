@@ -31,7 +31,7 @@ from app.schemas import (
 )
 from app.utils.authz import is_admin_user, is_instructor_user
 
-router = APIRouter(prefix="/exams", tags=["考试管理"])
+router = APIRouter(prefix="/exams", tags=["exam_management"])
 
 
 def _require_admin_or_instructor(db: Session, user_id: int):

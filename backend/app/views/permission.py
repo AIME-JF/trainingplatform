@@ -19,7 +19,7 @@ from app.schemas import (
 )
 
 
-router = APIRouter(prefix="/permissions", tags=["权限管理"])
+router = APIRouter(prefix="/permissions", tags=["permission_management"])
 
 
 def _require_permission(current_user: TokenData, permission: str):

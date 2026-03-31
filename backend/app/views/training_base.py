@@ -14,7 +14,7 @@ from app.schemas.training import TrainingBaseCreate, TrainingBaseResponse, Train
 from app.models import TrainingBase
 from app.utils.authz import can_manage_training_base, can_view_training_base, is_admin_user, is_instructor_user
 
-router = APIRouter(prefix="/training-bases", tags=["培训基地"])
+router = APIRouter(prefix="/training-bases", tags=["training_base_management"])
 
 
 def _require_admin_or_instructor(db: Session, user_id: int):

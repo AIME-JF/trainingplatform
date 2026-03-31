@@ -13,7 +13,7 @@ from app.schemas import (
 )
 from app.controllers import PoliceTypeController
 
-router = APIRouter(prefix="/police-types", tags=["警种管理"])
+router = APIRouter(prefix="/police-types", tags=["police_type_management"])
 
 
 @router.get("", response_model=StandardResponse[PaginatedResponse[PoliceTypeSimpleResponse]], summary="警种列表")

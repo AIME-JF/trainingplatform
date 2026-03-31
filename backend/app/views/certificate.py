@@ -13,7 +13,7 @@ from app.schemas import (
 )
 from app.controllers import CertificateController
 
-router = APIRouter(prefix="/certificates", tags=["证书管理"])
+router = APIRouter(prefix="/certificates", tags=["certificate_management"])
 
 
 @router.get("", response_model=StandardResponse[PaginatedResponse[CertificateResponse]], summary="证书列表")

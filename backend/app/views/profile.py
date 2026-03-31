@@ -13,7 +13,7 @@ from app.schemas import (
 )
 from app.controllers import ProfileController
 
-router = APIRouter(prefix="/profile", tags=["个人中心"])
+router = APIRouter(prefix="/profile", tags=["profile"])
 
 
 @router.get("", response_model=StandardResponse[ProfileResponse], summary="个人信息")

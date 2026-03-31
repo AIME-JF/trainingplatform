@@ -34,7 +34,7 @@ app.add_middleware(RequestLoggingMiddleware)
 register_exception_handlers(app)
 
 
-@app.get("/", response_model=StandardResponse)
+@app.get("/", response_model=StandardResponse, tags=["system_public"])
 def root():
     return StandardResponse(
         message="欢迎使用",
@@ -46,7 +46,7 @@ def root():
     )
 
 
-@app.get("/health", response_model=StandardResponse)
+@app.get("/health", response_model=StandardResponse, tags=["system_public"])
 def health_check():
     return StandardResponse(
         message="系统运行正常",

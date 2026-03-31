@@ -20,7 +20,7 @@ from app.schemas.review import (
 from app.controllers.review import ReviewController
 
 
-router = APIRouter(tags=['资源审核'])
+router = APIRouter(tags=['resource_review'])
 
 
 def _require_any_permission(current_user: TokenData, permissions: List[str], detail: str):

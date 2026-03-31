@@ -19,7 +19,7 @@ from app.schemas import (
 from app.controllers import CourseController
 from app.services.course import CourseService
 
-router = APIRouter(prefix="/courses", tags=["课程管理"])
+router = APIRouter(prefix="/courses", tags=["course_management"])
 
 
 def _require_course_viewer(db: Session, course_id: int, user_id: int):

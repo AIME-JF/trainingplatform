@@ -24,7 +24,7 @@ from app.schemas import (
 from app.services.system_exchange import SystemExchangeService
 
 
-router = APIRouter(prefix="/roles", tags=["角色管理"])
+router = APIRouter(prefix="/roles", tags=["role_management"])
 
 
 def _excel_response(data: bytes, filename: str) -> StreamingResponse:

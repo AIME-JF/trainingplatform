@@ -16,7 +16,7 @@ from app.schemas import (
 )
 from app.controllers import ReportController
 
-router = APIRouter(prefix="/report", tags=["数据看板"])
+router = APIRouter(prefix="/report", tags=["reporting"])
 
 
 @router.get("/kpi", response_model=StandardResponse[KpiResponse], summary="KPI数据")

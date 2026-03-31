@@ -27,7 +27,7 @@ from app.schemas import (
 )
 from app.utils.authz import is_admin_user
 
-router = APIRouter(prefix="/system", tags=["系统配置"])
+router = APIRouter(prefix="/system", tags=["system_configuration"])
 
 
 def _require_admin(db: Session, user_id: int):

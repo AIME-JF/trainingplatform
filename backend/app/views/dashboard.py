@@ -9,7 +9,7 @@ from app.middleware.auth import get_current_user
 from app.schemas import StandardResponse, TokenData, DashboardResponse
 from app.controllers import DashboardController
 
-router = APIRouter(prefix="/dashboard", tags=["工作台"])
+router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 
 @router.get("", response_model=StandardResponse[DashboardResponse], summary="获取工作台数据")
