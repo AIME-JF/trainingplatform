@@ -98,7 +98,13 @@
               </div>
 
               <!-- 题目内容区 -->
-              <div class="folder-content">
+              <div
+                class="folder-content"
+                :class="{ 'folder-drag-over': dragOverFolderId === folder.id }"
+                @dragover="handleDragOver($event, folder)"
+                @dragleave="handleDragLeave($event, folder)"
+                @drop="handleDropToFolder($event, folder)"
+              >
                 <div
                   v-for="(record, index) in folder.questions"
                   :key="record.id"
@@ -953,7 +959,11 @@ onMounted(async () => {
 .folder-content {
   max-height: 2000px;
   overflow: hidden;
-  transition: max-height 0.3s ease-out;
+  transition: max-height 0.3s ease-out, background-color 0.15s;
+}
+
+.folder-content.folder-drag-over {
+  background: #EFF6FF;
 }
 
 .folder-collapsed .folder-content {
