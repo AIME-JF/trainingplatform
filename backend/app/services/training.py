@@ -70,6 +70,8 @@ from app.utils.authz import (
     can_operate_training_course,
     can_view_training,
     can_view_training_with_context,
+    is_admin_user,
+    is_training_related_user,
 )
 from app.utils.data_scope import build_data_scope_context, can_assign_scoped_values
 from logger import logger
@@ -2321,28 +2323,43 @@ class TrainingService:
         student_ids = [item.user_id for item in approved_enrollments]
         group_names = sorted({item.group_name for item in approved_enrollments if item.group_name})
         cadre_count = sum(1 for item in approved_enrollments if item.cadre_role)
+
+        # 判断当前用户是否与培训班有直接关系（学员/教官/创建人/班主任），或是管理员
+        is_related = bool(current_user_id and is_training_related_user(training, current_user_id))
+        is_admin = bool(current_user_id and is_admin_user(self.db, current_user_id))
+        has_full_access = is_related or is_admin
+
         instructor_ids = []
         for course in training.courses or []:
             if course.primary_instructor_id:
                 instructor_ids.append(course.primary_instructor_id)
             instructor_ids.extend(int(item) for item in (course.assistant_instructor_ids or []) if item is not None)
         user_name_map = self._load_user_name_map(instructor_ids)
-        courses = [self._build_course_response(training, item, user_name_map) for item in (training.courses or [])]
 
-        exam_sessions = []
-        for session in (training.exam_sessions or []):
-            if (session.purpose or "class_assessment") == "admission":
-                continue
-            exam_sessions.append(TrainingExamSummary(
-                id=session.id,
-                title=session.title,
-                purpose=session.purpose or "class_assessment",
-                status=session.status or "upcoming",
-                start_time=session.start_time,
-                end_time=session.end_time,
-                question_count=len(session.paper.paper_questions or []) if session.paper else 0,
-                passing_score=session.passing_score or 60,
-            ))
+        # 有完整访问权限时返回详细数据，否则只返回基础信息
+        if has_full_access:
+            courses = [self._build_course_response(training, item, user_name_map) for item in (training.courses or [])]
+            exam_sessions = []
+            for session in (training.exam_sessions or []):
+                if (session.purpose or "class_assessment") == "admission":
+                    continue
+                exam_sessions.append(TrainingExamSummary(
+                    id=session.id,
+                    title=session.title,
+                    purpose=session.purpose or "class_assessment",
+                    status=session.status or "upcoming",
+                    start_time=session.start_time,
+                    end_time=session.end_time,
+                    question_count=len(session.paper.paper_questions or []) if session.paper else 0,
+                    passing_score=session.passing_score or 60,
+                ))
+            notices = self._list_training_notices(training.id)
+            resources = self.list_training_resources(training.id)
+        else:
+            courses = []
+            exam_sessions = []
+            notices = []
+            resources = []
 
         user_permission_codes = self._get_user_permission_codes(current_user_id) if current_user_id else set()
         can_edit_training = bool(
@@ -2360,9 +2377,7 @@ class TrainingService:
         current_enrollment_status = current_enrollment.status if current_enrollment else None
         current_step_key = self._resolve_current_step_key(training)
         students = [self._enrollment_to_response(item) for item in approved_enrollments] if can_manage_all else []
-        checkin_records = self._get_detail_checkin_records(training.id, current_user_id, can_manage_all)
-        notices = self._list_training_notices(training.id)
-        resources = self.list_training_resources(training.id)
+        checkin_records = self._get_detail_checkin_records(training.id, current_user_id, can_manage_all) if has_full_access else []
         schedule_rule_config = self._resolve_training_schedule_rule_config(training)
 
         return TrainingResponse(

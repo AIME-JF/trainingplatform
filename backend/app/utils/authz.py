@@ -95,6 +95,27 @@ def can_view_training_with_context(context: DataScopeContext, training: Optional
     return False
 
 
+def is_training_related_user(training: Optional[Training], user_id: int) -> bool:
+    """判断用户是否与培训班有直接关系（已审批学员、班主任、创建人、课程教官），
+    有关系的用户可查看班级全部详情且忽略数据范围限制。"""
+    if not training or not user_id:
+        return False
+    # 创建人或班主任
+    if training.created_by == user_id or training.instructor_id == user_id:
+        return True
+    # 已审批学员
+    for enrollment in (training.enrollments or []):
+        if enrollment.user_id == user_id and enrollment.status == "approved":
+            return True
+    # 课程主讲/助教教官
+    for course in (training.courses or []):
+        if course.primary_instructor_id == user_id:
+            return True
+        if user_id in (course.assistant_instructor_ids or []):
+            return True
+    return False
+
+
 def can_view_training(db: Session, training: Optional[Training], user_id: int) -> bool:
     if not training:
         return False
