@@ -4,8 +4,10 @@ import {
   TRAINING_PERMISSIONS,
   TRAINING_SCHEDULE_PERMISSIONS,
   EXAM_LIST_PERMISSIONS,
+  COURSE_PERMISSIONS,
   RESOURCE_LIBRARY_PERMISSIONS,
   MY_RESOURCE_PERMISSIONS,
+  TEACHING_RESOURCE_GENERATION_PERMISSIONS,
 } from '@/constants/permissions'
 
 const MobileLayout = () => import('@/layouts/MobileLayout.vue')
@@ -94,28 +96,50 @@ export const routes: RouteRecordRaw[] = [
       },
       // -- 资源 --
       {
+        path: 'resource/courses',
+        name: 'LearningCourses',
+        component: () => import('@/views/resource/Courses.vue'),
+        meta: { title: '学习资源', anyPermissions: COURSE_PERMISSIONS },
+      },
+      {
+        path: 'resource/courses/:id',
+        name: 'CourseDetail',
+        component: () => import('@/views/resource/CourseDetail.vue'),
+        meta: { title: '课程资源详情', anyPermissions: COURSE_PERMISSIONS },
+      },
+      {
         path: 'resource/library',
         name: 'ResourceLibrary',
-        component: () => import('@/views/dashboard/Index.vue'),
-        meta: { title: '学习资源', anyPermissions: RESOURCE_LIBRARY_PERMISSIONS },
+        component: () => import('@/views/resource/Library.vue'),
+        meta: { title: '资源库', anyPermissions: RESOURCE_LIBRARY_PERMISSIONS },
       },
       {
         path: 'resource/recommend',
         name: 'ResourceRecommend',
-        component: () => import('@/views/dashboard/Index.vue'),
+        component: () => import('@/views/resource/Recommend.vue'),
         meta: { title: '资源推荐' },
       },
       {
         path: 'resource/detail/:id',
         name: 'ResourceDetail',
-        component: () => import('@/views/dashboard/Index.vue'),
+        component: () => import('@/views/resource/Detail.vue'),
         meta: { title: '资源详情' },
       },
       {
         path: 'resource/my',
         name: 'MyResources',
-        component: () => import('@/views/dashboard/Index.vue'),
+        component: () => import('@/views/resource/MyResources.vue'),
         meta: { title: '我的资源', anyPermissions: MY_RESOURCE_PERMISSIONS },
+      },
+      {
+        path: 'resource/teaching-generate',
+        name: 'TeachingResourceGenerationTask',
+        component: () => import('@/views/resource/TeachingResourceGenerationTask.vue'),
+        meta: { title: '教学资源生成', anyPermissions: TEACHING_RESOURCE_GENERATION_PERMISSIONS },
+      },
+      {
+        path: 'resource/ai-generate',
+        redirect: { name: 'TeachingResourceGenerationTask' },
       },
       // -- 个人中心 --
       {

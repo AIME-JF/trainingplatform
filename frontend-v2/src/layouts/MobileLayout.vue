@@ -74,13 +74,13 @@ const sidebarItems = [
   { path: '/', label: '首页', icon: HomeOutlined },
   { path: '/calendar', label: '日历', icon: CalendarOutlined },
   { path: '/classes', label: '班级', icon: ReadOutlined },
-  { path: '/resource/library', label: '学习资源', icon: DatabaseOutlined },
+  { path: '/resource/courses', label: '学习资源', icon: DatabaseOutlined },
 ]
 
 const bottomTabs = [
   { path: '/', label: '首页', icon: HomeOutlined },
   { path: '/classes', label: '班级', icon: ReadOutlined },
-  { path: '/resource/library', label: '资源', icon: DatabaseOutlined },
+  { path: '/resource/courses', label: '资源', icon: DatabaseOutlined },
   { path: '/profile', label: '我的', icon: UserOutlined },
 ]
 

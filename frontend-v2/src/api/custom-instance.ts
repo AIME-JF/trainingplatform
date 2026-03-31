@@ -67,15 +67,28 @@ function extractErrorMessage(error: unknown): string {
   return '未知错误'
 }
 
+type UnwrapStandardResponse<T> = T extends { data?: infer D } ? D : T
+
+function normalizeGeneratedUrl(url?: string): string | undefined {
+  if (!url) {
+    return url
+  }
+  if (url.startsWith('/api/v1/')) {
+    return url.slice('/api/v1'.length)
+  }
+  return url
+}
+
 /**
  * Orval mutator：所有生成的 API 函数都会调用此函数
  */
-export const customInstance = <T>(config: AxiosRequestConfig): Promise<T> => {
+export const customInstance = <T>(config: AxiosRequestConfig): Promise<UnwrapStandardResponse<T>> => {
   const source = axios.CancelToken.source()
   const promise = axiosInstance({
     ...config,
+    url: normalizeGeneratedUrl(config.url),
     cancelToken: source.token,
-  }).then(({ data }) => data as T)
+  }).then(({ data }) => data as UnwrapStandardResponse<T>)
 
   // @ts-expect-error attach cancel method
   promise.cancel = () => source.cancel('Query was cancelled')
