@@ -36,4 +36,5 @@ venv/
 
 .claude/
 .vscode/
-docs/daily/*
+docs/
+原型图/
