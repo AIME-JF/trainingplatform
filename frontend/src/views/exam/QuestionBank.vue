@@ -78,7 +78,14 @@
               :class="['folder-group', { 'folder-collapsed': !folder.expanded }]"
             >
               <!-- 文件夹标题行 -->
-              <div class="folder-title" @click="toggleFolder(folder.id)">
+              <div
+                class="folder-title"
+                :class="{ 'folder-drag-over': dragOverFolderId === folder.id }"
+                @click="toggleFolder(folder.id)"
+                @dragover="handleDragOver($event, folder)"
+                @dragleave="handleDragLeave($event, folder)"
+                @drop="handleDropToFolder($event, folder)"
+              >
                 <div class="folder-title-left">
                   <svg :class="['chevron-icon', { 'rotated': folder.expanded }]" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
                   <svg class="folder-icon" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2z"/></svg>
@@ -96,6 +103,9 @@
                   v-for="(record, index) in folder.questions"
                   :key="record.id"
                   class="question-row"
+                  draggable="true"
+                  @dragstart="handleQuestionDragStart($event, record, folder)"
+                  @dragend="handleDragEnd"
                 >
                   <div class="col-folder text-xs text-slate-400">{{ folder.name }}</div>
                   <div class="col-content">
@@ -256,6 +266,11 @@ const questionList = ref([])
 const policeTypeOptions = ref([])
 const searchText = ref('')
 
+// 拖拽相关
+const draggedQuestion = ref(null)
+const draggedFromFolder = ref(null)
+const dragOverFolderId = ref(null)
+
 // 统计数据
 const statsState = reactive({
   total: 0,
@@ -344,6 +359,58 @@ function toggleFolder(folderId) {
     expandedFolders.value.add(folderId)
   }
   expandedFolders.value = new Set(expandedFolders.value)
+}
+
+// 拖拽相关函数
+function handleQuestionDragStart(event, question, folder) {
+  draggedQuestion.value = question
+  draggedFromFolder.value = folder
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/plain', JSON.stringify({ questionId: question.id, folderId: folder.id }))
+}
+
+function handleDragOver(event, folder) {
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'move'
+  dragOverFolderId.value = folder.id
+}
+
+function handleDragLeave(event, folder) {
+  // 只有当鼠标离开文件夹标题本身时才清除
+  if (!event.currentTarget.contains(event.relatedTarget)) {
+    dragOverFolderId.value = null
+  }
+}
+
+async function handleDropToFolder(event, targetFolder) {
+  event.preventDefault()
+  dragOverFolderId.value = null
+  if (!draggedQuestion.value) return
+
+  const question = draggedQuestion.value
+  const newFolderId = targetFolder.id === 0 ? null : targetFolder.id
+
+  try {
+    await moveQuestionToFolder(question.id, newFolderId)
+    message.success(`已将题目移动到「${targetFolder.name}」`)
+    await Promise.all([loadQuestions(), loadStats()])
+    // 确保目标文件夹展开
+    if (!expandedFolders.value.has(targetFolder.id)) {
+      expandedFolders.value.add(targetFolder.id)
+      expandedFolders.value = new Set(expandedFolders.value)
+    }
+  } catch (error) {
+    message.error(error.message || '移动失败')
+    await loadQuestions()
+  }
+  draggedQuestion.value = null
+  draggedFromFolder.value = null
+}
+
+function handleDragEnd() {
+  draggedQuestion.value = null
+  draggedFromFolder.value = null
+  dragOverFolderId.value = null
 }
 
 async function loadQuestions() {
@@ -818,6 +885,11 @@ onMounted(async () => {
 
 .folder-title:hover {
   background: #F1F5F9;
+}
+
+.folder-title.folder-drag-over {
+  background: #EFF6FF;
+  border-color: #2563EB;
 }
 
 .folder-title-left {

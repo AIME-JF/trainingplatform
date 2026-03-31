@@ -1,5 +1,5 @@
 <template>
-  <div class="page-content">
+  <div class="page-content resource-page">
     <LearningResourceTabs />
 
     <div class="page-header">
@@ -20,7 +20,7 @@
     <a-card :bordered="false" class="filter-card">
       <a-row :gutter="[12, 12]">
         <a-col :xs="24" :md="10">
-          <a-input-search v-model:value="query.search" placeholder="搜索资源标题" @search="fetchResources" />
+          <ResourceSearchInput v-model:value="query.search" placeholder="搜索资源标题" @search="fetchResources" />
         </a-col>
         <a-col :xs="24" :md="6">
           <a-select v-model:value="query.content_type" style="width: 100%" @change="fetchResources">
@@ -95,6 +95,7 @@ import { listResources, offlineResource } from '@/api/learning-resource'
 import { useAuthStore } from '@/stores/auth'
 import LearningResourceTabs from '@/components/resource/LearningResourceTabs.vue'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
+import ResourceSearchInput from '@/components/resource/ResourceSearchInput.vue'
 import ResourceUploadModal from '@/components/resource/ResourceUploadModal.vue'
 import { formatDateTime, getResourceContentTypeLabel, getResourceStatusLabel } from '@/utils/learning-resource'
 

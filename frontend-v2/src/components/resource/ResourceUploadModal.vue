@@ -1,6 +1,7 @@
 <template>
   <a-modal
     :open="open"
+    wrap-class-name="resource-modal"
     title="上传资源"
     :width="920"
     :footer="null"

@@ -10,6 +10,7 @@ import { useAuthStore } from './stores/auth'
 
 import './styles/variables.css'
 import './styles/global.css'
+import './styles/resource-theme.css'
 import './styles/mobile.css'
 import 'ant-design-vue/dist/reset.css'
 
