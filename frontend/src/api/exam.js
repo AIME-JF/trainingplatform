@@ -28,6 +28,26 @@ export function deleteExamPaper(id) {
     return request.delete(`/exams/papers/${id}`)
 }
 
+export function getPaperFolders() {
+    return request.get('/exams/paper-folders')
+}
+
+export function createPaperFolder(data) {
+    return request.post('/exams/paper-folders', data)
+}
+
+export function updatePaperFolder(id, data) {
+    return request.put(`/exams/paper-folders/${id}`, data)
+}
+
+export function deletePaperFolder(id) {
+    return request.delete(`/exams/paper-folders/${id}`)
+}
+
+export function movePaperToFolder(paperId, folderId) {
+    return request.patch(`/exams/papers/${paperId}/folder`, { folder_id: folderId })
+}
+
 export function getExams(params) {
     return request.get('/exams', { params })
 }

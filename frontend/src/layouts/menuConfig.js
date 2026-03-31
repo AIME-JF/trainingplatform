@@ -135,13 +135,8 @@ export const appMenuConfig = [
       },
       {
         key: '/paper/ai-assemble',
-        label: '智能组卷',
-        anyPermissions: AI_PAPER_ASSEMBLE_PAGE_PERMISSIONS,
-      },
-      {
-        key: '/paper/ai-generate',
-        label: '智能生成试卷',
-        anyPermissions: AI_PAPER_GENERATE_PAGE_PERMISSIONS,
+        label: '智能出卷',
+        anyPermissions: [...AI_PAPER_ASSEMBLE_PAGE_PERMISSIONS, ...AI_PAPER_GENERATE_PAGE_PERMISSIONS],
       },
     ],
   },

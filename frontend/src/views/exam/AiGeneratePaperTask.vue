@@ -63,8 +63,6 @@
               </a-select>
             </a-form-item>
           </a-col>
-        </a-row>
-        <a-row :gutter="12">
           <a-col :span="12">
             <a-form-item label="考试时长">
               <a-input-number v-model:value="taskForm.duration" :min="10" :max="300" style="width:100%" />
@@ -414,6 +412,33 @@ onMounted(() => {
 </script>
 
 <style scoped>
+.ai-task-page {
+  margin: -24px;
+  min-height: calc(100vh - 64px);
+}
+
+.tab-card {
+  width: 100%;
+}
+
+.tab-card :deep(.ant-card-body) {
+  padding: 24px;
+}
+
+.tab-card :deep(.ant-form) {
+  max-width: 100%;
+}
+
+.tab-card :deep(.ant-row) {
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+}
+
+.tab-card :deep(.ant-col) {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
 .detail-header {
   display: flex;
   justify-content: space-between;

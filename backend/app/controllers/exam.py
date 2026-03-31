@@ -14,6 +14,9 @@ from app.schemas import (
     ExamPaperUpdate,
     ExamSubmit,
     ExamUpdate,
+    PaperFolderCreate,
+    PaperFolderUpdate,
+    PaperMoveRequest,
 )
 from app.services import ExamService
 from logger import logger
@@ -34,9 +37,10 @@ class ExamController:
         paper_type: Optional[str] = None,
         search: Optional[str] = None,
         current_user_id: Optional[int] = None,
+        folder_id: Optional[int] = None,
     ):
         try:
-            return self.service.get_exam_papers(page, size, paper_status, paper_type, search, current_user_id)
+            return self.service.get_exam_papers(page, size, paper_status, paper_type, search, current_user_id, folder_id)
         except Exception as exc:
             logger.error("获取试卷列表异常: %s", exc)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取试卷列表失败")
@@ -92,6 +96,52 @@ class ExamController:
         except Exception as exc:
             logger.error("删除试卷异常: %s", exc)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="删除试卷失败")
+
+    # ============== 文件夹管理 ==============
+
+    def get_paper_folders(self, current_user_id: Optional[int] = None):
+        try:
+            return self.service.get_paper_folders(current_user_id)
+        except Exception as exc:
+            logger.error("获取文件夹列表异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取文件夹列表失败")
+
+    def create_paper_folder(self, data: PaperFolderCreate, user_id: int):
+        try:
+            return self.service.create_paper_folder(data, user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("创建文件夹异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建文件夹失败")
+
+    def update_paper_folder(self, folder_id: int, data: PaperFolderUpdate):
+        try:
+            return self.service.update_paper_folder(folder_id, data)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("更新文件夹异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新文件夹失败")
+
+    def delete_paper_folder(self, folder_id: int):
+        try:
+            self.service.delete_paper_folder(folder_id)
+            return {"deleted": True}
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("删除文件夹异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="删除文件夹失败")
+
+    def move_paper_to_folder(self, paper_id: int, data: PaperMoveRequest):
+        try:
+            return self.service.move_paper_to_folder(paper_id, data.folder_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("移动试卷异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="移动试卷失败")
 
     def get_exams(
         self,

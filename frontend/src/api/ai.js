@@ -60,6 +60,26 @@ export function confirmAiPaperGenerationTask(taskId) {
   return request.post(`/ai/paper-generation-tasks/${taskId}/confirm`)
 }
 
+export function getAiPaperDocumentGenerationTasks(params) {
+  return request.get('/ai/paper-document-generation-tasks', { params })
+}
+
+export function createAiPaperDocumentGenerationTask(data) {
+  return request.post('/ai/paper-document-generation-tasks', data)
+}
+
+export function getAiPaperDocumentGenerationTaskDetail(taskId) {
+  return request.get(`/ai/paper-document-generation-tasks/${taskId}`)
+}
+
+export function updateAiPaperDocumentGenerationTaskResult(taskId, data) {
+  return request.put(`/ai/paper-document-generation-tasks/${taskId}/result`, data)
+}
+
+export function confirmAiPaperDocumentGenerationTask(taskId) {
+  return request.post(`/ai/paper-document-generation-tasks/${taskId}/confirm`)
+}
+
 export function getTeachingResourceGenerationTasks(params) {
   return request.get('/ai/teaching-resource-generation-tasks', { params })
 }

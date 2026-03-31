@@ -61,8 +61,20 @@
         </a-col>
         <a-col :span="12">
           <a-form-item label="警种">
-            <a-select v-model:value="form.policeTypeId" allow-clear placeholder="可选">
+            <a-select v-model:value="form.policeTypeId" allow-clear placeholder="选择警种后会自动推荐文件夹" @change="handlePoliceTypeChange">
               <a-select-option v-for="item in policeTypeOptions" :key="item.id" :value="item.id">
+                {{ item.name }}
+              </a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+        <a-col :span="12">
+          <a-form-item
+            label="所属文件夹"
+            :extra="form.policeTypeId ? '已根据警种自动推荐，可手动调整' : '选择警种后会自动推荐到对应文件夹'"
+          >
+            <a-select v-model:value="form.folderId" allow-clear placeholder="会自动推荐">
+              <a-select-option v-for="item in folderOptions" :key="item.id" :value="item.id">
                 {{ item.name }}
               </a-select-option>
             </a-select>
@@ -121,9 +133,10 @@
 </template>
 
 <script setup>
-import { computed, reactive, watch } from 'vue'
+import { computed, reactive, watch, ref, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { createKnowledgePointRemoteSelect, mergeKnowledgePointOptions } from '../utils/knowledgePointRemoteSelect'
+import { getQuestionFolders } from '@/api/question'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -133,6 +146,71 @@ const props = defineProps({
   policeTypeOptions: { type: Array, default: () => [] },
   knowledgePointOptions: { type: Array, default: () => [] },
   allowedTypes: { type: Array, default: () => ['single', 'multi', 'judge'] },
+})
+
+const folderOptions = ref([])
+const folderMapByKeyword = ref({}) // 按关键词映射文件夹
+
+async function loadFolderOptions() {
+  try {
+    const result = await getQuestionFolders()
+    folderOptions.value = flattenFolders(result || [])
+    // 构建关键词到文件夹的映射
+    buildFolderKeywordMap(result || [])
+  } catch (e) {
+    folderOptions.value = []
+  }
+}
+
+function flattenFolders(folders, depth = 0) {
+  let result = []
+  folders.forEach(folder => {
+    result.push({ id: folder.id, name: (depth > 0 ? '　'.repeat(depth) + '└ ' : '') + folder.name })
+    if (folder.children && folder.children.length > 0) {
+      result = result.concat(flattenFolders(folder.children, depth + 1))
+    }
+  })
+  return result
+}
+
+function buildFolderKeywordMap(folders) {
+  // 匹配规则：文件夹名称包含的关键词 -> 文件夹名
+  const rules = {
+    '刑事': '刑事类',
+    '治安': '治安类',
+    '交通': '交通类',
+    '综合': '综合类',
+  }
+  // 扁平化文件夹列表用于查找
+  const allFolders = flattenFolders(folders)
+  folderMapByKeyword.value = {}
+  Object.entries(rules).forEach(([keyword, folderName]) => {
+    const folder = allFolders.find(f => f.name === folderName)
+    if (folder) {
+      folderMapByKeyword.value[keyword] = folder.id
+    }
+  })
+}
+
+// 根据警种名称智能推荐文件夹
+function recommendFolderByPoliceType(policeTypeName) {
+  if (!policeTypeName) return null
+  const rules = [
+    { keywords: ['刑事'], folderId: folderMapByKeyword.value['刑事'] },
+    { keywords: ['治安'], folderId: folderMapByKeyword.value['治安'] },
+    { keywords: ['交通'], folderId: folderMapByKeyword.value['交通'] },
+  ]
+  for (const rule of rules) {
+    if (rule.keywords.some(k => policeTypeName.includes(k))) {
+      return rule.folderId
+    }
+  }
+  // 默认返回综合类
+  return folderMapByKeyword.value['综合']
+}
+
+onMounted(() => {
+  loadFolderOptions()
 })
 
 const emit = defineEmits(['update:open', 'submit'])
@@ -176,6 +254,7 @@ function createDefaultForm() {
     content: '',
     knowledgePointNames: [],
     policeTypeId: undefined,
+    folderId: undefined,
     options: [
       { key: 'A', text: '' },
       { key: 'B', text: '' },
@@ -204,6 +283,7 @@ function resetForm(question = null) {
     content: question?.content || '',
     knowledgePointNames: resolveKnowledgePointNames(question),
     policeTypeId: question?.policeTypeId || question?.police_type_id,
+    folderId: question?.folderId || question?.folder_id,
     options: normalizeOptions(resolvedType, question?.options),
     explanation: question?.explanation || '',
   })
@@ -291,6 +371,18 @@ function handleTypeChange() {
   form.answerMulti = []
 }
 
+function handlePoliceTypeChange(policeTypeId) {
+  if (policeTypeId) {
+    const policeType = props.policeTypeOptions.find(p => p.id === policeTypeId)
+    if (policeType) {
+      const recommendedFolderId = recommendFolderByPoliceType(policeType.name)
+      if (recommendedFolderId) {
+        form.folderId = recommendedFolderId
+      }
+    }
+  }
+}
+
 function addOption() {
   const optionKey = String.fromCharCode(65 + form.options.length)
   form.options.push({ key: optionKey, text: '' })
@@ -333,6 +425,7 @@ function handleOk() {
     knowledgePointNames,
     knowledgePoints: [...knowledgePointNames],
     policeTypeId: form.policeTypeId || undefined,
+    folderId: form.folderId || undefined,
     options: form.type === 'judge' ? normalizeOptions('judge') : form.options.map((item) => ({ ...item })),
     answer: form.type === 'multi' ? [...form.answerMulti] : form.answer,
     explanation: form.explanation?.trim() || undefined,

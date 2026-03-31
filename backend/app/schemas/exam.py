@@ -79,6 +79,7 @@ class QuestionCreate(BaseModel):
     difficulty: int = Field(1, ge=1, le=5, description="难度1-5")
     knowledge_point_names: List[str] = Field(default_factory=list, description="知识点名称列表")
     police_type_id: Optional[int] = Field(None, description="警种ID")
+    folder_id: Optional[int] = Field(None, description="所属文件夹ID")
     score: int = Field(1, description="分值")
 
     @field_validator("knowledge_point_names", mode="before")
@@ -98,6 +99,7 @@ class QuestionUpdate(BaseModel):
     difficulty: Optional[int] = Field(None, ge=1, le=5)
     knowledge_point_names: Optional[List[str]] = Field(None, description="知识点名称列表")
     police_type_id: Optional[int] = None
+    folder_id: Optional[int] = None
     score: Optional[int] = None
 
     @field_validator("knowledge_point_names", mode="before")
@@ -120,6 +122,8 @@ class QuestionResponse(BaseModel):
     knowledge_point_names: List[str] = Field(default_factory=list)
     police_type_id: Optional[int] = None
     police_type_name: Optional[str] = None
+    folder_id: Optional[int] = None
+    folder_name: Optional[str] = None
     score: int = 1
     created_by: Optional[int] = None
     created_at: Optional[datetime] = None
@@ -159,6 +163,76 @@ class ExamWrongQuestionResponse(BaseModel):
     score: int = 0
 
 
+class PaperFolderCreate(BaseModel):
+    """创建试卷文件夹"""
+
+    name: str = Field(..., max_length=100, description="文件夹名称")
+    parent_id: Optional[int] = Field(None, description="父文件夹ID")
+    sort_order: int = Field(0, description="排序")
+
+
+class PaperFolderUpdate(BaseModel):
+    """更新试卷文件夹"""
+
+    name: Optional[str] = Field(None, max_length=100)
+    parent_id: Optional[int] = None
+    sort_order: Optional[int] = None
+
+
+class PaperFolderResponse(BaseModel):
+    """试卷文件夹响应"""
+
+    id: int
+    name: str
+    parent_id: Optional[int] = None
+    sort_order: int = 0
+    paper_count: int = 0
+    children: List["PaperFolderResponse"] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class PaperMoveRequest(BaseModel):
+    """移动试卷到文件夹"""
+
+    folder_id: Optional[int] = Field(None, description="目标文件夹ID，null表示移出文件夹")
+
+
+class QuestionFolderCreate(BaseModel):
+    """创建试题文件夹"""
+
+    name: str = Field(..., max_length=100, description="文件夹名称")
+    parent_id: Optional[int] = Field(None, description="父文件夹ID")
+    sort_order: int = Field(0, description="排序")
+
+
+class QuestionFolderUpdate(BaseModel):
+    """更新试题文件夹"""
+
+    name: Optional[str] = Field(None, max_length=100)
+    parent_id: Optional[int] = None
+    sort_order: Optional[int] = None
+
+
+class QuestionFolderResponse(BaseModel):
+    """试题文件夹响应"""
+
+    id: int
+    name: str
+    parent_id: Optional[int] = None
+    sort_order: int = 0
+    question_count: int = 0
+    children: List["QuestionFolderResponse"] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class QuestionMoveRequest(BaseModel):
+    """移动试题到文件夹"""
+
+    folder_id: Optional[int] = Field(None, description="目标文件夹ID，null表示移出文件夹")
+
+
 class ExamPaperCreate(BaseModel):
     """创建试卷"""
 
@@ -168,6 +242,7 @@ class ExamPaperCreate(BaseModel):
     total_score: Optional[int] = Field(None, ge=1, description="总分，默认按题目自动汇总")
     passing_score: Optional[int] = Field(None, ge=1, description="及格分")
     type: str = Field("formal", description="试卷类型: formal/quiz")
+    folder_id: Optional[int] = Field(None, description="所属文件夹ID")
     question_ids: List[int] = Field(default_factory=list, description="题目ID列表")
 
 
@@ -180,6 +255,7 @@ class ExamPaperUpdate(BaseModel):
     total_score: Optional[int] = Field(None, ge=1)
     passing_score: Optional[int] = Field(None, ge=1)
     type: Optional[str] = None
+    folder_id: Optional[int] = None
     question_ids: Optional[List[int]] = None
 
 
@@ -194,6 +270,7 @@ class ExamPaperResponse(BaseModel):
     passing_score: int = 60
     type: str = "formal"
     status: str = "draft"
+    folder_id: Optional[int] = None
     published_at: Optional[datetime] = None
     created_by: Optional[int] = None
     question_count: int = 0
