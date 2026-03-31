@@ -18,7 +18,7 @@
 
   /* ===== 文字色 ===== */
   --v2-text-primary: #1D1D1F;
-  --v2-text-secondary: #6E6E73;
+  --v2-text-secondary: #86868B;
   --v2-text-muted: #AEAEB2;
   --v2-text-white: #FFFFFF;
 
@@ -47,15 +47,23 @@
   --v2-topbar-height: 0px;
   --v2-bottomnav-height: 64px;
 
-  /* ===== 卡片封面渐变预设 ===== */
-  --v2-cover-blue: linear-gradient(135deg, #DBEAFE 0%, #BFDBFE 100%);
-  --v2-cover-green: linear-gradient(135deg, #D1FAE5 0%, #A7F3D0 100%);
-  --v2-cover-pink: linear-gradient(135deg, #FCE7F3 0%, #FBCFE8 100%);
-  --v2-cover-purple: linear-gradient(135deg, #EDE9FE 0%, #DDD6FE 100%);
-  --v2-cover-yellow: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
-  --v2-cover-orange: linear-gradient(135deg, #FFEDD5 0%, #FED7AA 100%);
-  --v2-cover-teal: linear-gradient(135deg, #CCFBF1 0%, #99F6E4 100%);
-  --v2-cover-rose: linear-gradient(135deg, #FFE4E6 0%, #FECDD3 100%);
+  /* ===== 卡片封面渐变（莫兰迪低饱和色系） ===== */
+  --v2-cover-blue:   linear-gradient(150deg, #C5CDDF 0%, #D8DFED 50%, #C0C9DC 100%);
+  --v2-cover-green:  linear-gradient(150deg, #C2D5C8 0%, #D4E3D9 50%, #BDD0C4 100%);
+  --v2-cover-purple: linear-gradient(150deg, #CFC5D9 0%, #DDD4E6 50%, #C9BFCF 100%);
+  --v2-cover-orange: linear-gradient(150deg, #DBCFBE 0%, #E6DDD0 50%, #D5C8B6 100%);
+  --v2-cover-teal:   linear-gradient(150deg, #B8CDD0 0%, #CEDEE0 50%, #B5C8CC 100%);
+  --v2-cover-pink:   linear-gradient(150deg, #D8C3C8 0%, #E5D5D9 50%, #D2BDC3 100%);
+  --v2-cover-yellow: linear-gradient(150deg, #D8D3BC 0%, #E4E0CF 50%, #D2CDB6 100%);
+  --v2-cover-rose:   linear-gradient(150deg, #D0BFC0 0%, #DFD1D2 50%, #CBBCBD 100%);
+
+  /* ===== 状态标签色（低饱和配色） ===== */
+  --v2-tag-upcoming-bg: rgba(75, 110, 245, 0.1);
+  --v2-tag-upcoming-text: #4B6EF5;
+  --v2-tag-active-bg: rgba(52, 199, 89, 0.1);
+  --v2-tag-active-text: #2DA44E;
+  --v2-tag-ended-bg: rgba(142, 142, 147, 0.1);
+  --v2-tag-ended-text: #8E8E93;
 
   /* ===== 工具图标色 ===== */
   --v2-icon-red: #FF3B30;

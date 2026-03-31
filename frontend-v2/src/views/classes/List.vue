@@ -58,41 +58,53 @@
         class="class-card"
         @click="goDetail(item.id)"
       >
-        <!-- 封面 -->
+        <!-- 封面区 -->
         <div class="card-cover" :style="{ background: coverColors[index % coverColors.length] }">
-          <div class="cover-icon">
-            <TeamOutlined />
-          </div>
+          <!-- 线框图标 -->
+          <svg class="cover-icon" viewBox="0 0 48 48" fill="none" stroke="rgba(255,255,255,0.55)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="6" y="10" width="36" height="28" rx="3" />
+            <path d="M24 10V6" />
+            <path d="M16 10V7" />
+            <path d="M32 10V7" />
+            <line x1="6" y1="18" x2="42" y2="18" />
+            <circle cx="16" cy="26" r="2.5" />
+            <circle cx="24" cy="26" r="2.5" />
+            <circle cx="32" cy="26" r="2.5" />
+            <line x1="16" y1="33" x2="16" y2="28.5" stroke-dasharray="1.5 1.5" />
+            <line x1="24" y1="33" x2="24" y2="28.5" stroke-dasharray="1.5 1.5" />
+            <line x1="32" y1="33" x2="32" y2="28.5" stroke-dasharray="1.5 1.5" />
+          </svg>
+
+          <!-- 状态标签（柔和底色） -->
           <span v-if="item.status" class="status-tag" :class="'status-' + item.status">
             {{ statusLabels[item.status] || item.status }}
           </span>
+          <!-- 类型标签 -->
           <span v-if="item.type" class="type-tag">
             {{ typeLabels[item.type] || item.type }}
           </span>
         </div>
 
-        <!-- 信息 -->
+        <!-- 信息区 -->
         <div class="card-body">
           <h3 class="card-title">{{ item.name }}</h3>
-          <div class="card-info">
-            <span class="info-item">
-              <CalendarOutlined />
-              {{ formatDate(item.start_date) }} ~ {{ formatDate(item.end_date) }}
-            </span>
+
+          <div class="card-detail-row">
+            <CalendarOutlined class="detail-icon" />
+            <span>{{ formatDate(item.start_date) }} ~ {{ formatDate(item.end_date) }}</span>
           </div>
-          <div class="card-meta">
-            <span class="meta-item">
-              <UserOutlined />
-              {{ item.instructor_name || '未指定' }}
-            </span>
-            <span class="meta-item">
-              <TeamOutlined />
-              {{ item.enrolled_count ?? 0 }}{{ item.capacity ? '/' + item.capacity : '' }} 人
-            </span>
+
+          <div class="card-detail-row">
+            <UserOutlined class="detail-icon" />
+            <span>{{ item.instructor_name || '未指定教官' }}</span>
+            <span class="detail-sep">·</span>
+            <TeamOutlined class="detail-icon" />
+            <span>{{ item.enrolled_count ?? 0 }}{{ item.capacity ? '/' + item.capacity : '' }} 人</span>
           </div>
-          <div v-if="item.location" class="card-location">
-            <EnvironmentOutlined />
-            {{ item.location }}
+
+          <div v-if="item.location" class="card-detail-row">
+            <EnvironmentOutlined class="detail-icon" />
+            <span>{{ item.location }}</span>
           </div>
         </div>
       </div>
@@ -251,7 +263,7 @@ onMounted(fetchList)
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
   flex-wrap: wrap;
   gap: 12px;
 }
@@ -269,43 +281,49 @@ onMounted(fetchList)
   padding: 80px 0;
 }
 
-/* -- 班级网格 -- */
+/* -- 网格：桌面端一行 4 张，偏方正比例 -- */
 .class-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
 }
 
-@media (min-width: 1200px) {
+@media (min-width: 1100px) {
   .class-grid {
     grid-template-columns: repeat(4, 1fr);
   }
 }
 
+@media (min-width: 1500px) {
+  .class-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
 @media (max-width: 768px) {
   .class-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
     gap: 12px;
   }
 }
 
-/* -- 班级卡片 -- */
+/* -- 卡片 -- */
 .class-card {
   background: var(--v2-bg-card);
   border-radius: var(--v2-radius);
   overflow: hidden;
   cursor: pointer;
-  transition: box-shadow 0.2s, transform 0.2s;
+  transition: box-shadow 0.25s, transform 0.25s;
 }
 
 .class-card:hover {
   box-shadow: var(--v2-shadow-lg);
-  transform: translateY(-2px);
+  transform: translateY(-3px);
 }
 
-/* -- 封面 -- */
+/* -- 封面区：与信息区约 1:1.2 -- */
 .card-cover {
-  height: 110px;
+  height: 130px;
   position: relative;
   display: flex;
   align-items: center;
@@ -313,91 +331,92 @@ onMounted(fetchList)
 }
 
 .cover-icon {
-  font-size: 44px;
-  color: rgba(255, 255, 255, 0.65);
+  width: 52px;
+  height: 52px;
 }
 
+/* -- 状态标签：柔和半透明底色 + 深色文字 -- */
 .status-tag {
   position: absolute;
   left: 10px;
   bottom: 10px;
   font-size: 11px;
-  padding: 2px 10px;
+  padding: 3px 10px;
   border-radius: var(--v2-radius-full);
-  color: #fff;
   font-weight: 500;
+  letter-spacing: 0.2px;
 }
 
-.status-upcoming { background: var(--v2-primary); }
-.status-active   { background: var(--v2-success); }
-.status-ended    { background: var(--v2-text-muted); }
+.status-upcoming {
+  background: var(--v2-tag-upcoming-bg);
+  color: var(--v2-tag-upcoming-text);
+}
+.status-active {
+  background: var(--v2-tag-active-bg);
+  color: var(--v2-tag-active-text);
+}
+.status-ended {
+  background: var(--v2-tag-ended-bg);
+  color: var(--v2-tag-ended-text);
+}
 
 .type-tag {
   position: absolute;
   right: 10px;
   top: 10px;
-  background: rgba(255, 255, 255, 0.88);
+  background: rgba(255, 255, 255, 0.72);
   color: var(--v2-text-secondary);
   font-size: 11px;
   padding: 2px 8px;
   border-radius: var(--v2-radius-xs);
+  backdrop-filter: blur(4px);
 }
 
-/* -- 卡片信息 -- */
+/* -- 信息区：加大内边距、拉开行间距 -- */
 .card-body {
-  padding: 14px;
+  padding: 16px 18px 18px;
 }
 
 .card-title {
   font-size: 15px;
   font-weight: 600;
   color: var(--v2-text-primary);
-  margin-bottom: 8px;
+  margin-bottom: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.3;
 }
 
-.card-info {
-  margin-bottom: 6px;
-}
-
-.card-info .info-item {
+.card-detail-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
   font-size: 12px;
   color: var(--v2-text-muted);
-  display: flex;
-  align-items: center;
-  gap: 4px;
+  line-height: 1;
+  margin-bottom: 8px;
 }
 
-.card-meta {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 4px;
+.card-detail-row:last-child {
+  margin-bottom: 0;
 }
 
-.meta-item {
-  font-size: 12px;
-  color: var(--v2-text-secondary);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.card-location {
+.detail-icon {
   font-size: 12px;
   color: var(--v2-text-muted);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 4px;
+  flex-shrink: 0;
+}
+
+.detail-sep {
+  margin: 0 2px;
+  color: var(--v2-border);
 }
 
 /* -- 分页 -- */
 .pagination-wrapper {
   display: flex;
   justify-content: center;
-  padding: 24px 0;
+  padding: 28px 0;
 }
 </style>
