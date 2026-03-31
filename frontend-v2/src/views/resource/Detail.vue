@@ -1,5 +1,5 @@
 <template>
-  <div class="page-content">
+  <div class="page-content resource-page">
     <div class="detail-actions">
       <a-button @click="router.push('/resource/library')">返回资源库</a-button>
       <a-button @click="router.push('/resource/my')">我的资源</a-button>

@@ -1,5 +1,5 @@
 <template>
-  <div class="page-content">
+  <div class="page-content resource-page">
     <LearningResourceTabs />
 
     <div class="page-header">
@@ -23,7 +23,7 @@
     </div>
 
     <a-card :bordered="false" class="filter-card">
-      <a-space wrap>
+      <a-space wrap class="filter-toolbar">
         <a-select v-model:value="query.status" style="width: 180px" @change="fetchMine">
           <a-select-option value="">全部状态</a-select-option>
           <a-select-option value="draft">草稿</a-select-option>
@@ -33,7 +33,7 @@
           <a-select-option value="rejected">已驳回</a-select-option>
           <a-select-option value="offline">已下线</a-select-option>
         </a-select>
-        <a-input-search v-model:value="query.search" style="width: 280px" placeholder="搜索我的资源" @search="fetchMine" />
+        <ResourceSearchInput v-model:value="query.search" style="width: 320px" placeholder="搜索我的资源" @search="fetchMine" />
       </a-space>
     </a-card>
 
@@ -141,6 +141,7 @@ import {
 import { useAuthStore } from '@/stores/auth'
 import LearningResourceTabs from '@/components/resource/LearningResourceTabs.vue'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
+import ResourceSearchInput from '@/components/resource/ResourceSearchInput.vue'
 import ResourceUploadModal from '@/components/resource/ResourceUploadModal.vue'
 import { getResourceContentTypeLabel, getResourceStatusColor, getResourceStatusLabel } from '@/utils/learning-resource'
 
@@ -283,6 +284,10 @@ function handleUploadSuccess() {
 .filter-card {
   margin-bottom: 20px;
   border-radius: var(--v2-radius-lg);
+}
+
+.filter-toolbar {
+  gap: 12px;
 }
 
 .pagination-wrapper {

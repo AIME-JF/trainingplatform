@@ -1,6 +1,7 @@
 <template>
   <a-modal
     :open="open"
+    wrap-class-name="resource-modal"
     :title="courseId ? '编辑课程' : '创建课程'"
     :width="880"
     :footer="null"

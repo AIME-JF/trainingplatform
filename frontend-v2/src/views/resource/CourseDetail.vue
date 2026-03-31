@@ -1,5 +1,5 @@
 <template>
-  <div class="detail-page">
+  <div class="detail-page resource-page">
     <header class="detail-header">
       <div class="header-main">
         <div class="header-actions">

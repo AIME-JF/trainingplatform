@@ -1,5 +1,5 @@
 <template>
-  <div class="page-content">
+  <div class="page-content resource-page">
     <LearningResourceTabs />
 
     <div class="page-header">
@@ -15,7 +15,7 @@
     <a-card :bordered="false" class="filter-card">
       <a-row :gutter="[12, 12]">
         <a-col :xs="24" :xl="8">
-          <a-input-search v-model:value="filters.search" placeholder="搜索课程名称、关键词..." @search="fetchCourses" />
+          <ResourceSearchInput v-model:value="filters.search" placeholder="搜索课程名称、关键词..." @search="fetchCourses" />
         </a-col>
         <a-col :xs="24" :md="8" :xl="5">
           <a-select v-model:value="filters.instructor_id" :options="instructorOptions" allow-clear placeholder="按教官筛选" style="width: 100%" @change="fetchCourses" />
@@ -25,8 +25,8 @@
             <a-tag
               v-for="cat in categoryTabs"
               :key="cat.key"
-              :color="filters.category === cat.key ? 'blue' : 'default'"
               class="cat-tag"
+              :class="{ active: filters.category === cat.key }"
               @click="selectCategory(cat.key)"
             >
               {{ cat.label }}
@@ -61,11 +61,24 @@
         class="course-card"
         @click="router.push(`/resource/courses/${course.id}`)"
       >
-        <div class="card-cover" :style="{ background: coverColors[index % coverColors.length] }">
+        <div class="card-cover" :style="{ background: getCourseCoverBackground(course, index) }">
           <div class="cover-labels">
-            <a-tag>{{ getCourseCategoryLabel(course.category) }}</a-tag>
-            <a-tag :color="getCourseFileTypeColor(course.file_type)">{{ getCourseFileTypeLabel(course.file_type) }}</a-tag>
-            <a-tag v-if="course.is_required" color="red">必修</a-tag>
+            <a-tag class="cover-tag cover-tag-category">{{ getCourseCategoryLabel(course.category) }}</a-tag>
+            <div class="cover-tag-stack">
+              <a-tag class="cover-tag cover-tag-type">{{ getCourseFileTypeLabel(course.file_type) }}</a-tag>
+              <a-tag v-if="course.is_required" class="cover-tag cover-tag-required">必修</a-tag>
+            </div>
+          </div>
+          <div
+            class="cover-visual"
+            :style="{
+              '--cover-visual-accent': getCourseCoverVisual(course.category).accent,
+              '--cover-visual-glow': getCourseCoverVisual(course.category).glow,
+            }"
+          >
+            <span class="cover-visual-ring">
+              <component :is="getCourseCoverVisual(course.category).icon" class="cover-visual-icon" />
+            </span>
           </div>
         </div>
         <div class="card-body">
@@ -97,7 +110,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { AppstoreOutlined, CarOutlined, LaptopOutlined, ReadOutlined, SafetyCertificateOutlined, TeamOutlined, ThunderboltOutlined } from '@ant-design/icons-vue'
+import { computed, onMounted, reactive, ref, type Component } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import type { CourseListResponse } from '@/api/learning-resource'
@@ -105,11 +119,11 @@ import { deleteCourse, listCourses, listUsers } from '@/api/learning-resource'
 import { useAuthStore } from '@/stores/auth'
 import CourseEditorModal from '@/components/resource/CourseEditorModal.vue'
 import LearningResourceTabs from '@/components/resource/LearningResourceTabs.vue'
+import ResourceSearchInput from '@/components/resource/ResourceSearchInput.vue'
 import {
   COURSE_CATEGORIES,
   formatDate,
   getCourseCategoryLabel,
-  getCourseFileTypeColor,
   getCourseFileTypeLabel,
   getUserDisplayName,
 } from '@/utils/learning-resource'
@@ -130,16 +144,65 @@ const filters = reactive({
   sort: 'default',
 })
 
-const coverColors = [
-  'var(--v2-cover-blue)',
-  'var(--v2-cover-green)',
-  'var(--v2-cover-purple)',
-  'var(--v2-cover-orange)',
-  'var(--v2-cover-teal)',
-  'var(--v2-cover-pink)',
-  'var(--v2-cover-yellow)',
-  'var(--v2-cover-rose)',
+interface CourseCoverVisual {
+  icon: Component
+  background: string
+  accent: string
+  glow: string
+}
+
+const defaultCourseCoverVisual: CourseCoverVisual = {
+  icon: ReadOutlined,
+  background: 'linear-gradient(135deg, #edf1fb 0%, #e4eaf5 100%)',
+  accent: '#7a8fca',
+  glow: 'rgba(122, 143, 202, 0.14)',
+}
+
+const fallbackCoverBackgrounds = [
+  'linear-gradient(135deg, #edf1fb 0%, #e4eaf5 100%)',
+  'linear-gradient(135deg, #edf3ee 0%, #e1eae3 100%)',
+  'linear-gradient(135deg, #f6eee7 0%, #eee2d7 100%)',
+  'linear-gradient(135deg, #edf4f3 0%, #e2ece9 100%)',
 ]
+
+const courseCoverVisualMap: Record<string, CourseCoverVisual> = {
+  law: {
+    icon: SafetyCertificateOutlined,
+    background: 'linear-gradient(135deg, #edf5ec 0%, #e4eee6 100%)',
+    accent: '#6c8f7b',
+    glow: 'rgba(108, 143, 123, 0.12)',
+  },
+  fraud: {
+    icon: AppstoreOutlined,
+    background: 'linear-gradient(135deg, #eef1fb 0%, #e5e9f6 100%)',
+    accent: '#7b8dc6',
+    glow: 'rgba(123, 141, 198, 0.14)',
+  },
+  traffic: {
+    icon: CarOutlined,
+    background: 'linear-gradient(135deg, #ecf2fb 0%, #dfe9f4 100%)',
+    accent: '#6f8fb2',
+    glow: 'rgba(111, 143, 178, 0.14)',
+  },
+  community: {
+    icon: TeamOutlined,
+    background: 'linear-gradient(135deg, #f7efe7 0%, #efdfd3 100%)',
+    accent: '#b08b73',
+    glow: 'rgba(176, 139, 115, 0.12)',
+  },
+  cybersec: {
+    icon: LaptopOutlined,
+    background: 'linear-gradient(135deg, #edf4f2 0%, #e1ebe8 100%)',
+    accent: '#6c9b98',
+    glow: 'rgba(108, 155, 152, 0.12)',
+  },
+  physical: {
+    icon: ThunderboltOutlined,
+    background: 'linear-gradient(135deg, #f8efe8 0%, #f0dfd1 100%)',
+    accent: '#c19475',
+    glow: 'rgba(193, 148, 117, 0.12)',
+  },
+}
 
 const categoryTabs = COURSE_CATEGORIES.map((item) => (
   item.key === 'all' ? { key: 'all', label: '全部' } : item
@@ -191,6 +254,18 @@ function selectCategory(category: string) {
   void fetchCourses()
 }
 
+function getCourseCoverVisual(category?: string | null) {
+  return courseCoverVisualMap[category || ''] || defaultCourseCoverVisual
+}
+
+function getCourseCoverBackground(course: CourseListResponse, index: number) {
+  if (course.cover_color) {
+    return course.cover_color
+  }
+  const visual = courseCoverVisualMap[course.category || '']
+  return visual?.background || fallbackCoverBackgrounds[index % fallbackCoverBackgrounds.length]
+}
+
 function openCreate() {
   editingCourseId.value = null
   editorVisible.value = true
@@ -218,7 +293,7 @@ async function handleDelete(courseId: number) {
   align-items: center;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
 }
 
 .page-title {
@@ -232,21 +307,59 @@ async function handleDelete(courseId: number) {
 }
 
 .filter-card {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
+}
+
+.filter-card :deep(.ant-row) {
+  align-items: center;
+}
+
+.filter-card :deep(.ant-col) {
+  display: flex;
+  align-items: center;
+}
+
+.filter-card :deep(.ant-col > *) {
+  width: 100%;
 }
 
 .category-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 10px;
+  align-items: center;
+  min-height: var(--resource-control-height);
 }
 
-.cat-tag {
+:deep(.cat-tag.ant-tag) {
   cursor: pointer;
+  margin: 0;
+  padding: 7px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--v2-text-secondary);
+  border: 1px solid rgba(75, 110, 245, 0.12);
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 8px 20px rgba(75, 110, 245, 0.06);
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+:deep(.cat-tag.ant-tag:hover),
+:deep(.cat-tag.active.ant-tag) {
+  color: var(--v2-primary);
+  border-color: rgba(75, 110, 245, 0.3);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(237, 242, 255, 0.94));
+  box-shadow: 0 12px 24px rgba(75, 110, 245, 0.12);
+  transform: translateY(-1px);
 }
 
 .course-stats {
-  margin-bottom: 16px;
+  margin-bottom: 20px;
   color: var(--v2-text-secondary);
 }
 
@@ -257,48 +370,159 @@ async function handleDelete(courseId: number) {
 
 .course-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
 }
 
 .course-card {
+  position: relative;
   overflow: hidden;
   background: var(--v2-bg-card);
-  border-radius: var(--v2-radius-lg);
-  box-shadow: var(--v2-shadow-sm);
+  border-radius: 24px;
+  box-shadow: 0 18px 40px rgba(24, 39, 75, 0.08);
   cursor: pointer;
+  transition:
+    transform 0.22s ease,
+    box-shadow 0.22s ease;
+}
+
+.course-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 22px 46px rgba(75, 110, 245, 0.1);
 }
 
 .card-cover {
-  height: 120px;
-  padding: 14px;
+  position: relative;
+  height: 164px;
+  padding: 18px;
+  overflow: hidden;
+}
+
+.card-cover::before {
+  content: '';
+  position: absolute;
+  right: -30px;
+  bottom: -64px;
+  width: 188px;
+  height: 188px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  filter: blur(6px);
+}
+
+.card-cover::after {
+  content: '';
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  bottom: 0;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .cover-labels {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cover-tag-stack {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+:deep(.cover-tag.ant-tag) {
+  margin: 0;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+}
+
+:deep(.cover-tag-category.ant-tag) {
+  color: #405f7f;
+}
+
+:deep(.cover-tag-type.ant-tag) {
+  color: #7867c6;
+}
+
+:deep(.cover-tag-required.ant-tag) {
+  color: #cc2f39;
+  border-color: rgba(255, 142, 151, 0.48);
+  background: rgba(255, 247, 247, 0.96);
+}
+
+.cover-visual {
+  position: absolute;
+  left: 50%;
+  top: 55%;
+  transform: translate(-50%, -50%);
+  z-index: 1;
+}
+
+.cover-visual-ring {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 24px;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.68));
+  box-shadow:
+    0 16px 28px var(--cover-visual-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(12px);
+}
+
+.cover-visual-ring::after {
+  content: '';
+  position: absolute;
+  inset: 9px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0));
+}
+
+.cover-visual-icon {
+  position: relative;
+  z-index: 1;
+  font-size: 32px;
+  color: var(--cover-visual-accent);
 }
 
 .card-body {
-  padding: 18px;
+  padding: 22px 22px 24px;
 }
 
 .card-head {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 
 .card-head h3 {
-  font-size: 18px;
-  margin-bottom: 8px;
+  font-size: 22px;
+  line-height: 1.28;
+  margin-bottom: 10px;
 }
 
 .card-head p {
   color: var(--v2-text-secondary);
-  line-height: 1.7;
+  font-size: 15px;
+  line-height: 1.8;
+  min-height: 54px;
 }
 
 .card-meta {
@@ -306,8 +530,24 @@ async function handleDelete(courseId: number) {
   justify-content: space-between;
   gap: 12px;
   color: var(--v2-text-secondary);
-  font-size: 13px;
-  margin-bottom: 10px;
+  font-size: 14px;
+  margin-bottom: 12px;
+}
+
+.card-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.card-body :deep(.ant-progress) {
+  margin-top: 8px;
+}
+
+.card-body :deep(.ant-progress-bg),
+.card-body :deep(.ant-progress-inner) {
+  height: 8px !important;
+  border-radius: 999px;
 }
 
 @media (max-width: 768px) {
@@ -316,6 +556,22 @@ async function handleDelete(courseId: number) {
   .card-meta {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .course-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .card-cover {
+    height: 152px;
+  }
+
+  .cover-labels {
+    flex-direction: column;
+  }
+
+  .cover-tag-stack {
+    justify-content: flex-start;
   }
 }
 </style>

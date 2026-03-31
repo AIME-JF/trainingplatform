@@ -56,29 +56,81 @@ function isActive(path: string) {
 .resource-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 20px;
+  gap: 14px;
+  margin-bottom: 26px;
 }
 
 .resource-tab {
-  border: 1px solid var(--v2-border);
-  background: var(--v2-bg-card);
+  position: relative;
+  border: none;
+  background: rgba(255, 255, 255, 0.42);
   color: var(--v2-text-secondary);
-  border-radius: var(--v2-radius-full);
-  padding: 8px 18px;
-  font-size: 14px;
+  border-radius: 0;
+  min-height: 52px;
+  padding: 14px 28px;
+  font-size: 17px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
+  overflow: hidden;
+  transition:
+    color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.resource-tab::before,
+.resource-tab::after {
+  content: '';
+  position: absolute;
+  top: 8%;
+  bottom: 8%;
+  width: 3px;
+  border-radius: 0;
+  background: linear-gradient(180deg, rgba(75, 110, 245, 0), rgba(75, 110, 245, 0.98), rgba(75, 110, 245, 0));
+  opacity: 0;
+  box-shadow: 0 0 12px rgba(75, 110, 245, 0.28);
+  transition: opacity 0.2s ease;
+}
+
+.resource-tab::before {
+  left: 0;
+}
+
+.resource-tab::after {
+  right: 0;
 }
 
 .resource-tab:hover {
-  border-color: var(--v2-primary);
   color: var(--v2-primary);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(242, 246, 255, 0.9));
+  box-shadow: 0 14px 30px rgba(75, 110, 245, 0.12);
+  transform: translateY(-1px);
+}
+
+.resource-tab:hover::before,
+.resource-tab:hover::after {
+  opacity: 1;
 }
 
 .resource-tab.active {
-  border-color: var(--v2-primary);
-  background: var(--v2-primary);
-  color: #fff;
+  color: var(--v2-primary);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(238, 243, 255, 0.95));
+  box-shadow:
+    inset 0 0 0 1px rgba(75, 110, 245, 0.08),
+    0 16px 34px rgba(75, 110, 245, 0.14);
+}
+
+.resource-tab.active::before,
+.resource-tab.active::after {
+  opacity: 1;
+}
+
+@media (max-width: 768px) {
+  .resource-tab {
+    min-height: 46px;
+    padding: 12px 22px;
+    font-size: 15px;
+  }
 }
 </style>

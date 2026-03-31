@@ -1,5 +1,5 @@
 <template>
-  <div class="page-content recommend-page">
+  <div class="page-content recommend-page resource-page">
     <LearningResourceTabs />
 
     <div class="recommend-header">

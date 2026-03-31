@@ -82,20 +82,17 @@ class CourseService:
             selectinload(Course.tag_relations).joinedload(CourseTagRelation.tag),
         )
 
-        if search:
-            query = (
-                query.outerjoin(Course.chapters)
-                .outerjoin(Course.tag_relations)
-                .outerjoin(CourseTagRelation.tag)
-                .filter(
-                    or_(
-                        Course.title.contains(search),
-                        Course.description.contains(search),
-                        Chapter.title.contains(search),
-                        CourseTag.name.contains(search),
-                    )
+        keyword = str(search or "").strip()
+        if keyword:
+            query = query.filter(
+                or_(
+                    Course.title.contains(keyword),
+                    Course.description.contains(keyword),
+                    Course.chapters.any(Chapter.title.contains(keyword)),
+                    Course.tag_relations.any(
+                        CourseTagRelation.tag.has(CourseTag.name.contains(keyword))
+                    ),
                 )
-                .distinct()
             )
         if category:
             query = query.filter(Course.category == category)

@@ -1,5 +1,5 @@
 <template>
-  <div class="page-content">
+  <div class="page-content resource-page">
     <LearningResourceTabs />
 
     <div class="page-header">
