@@ -1,0 +1,47 @@
+:root {
+  /* 公安蓝主题色 */
+  --police-primary: #003087;
+  --police-primary-hover: #00409a;
+  --police-primary-light: #e6eeff;
+  --police-secondary: #1a4fa0;
+
+  /* 警徽金色点缀 */
+  --police-gold: #c8a84b;
+  --police-gold-light: #f5ecd0;
+
+  /* 功能色 */
+  --police-success: #1a7a3e;
+  --police-warning: #d48806;
+  --police-danger: #cf1322;
+  --police-info: #0958d9;
+
+  /* 背景色 */
+  --police-bg: #f0f4f8;
+  --police-bg-card: #ffffff;
+  --police-sidebar-bg: #001849;
+  --police-sidebar-item-hover: #002d6e;
+  --police-sidebar-item-active: #003087;
+
+  /* 文字色 */
+  --police-text-primary: #1a1a2e;
+  --police-text-secondary: #4a5568;
+  --police-text-muted: #8a9bb0;
+  --police-text-white: #ffffff;
+
+  /* 边框 */
+  --police-border: #d9e3f0;
+  --police-border-light: #eef2f7;
+
+  /* 圆角：方正感，适合政务系统 */
+  --police-radius-sm: 4px;
+  --police-radius: 6px;
+  --police-radius-lg: 8px;
+
+  /* 字体 */
+  --police-font: 'PingFang SC', 'Microsoft YaHei', '微软雅黑', sans-serif;
+
+  /* 阴影 */
+  --police-shadow-sm: 0 1px 4px rgba(0, 48, 135, 0.08);
+  --police-shadow: 0 2px 8px rgba(0, 48, 135, 0.12);
+  --police-shadow-lg: 0 4px 20px rgba(0, 48, 135, 0.16);
+}

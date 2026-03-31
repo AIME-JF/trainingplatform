@@ -1,0 +1,272 @@
+/* ============================================
+   警务训练平台 - 移动端响应式样式
+   目标：375px~768px 手机屏幕
+   注意：不修改 PC 端任何布局
+   ============================================ */
+
+/* ---- 全局布局 ---- */
+@media (max-width: 768px) {
+
+  /* 隐藏桌面侧边栏 */
+  .ant-layout-sider {
+    display: none !important;
+  }
+
+  /* 内容区去掉左边空间 */
+  .ant-layout {
+    margin-left: 0 !important;
+  }
+
+  /* 顶部栏压缩 */
+  .topbar {
+    padding: 0 12px !important;
+    height: 52px !important;
+  }
+
+  .page-title {
+    font-size: 14px !important;
+    max-width: calc(100vw - 160px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .topbar-left,
+  .topbar-right {
+    min-width: 0;
+  }
+
+  /* 用户名在移动端隐藏（只显示头像） */
+  .user-name {
+    display: none !important;
+  }
+
+  .user-arrow {
+    display: none !important;
+  }
+
+  /* 内容区减少 padding */
+  .content-area {
+    padding: 12px !important;
+    padding-bottom: 76px !important;
+    /* 留出底部导航空间 */
+    min-height: calc(var(--app-vh, 1vh) * 100 - 52px - 64px) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .content-area.immersive-content {
+    padding: 0 !important;
+    padding-bottom: 0 !important;
+    height: calc(var(--app-vh, 1vh) * 100 - 52px - 64px) !important;
+    min-height: calc(var(--app-vh, 1vh) * 100 - 52px - 64px) !important;
+    overflow: hidden !important;
+    background: #000 !important;
+  }
+
+  /* ================================================
+     Ant Design Grid 全宽化
+     让所有 a-col 在移动端变成 100% 宽度
+     ================================================ */
+  .ant-col-6,
+  .ant-col-8,
+  .ant-col-10,
+  .ant-col-12,
+  .ant-col-14,
+  .ant-col-16,
+  .ant-col-17 {
+    flex: 0 0 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* 统计卡片保持 2 列 */
+  .ant-row>.ant-col-6:has(.kpi-card),
+  .ant-row>.ant-col-6:has(.stat-mini) {
+    flex: 0 0 50% !important;
+    max-width: 50% !important;
+  }
+
+  /* Ant Design Row gutter 缩小 */
+  .ant-row {
+    margin-left: -6px !important;
+    margin-right: -6px !important;
+  }
+
+  .ant-row>.ant-col {
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+  }
+
+  /* ---- Ant Design 卡片 ---- */
+  .ant-card {
+    border-radius: 8px !important;
+  }
+
+  .ant-card .ant-card-body {
+    padding: 14px !important;
+  }
+
+  /* ---- 表格：横向滚动 ---- */
+  .ant-table-wrapper {
+    overflow-x: auto;
+  }
+
+  /* ---- Modal 移动端全屏化 ---- */
+  .ant-modal {
+    max-width: calc(100vw - 24px) !important;
+    margin: 12px auto !important;
+  }
+
+  .ant-modal-body {
+    max-height: 70vh !important;
+    overflow-y: auto !important;
+  }
+
+  /* ---- 页面标题区 ---- */
+  .page-header {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+
+  .page-header h2 {
+    font-size: 18px !important;
+  }
+
+  /* ---- Descriptions 描述列表 ---- */
+  .ant-descriptions-item-label,
+  .ant-descriptions-item-content {
+    padding: 8px 8px !important;
+    font-size: 12px !important;
+  }
+
+  /* ---- 考试页面全屏优化 ---- */
+  .exam-layout {
+    flex-direction: column !important;
+  }
+
+  .exam-sidebar {
+    display: none !important;
+  }
+
+  /* ---- 登录页移动端 ---- */
+  .login-bg {
+    display: none !important;
+  }
+
+  .login-form-area {
+    width: 100% !important;
+    padding: 24px 16px !important;
+    background: linear-gradient(135deg, #001234 0%, #003087 50%, #001849 100%) !important;
+  }
+
+  .login-card {
+    padding: 28px 20px !important;
+  }
+
+  .login-card .role-cards {
+    gap: 6px !important;
+  }
+
+  .login-card .role-card {
+    padding: 10px 12px !important;
+  }
+
+  /* ---- Tabs 移动端 ---- */
+  .ant-tabs-nav {
+    margin-bottom: 12px !important;
+  }
+
+  /* ---- 按钮组 ---- */
+  .ant-space {
+    flex-wrap: wrap;
+  }
+
+  /* ---- 标签过滤栏 ---- */
+  .filter-bar,
+  .toolbar {
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  /* ---- 通用操作栏与筛选栏兜底 ---- */
+  .action-bar,
+  .actions,
+  .search-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* ---- 表单控件移动端自适应 ---- */
+  .ant-form-item-control-input,
+  .ant-form-item-control-input-content,
+  .ant-picker,
+  .ant-select,
+  .ant-input-search,
+  .ant-input-number {
+    width: 100%;
+    min-width: 0;
+  }
+
+  /* ---- Drawer / Modal 进一步兜底 ---- */
+  .ant-drawer-content-wrapper {
+    max-width: calc(100vw - 20px) !important;
+  }
+
+  .ant-modal-content {
+    border-radius: 8px;
+  }
+}
+
+/* ---- 底部导航栏（移动端专属） ---- */
+.mobile-bottom-nav {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 64px;
+    background: white;
+    border-top: 1px solid #e8e8e8;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+    z-index: 1000;
+    align-items: stretch;
+  }
+
+  .mobile-nav-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    cursor: pointer;
+    color: #8c8c8c;
+    font-size: 10px;
+    transition: color 0.2s;
+    padding: 4px 0;
+    text-decoration: none;
+    border: none;
+    background: none;
+  }
+
+  .mobile-nav-item.active {
+    color: #003087;
+  }
+
+  .mobile-nav-item .nav-icon {
+    font-size: 20px;
+    line-height: 1;
+  }
+
+  .mobile-nav-item .nav-label {
+    font-size: 10px;
+    line-height: 1;
+  }
+}

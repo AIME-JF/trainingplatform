@@ -1,0 +1,92 @@
+import request from './request'
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+
+export function getCourses(params) {
+  return request.get('/courses', { params })
+}
+
+export function getCourse(id) {
+  return request.get(`/courses/${id}`)
+}
+
+export function getCourseTags(params) {
+  return request.get('/courses/tags', { params })
+}
+
+export function createCourseTag(data) {
+  return request.post('/courses/tags', data)
+}
+
+export function createCourse(data) {
+  return request.post('/courses', data)
+}
+
+export function updateCourse(id, data) {
+  return request.put(`/courses/${id}`, data)
+}
+
+export function deleteCourse(id) {
+  return request.delete(`/courses/${id}`)
+}
+
+export function getProgress() {
+  return request.get('/courses/progress')
+}
+
+export function updateChapterProgress(courseId, chapterId, payload) {
+  const body = typeof payload === 'number' ? { progress: payload } : payload
+  return request.put(`/courses/${courseId}/chapters/${chapterId}/progress`, body)
+}
+
+export function keepaliveChapterProgress(courseId, chapterId, payload) {
+  const token = localStorage.getItem('token')
+  const body = typeof payload === 'number'
+    ? { progress: payload }
+    : {
+        progress: payload?.progress ?? 0,
+        playback_seconds: payload?.playbackSeconds ?? payload?.playback_seconds ?? 0,
+      }
+
+  return fetch(`${API_BASE_URL}/courses/${courseId}/chapters/${chapterId}/progress`, {
+    method: 'PUT',
+    keepalive: true,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(body),
+  })
+}
+
+export function getCourseNote(courseId) {
+  return request.get(`/courses/${courseId}/note`)
+}
+
+export function saveCourseNote(courseId, content) {
+  return request.put(`/courses/${courseId}/note`, { content })
+}
+
+export function getCourseQA(courseId) {
+  return request.get(`/courses/${courseId}/qa`)
+}
+
+export function createCourseQA(courseId, data) {
+  return request.post(`/courses/${courseId}/qa`, data)
+}
+
+export function getCourseLearningStatus(courseId) {
+  return request.get(`/courses/${courseId}/learning-status`)
+}
+
+export function bindCourseResource(courseId, data) {
+  return request.post(`/courses/${courseId}/resources`, data)
+}
+
+export function getCourseResources(courseId) {
+  return request.get(`/courses/${courseId}/resources`)
+}
+
+export function unbindCourseResource(courseId, resourceId) {
+  return request.delete(`/courses/${courseId}/resources/${resourceId}`)
+}

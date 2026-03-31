@@ -1,0 +1,300 @@
+"""
+AI 智能出题生成器。
+"""
+from __future__ import annotations
+
+import json
+import re
+from typing import Any, Iterable, List
+
+from app.schemas import AIQuestionTaskCreateRequest, AITaskQuestionDraft
+
+from .base import BaseAIAgent
+
+
+class AIQuestionGenerator(BaseAIAgent):
+    """AI 智能出题生成器"""
+
+    SUPPORTED_TYPES = ("single", "multi", "judge")
+
+    def generate_questions(self, request: AIQuestionTaskCreateRequest) -> List[AITaskQuestionDraft]:
+        prompt = self._build_generation_prompt(request)
+        payload = self._generate_json_payload(
+            system_prompt="你是一个只输出合法 JSON 的警务训练出题助手。",
+            user_prompt=prompt,
+        )
+        return self._build_question_drafts(payload, request)
+
+    def _build_generation_prompt(self, request: AIQuestionTaskCreateRequest) -> str:
+        allowed_types = [str(item).strip() for item in (request.question_types or []) if str(item).strip()] or ["single"]
+        knowledge_points = [item for item in (request.knowledge_points or []) if item] or [request.topic]
+
+        type_schema_text = """
+题型格式与约束：
+1. single（单选题）
+   - JSON 结构：
+     {
+       "type": "single",
+       "content": "题干",
+       "options": [
+         {"key": "A", "text": "选项A"},
+         {"key": "B", "text": "选项B"},
+         {"key": "C", "text": "选项C"},
+         {"key": "D", "text": "选项D"}
+       ],
+       "answer": "A",
+       "explanation": "解析",
+       "difficulty": 3,
+       "knowledge_points": ["知识点1", "知识点2"],
+       "score": __SCORE__
+     }
+   - 约束：必须且只能有 1 个正确答案；选项数量 4-6 个；answer 必须是单个选项 key。
+2. multi（多选题）
+   - JSON 结构：
+     {
+       "type": "multi",
+       "content": "题干",
+       "options": [
+         {"key": "A", "text": "选项A"},
+         {"key": "B", "text": "选项B"},
+         {"key": "C", "text": "选项C"},
+         {"key": "D", "text": "选项D"}
+       ],
+       "answer": ["A", "C"],
+       "explanation": "解析",
+       "difficulty": 3,
+       "knowledge_points": ["知识点1", "知识点2"],
+       "score": __SCORE__
+     }
+   - 约束：必须至少 2 个正确答案；answer 必须是去重后的选项 key 数组。
+3. judge（判断题）
+   - JSON 结构：
+     {
+       "type": "judge",
+       "content": "题干",
+       "options": [
+         {"key": "A", "text": "正确"},
+         {"key": "B", "text": "错误"}
+       ],
+       "answer": "A",
+       "explanation": "解析",
+       "difficulty": 3,
+       "knowledge_points": ["知识点1"],
+       "score": __SCORE__
+     }
+   - 约束：options 固定为 A=正确、B=错误；answer 只能是 A 或 B。
+""".strip().replace("__SCORE__", str(request.score))
+
+        prompt_lines = [
+            "你是警务训练平台的智能出题引擎。",
+            "你必须严格输出一个合法 JSON 对象，不允许输出 Markdown、代码块、额外说明、前后缀文本。",
+            "JSON 顶层格式必须是：",
+            '{',
+            '  "questions": [',
+            "    ...题目对象...",
+            "  ]",
+            "}",
+            type_schema_text,
+            "全局生成约束：",
+            f"- questions 数组长度必须严格等于 {request.question_count}。",
+            f"- 本次允许的题型只有：{', '.join(allowed_types)}。禁止输出其他题型。",
+            f"- 每题默认分值固定为 {request.score}，score 字段必须填写 {request.score}。",
+            f"- 难度 difficulty 必须为 1-5 的整数，整体目标难度为 {request.difficulty}。",
+            "- 所有题目必须使用简体中文。",
+            "- 所有题目必须唯一，不能出现重复题干或语义重复的题目。",
+            "- 题干必须完整、明确，不要出现“根据上文”“根据材料”之类缺少上下文的表达。",
+            "- explanation 必须给出简洁且明确的解析。",
+            "- knowledge_points 必须是 1-3 个字符串组成的数组，且优先从提供的知识点列表中选择或贴近生成。",
+            "- 不要生成与警务训练无关的内容。",
+            "任务上下文：",
+            f"- 任务名称：{request.task_name}",
+            f"- 出题主题：{request.topic}",
+            f"- 知识点列表：{json.dumps(knowledge_points, ensure_ascii=False)}",
+            f"- 目标题目数量：{request.question_count}",
+            f"- 允许题型：{json.dumps(allowed_types, ensure_ascii=False)}",
+            f"- 目标难度：{request.difficulty}",
+            f"- 默认分值：{request.score}",
+            f"- 警种ID：{request.police_type_id if request.police_type_id is not None else '未指定'}",
+        ]
+
+        if request.source_text:
+            prompt_lines.extend(
+                [
+                    "参考文本：",
+                    request.source_text.strip(),
+                ]
+            )
+
+        if request.requirements:
+            prompt_lines.append(f"- 补充要求：{request.requirements.strip()}")
+
+        prompt_lines.append("请现在直接输出 JSON 对象。")
+        return "\n".join(prompt_lines)
+
+    def _build_question_drafts(
+        self,
+        payload: dict[str, Any],
+        request: AIQuestionTaskCreateRequest,
+    ) -> List[AITaskQuestionDraft]:
+        questions_payload = payload.get("questions")
+        if not isinstance(questions_payload, list):
+            raise ValueError("AI 返回结果缺少 questions 数组")
+        if len(questions_payload) != request.question_count:
+            raise ValueError(f"AI 返回题目数量不正确，期望 {request.question_count}，实际 {len(questions_payload)}")
+
+        allowed_types = {
+            str(item).strip()
+            for item in (request.question_types or [])
+            if str(item).strip()
+        } or {"single"}
+
+        questions: List[AITaskQuestionDraft] = []
+        existed_contents: set[str] = set()
+        for index, item in enumerate(questions_payload, start=1):
+            draft = self._build_single_question_draft(index, item, request, allowed_types)
+            normalized_content = draft.content.strip()
+            if normalized_content in existed_contents:
+                raise ValueError("AI 生成了重复题目，请重试")
+            existed_contents.add(normalized_content)
+            questions.append(draft)
+        return questions
+
+    def _build_single_question_draft(
+        self,
+        index: int,
+        item: Any,
+        request: AIQuestionTaskCreateRequest,
+        allowed_types: set[str],
+    ) -> AITaskQuestionDraft:
+        if not isinstance(item, dict):
+            raise ValueError(f"第 {index} 题格式错误，必须是对象")
+
+        question_type = str(item.get("type") or "").strip()
+        if question_type not in allowed_types:
+            allowed_text = "、".join(sorted(allowed_types))
+            raise ValueError(f"第 {index} 题题型非法，仅允许：{allowed_text}")
+
+        content = str(item.get("content") or "").strip()
+        if not content:
+            raise ValueError(f"第 {index} 题缺少题干")
+
+        difficulty = self._to_int(item.get("difficulty")) or int(request.difficulty)
+        if difficulty < 1 or difficulty > 5:
+            raise ValueError(f"第 {index} 题难度必须在 1-5 之间")
+
+        knowledge_points = self._normalize_knowledge_points(
+            item.get("knowledge_points")
+            or item.get("knowledgePoints")
+            or item.get("knowledge_point")
+            or item.get("knowledgePoint")
+        )
+        explanation = str(item.get("explanation") or "").strip() or None
+
+        options, answer = self._normalize_question_content(question_type, item.get("options"), item.get("answer"), index)
+
+        return AITaskQuestionDraft(
+            temp_id=f"draft-{index}",
+            origin="generated",
+            type=question_type,
+            content=content,
+            options=options,
+            answer=answer,
+            explanation=explanation,
+            difficulty=difficulty,
+            knowledge_points=knowledge_points,
+            police_type_id=request.police_type_id,
+            score=int(request.score),
+        )
+
+    def _normalize_question_content(
+        self,
+        question_type: str,
+        raw_options: Any,
+        raw_answer: Any,
+        index: int,
+    ) -> tuple[list[dict[str, str]] | None, Any]:
+        if question_type == "judge":
+            answer = self._normalize_judge_answer(raw_answer)
+            return [
+                {"key": "A", "text": "正确"},
+                {"key": "B", "text": "错误"},
+            ], answer
+
+        options = self._normalize_choice_options(raw_options, index)
+        option_keys = [item["key"] for item in options]
+
+        if question_type == "single":
+            answer = self._normalize_single_answer(raw_answer, option_keys, index)
+        else:
+            answer = self._normalize_multi_answer(raw_answer, option_keys, index)
+        return options, answer
+
+    def _normalize_choice_options(self, raw_options: Any, index: int) -> list[dict[str, str]]:
+        if not isinstance(raw_options, list):
+            raise ValueError(f"第 {index} 题缺少选项数组")
+
+        normalized_texts: list[str] = []
+        for item in raw_options:
+            if isinstance(item, dict):
+                text = str(item.get("text") or "").strip()
+            else:
+                text = str(item or "").strip()
+            if text:
+                normalized_texts.append(text)
+
+        normalized_texts = list(dict.fromkeys(normalized_texts))
+        if len(normalized_texts) < 4 or len(normalized_texts) > 6:
+            raise ValueError(f"第 {index} 题选项数量必须在 4-6 个之间")
+
+        return [
+            {
+                "key": chr(65 + option_index),
+                "text": text,
+            }
+            for option_index, text in enumerate(normalized_texts)
+        ]
+
+    def _normalize_single_answer(self, raw_answer: Any, option_keys: Iterable[str], index: int) -> str:
+        if isinstance(raw_answer, list):
+            raw_answer = raw_answer[0] if raw_answer else None
+
+        answer = str(raw_answer or "").strip().upper()
+        if answer not in option_keys:
+            raise ValueError(f"第 {index} 题单选答案非法")
+        return answer
+
+    def _normalize_multi_answer(self, raw_answer: Any, option_keys: Iterable[str], index: int) -> list[str]:
+        answers: list[str] = []
+        if isinstance(raw_answer, list):
+            answers = [str(item).strip().upper() for item in raw_answer if str(item).strip()]
+        elif raw_answer is not None:
+            answers = [str(item).strip().upper() for item in re.split(r"[,，/、\s]+", str(raw_answer)) if str(item).strip()]
+
+        answers = list(dict.fromkeys(answers))
+        if len(answers) < 2:
+            raise ValueError(f"第 {index} 题多选答案至少需要 2 个")
+        if any(item not in option_keys for item in answers):
+            raise ValueError(f"第 {index} 题多选答案非法")
+        return answers
+
+    def _normalize_judge_answer(self, raw_answer: Any) -> str:
+        answer = str(raw_answer or "").strip().upper()
+        if answer in {"A", "正确", "TRUE", "YES", "1"}:
+            return "A"
+        if answer in {"B", "错误", "FALSE", "NO", "0"}:
+            return "B"
+        raise ValueError("判断题答案非法")
+
+    def _normalize_knowledge_points(self, raw_value: Any) -> list[str]:
+        raw_items = [raw_value] if isinstance(raw_value, str) else list(raw_value or [])
+        normalized: list[str] = []
+        seen = set()
+        for raw_item in raw_items:
+            item = str(raw_item or "").strip()
+            if not item or item in seen:
+                continue
+            seen.add(item)
+            normalized.append(item[:100])
+        if not normalized:
+            raise ValueError("题目缺少知识点列表")
+        return normalized[:3]

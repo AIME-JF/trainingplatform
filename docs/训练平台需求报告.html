@@ -1,0 +1,872 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>公安训练管理平台 — 需求分析报告</title>
+<style>
+  :root {
+    --primary: #1a365d;
+    --primary-light: #2a4a7f;
+    --accent: #c53030;
+    --accent-light: #fc8181;
+    --bg: #f7fafc;
+    --card: #ffffff;
+    --border: #e2e8f0;
+    --text: #1a202c;
+    --text-secondary: #4a5568;
+    --text-muted: #718096;
+    --success: #276749;
+    --success-bg: #f0fff4;
+    --warning: #975a16;
+    --warning-bg: #fffff0;
+    --info: #2b6cb0;
+    --info-bg: #ebf8ff;
+    --phase1: #2b6cb0;
+    --phase2: #6b46c1;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+  }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-light) 100%);
+    color: white;
+    padding: 48px 0 40px;
+    position: relative;
+    overflow: hidden;
+  }
+  .header::after {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -10%;
+    width: 400px;
+    height: 400px;
+    background: rgba(255,255,255,0.03);
+    border-radius: 50%;
+  }
+  .header-inner {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 32px;
+    position: relative;
+    z-index: 1;
+  }
+  .header .badge {
+    display: inline-block;
+    background: rgba(255,255,255,0.15);
+    border: 1px solid rgba(255,255,255,0.25);
+    border-radius: 4px;
+    padding: 4px 12px;
+    font-size: 12px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .header h1 {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    letter-spacing: 1px;
+  }
+  .header .subtitle {
+    font-size: 16px;
+    opacity: 0.85;
+    margin-bottom: 24px;
+  }
+  .meta-row {
+    display: flex;
+    gap: 32px;
+    font-size: 13px;
+    opacity: 0.75;
+  }
+  .meta-row span { display: flex; align-items: center; gap: 6px; }
+
+  /* Container */
+  .container {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 0 32px 64px;
+  }
+
+  /* Executive Summary */
+  .exec-summary {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 32px;
+    margin: -32px 0 40px;
+    position: relative;
+    z-index: 2;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.06);
+  }
+  .exec-summary h2 {
+    font-size: 18px;
+    color: var(--primary);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .exec-summary p {
+    color: var(--text-secondary);
+    font-size: 15px;
+    margin-bottom: 12px;
+  }
+
+  /* Principles */
+  .principles {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin: 32px 0 40px;
+  }
+  .principle-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 24px;
+    text-align: center;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .principle-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  }
+  .principle-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    margin: 0 auto 12px;
+  }
+  .principle-card h3 { font-size: 15px; margin-bottom: 6px; }
+  .principle-card p { font-size: 13px; color: var(--text-muted); }
+
+  /* Section */
+  .section {
+    margin-bottom: 40px;
+  }
+  .section-title {
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 8px;
+    padding-bottom: 12px;
+    border-bottom: 2px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .section-title .num {
+    background: var(--primary);
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+  }
+  .section-desc {
+    color: var(--text-secondary);
+    font-size: 14px;
+    margin-bottom: 20px;
+    padding-left: 42px;
+  }
+
+  /* Module Card */
+  .module {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 20px;
+    overflow: hidden;
+    transition: box-shadow 0.2s;
+  }
+  .module:hover {
+    box-shadow: 0 4px 16px rgba(0,0,0,0.06);
+  }
+  .module-header {
+    padding: 20px 24px 16px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  .module-header h3 {
+    font-size: 17px;
+    color: var(--text);
+  }
+  .module-header .phase-tag {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+  .phase-tag.p1 {
+    background: #ebf8ff;
+    color: var(--phase1);
+    border: 1px solid #bee3f8;
+  }
+  .phase-tag.p2 {
+    background: #faf5ff;
+    color: var(--phase2);
+    border: 1px solid #d6bcfa;
+  }
+  .module-body {
+    padding: 0 24px 20px;
+  }
+  .module-body p {
+    font-size: 14px;
+    color: var(--text-secondary);
+    margin-bottom: 12px;
+  }
+
+  /* Feature List */
+  .feature-list {
+    list-style: none;
+    padding: 0;
+  }
+  .feature-list li {
+    position: relative;
+    padding: 8px 0 8px 28px;
+    font-size: 14px;
+    color: var(--text-secondary);
+    border-bottom: 1px solid #f7fafc;
+  }
+  .feature-list li:last-child { border-bottom: none; }
+  .feature-list li::before {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 15px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--phase1);
+  }
+  .feature-list li.p2::before {
+    background: var(--phase2);
+  }
+  .feature-list li strong {
+    color: var(--text);
+    font-weight: 600;
+  }
+
+  /* Callout */
+  .callout {
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin: 16px 0;
+    font-size: 14px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+  }
+  .callout.info { background: var(--info-bg); border-left: 3px solid var(--info); }
+  .callout.warning { background: var(--warning-bg); border-left: 3px solid var(--warning); }
+  .callout.success { background: var(--success-bg); border-left: 3px solid var(--success); }
+  .callout-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+  .callout p { margin: 0; color: var(--text-secondary); }
+  .callout strong { color: var(--text); }
+
+  /* Flow Diagram */
+  .flow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0;
+    margin: 24px 0;
+    padding: 24px 16px;
+    background: #f8faff;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+  }
+  .flow-step {
+    background: white;
+    border: 1px solid #d0d8e8;
+    border-radius: 8px;
+    padding: 12px 18px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--primary);
+    text-align: center;
+    min-width: 100px;
+  }
+  .flow-arrow {
+    color: var(--text-muted);
+    font-size: 18px;
+    padding: 0 6px;
+  }
+
+  /* Phase comparison table */
+  .phase-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 20px 0;
+    font-size: 14px;
+  }
+  .phase-table th, .phase-table td {
+    padding: 12px 16px;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  .phase-table th {
+    background: #f8faff;
+    font-weight: 600;
+    color: var(--primary);
+    font-size: 13px;
+  }
+  .phase-table td { color: var(--text-secondary); }
+  .phase-table tr:hover td { background: #fafbfd; }
+
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+  .tag-p1 { background: #ebf8ff; color: var(--phase1); }
+  .tag-p2 { background: #faf5ff; color: var(--phase2); }
+
+  /* Architecture */
+  .arch-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin: 20px 0;
+  }
+  .arch-box {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 20px;
+  }
+  .arch-box h4 {
+    font-size: 14px;
+    color: var(--primary);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .arch-box ul {
+    list-style: none;
+    padding: 0;
+  }
+  .arch-box li {
+    padding: 4px 0;
+    font-size: 13px;
+    color: var(--text-secondary);
+    padding-left: 16px;
+    position: relative;
+  }
+  .arch-box li::before {
+    content: '>';
+    position: absolute;
+    left: 0;
+    color: var(--text-muted);
+    font-weight: bold;
+  }
+
+  /* Footer */
+  .footer {
+    text-align: center;
+    padding: 32px;
+    color: var(--text-muted);
+    font-size: 12px;
+    border-top: 1px solid var(--border);
+    margin-top: 40px;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .principles { grid-template-columns: 1fr; }
+    .arch-grid { grid-template-columns: 1fr; }
+    .meta-row { flex-direction: column; gap: 8px; }
+    .flow { flex-direction: column; }
+    .flow-arrow { transform: rotate(90deg); }
+    .header h1 { font-size: 24px; }
+  }
+
+  @media print {
+    body { background: white; }
+    .header { background: var(--primary) !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .module:hover, .principle-card:hover { transform: none; box-shadow: none; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+  <div class="header-inner">
+    <div class="badge">INTERNAL / CONFIDENTIAL</div>
+    <h1>公安训练管理平台 — 需求分析报告</h1>
+    <p class="subtitle">基于业务方会议沟通的功能需求提炼与分阶段实施规划</p>
+    <div class="meta-row">
+      <span>文档版本 v1.0</span>
+      <span>日期：2026-03-13</span>
+      <span>来源：业务需求沟通会议纪要</span>
+    </div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- Executive Summary -->
+  <div class="exec-summary">
+    <h2>执行摘要</h2>
+    <p>本报告基于与厅级业务方的需求沟通会议，提炼并整理了<strong>公安训练管理平台</strong>的核心功能需求。业务方明确了"<strong>先打通流程框架、最简化实现、功能点先行、关联后置</strong>"的建设原则，要求摒弃传统信息化平台的审批流转思路，以<strong>智能化数据自动流转</strong>为远期目标，分阶段交付。</p>
+    <p>一期目标聚焦于 <strong>5 个核心模块</strong>：开班管理、学员管理、教官管理、考试平台、课程资源库，计划<strong>一个月内完成基础功能上线</strong>，后续以周为单位迭代优化。</p>
+  </div>
+
+  <!-- Design Principles -->
+  <div class="principles">
+    <div class="principle-card">
+      <div class="principle-icon" style="background:#ebf8ff; color:var(--phase1);">1</div>
+      <h3>框架先行</h3>
+      <p>先定框架、流程最简化打通，不纠结细节流程</p>
+    </div>
+    <div class="principle-card">
+      <div class="principle-icon" style="background:#f0fff4; color:var(--success);">2</div>
+      <h3>痕迹优先</h3>
+      <p>学员有痕迹、班有痕迹、教官有痕迹，数据先留存</p>
+    </div>
+    <div class="principle-card">
+      <div class="principle-icon" style="background:#faf5ff; color:var(--phase2);">3</div>
+      <h3>智能化导向</h3>
+      <p>不做信息化平台的审批流转，面向智能化数据自动流转</p>
+    </div>
+  </div>
+
+  <!-- ======== Module 1: 开班管理 ======== -->
+  <div class="section">
+    <h2 class="section-title"><span class="num">1</span> 开班管理</h2>
+    <p class="section-desc">覆盖培训班从创建、发布到学员编组的全流程，取代线下通知+Excel收集模式。</p>
+
+    <div class="module">
+      <div class="module-header">
+        <h3>1.1 班次创建与发布</h3>
+        <span class="phase-tag p1">一期</span>
+      </div>
+      <div class="module-body">
+        <p>在平台上创建培训班次信息，发布后学员可在线查看并完成报名，取代线下通知流程。</p>
+        <ul class="feature-list">
+          <li><strong>班次信息录入</strong> — 班次名称、培训时间、地点、人数上限、承训单位等基础字段</li>
+          <li><strong>挂网预告</strong> — 班次创建后可一键发布上线，学员端可见</li>
+          <li><strong>课程表导入</strong> — 支持 Excel 表格直接导入课程表（一期不做课程库选课）</li>
+        </ul>
+        <div class="callout info">
+          <span class="callout-icon">i</span>
+          <p><strong>关键约束：</strong>平台不承担审批流程，审批走现有 OA 公文办理。平台仅负责审批完成后的信息发布与学员管理。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="module">
+      <div class="module-header">
+        <h3>1.2 班级编组与管理</h3>
+        <span class="phase-tag p1">一期</span>
+      </div>
+      <div class="module-body">
+        <ul class="feature-list">
+          <li><strong>班干部指定</strong> — 从已报名学员名单中挑选班干部</li>
+          <li><strong>学员分组</strong> — 支持自动分组和承训单位人工干预调整</li>
+          <li><strong>班次锁定</strong> — 报名截止后锁定名单，签到签退仅限已锁定学员</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 核心业务流程图 -->
+    <div class="flow">
+      <div class="flow-step">OA审批通过</div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step">创建班次</div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step">导入课表</div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step">发布挂网</div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step">学员报名</div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step">名单锁定</div>
+      <span class="flow-arrow">&rarr;</span>
+      <div class="flow-step">分组/编班</div>
+    </div>
+  </div>
+
+  <!-- ======== Module 2: 学员管理 ======== -->
+  <div class="section">
+    <h2 class="section-title"><span class="num">2</span> 学员管理</h2>
+    <p class="section-desc">以学员实际行为（报名、签到、考试）为核心，自动积累训历档案。</p>
+
+    <div class="module">
+      <div class="module-header">
+        <h3>2.1 在线报名与建档</h3>
+        <span class="phase-tag p1">一期</span>
+      </div>
+      <div class="module-body">
+        <p>学员通过移动端或 PC 端直接提交报名信息，系统自动归入对应班次，替代线下名单收集。</p>
+        <ul class="feature-list">
+          <li><strong>学员端信息复用</strong> — 学员已有账号信息（来源于八桂警综等既有系统），报名时直接调取提交，无需重复录入</li>
+          <li><strong>在线报名提交</strong> — 学员点击目标班次 → 确认个人信息 → 提交报名</li>
+          <li><strong>名单线上汇总</strong> — 系统自动汇总报名学员名单，替代人工 Excel 收集</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="module">
+      <div class="module-header">
+        <h3>2.2 签到与签退</h3>
+        <span class="phase-tag p1">一期</span>
+      </div>
+      <div class="module-body">
+        <ul class="feature-list">
+          <li><strong>学员签到</strong> — 记录学员每门课/每日的到课情况</li>
+          <li><strong>学员签退</strong> — 签退时触发评课流程</li>
+          <li><strong>评课功能</strong> — 签退环节内嵌课程评价，学员对授课质量进行反馈</li>
+          <li><strong>缺勤记录</strong> — 签到数据自动标记缺勤情况</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="module">
+      <div class="module-header">
+        <h3>2.3 训历档案</h3>
+        <span class="phase-tag p1">一期（基础） / 二期（智能分析）</span>
+      </div>
+      <div class="module-body">
+        <p>自动积累每位学员的训练档案，为年度考核提供数据支撑。</p>
+        <ul class="feature-list">
+          <li><strong>参训记录汇总</strong> — 年度参加了多少期培训班、每期具体信息</li>
+          <li><strong>考试成绩关联</strong> — 在某个班次中的考试成绩自动归入档案</li>
+          <li><strong>年度训练分析</strong> — 一键生成年度参训概览（班次数、考试次数、成绩统计）</li>
+          <li><strong>一键导出</strong> — 导出培训记录表，可直接用于年度考核表填报</li>
+        </ul>
+        <div class="callout success">
+          <span class="callout-icon">&#10003;</span>
+          <p><strong>核心价值：</strong>以往年度考核中培训记录靠人工填写、无法核实。系统化后培训数据可追溯、可验证，直接匹配年度考核表的培训记录字段。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== Module 3: 教官管理 ======== -->
+  <div class="section">
+    <h2 class="section-title"><span class="num">3</span> 教官管理</h2>
+    <p class="section-desc">建立教官数字化档案与授课追踪体系，为教官评聘提供客观数据支撑。</p>
+
+    <div class="module">
+      <div class="module-header">
+        <h3>3.1 教官信息在线采集</h3>
+        <span class="phase-tag p1">一期</span>
+      </div>
+      <div class="module-body">
+        <p>提供在线信息采集页面，教官直接登录系统录入个人信息并提交，替代下发 Excel 收集模式。</p>
+        <ul class="feature-list">
+          <li><strong>在线表单录入</strong> — 教官通过系统端直接填写个人信息（姓名、单位、专业领域、资质等）</li>
+          <li><strong>一键提交</strong> — 填写完毕直接提交，数据即时入库</li>
+          <li><strong>字段可维护</strong> — 采集字段支持后台灵活配置</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="module">
+      <div class="module-header">
+        <h3>3.2 教官签到与授课记录</h3>
+        <span class="phase-tag p1">一期</span>
+      </div>
+      <div class="module-body">
+        <ul class="feature-list">
+          <li><strong>扫码签到</strong> — 教官到班授课时扫码签到，记录自动关联到该班次</li>
+          <li><strong>授课档案积累</strong> — 自动记录：上过什么课、今年上了多少节课、分别给哪个班上过</li>
+          <li><strong>教官评聘数据支撑</strong> — 竞聘厅级教官时，系统可导出授课记录作为客观凭证，杜绝"自报材料无法核实"问题</li>
+        </ul>
+        <div class="callout warning">
+          <span class="callout-icon">!</span>
+          <p><strong>业务痛点：</strong>当前教官竞聘依赖自报材料，授课数量、授课班次无法核实。系统化后每次授课均有签到记录，可溯源、可验证。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="module">
+      <div class="module-header">
+        <h3>3.3 师资库建设</h3>
+        <span class="phase-tag p2">二期</span>
+      </div>
+      <div class="module-body">
+        <p>一期先通过导表方式运作；二期建设完整师资库后，实现"购物车式"课程规划体验。</p>
+        <ul class="feature-list">
+          <li class="p2"><strong>全区师资检索</strong> — 各总队可搜索全区师资库和课程库</li>
+          <li class="p2"><strong>购物车式选课</strong> — 浏览教官 → 加入备选 → 组合课表 → 确认生成</li>
+          <li class="p2"><strong>一键生成课表</strong> — 选定师资+课程后自动生成课程表</li>
+        </ul>
+        <div class="callout info">
+          <span class="callout-icon">i</span>
+          <p><strong>类比：</strong>业务方将此功能类比为"淘宝购物车"——先将教官和课程放入备选篮，组合后"付款"即生成正式课表。一期暂不实现，预计明年上线。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== Module 4: 考试平台 ======== -->
+  <div class="section">
+    <h2 class="section-title"><span class="num">4</span> 考试平台</h2>
+    <p class="section-desc">集成在线考试能力，支持准入制考试与班内考核，引入AI评分智能体。</p>
+
+    <div class="module">
+      <div class="module-header">
+        <h3>4.1 在线考试基础功能</h3>
+        <span class="phase-tag p1">一期</span>
+      </div>
+      <div class="module-body">
+        <ul class="feature-list">
+          <li><strong>题型支持</strong> — 一期支持：单选题、多选题、判断题（客观题）</li>
+          <li><strong>客观题自动阅卷</strong> — 提交即出分，无需人工批改</li>
+          <li><strong>考试与班次关联</strong> — 考试成绩自动归入对应班次和学员训历档案</li>
+          <li><strong>题库管理</strong> — 各总队拥有独立账号，可维护本警种题库</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="module">
+      <div class="module-header">
+        <h3>4.2 准入制考试</h3>
+        <span class="phase-tag p1">一期</span>
+      </div>
+      <div class="module-body">
+        <p>部分培训班设置准入门槛，学员需先通过准入制考试方可报名参训。</p>
+        <ul class="feature-list">
+          <li><strong>考试与班次绑定</strong> — 创建班次时可选择性关联一场准入制考试</li>
+          <li><strong>自动筛选</strong> — 考试通过名单自动标记为"可报名"，未通过者反馈至各市政治部</li>
+        </ul>
+        <div class="flow">
+          <div class="flow-step">发布准入考试</div>
+          <span class="flow-arrow">&rarr;</span>
+          <div class="flow-step">学员参考</div>
+          <span class="flow-arrow">&rarr;</span>
+          <div class="flow-step">自动阅卷</div>
+          <span class="flow-arrow">&rarr;</span>
+          <div class="flow-step">通过名单</div>
+          <span class="flow-arrow">&rarr;</span>
+          <div class="flow-step">开放报名</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="module">
+      <div class="module-header">
+        <h3>4.3 AI 主观题评分智能体</h3>
+        <span class="phase-tag p2">二期</span>
+      </div>
+      <div class="module-body">
+        <ul class="feature-list">
+          <li class="p2"><strong>主观题AI评分</strong> — 基于智能体对主观题答案进行自动评分，减少人工阅卷工作量</li>
+          <li class="p2"><strong>多警种适配</strong> — 不同警种的评分标准需配置独立的评分智能体</li>
+          <li class="p2"><strong>等级认证考试</strong> — 参考资金分析师等级认证考试模式，支持警种等级认证</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== Module 5: 课程资源库 ======== -->
+  <div class="section">
+    <h2 class="section-title"><span class="num">5</span> 课程资源库</h2>
+    <p class="section-desc">建设视频课程公共资源库，支持PC端挂网与移动端短视频浏览。</p>
+
+    <div class="module">
+      <div class="module-header">
+        <h3>5.1 视频公共资源库</h3>
+        <span class="phase-tag p1">一期</span>
+      </div>
+      <div class="module-body">
+        <ul class="feature-list">
+          <li><strong>视频挂网展示</strong> — PC 端视频资源公开浏览</li>
+          <li><strong>移动端短视频浏览</strong> — 类抖音式上下滑动浏览体验</li>
+          <li><strong>视频征集上架流程</strong> — 下发征集通知 → 各市政治部初审 → 厅级终审 → 上架</li>
+        </ul>
+        <div class="callout info">
+          <span class="callout-icon">i</span>
+          <p><strong>一期规模：</strong>首批征集高质量视频，上架量控制在 100 条以内。视频与班次的关联（培训前预习）列入下半年规划。</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="module">
+      <div class="module-header">
+        <h3>5.2 视频与培训联动</h3>
+        <span class="phase-tag p2">二期</span>
+      </div>
+      <div class="module-body">
+        <ul class="feature-list">
+          <li class="p2"><strong>视频关联班次</strong> — 开班前指定预习视频，学员需完成观看</li>
+          <li class="p2"><strong>观看+考测</strong> — 视频学习后进行在线测试，形成"看视频→做考测→正式参训"闭环</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== 分阶段规划 ======== -->
+  <div class="section">
+    <h2 class="section-title"><span class="num">6</span> 分阶段实施规划</h2>
+    <p class="section-desc">按业务方"先用起来、每周迭代"的要求，分两阶段推进。</p>
+
+    <table class="phase-table">
+      <thead>
+        <tr>
+          <th style="width:25%">功能模块</th>
+          <th style="width:40%">一期（1个月内上线）</th>
+          <th style="width:35%">二期（持续迭代）</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>开班管理</strong></td>
+          <td>班次创建、课表Excel导入、挂网发布、编组/班干部指定</td>
+          <td>从师资库选课组表（购物车模式）、一键生成课表</td>
+        </tr>
+        <tr>
+          <td><strong>学员管理</strong></td>
+          <td>在线报名、签到签退、评课、基础训历档案、年度记录导出</td>
+          <td>智能训练分析、八桂警综数据深度对接、智能推荐</td>
+        </tr>
+        <tr>
+          <td><strong>教官管理</strong></td>
+          <td>在线信息采集、扫码签到、授课记录积累</td>
+          <td>师资库全区检索、教官授课数据分析、评聘数据报表</td>
+        </tr>
+        <tr>
+          <td><strong>考试平台</strong></td>
+          <td>客观题（单选/多选/判断）、自动阅卷、准入制考试</td>
+          <td>AI主观题评分智能体、警种等级认证考试</td>
+        </tr>
+        <tr>
+          <td><strong>课程资源</strong></td>
+          <td>视频公共库挂网、移动端短视频浏览</td>
+          <td>视频关联班次、培训前预习+考测闭环</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout warning">
+      <span class="callout-icon">!</span>
+      <p><strong>迭代节奏：</strong>一期上线后，以<strong>每周</strong>为单位优化功能点。业务方每周碰面确认本周交付内容与下周规划。</p>
+    </div>
+  </div>
+
+  <!-- ======== 架构约束 ======== -->
+  <div class="section">
+    <h2 class="section-title"><span class="num">7</span> 关键架构约束与设计原则</h2>
+
+    <div class="arch-grid">
+      <div class="arch-box">
+        <h4>不做的事</h4>
+        <ul>
+          <li>不做审批流程（审批走 OA）</li>
+          <li>不做传统信息化平台的逐级工作流</li>
+          <li>不做教官换课变更审批流程</li>
+          <li>一期不建师资库/课程库（用导表过渡）</li>
+          <li>一期不做视频与班次关联</li>
+        </ul>
+      </div>
+      <div class="arch-box">
+        <h4>必须做的事</h4>
+        <ul>
+          <li>所有操作留痕（学员、教官、班次）</li>
+          <li>以人的实际行为驱动数据（签到→自动记录）</li>
+          <li>数据可导出（年度考核表、授课记录等）</li>
+          <li>预留智能化扩展接口（智能体接入）</li>
+          <li>移动端适配（学员报名、签到、视频浏览）</li>
+        </ul>
+      </div>
+      <div class="arch-box">
+        <h4>设计理念</h4>
+        <ul>
+          <li>"做功能点，以后再做关联"</li>
+          <li>"不是信息平台，是智能平台的基座"</li>
+          <li>"先能跑起来，再做智能化"</li>
+          <li>"人工环节以后由智能体接管"</li>
+        </ul>
+      </div>
+      <div class="arch-box">
+        <h4>数据对接</h4>
+        <ul>
+          <li>八桂警综 — 学员基础信息来源</li>
+          <li>OA 系统 — 审批结果（不在本平台审批）</li>
+          <li>年度考核系统 — 训练记录导出对接</li>
+          <li>智能体中枢 — 二期 AI 评分等能力接入</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======== 用户角色 ======== -->
+  <div class="section">
+    <h2 class="section-title"><span class="num">8</span> 用户角色矩阵</h2>
+
+    <table class="phase-table">
+      <thead>
+        <tr>
+          <th>角色</th>
+          <th>核心操作</th>
+          <th>终端</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>厅级管理员</strong></td>
+          <td>创建班次、发布挂网、指定班干/分组、导入课表、查看全区数据</td>
+          <td>PC</td>
+        </tr>
+        <tr>
+          <td><strong>各总队管理员</strong></td>
+          <td>搜索师资/课程（二期）、维护本警种题库、查看本总队数据</td>
+          <td>PC</td>
+        </tr>
+        <tr>
+          <td><strong>承训单位</strong></td>
+          <td>干预分组调整、管理班次日常事务</td>
+          <td>PC</td>
+        </tr>
+        <tr>
+          <td><strong>学员</strong></td>
+          <td>查看班次、报名、签到签退、评课、参加考试、查看训历</td>
+          <td>移动端 + PC</td>
+        </tr>
+        <tr>
+          <td><strong>教官</strong></td>
+          <td>录入个人信息、扫码签到、查看授课记录</td>
+          <td>移动端 + PC</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <p>公安训练管理平台 &middot; 需求分析报告 v1.0 &middot; 2026-03-13</p>
+    <p style="margin-top:4px;">本文档基于业务方沟通纪要整理，仅供内部研发参考</p>
+  </div>
+
+</div>
+</body>
+</html>

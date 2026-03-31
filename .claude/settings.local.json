@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(ls backend/alembic/versions/*.py)",
+      "Bash(python -c \"import py_compile; py_compile.compile\\(''backend/app/agents/teaching_resource_content_agent.py'', doraise=True\\); print\\(''OK''\\)\")",
+      "Bash(find /g/exam/police-training-platform/police-training-platform/backend -type f -name *report* -o -name *board* -o -name *dashboard*)",
+      "Bash(cd:*)",
+      "Bash(python -c \":*)",
+      "Bash(python -c \"import py_compile; py_compile.compile\\(''app/views/training.py'', doraise=True\\); print\\(''OK''\\)\")",
+      "Bash(mkdir -p \"G:/exam/police-training-platform/police-training-platform/.claude/skills\")",
+      "Bash(mv \"G:/exam/police-training-platform/police-training-platform/.claude/commands/daily-report.md\" \"G:/exam/police-training-platform/police-training-platform/.claude/skills/daily-report.md\")",
+      "Bash(rmdir \"G:/exam/police-training-platform/police-training-platform/.claude/commands\")",
+      "Bash(rm -rf \"G:/exam/police-training-platform/police-training-platform/.claude/skills/daily-report.md\")",
+      "Bash(mkdir -p \"G:/exam/police-training-platform/police-training-platform/.claude/skills/daily-report\")"
+    ]
+  }
+}
