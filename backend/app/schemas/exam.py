@@ -202,6 +202,7 @@ class QuestionFolderCreate(BaseModel):
     """创建试题文件夹"""
 
     name: str = Field(..., max_length=100, description="文件夹名称")
+    category: Optional[str] = Field(None, max_length=50, description="题库分类")
     parent_id: Optional[int] = Field(None, description="父文件夹ID")
     sort_order: int = Field(0, description="排序")
 
@@ -210,6 +211,7 @@ class QuestionFolderUpdate(BaseModel):
     """更新试题文件夹"""
 
     name: Optional[str] = Field(None, max_length=100)
+    category: Optional[str] = Field(None, max_length=50)
     parent_id: Optional[int] = None
     sort_order: Optional[int] = None
 
@@ -219,9 +221,17 @@ class QuestionFolderResponse(BaseModel):
 
     id: int
     name: str
+    category: Optional[str] = None
     parent_id: Optional[int] = None
     sort_order: int = 0
     question_count: int = 0
+    paper_count: int = 0
+    exercise_count: int = 0
+    status: str = "未使用"
+    created_by: Optional[int] = None
+    created_by_name: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     children: List["QuestionFolderResponse"] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)

@@ -7,7 +7,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import joinedload, selectinload
 
-from app.models import KnowledgePoint, PoliceType, Question, QuestionFolder
+from app.models import KnowledgePoint, PoliceType, Question, QuestionFolder, User
 from app.schemas import PaginatedResponse
 from app.schemas.exam import QuestionCreate, QuestionUpdate, QuestionResponse, QuestionBatchCreate, QuestionFolderCreate, QuestionFolderUpdate
 from app.schemas.knowledge_point import KnowledgePointSimpleResponse
@@ -151,18 +151,91 @@ class QuestionService:
 
     # ============== 文件夹管理 ==============
 
+    def _build_folder_response(self, folder: QuestionFolder, question_count: int = 0, paper_count: int = 0) -> dict:
+        creator_name = None
+        if folder.created_by:
+            user = self.db.query(User).filter(User.id == folder.created_by).first()
+            if user:
+                creator_name = user.name or user.username
+
+        if question_count > 0 or paper_count > 0:
+            status = "使用中"
+        else:
+            status = "未使用"
+
+        return {
+            "id": folder.id,
+            "name": folder.name,
+            "category": folder.category or "默认分类",
+            "parent_id": folder.parent_id,
+            "sort_order": folder.sort_order,
+            "question_count": question_count,
+            "paper_count": paper_count,
+            "exercise_count": 0,
+            "status": status,
+            "created_by": folder.created_by,
+            "created_by_name": creator_name,
+            "created_at": folder.created_at,
+            "updated_at": folder.updated_at,
+            "children": [],
+        }
+
     def get_question_folders(self) -> List:
         """获取试题文件夹树"""
         folders = self.db.query(QuestionFolder).order_by(QuestionFolder.sort_order, QuestionFolder.id).all()
+
+        creator_ids = {f.created_by for f in folders if f.created_by}
+        creators = {u.id: u for u in self.db.query(User).filter(User.id.in_(creator_ids)).all()} if creator_ids else {}
+
+        folder_ids = [f.id for f in folders]
+        question_counts = {}
+        if folder_ids:
+            from sqlalchemy import func as sa_func
+            counts = self.db.query(Question.folder_id, sa_func.count(Question.id)).filter(
+                Question.folder_id.in_(folder_ids)
+            ).group_by(Question.folder_id).all()
+            question_counts = {row[0]: row[1] for row in counts}
+
+        paper_counts = {}
+        if folder_ids:
+            from sqlalchemy import func as sa_func
+            from app.models.exam import ExamPaperQuestion
+            counts = self.db.query(
+                Question.folder_id,
+                sa_func.count(sa_func.distinct(ExamPaperQuestion.paper_id))
+            ).join(
+                ExamPaperQuestion, ExamPaperQuestion.question_id == Question.id
+            ).filter(
+                Question.folder_id.in_(folder_ids)
+            ).group_by(Question.folder_id).all()
+            paper_counts = {row[0]: row[1] for row in counts}
+
         folder_responses = []
         for folder in folders:
-            question_count = self.db.query(Question).filter(Question.folder_id == folder.id).count()
+            q_count = question_counts.get(folder.id, 0)
+            p_count = paper_counts.get(folder.id, 0)
+            creator = creators.get(folder.created_by)
+            creator_name = creator.name if creator and creator.name else (creator.username if creator else None)
+
+            if q_count > 0 or p_count > 0:
+                status = "使用中"
+            else:
+                status = "未使用"
+
             folder_responses.append({
                 "id": folder.id,
                 "name": folder.name,
+                "category": folder.category or "默认分类",
                 "parent_id": folder.parent_id,
                 "sort_order": folder.sort_order,
-                "question_count": question_count,
+                "question_count": q_count,
+                "paper_count": p_count,
+                "exercise_count": 0,
+                "status": status,
+                "created_by": folder.created_by,
+                "created_by_name": creator_name,
+                "created_at": folder.created_at,
+                "updated_at": folder.updated_at,
                 "children": [],
             })
         return self._build_folder_tree(folder_responses)
@@ -179,36 +252,29 @@ class QuestionService:
         return root_folders
 
     def create_question_folder(self, data: QuestionFolderCreate, user_id: int):
-        """创建文件夹"""
         if data.parent_id:
             parent = self.db.query(QuestionFolder).filter(QuestionFolder.id == data.parent_id).first()
             if not parent:
                 raise ValueError("父文件夹不存在")
         folder = QuestionFolder(
             name=data.name,
+            category=data.category,
             parent_id=data.parent_id,
             sort_order=data.sort_order,
             created_by=user_id,
         )
         self.db.add(folder)
         self.db.commit()
-        question_count = self.db.query(Question).filter(Question.folder_id == folder.id).count()
-        return {
-            "id": folder.id,
-            "name": folder.name,
-            "parent_id": folder.parent_id,
-            "sort_order": folder.sort_order,
-            "question_count": question_count,
-            "children": [],
-        }
+        return self._build_folder_response(folder)
 
     def update_question_folder(self, folder_id: int, data: QuestionFolderUpdate):
-        """更新文件夹"""
         folder = self.db.query(QuestionFolder).filter(QuestionFolder.id == folder_id).first()
         if not folder:
             raise ValueError("文件夹不存在")
         if data.name is not None:
             folder.name = data.name
+        if data.category is not None:
+            folder.category = data.category
         if data.parent_id is not None:
             if data.parent_id == folder_id:
                 raise ValueError("不能将文件夹设置为自己的子文件夹")
@@ -219,15 +285,9 @@ class QuestionService:
         if data.sort_order is not None:
             folder.sort_order = data.sort_order
         self.db.commit()
-        question_count = self.db.query(Question).filter(Question.folder_id == folder.id).count()
-        return {
-            "id": folder.id,
-            "name": folder.name,
-            "parent_id": folder.parent_id,
-            "sort_order": folder.sort_order,
-            "question_count": question_count,
-            "children": [],
-        }
+
+        q_count = self.db.query(Question).filter(Question.folder_id == folder_id).count()
+        return self._build_folder_response(folder, question_count=q_count)
 
     def delete_question_folder(self, folder_id: int) -> None:
         """删除文件夹"""

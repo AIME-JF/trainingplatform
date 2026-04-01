@@ -1,232 +1,205 @@
 <template>
   <div class="question-bank-page">
-    <!-- 顶部通栏 -->
-    <header class="page-header-bar">
-      <div class="header-left">
-        <div class="logo-icon">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-        </div>
-        <div class="header-title">
-          <span class="title-main">试题仓库</span>
-          <div class="title-sub">
-            <span>考试系统</span>
-            <span class="text-slate-200">/</span>
-            <span>题库管理</span>
-          </div>
-        </div>
-      </div>
-      <div class="header-right">
-        <a-button @click="openManageFolderModal">管理目录</a-button>
-        <a-dropdown>
-          <a-button type="primary">
-            <template #icon><PlusOutlined /></template>
-            出题
-            <DownOutlined />
-          </a-button>
-          <template #overlay>
-            <a-menu @click="handleQuestionMenuClick">
-              <a-menu-item key="manual">
-                <PlusOutlined /> 手动新增试题
-              </a-menu-item>
-              <a-menu-item key="ai">
-                <ThunderboltOutlined /> AI智能出题
-              </a-menu-item>
-            </a-menu>
-          </template>
-        </a-dropdown>
-      </div>
-    </header>
+    <!-- 主体内容 -->
+    <main class="main-content">
+      <div class="content-wrapper">
 
-    <!-- 内容区域 -->
-    <div class="content-area">
-      <div class="content-inner">
-        <!-- 标题和搜索 -->
-        <div class="page-title-row">
-          <div>
-            <h1 class="page-title">试题仓库</h1>
-            <p class="page-desc">按业务文件夹分类存储，支持点击文件夹快速展开/收起题目</p>
+        <!-- 1. 二级导航与快捷操作入口 -->
+        <div class="sub-nav-bar">
+          <div class="sub-nav-left">
+            <span :class="['sub-nav-item', { active: activeNav === 'bank' }]" @click="activeNav = 'bank'">题库中心</span>
+            <span :class="['sub-nav-item', { active: activeNav === 'category' }]" @click="activeNav = 'category'">题库分类</span>
           </div>
-          <div class="search-box">
-            <a-input-search v-model:value="searchText" placeholder="全库搜索题干..." allow-clear @search="handleSearch" style="width: 288px" />
+          <div class="sub-nav-right">
+            <button class="btn-aux" @click="showDisabled = !showDisabled">已禁用的项目</button>
+            <button class="btn-aux" @click="showArchived = !showArchived">已归档</button>
           </div>
         </div>
 
-        <!-- 统一的大边框容器 -->
+        <!-- 2. 统一的大边框容器 -->
         <div class="main-container">
-          <!-- 统计数据条 -->
-          <div class="stats-bar">
-            <div class="stats-content">
-              <div class="stat-item">
-                <span class="stat-label">目录总数</span>
-                <span class="stat-value">{{ folderCount }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">题目总计</span>
-                <span class="stat-value">{{ statsState.total }}</span>
-              </div>
-              <div class="stat-divider"></div>
-              <div class="stat-legend">
-                <span class="legend-item"><i class="w-2 h-2 rounded-full bg-blue-500"></i><span class="legend-num">{{ statsState.single }}</span>单选</span>
-                <span class="legend-item"><i class="w-2 h-2 rounded-full bg-purple-500"></i><span class="legend-num">{{ statsState.multi }}</span>多选</span>
-                <span class="legend-item"><i class="w-2 h-2 rounded-full bg-amber-500"></i><span class="legend-num">{{ statsState.judge }}</span>判断</span>
+
+          <!-- 第一层：操作与搜索过滤 -->
+          <div class="toolbar-row">
+            <div class="toolbar-left">
+              <button class="btn-primary" @click="openCreateFolderModal">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+                添加题库
+              </button>
+              <div class="search-wrapper">
+                <svg class="search-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <input type="text" class="input-minimal" v-model="searchText" placeholder="请输入关键字搜索..." @input="handleSearch">
               </div>
             </div>
-          </div>
 
-          <!-- Tab 切换栏 -->
-          <div class="view-tabs">
-            <div :class="['tab-item', { active: currentView === 'folder' }]" @click="switchView('folder')">
-              <FolderOutlined /> 文件夹视角
+            <div class="toolbar-right">
+              <select class="input-minimal filter-select" v-model="filterCategory">
+                <option value="">题库分类 (全部)</option>
+                <option value="default">默认分类</option>
+              </select>
+              <select class="input-minimal filter-select-sm" v-model="filterDifficulty">
+                <option value="">难易程度</option>
+                <option value="1">1级</option>
+                <option value="2">2级</option>
+                <option value="3">3级</option>
+                <option value="4">4级</option>
+                <option value="5">5级</option>
+              </select>
+              <div class="divider-v"></div>
+              <label class="checkbox-label">
+                <input type="checkbox" v-model="filterMyOnly" class="custom-checkbox">
+                <span>只看我发布的</span>
+              </label>
+              <button class="btn-aux" @click="handleExport">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                导出数据
+              </button>
             </div>
-            <div :class="['tab-item', { active: currentView === 'course' }]" @click="switchView('course')">
-              <BookOutlined /> 课程视角
+          </div>
+
+          <!-- 第二层：表格数据 -->
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th class="col-check">
+                    <input type="checkbox" class="custom-checkbox" :checked="isAllSelected" @change="toggleSelectAll">
+                  </th>
+                  <th class="col-index">序号</th>
+                  <th class="col-name">题库名称</th>
+                  <th class="col-publisher">发布人</th>
+                  <th class="col-category text-center">题库分类</th>
+                  <th class="col-paper text-center">试卷数</th>
+                  <th class="col-exercise text-center">课后练习数</th>
+                  <th class="col-questions text-center">题目数量</th>
+                  <th class="col-status text-center">状态</th>
+                  <th class="col-time">添加时间</th>
+                  <th class="col-action text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(item, index) in displayedList" :key="item.id" class="table-row">
+                  <td class="col-check">
+                    <input type="checkbox" class="custom-checkbox" :checked="selectedIds.includes(item.id)" @change="toggleSelect(item.id)">
+                  </td>
+                  <td class="col-index">{{ (pagination.current - 1) * pagination.pageSize + index + 1 }}</td>
+                  <td class="col-name">
+                    <span class="name-text" :class="{ 'is-system': item.isSystem }">{{ item.name }}</span>
+                    <span v-if="item.isSystem" class="badge-system">System</span>
+                  </td>
+                  <td class="col-publisher">{{ item.creatorName || '-' }}</td>
+                  <td class="col-category text-center">{{ item.category }}</td>
+                  <td class="col-paper text-center">{{ item.paperCount }}</td>
+                  <td class="col-exercise text-center">{{ item.exerciseCount }}</td>
+                  <td class="col-questions text-center question-count">{{ item.questionCount }}</td>
+                  <td class="col-status text-center">
+                    <span class="status-text">{{ item.statusText }}</span>
+                  </td>
+                  <td class="col-time">{{ item.createdAt }}</td>
+                  <td class="col-action text-right">
+                    <div class="action-btns">
+                      <button class="btn-link" @click="handleViewQuestions(item)">查看题目</button>
+                      <button class="btn-link" @click="openEditFolderModal(item)" :disabled="item.isSystem">编辑</button>
+                      <button class="btn-link btn-link-danger" @click="handleDeleteFolder(item)" :disabled="item.isSystem">删除</button>
+                    </div>
+                  </td>
+                </tr>
+                <tr v-if="displayedList.length === 0">
+                  <td colspan="11" class="empty-row">暂无数据</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- 第三层：说明与批量操作 -->
+          <div class="footer-area">
+            <!-- 说明文字 -->
+            <div class="notice-area">
+              <svg class="notice-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <div class="notice-text">
+                <p>说明：1.综合题库为默认题库，不支持编辑、删除和导出等操作，请谨慎使用</p>
+                <p class="mt-4">2.被用于试卷的题库和关联课后练习的题库不能删除</p>
+              </div>
             </div>
-            <div :class="['tab-item', { active: currentView === 'knowledgePoint' }]" @click="switchView('knowledgePoint')">
-              <AimOutlined /> 知识点视角
-            </div>
-          </div>
 
-          <!-- 课程筛选 -->
-          <div v-if="currentView === 'course'" class="view-filter">
-            <a-select
-              v-model="selectedCourseIds"
-              mode="multiple"
-              placeholder="请选择课程"
-              :loading="courseLoading"
-              :options="courseSelectOptions"
-              show-search
-              :filter-option="false"
-              @search="handleCourseSearch"
-              @change="handleCourseChange"
-              style="width: 400px"
-            />
-          </div>
+            <div class="footer-divider"></div>
 
-          <!-- 知识点筛选 -->
-          <div v-if="currentView === 'knowledgePoint'" class="view-filter">
-            <a-select
-              v-model="selectedKpIds"
-              mode="multiple"
-              placeholder="请选择知识点"
-              :loading="kpLoading"
-              :options="kpSelectOptions"
-              show-search
-              :filter-option="false"
-              style="width: 500px"
-            />
-          </div>
-
-          <!-- 列表标题栏 -->
-          <div class="list-header">
-            <div class="col-folder">所属文件夹</div>
-            <div class="col-content">题干描述</div>
-            <div class="col-type text-center">题型</div>
-            <div class="col-diff text-center">难度</div>
-            <div class="col-score text-center">分值</div>
-            <div class="col-action text-right">操作</div>
-          </div>
-
-          <!-- 文件夹分组区域 -->
-          <div class="folder-list">
-            <div
-              v-for="folder in displayedGroups"
-              :key="folder.id"
-              :class="['folder-group', { 'folder-collapsed': !folder.expanded }]"
-            >
-              <!-- 文件夹标题行 -->
-              <div
-                class="folder-title"
-                :class="{ 'folder-drag-over': dragOverFolderId === folder.id }"
-                @click="toggleFolder(folder.id)"
-                @dragover="handleDragOver($event, folder)"
-                @dragleave="handleDragLeave($event, folder)"
-                @drop="handleDropToFolder($event, folder)"
-              >
-                <div class="folder-title-left">
-                  <svg :class="['chevron-icon', { 'rotated': folder.expanded }]" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
-                  <svg class="folder-icon" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2z"/></svg>
-                  <span class="folder-name">{{ folder.name }}</span>
+            <!-- 批量操作与分页 -->
+            <div class="footer-actions">
+              <div class="footer-left">
+                <label class="checkbox-label">
+                  <input type="checkbox" class="custom-checkbox" :checked="isAllSelected" @change="toggleSelectAll">
+                  <span>全选</span>
+                </label>
+                <div class="divider-v"></div>
+                <div class="batch-ops">
+                  <span class="batch-label">批量操作:</span>
+                  <button class="btn-batch btn-batch-danger" @click="handleBatchDelete">批量删除</button>
+                  <button class="btn-batch" @click="handleBatchMove">批量移动分类</button>
                 </div>
-                <div class="folder-title-desc">包含 {{ folder.name }} 等 {{ folder.questionCount }} 道试题</div>
-                <div class="folder-title-actions">
-                  <a-button type="link" size="small" class="batch-move-btn" @click.stop="openBatchMoveModal(folder)">批量移动</a-button>
-                </div>
               </div>
 
-              <!-- 题目内容区 -->
-              <div
-                class="folder-content"
-                :class="{ 'folder-drag-over': dragOverFolderId === folder.id }"
-                @dragover="handleDragOver($event, folder)"
-                @dragleave="handleDragLeave($event, folder)"
-                @drop="handleDropToFolder($event, folder)"
-              >
-                <div
-                  v-for="(record, index) in folder.questions"
-                  :key="record.id"
-                  class="question-row"
-                  draggable="true"
-                  @dragstart="handleQuestionDragStart($event, record, folder)"
-                  @dragend="handleDragEnd"
-                >
-                  <div class="col-folder text-xs text-slate-400">{{ folder.name }}</div>
-                  <div class="col-content">
-                    <p class="question-content text-sm text-slate-700 font-medium">{{ index + 1 }}. {{ record.content }}</p>
-                  </div>
-                  <div class="col-type flex justify-center">
-                    <span :class="['tag-pill', typeTagColors[record.type]]">{{ typeLabels[record.type] }}</span>
-                  </div>
-                  <div class="col-diff flex justify-center">
-                    <span :class="['tag-pill', difficultyTagColors[record.difficulty]]">{{ record.difficulty }}级</span>
-                  </div>
-                  <div class="col-score text-center text-sm font-semibold text-slate-600">{{ record.score || 0 }}</div>
-                  <div class="col-action text-right flex justify-end gap-4">
-                    <a-button type="link" size="small" class="text-slate-400 hover:text-blue-600" @click="openEditModal(record)">详情</a-button>
-                    <a-button type="link" size="small" danger class="text-slate-300 hover:text-red-500" @click="handleDelete(record)">
-                      <DeleteOutlined />
-                    </a-button>
-                  </div>
+              <div class="footer-right">
+                <div class="page-info">
+                  共 {{ pagination.total }} 条记录 <span class="page-sep">|</span> 每页 {{ pagination.pageSize }} 条
                 </div>
-                <div v-if="!folder.questions || folder.questions.length === 0" class="empty-folder">
-                  该文件夹下暂无题目
+                <div class="pagination-btns">
+                  <button class="page-btn" :disabled="pagination.current <= 1" @click="changePage(pagination.current - 1)">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+                  </button>
+                  <button class="page-btn page-btn-active">{{ pagination.current }}</button>
+                  <button class="page-btn" :disabled="pagination.current >= totalPages" @click="changePage(pagination.current + 1)">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+                  </button>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- 底部 Footer -->
-          <div class="list-footer">
-            <div class="footer-info">
-              <span>当前展开 {{ expandedFolders.size }} 个目录</span>
-              <span class="text-slate-200">|</span>
-              <span>列表更新于 {{ currentTime }}</span>
-            </div>
-            <div class="pagination">
-              <a-button size="small" disabled><LeftOutlined /></a-button>
-              <a-button size="small" class="current-page">1</a-button>
-              <a-button size="small"><RightOutlined /></a-button>
-            </div>
-          </div>
         </div>
+
       </div>
-    </div>
+    </main>
 
-    <!-- 新增/编辑题目弹窗 -->
-    <question-form-modal
-      v-model:open="modalOpen"
-      :title="editingQuestion ? '编辑题目' : '新增题目'"
-      :question="editingQuestion"
-      :police-type-options="policeTypeOptions"
-      @submit="handleSubmitQuestion"
-    />
+    <!-- 新建/编辑题库弹窗 -->
+    <a-modal
+      v-model:open="folderFormModalVisible"
+      :title="editingFolderId ? '编辑题库' : '添加题库'"
+      @ok="handleFolderSubmit"
+      @cancel="resetFolderFormModal"
+      width="520px"
+    >
+      <a-form :model="folderForm" layout="vertical">
+        <a-form-item label="题库名称" :rules="[{ required: true, message: '请输入题库名称' }]">
+          <a-input v-model:value="folderForm.name" placeholder="请输入题库名称" :maxlength="100" />
+        </a-form-item>
+        <a-form-item label="题库分类">
+          <a-select v-model:value="folderForm.category" placeholder="请选择分类">
+            <a-select-option value="default">默认分类</a-select-option>
+            <a-select-option value="criminal">刑事类</a-select-option>
+            <a-select-option value="public_security">治安类</a-select-option>
+            <a-select-option value="traffic">交通类</a-select-option>
+            <a-select-option value="comprehensive">综合类</a-select-option>
+          </a-select>
+        </a-form-item>
+        <a-form-item v-if="editingFolderId" label="移动到">
+          <a-tree-select
+            v-model:value="folderForm.parentId"
+            :tree-data="folderTreeData"
+            placeholder="根目录（不移动）"
+            allow-clear
+            tree-default-expand-all
+          />
+        </a-form-item>
+      </a-form>
+    </a-modal>
 
-    <!-- 管理文件夹弹窗 -->
+    <!-- 管理目录弹窗 -->
     <a-modal
       v-model:open="folderModalVisible"
       title="管理目录"
       width="600px"
-      @ok="handleFolderSubmit"
-      @cancel="resetFolderModal"
+      @ok="folderModalVisible = false"
     >
       <div class="folder-manager">
         <div class="folder-manager-header">
@@ -250,41 +223,13 @@
           </div>
         </div>
       </div>
-      <template #footer>
-        <a-space style="float:right">
-          <a-button @click="folderModalVisible = false">关闭</a-button>
-        </a-space>
-      </template>
-    </a-modal>
-
-    <!-- 新建/编辑文件夹弹窗 -->
-    <a-modal
-      v-model:open="folderFormModalVisible"
-      :title="editingFolderId ? '编辑文件夹' : '新建文件夹'"
-      @ok="handleFolderSubmit"
-      @cancel="resetFolderFormModal"
-    >
-      <a-form :model="folderForm" layout="vertical">
-        <a-form-item label="文件夹名称" name="name" :rules="[{ required: true, message: '请输入文件夹名称' }]">
-          <a-input v-model:value="folderForm.name" placeholder="请输入文件夹名称" :maxlength="100" />
-        </a-form-item>
-        <a-form-item v-if="editingFolderId" label="移动到">
-          <a-tree-select
-            v-model:value="folderForm.parentId"
-            :treeData="folderTreeData"
-            placeholder="根目录（不移动）"
-            allow-clear
-            tree-default-expand-all
-          />
-        </a-form-item>
-      </a-form>
     </a-modal>
 
     <!-- 批量移动弹窗 -->
     <a-modal
       v-model:open="batchMoveModalVisible"
       title="批量移动试题"
-      @ok="handleBatchMove"
+      @ok="handleBatchMoveConfirm"
     >
       <a-form layout="vertical">
         <a-form-item label="选择目标文件夹">
@@ -297,14 +242,24 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 新增/编辑题目弹窗 -->
+    <question-form-modal
+      v-model:open="modalOpen"
+      :title="editingQuestion ? '编辑题目' : '新增题目'"
+      :question="editingQuestion"
+      :police-type-options="policeTypeOptions"
+      @submit="handleSubmitQuestion"
+    />
+
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
-import { PlusOutlined, DeleteOutlined, LeftOutlined, RightOutlined, FolderOutlined, BookOutlined, AimOutlined, DownOutlined, ThunderboltOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, FolderOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import {
   createQuestion,
@@ -318,88 +273,84 @@ import {
   updateQuestionFolder,
 } from '@/api/question'
 import { getPoliceTypes } from '@/api/user'
-import { getCourses } from '@/api/course'
-import { getKnowledgePoints } from '@/api/knowledgePoint'
 import QuestionFormModal from './components/QuestionFormModal.vue'
 
 const authStore = useAuthStore()
 const router = useRouter()
 
-const loading = ref(false)
-const modalOpen = ref(false)
-const editingQuestion = ref(null)
-const questionList = ref([])
-const policeTypeOptions = ref([])
+// ============ 导航 ============
+const activeNav = ref('bank')
+const showDisabled = ref(false)
+const showArchived = ref(false)
+
+// ============ 搜索与筛选 ============
 const searchText = ref('')
+const filterCategory = ref('')
+const filterDifficulty = ref('')
+const filterMyOnly = ref(false)
 
-// 拖拽相关
-const draggedQuestion = ref(null)
-const draggedFromFolder = ref(null)
-const dragOverFolderId = ref(null)
-
-// 统计数据
-const statsState = reactive({
-  total: 0,
-  single: 0,
-  multi: 0,
-  judge: 0,
-})
-
-// 文件夹相关
+// ============ 题库列表数据 ============
+const loading = ref(false)
 const folderList = ref([])
-const expandedFolders = ref(new Set())
+const userList = ref(new Map()) // id -> name 映射
+const selectedIds = ref([])
+
+// ============ 分页 ============
+const pagination = reactive({ current: 1, pageSize: 15, total: 0 })
+
+// ============ 文件夹管理弹窗 ============
 const folderModalVisible = ref(false)
 const folderFormModalVisible = ref(false)
 const folderSearchText = ref('')
 const editingFolderId = ref(null)
-const folderForm = reactive({ name: '', parentId: null })
+const folderForm = reactive({ name: '', category: '', parentId: null })
 const batchMoveModalVisible = ref(false)
 const batchMoveTargetFolderId = ref(null)
-const currentBatchMoveFolderId = ref(null)
 
-// 视角切换
-const currentView = ref('folder') // 'folder' | 'course' | 'knowledgePoint'
+// ============ 题目弹窗 ============
+const modalOpen = ref(false)
+const editingQuestion = ref(null)
+const policeTypeOptions = ref([])
 
-// 课程相关
-const courseList = ref([])
-const courseSelectOptions = ref([])
-const selectedCourseIds = ref([])
-const courseLoading = ref(false)
-const courseMap = ref(new Map())
+// ============ 计算属性 ============
 
-// 知识点相关
-const kpSelectOptions = ref([])
-const selectedKpIds = ref([])
-const kpLoading = ref(false)
-const courseKpMap = ref({})
-let kpSearchTimer = null
+// 过滤后的题库列表
+const filteredList = computed(() => {
+  let list = [...folderList.value]
 
-// 每页显示的展开文件夹列表
-const expandedFolderList = ref([])
+  // 关键字搜索
+  if (searchText.value) {
+    const keyword = searchText.value.toLowerCase()
+    list = list.filter(item => item.name.toLowerCase().includes(keyword) || (item.creatorName || '').toLowerCase().includes(keyword))
+  }
 
-// 带展开状态的文件夹列表
-const displayedFolders = computed(() => {
-  return expandedFolderList.value.map(folder => ({
-    ...folder,
-    expanded: expandedFolders.value.has(folder.id),
-  }))
+  // 只看我发布的
+  if (filterMyOnly.value) {
+    const currentUserId = authStore.currentUser?.id
+    list = list.filter(item => item.createdBy === currentUserId)
+  }
+
+  return list
 })
 
-// 多维度视图 - 当前展示的分组
-const displayedGroups = computed(() => {
-  if (currentView.value === 'folder') {
-    return displayedFolders.value
-  }
-  if (currentView.value === 'course') {
-    return groupByCourse()
-  }
-  if (currentView.value === 'knowledgePoint') {
-    return groupByKnowledgePoint()
-  }
-  return displayedFolders.value
+// 分页后的展示列表
+const displayedList = computed(() => {
+  const start = (pagination.current - 1) * pagination.pageSize
+  const end = start + pagination.pageSize
+  return filteredList.value.slice(start, end)
 })
 
-const flatFolderList = computed(() => {
+// 总页数
+const totalPages = computed(() => Math.ceil(pagination.total / pagination.pageSize) || 1)
+
+// 全选状态
+const isAllSelected = computed(() => {
+  if (displayedList.value.length === 0) return false
+  return displayedList.value.every(item => selectedIds.value.includes(item.id))
+})
+
+// 所有文件夹列表（扁平，用于批量移动选择）
+const allFolderList = computed(() => {
   const result = []
   const flatten = (folders) => {
     folders.forEach(folder => {
@@ -413,8 +364,19 @@ const flatFolderList = computed(() => {
   return result
 })
 
-// 所有文件夹列表（扁平，用于批量移动选择）
-const allFolderList = computed(() => flatFolderList.value)
+// 文件夹树形数据（用于选择父文件夹）
+const folderTreeData = computed(() => {
+  const convert = (folders) => {
+    return folders
+      .filter(f => f.id !== editingFolderId.value)
+      .map(f => ({
+        value: f.id,
+        label: f.name,
+        children: f.children ? convert(f.children) : []
+      }))
+  }
+  return convert(folderList.value)
+})
 
 // 过滤后的文件夹列表（管理弹窗用）
 const filteredFolderList = computed(() => {
@@ -422,192 +384,269 @@ const filteredFolderList = computed(() => {
   return folderList.value.filter(f => f.name.includes(folderSearchText.value))
 })
 
-// 文件夹树形数据（用于选择父文件夹）
-const folderTreeData = computed(() => {
-  const convert = (folders, level = 0) => {
-    return folders
-      .filter(f => f.id !== editingFolderId.value)
-      .map(f => ({
-        value: f.id,
-        label: f.name,
-        children: f.children ? convert(f.children, level + 1) : []
-      }))
-  }
-  return convert(folderList.value)
-})
+// ============ 方法 ============
 
-const folderCount = computed(() => folderList.value.length)
-
-const currentTime = ref('')
-
-const typeLabels = { single: '单选题', multi: '多选题', judge: '判断题' }
-const typeTagColors = { single: 'tag-blue', multi: 'tag-purple', judge: 'tag-amber' }
-const difficultyTagColors = { 1: 'tag-green', 2: 'tag-cyan', 3: 'tag-blue', 4: 'tag-orange', 5: 'tag-red' }
-
-function updateCurrentTime() {
-  const now = new Date()
-  currentTime.value = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
+function formatDate(dateStr) {
+  if (!dateStr) return '-'
+  const d = new Date(dateStr)
+  const pad = n => n.toString().padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-function toggleFolder(folderId) {
-  if (expandedFolders.value.has(folderId)) {
-    expandedFolders.value.delete(folderId)
-  } else {
-    expandedFolders.value.add(folderId)
-  }
-  expandedFolders.value = new Set(expandedFolders.value)
-}
-
-// 拖拽相关函数
-function handleQuestionDragStart(event, question, folder) {
-  draggedQuestion.value = question
-  draggedFromFolder.value = folder
-  event.dataTransfer.effectAllowed = 'move'
-  event.dataTransfer.setData('text/plain', JSON.stringify({ questionId: question.id, folderId: folder.id }))
-}
-
-function handleDragOver(event, folder) {
-  event.preventDefault()
-  event.stopPropagation()
-  event.dataTransfer.dropEffect = 'move'
-  dragOverFolderId.value = folder.id
-}
-
-function handleDragLeave(event, folder) {
-  event.stopPropagation()
-  // 只有当鼠标离开文件夹标题本身时才清除
-  if (!event.currentTarget.contains(event.relatedTarget)) {
-    dragOverFolderId.value = null
-  }
-}
-
-async function handleDropToFolder(event, targetFolder) {
-  event.preventDefault()
-  dragOverFolderId.value = null
-  if (!draggedQuestion.value) return
-
-  const question = draggedQuestion.value
-  const newFolderId = targetFolder.id === 0 ? null : targetFolder.id
-
-  try {
-    await moveQuestionToFolder(question.id, newFolderId)
-    message.success(`已将题目移动到「${targetFolder.name}」`)
-    await Promise.all([loadQuestions(), loadStats()])
-    // 确保目标文件夹展开
-    if (!expandedFolders.value.has(targetFolder.id)) {
-      expandedFolders.value.add(targetFolder.id)
-      expandedFolders.value = new Set(expandedFolders.value)
-    }
-  } catch (error) {
-    message.error(error.message || '移动失败')
-    await loadQuestions()
-  }
-  draggedQuestion.value = null
-  draggedFromFolder.value = null
-}
-
-function handleDragEnd() {
-  draggedQuestion.value = null
-  draggedFromFolder.value = null
-  dragOverFolderId.value = null
-}
-
-async function loadQuestions() {
-  loading.value = true
-  try {
-    const result = await getQuestions({
-      size: -1, // 获取所有题目用于分组
-      search: searchText.value || undefined,
-    })
-    const questions = (result.items || []).map((item) => ({
-      ...item,
-      knowledgePointNames: item.knowledgePointNames
-        || item.knowledgePoints?.map((point) => (typeof point === 'string' ? point : point?.name)).filter(Boolean)
-        || [],
-      knowledgePointIds: item.knowledgePointIds
-        || item.knowledgePoints?.map((point) => (typeof point === 'string' ? point : point?.id)).filter(Boolean)
-        || [],
-    }))
-    // 按文件夹分组
-    groupQuestionsByFolder(questions)
-    refreshExpandedState()
-    pagination.total = result.total || 0
-  } catch (error) {
-    message.error(error.message || '加载试题失败')
-  } finally {
-    loading.value = false
-  }
-}
-
-function refreshExpandedState() {
-  // 确保之前展开的文件夹在新的 expandedFolderList 中仍然是展开状态
-  const currentExpanded = new Set(expandedFolders.value)
-  expandedFolderList.value.forEach(folder => {
-    if (currentExpanded.has(folder.id)) {
-      expandedFolders.value.add(folder.id)
+function buildBankList(folders, users) {
+  return folders.map((folder, index) => {
+    return {
+      id: folder.id,
+      name: folder.name,
+      isSystem: folder.name === '综合题库' || folder.is_system,
+      creatorName: folder.created_by_name || '-',
+      category: folder.category || '默认分类',
+      paperCount: folder.paper_count || 0,
+      exerciseCount: folder.exercise_count || 0,
+      questionCount: folder.question_count || 0,
+      statusText: folder.status || '未使用',
+      createdAt: formatDate(folder.created_at),
+      createdBy: folder.created_by,
     }
   })
-  expandedFolders.value = new Set(expandedFolders.value)
-}
-
-function groupQuestionsByFolder(questions) {
-  // 构建文件夹Map（扁平结构）
-  const folderMap = new Map()
-  flatFolderList.value.forEach(folder => {
-    folderMap.set(folder.id, { ...folder, questions: [], questionCount: 0 })
-  })
-
-  // 将题目分配到文件夹
-  questions.forEach(q => {
-    if (q.folderId && folderMap.has(q.folderId)) {
-      const folderData = folderMap.get(q.folderId)
-      folderData.questions.push(q)
-      folderData.questionCount = folderData.questions.length
-    }
-  })
-
-  // 未分类的题目放入"未分类"文件夹
-  const uncategorizedQuestions = questions.filter(q => !q.folderId || !folderMap.has(q.folderId))
-  if (uncategorizedQuestions.length > 0) {
-    folderMap.set(0, { id: 0, name: '未分类', questionCount: uncategorizedQuestions.length, questions: uncategorizedQuestions, children: [], parentId: null, sortOrder: 999 })
-  }
-
-  // 更新文件夹列表
-  expandedFolderList.value = Array.from(folderMap.values())
 }
 
 async function loadFolders() {
   try {
     const result = await getQuestionFolders()
     folderList.value = result || []
-    // 默认展开第一个文件夹
-    if (folderList.value.length > 0 && expandedFolders.value.size === 0) {
-      expandedFolders.value.add(folderList.value[0].id)
-      expandedFolders.value = new Set(expandedFolders.value)
-    }
   } catch (error) {
-    console.error('加载文件夹失败:', error)
+    console.error('加载题库文件夹失败:', error)
     folderList.value = []
   }
 }
 
-async function loadStats() {
+async function loadUsers() {
   try {
-    const [allRes, singleRes, multiRes, judgeRes] = await Promise.all([
-      getQuestions({ size: 1 }),
-      getQuestions({ size: 1, type: 'single' }),
-      getQuestions({ size: 1, type: 'multi' }),
-      getQuestions({ size: 1, type: 'judge' }),
-    ])
-    statsState.total = allRes.total || 0
-    statsState.single = singleRes.total || 0
-    statsState.multi = multiRes.total || 0
-    statsState.judge = judgeRes.total || 0
+    const result = await getPoliceTypes()
+    // 尝试从 authStore 获取用户信息
+    const currentUser = authStore.currentUser
+    if (currentUser?.name) {
+      userList.value.set(currentUser.id, currentUser.name)
+    }
   } catch {
-    statsState.total = 0
-    statsState.single = 0
-    statsState.multi = 0
-    statsState.judge = 0
+    // ignore
+  }
+}
+
+async function loadData() {
+  loading.value = true
+  try {
+    const folders = await getQuestionFolders()
+    const bankList = buildBankList(folders || [], userList.value)
+    folderList.value = bankList.map(b => ({ ...b, children: [] }))
+    pagination.total = bankList.length
+  } catch (error) {
+    message.error(error.message || '加载数据失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+function handleSearch() {
+  pagination.current = 1
+}
+
+function changePage(page) {
+  if (page < 1 || page > totalPages.value) return
+  pagination.current = page
+}
+
+function toggleSelect(id) {
+  const idx = selectedIds.value.indexOf(id)
+  if (idx > -1) {
+    selectedIds.value.splice(idx, 1)
+  } else {
+    selectedIds.value.push(id)
+  }
+}
+
+function toggleSelectAll() {
+  if (isAllSelected.value) {
+    selectedIds.value = selectedIds.value.filter(id => !displayedList.value.some(item => item.id === id))
+  } else {
+    const pageIds = displayedList.value.map(item => item.id)
+    const merged = new Set([...selectedIds.value, ...pageIds])
+    selectedIds.value = Array.from(merged)
+  }
+}
+
+function openCreateFolderModal() {
+  editingFolderId.value = null
+  folderForm.name = ''
+  folderForm.category = ''
+  folderForm.parentId = null
+  folderFormModalVisible.value = true
+}
+
+function openEditFolderModal(folder) {
+  editingFolderId.value = folder.id
+  folderForm.name = folder.name
+  folderForm.category = folder.category === '默认分类' ? '' : folder.category
+  folderForm.parentId = folder.parentId
+  folderFormModalVisible.value = true
+}
+
+function resetFolderFormModal() {
+  editingFolderId.value = null
+  folderForm.name = ''
+  folderForm.category = ''
+  folderForm.parentId = null
+  folderFormModalVisible.value = false
+}
+
+async function handleFolderSubmit() {
+  if (!folderForm.name?.trim()) {
+    message.warning('请输入题库名称')
+    return
+  }
+  try {
+    const payload = {
+      name: folderForm.name,
+      category: folderForm.category || null,
+      parentId: folderForm.parentId,
+    }
+    if (editingFolderId.value) {
+      await updateQuestionFolder(editingFolderId.value, payload)
+      message.success('题库已更新')
+    } else {
+      await createQuestionFolder(payload)
+      message.success('题库已创建')
+    }
+    resetFolderFormModal()
+    await loadData()
+  } catch (error) {
+    message.error(error.message || '操作失败')
+  }
+}
+
+function handleDeleteFolder(folder) {
+  if (folder.isSystem) {
+    message.warning('系统题库不能删除')
+    return
+  }
+  Modal.confirm({
+    title: '确认删除题库',
+    content: `删除后无法恢复，是否删除题库「${folder.name}」？`,
+    okType: 'danger',
+    async onOk() {
+      try {
+        await deleteQuestionFolder(folder.id)
+        message.success('题库已删除')
+        await loadData()
+      } catch (error) {
+        message.error(error.message || '删除失败')
+      }
+    },
+  })
+}
+
+function handleViewQuestions(item) {
+  if (item.isSystem) {
+    message.info('系统题库暂无题目')
+    return
+  }
+  // 跳转到题目管理页，带上文件夹筛选
+  router.push({ path: '/question/manage', query: { folderId: item.id } })
+}
+
+function openActionMenu(item) {
+  if (item.isSystem) {
+    message.info('系统题库不支持编辑、删除和导出等操作')
+    return
+  }
+  // 弹出操作菜单
+  Modal.confirm({
+    title: `操作「${item.name}」`,
+    content: '请选择要执行的操作',
+    okText: '编辑',
+    cancelText: '取消',
+    onOk() {
+      openEditFolderModal(item)
+    },
+  })
+}
+
+function handleExport() {
+  message.info('导出功能开发中')
+}
+
+function handleBatchDelete() {
+  if (selectedIds.value.length === 0) {
+    message.warning('请先选择要删除的题库')
+    return
+  }
+  Modal.confirm({
+    title: '确认批量删除',
+    content: `确定要删除选中的 ${selectedIds.value.length} 个题库吗？`,
+    okType: 'danger',
+    async onOk() {
+      try {
+        for (const id of selectedIds.value) {
+          await deleteQuestionFolder(id)
+        }
+        message.success('批量删除成功')
+        selectedIds.value = []
+        await loadData()
+      } catch (error) {
+        message.error(error.message || '批量删除失败')
+      }
+    },
+  })
+}
+
+function handleBatchMove() {
+  if (selectedIds.value.length === 0) {
+    message.warning('请先选择要移动的题库')
+    return
+  }
+  batchMoveTargetFolderId.value = null
+  batchMoveModalVisible.value = true
+}
+
+async function handleBatchMoveConfirm() {
+  if (batchMoveTargetFolderId.value === null && batchMoveTargetFolderId.value !== 0) {
+    message.warning('请选择目标文件夹')
+    return
+  }
+  try {
+    // 移动选中题库下的所有题目
+    for (const folderId of selectedIds.value) {
+      const folderQuestions = await getQuestions({ size: -1 })
+      const questions = (folderQuestions.items || []).filter(q => q.folderId === folderId)
+      for (const q of questions) {
+        await moveQuestionToFolder(q.id, batchMoveTargetFolderId.value)
+      }
+    }
+    message.success('批量移动成功')
+    selectedIds.value = []
+    batchMoveModalVisible.value = false
+    await loadData()
+  } catch (error) {
+    message.error(error.message || '移动失败')
+  }
+}
+
+// 题目相关
+async function handleSubmitQuestion(payload) {
+  try {
+    if (editingQuestion.value?.id) {
+      await updateQuestion(editingQuestion.value.id, payload)
+      message.success('题目已更新')
+    } else {
+      await createQuestion(payload)
+      message.success('题目已创建')
+    }
+    modalOpen.value = false
+    editingQuestion.value = null
+    await loadData()
+  } catch (error) {
+    message.error(error.message || '保存失败')
   }
 }
 
@@ -620,760 +659,595 @@ async function loadPoliceTypeOptions() {
   }
 }
 
-const pagination = reactive({ current: 1, pageSize: 10, total: 0 })
-
-function handleSearch() {
-  loadQuestions()
-  loadFolders()
-}
-
-function openAddModal() {
-  editingQuestion.value = null
-  modalOpen.value = true
-}
-
-function handleQuestionMenuClick({ key }) {
-  if (key === 'manual') {
-    openAddModal()
-  } else if (key === 'ai') {
-    router.push('/question/ai')
-  }
-}
-
-function openEditModal(record) {
-  editingQuestion.value = { ...record }
-  modalOpen.value = true
-}
-
-async function handleSubmitQuestion(payload) {
-  try {
-    if (editingQuestion.value?.id) {
-      await updateQuestion(editingQuestion.value.id, payload)
-      message.success('题目已更新')
-    } else {
-      await createQuestion(payload)
-      message.success('题目已创建')
-    }
-    modalOpen.value = false
-    editingQuestion.value = null
-    await Promise.all([loadQuestions(), loadStats(), loadFolders()])
-  } catch (error) {
-    message.error(error.message || '保存失败')
-  }
-}
-
-function handleDelete(record) {
-  Modal.confirm({
-    title: '确认删除题目',
-    content: '删除后无法恢复，是否继续？',
-    okType: 'danger',
-    async onOk() {
-      try {
-        await deleteQuestion(record.id)
-        message.success('题目已删除')
-        await Promise.all([loadQuestions(), loadStats(), loadFolders()])
-      } catch (error) {
-        message.error(error.message || '删除失败')
-      }
-    },
-  })
-}
-
-function openManageFolderModal() {
-  folderModalVisible.value = true
-}
-
-function openCreateFolderModal() {
-  editingFolderId.value = null
-  folderForm.name = ''
-  folderForm.parentId = null
-  folderFormModalVisible.value = true
-}
-
-function openEditFolderModal(folder) {
-  editingFolderId.value = folder.id
-  folderForm.name = folder.name
-  folderForm.parentId = folder.parentId
-  folderFormModalVisible.value = true
-}
-
-function resetFolderFormModal() {
-  editingFolderId.value = null
-  folderForm.name = ''
-  folderForm.parentId = null
-  folderFormModalVisible.value = false
-}
-
-async function handleFolderSubmit() {
-  if (!folderForm.name?.trim()) {
-    message.warning('请输入文件夹名称')
-    return
-  }
-  try {
-    if (editingFolderId.value) {
-      await updateQuestionFolder(editingFolderId.value, {
-        name: folderForm.name,
-        parentId: folderForm.parentId,
-      })
-      message.success('文件夹已更新')
-    } else {
-      await createQuestionFolder({
-        name: folderForm.name,
-        parentId: folderForm.parentId,
-      })
-      message.success('文件夹已创建')
-    }
-    resetFolderFormModal()
-    loadFolders()
-  } catch (error) {
-    message.error(error.message || '操作失败')
-  }
-}
-
-function handleDeleteFolder(folder) {
-  Modal.confirm({
-    title: '确认删除文件夹',
-    content: `删除后无法恢复，是否删除文件夹「${folder.name}」？`,
-    okType: 'danger',
-    async onOk() {
-      try {
-        await deleteQuestionFolder(folder.id)
-        message.success('文件夹已删除')
-        loadFolders()
-      } catch (error) {
-        message.error(error.message || '删除失败')
-      }
-    },
-  })
-}
-
-function resetFolderModal() {
-  folderSearchText.value = ''
-  folderModalVisible.value = false
-}
-
-function openBatchMoveModal(folder) {
-  currentBatchMoveFolderId.value = folder.id
-  batchMoveTargetFolderId.value = null
-  batchMoveModalVisible.value = true
-}
-
-async function handleBatchMove() {
-  if (currentBatchMoveFolderId.value === null) {
-    message.warning('请选择目标文件夹')
-    return
-  }
-  try {
-    // 移动该文件夹下的所有题目到目标文件夹
-    const folder = folderList.value.find(f => f.id === currentBatchMoveFolderId.value)
-    if (folder && folder.questions) {
-      for (const q of folder.questions) {
-        await moveQuestionToFolder(q.id, batchMoveTargetFolderId.value)
-      }
-    }
-    message.success('批量移动成功')
-    batchMoveModalVisible.value = false
-    loadQuestions()
-    loadFolders()
-  } catch (error) {
-    message.error(error.message || '移动失败')
-  }
-}
-
-function formatAnswer(answer) {
-  return Array.isArray(answer) ? answer.join('、') : answer
-}
-
-// ==================== 多维度视图相关 ====================
-
-function switchView(view) {
-  currentView.value = view
-  // 切换视角时重置筛选
-  if (view === 'course') {
-    selectedCourseIds.value = []
-    kpSelectOptions.value = []
-    selectedKpIds.value = []
-  } else if (view === 'knowledgePoint') {
-    selectedKpIds.value = []
-  }
-}
-
-async function loadCourses(search = '') {
-  courseLoading.value = true
-  try {
-    const result = await getCourses({ search, size: 100 })
-    const items = result.items || result || []
-    courseList.value = items
-    courseSelectOptions.value = items.map(c => ({ label: c.name, value: c.id }))
-    // 构建 courseMap
-    courseMap.value = new Map(items.map(c => [c.id, c]))
-  } catch {
-    courseSelectOptions.value = []
-  } finally {
-    courseLoading.value = false
-  }
-}
-
-let courseSearchTimer = null
-function handleCourseSearch(search) {
-  clearTimeout(courseSearchTimer)
-  courseSearchTimer = setTimeout(() => {
-    loadCourses(search)
-  }, 250)
-}
-
-function handleCourseChange(ids) {
-  // 清空知识点选择，重新加载该课程下的知识点
-  selectedKpIds.value = []
-  if (ids.length > 0) {
-    loadKnowledgePointsByCourses(ids)
-  } else {
-    kpSelectOptions.value = []
-  }
-}
-
-async function loadKnowledgePointsByCourses(courseIds) {
-  kpLoading.value = true
-  try {
-    const result = await getKnowledgePoints({ course_ids: courseIds.join(','), size: 500 })
-    const items = result.items || result || []
-    // 按课程分组存储知识点
-    courseKpMap.value = {}
-    items.forEach(kp => {
-      if (!courseKpMap.value[kp.courseId]) {
-        courseKpMap.value[kp.courseId] = []
-      }
-      courseKpMap.value[kp.courseId].push(kp)
-    })
-    // 更新下拉选项
-    kpSelectOptions.value = items.map(kp => ({
-      label: kp.name,
-      value: kp.id,
-    }))
-  } catch {
-    kpSelectOptions.value = []
-  } finally {
-    kpLoading.value = false
-  }
-}
-
-function groupByCourse() {
-  // 构建课程分组
-  const courseGroups = new Map()
-
-  questionList.value.forEach(q => {
-    const kpIds = q.knowledgePointIds || []
-    const courseIds = new Set()
-
-    kpIds.forEach(kpId => {
-      // 查找该知识点对应的课程
-      for (const [courseId, kps] of Object.entries(courseKpMap.value)) {
-        if (kps.some(kp => kp.id === kpId)) {
-          courseIds.add(courseId)
-        }
-      }
-    })
-
-    // 如果没有关联课程，归入"未分类"
-    if (courseIds.size === 0) {
-      if (!courseGroups.has('uncategorized')) {
-        courseGroups.set('uncategorized', { id: 'uncategorized', name: '未分类', questionCount: 0, questions: [], children: [], parentId: null, sortOrder: 999, expanded: true })
-      }
-      courseGroups.get('uncategorized').questions.push(q)
-      courseGroups.get('uncategorized').questionCount++
-    } else {
-      courseIds.forEach(courseId => {
-        if (!courseGroups.has(courseId)) {
-          const course = courseMap.value.get(courseId)
-          courseGroups.set(courseId, {
-            id: courseId,
-            name: course?.name || `课程${courseId}`,
-            questionCount: 0,
-            questions: [],
-            children: [],
-            parentId: null,
-            sortOrder: course?.sortOrder || 0,
-            expanded: true,
-          })
-        }
-        courseGroups.get(courseId).questions.push(q)
-        courseGroups.get(courseId).questionCount++
-      })
-    }
-  })
-
-  return Array.from(courseGroups.values()).sort((a, b) => a.sortOrder - b.sortOrder)
-}
-
-function groupByKnowledgePoint() {
-  // 构建知识点分组
-  const kpGroups = new Map()
-
-  questionList.value.forEach(q => {
-    const kpIds = q.knowledgePointIds || []
-
-    // 如果没有关联知识点，归入"未分类"
-    if (!kpIds || kpIds.length === 0) {
-      if (!kpGroups.has('uncategorized')) {
-        kpGroups.set('uncategorized', { id: 'uncategorized', name: '未分类', questionCount: 0, questions: [], children: [], parentId: null, sortOrder: 999, expanded: true })
-      }
-      kpGroups.get('uncategorized').questions.push(q)
-      kpGroups.get('uncategorized').questionCount++
-    } else {
-      kpIds.forEach(kpId => {
-        if (!kpGroups.has(kpId)) {
-          // 尝试找到知识点名称
-          let kpName = `知识点${kpId}`
-          for (const kps of Object.values(courseKpMap.value)) {
-            const found = kps.find(kp => kp.id === kpId)
-            if (found) {
-              kpName = found.name
-              break
-            }
-          }
-          kpGroups.set(kpId, {
-            id: kpId,
-            name: kpName,
-            questionCount: 0,
-            questions: [],
-            children: [],
-            parentId: null,
-            sortOrder: 0,
-            expanded: true,
-          })
-        }
-        kpGroups.get(kpId).questions.push(q)
-        kpGroups.get(kpId).questionCount++
-      })
-    }
-  })
-
-  return Array.from(kpGroups.values()).sort((a, b) => a.sortOrder - b.sortOrder)
-}
-
 onMounted(async () => {
-  await loadFolders()
-  await loadQuestions()
-  loadStats()
-  loadPoliceTypeOptions()
-  loadCourses()
-  updateCurrentTime()
+  await loadData()
+  await loadPoliceTypeOptions()
+})
+
+onUnmounted(() => {
+  const mainLayout = document.querySelector('.main-layout')
+  if (mainLayout) {
+    mainLayout.classList.remove('question-bank-fullscreen')
+  }
 })
 </script>
 
 <style scoped>
+/* ============ 页面布局 ============ */
 .question-bank-page {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  height: 100%;
   background-color: #F8FAFC;
   color: #334155;
   margin: 0;
   padding: 0;
 }
 
-/* 顶部通栏 */
-.page-header-bar {
-  height: 64px;
-  background: white;
-  border-bottom: 1px solid #E2E8F0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 24px;
-  flex-shrink: 0;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.logo-icon {
-  width: 32px;
-  height: 32px;
-  background: #2563EB;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-}
-
-.header-title {
-  display: flex;
-  flex-direction: column;
-}
-
-.title-main {
-  font-weight: 700;
-  color: #1E293B;
-  font-size: 14px;
-  letter-spacing: -0.01em;
-}
-
-.title-sub {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10px;
-  color: #94A3B8;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
-.header-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-/* 内容区域 */
-.content-area {
+.main-content {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
+  padding: 24px 32px;
 }
 
-.content-inner {
+.content-wrapper {
+  max-width: 100%;
   width: 100%;
 }
 
-.page-title-row {
+/* ============ 二级导航 ============ */
+.sub-nav-bar {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
+  align-items: center;
   margin-bottom: 24px;
 }
 
-.page-title {
-  font-size: 28px;
-  font-weight: 600;
-  color: #1E293B;
-  letter-spacing: -0.02em;
-  margin: 0;
+.sub-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 24px;
 }
 
-.page-desc {
-  margin: 8px 0 0;
-  color: #64748B;
+.sub-nav-item {
   font-size: 14px;
-}
-
-.search-box {
-  position: relative;
-}
-
-/* 主容器 */
-.main-container {
-  background: white;
-  border: 1px solid #E2E8F0;
-  border-radius: 12px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  min-height: 600px;
-}
-
-/* 统计条 */
-.stats-bar {
-  padding: 20px 32px;
-  border-bottom: 1px solid #F1F5F9;
-  background: #F8FAFC;
-}
-
-.stats-content {
-  display: flex;
-  align-items: center;
-  gap: 48px;
-}
-
-.stat-item {
-  display: flex;
-  flex-direction: column;
-}
-
-.stat-label {
-  font-size: 10px;
-  font-weight: 700;
-  color: #94A3B8;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 2px;
-}
-
-.stat-value {
-  font-size: 20px;
-  font-weight: 700;
-  color: #1E293B;
-}
-
-.stat-divider {
-  width: 1px;
-  height: 32px;
-  background: #E2E8F0;
-}
-
-.stat-legend {
-  display: flex;
-  gap: 32px;
-}
-
-.legend-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  font-size: 14px;
-  color: #64748B;
   font-weight: 600;
-}
-
-.legend-num {
-  font-size: 24px;
-  font-weight: 700;
-  color: #1E293B;
-  line-height: 1;
-}
-
-/* 列表标题栏 */
-.list-header {
-  display: flex;
-  align-items: center;
-  padding: 12px 32px;
-  border-bottom: 1px solid #E2E8F0;
-  font-size: 11px;
-  font-weight: 700;
   color: #94A3B8;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  background: white;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.col-folder { width: 192px; flex-shrink: 0; }
-.col-content { flex: 1; padding-right: 32px; }
-.col-type { width: 128px; flex-shrink: 0; }
-.col-diff { width: 80px; flex-shrink: 0; }
-.col-score { width: 80px; flex-shrink: 0; }
-.col-action { width: 128px; flex-shrink: 0; }
-
-.text-center { text-align: center; }
-.text-right { text-align: right; }
-
-/* 文件夹列表 */
-.folder-list {
-  flex: 1;
-}
-
-.folder-group {
-  border-bottom: 1px solid #F1F5F9;
-}
-
-.folder-title {
-  display: flex;
-  align-items: center;
-  padding: 14px 32px;
-  background: #F8FAFC;
-  border-bottom: 1px solid #F1F5F9;
+  padding-bottom: 8px;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
   cursor: pointer;
-  transition: background-color 0.15s;
 }
 
-.folder-title:hover {
-  background: #F1F5F9;
+.sub-nav-item:hover {
+  color: #64748B;
 }
 
-.folder-title.folder-drag-over {
-  background: #EFF6FF;
+.sub-nav-item.active {
+  color: #1E293B;
   border-color: #2563EB;
-  outline: 2px dashed #2563EB;
-  outline-offset: -2px;
 }
 
-.folder-title-left {
-  width: 192px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.chevron-icon {
-  transition: transform 0.2s ease;
-  color: #94A3B8;
-}
-
-.chevron-icon.rotated {
-  transform: rotate(0deg);
-}
-
-.chevron-icon:not(.rotated) {
-  transform: rotate(-90deg);
-}
-
-.folder-icon {
-  color: #2563EB;
-}
-
-.folder-name {
-  font-size: 14px;
-  font-weight: 700;
-  color: #334155;
-}
-
-.folder-title-desc {
-  flex: 1;
-  font-size: 12px;
-  color: #94A3B8;
-  font-style: italic;
-}
-
-.folder-title-actions {
-  width: 128px;
-  flex-shrink: 0;
-  text-align: right;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.folder-title:hover .folder-title-actions {
-  opacity: 1;
-}
-
-.batch-move-btn {
-  font-size: 11px;
-  font-weight: 600;
-  color: #2563EB;
-  padding: 0;
-}
-
-/* 文件夹内容 */
-.folder-content {
-  max-height: 2000px;
-  overflow: visible;
-  transition: max-height 0.3s ease-out, background-color 0.15s;
-  min-height: 1px;
-}
-
-.folder-content.folder-drag-over {
-  background: #EFF6FF;
-  outline: 2px dashed #2563EB;
-  outline-offset: -2px;
-}
-
-.folder-collapsed .folder-content {
-  max-height: 0;
-  overflow: hidden;
-}
-
-.question-row {
-  display: flex;
-  align-items: center;
-  padding: 16px 32px;
-  border-bottom: 1px solid #FAFAFA;
-  transition: background-color 0.15s;
-}
-
-.question-row:hover {
-  background: #EFF6FF;
-}
-
-.question-content {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 600px;
-}
-
-.empty-folder {
-  padding: 20px 40px;
-  text-align: center;
-  color: #94A3B8;
-  font-size: 14px;
-  min-height: 60px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.folder-content:not(.folder-drag-over) .empty-folder {
-  color: #94A3B8;
-}
-
-.folder-content.folder-drag-over .empty-folder {
-  color: #2563EB;
-  font-weight: 500;
-}
-
-/* 标签样式 */
-.tag-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px 8px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.tag-blue { background: #EFF6FF; color: #2563EB; }
-.tag-purple { background: #FAF5FF; color: #9333EA; }
-.tag-amber { background: #FFFBEB; color: #D97706; }
-.tag-green { background: #F0FDF4; color: #16A34A; }
-.tag-cyan { background: #ECFEFF; color: #0891B2; }
-.tag-orange { background: #FFF7ED; color: #EA580C; }
-.tag-red { background: #FEF2F2; color: #DC2626; }
-
-/* 底部 */
-.list-footer {
-  padding: 16px 32px;
-  border-top: 1px solid #F1F5F9;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: white;
-  margin-top: auto;
-}
-
-.footer-info {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  font-size: 12px;
-  color: #94A3B8;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-weight: 600;
-}
-
-.pagination {
+.sub-nav-right {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.pagination :deep(.ant-btn) {
+.btn-aux {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748B;
+  padding: 6px 12px;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  background-color: #FFFFFF;
+  transition: all 0.2s;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-aux:hover {
+  border-color: #CBD5E1;
+  background-color: #F8FAFC;
+  color: #1E293B;
+}
+
+/* ============ 主容器 ============ */
+.main-container {
+  background: white;
+  border: 1px solid #E2E8F0;
+  border-radius: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 640px;
+}
+
+/* ============ 工具栏 ============ */
+.toolbar-row {
+  padding: 24px 32px;
+  border-bottom: 1px solid #F1F5F9;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.btn-primary {
+  background: #2563EB;
+  color: white;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 8px 24px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 4px 6px rgba(37, 99, 235, 0.1);
+}
+
+.btn-primary:hover {
+  background: #1D4ED8;
+  transform: scale(0.98);
+}
+
+.search-wrapper {
+  position: relative;
+  width: 256px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  width: 16px;
+  height: 16px;
+  color: #94A3B8;
+  pointer-events: none;
+}
+
+.input-minimal {
+  background-color: transparent;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 14px;
+  color: #1E293B;
+  transition: all 0.2s;
+  outline: none;
+  height: 36px;
+}
+
+.input-minimal:hover {
+  border-color: #CBD5E1;
+}
+
+.input-minimal:focus {
+  border-color: #3B82F6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.search-wrapper .input-minimal {
+  padding-left: 36px;
+  width: 100%;
+}
+
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.filter-select {
+  width: 160px;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M5%207l5%205%205-5%22%20stroke%3D%22%2394A3B8%22%20stroke-width%3D%221.5%22%20fill%3D%22none%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748B;
+  cursor: pointer;
+}
+
+.filter-select-sm {
+  width: 128px;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M5%207l5%205%205-5%22%20stroke%3D%22%2394A3B8%22%20stroke-width%3D%221.5%22%20fill%3D%22none%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748B;
+  cursor: pointer;
+}
+
+.divider-v {
+  width: 1px;
+  height: 16px;
+  background: #E2E8F0;
+  margin: 0 8px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748B;
+  transition: color 0.2s;
+}
+
+.checkbox-label:hover {
+  color: #1E293B;
+}
+
+.custom-checkbox {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid #CBD5E1;
+  accent-color: #2563EB;
+  cursor: pointer;
+}
+
+/* ============ 表格 ============ */
+.table-wrapper {
+  flex: 1;
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  text-align: left;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.data-table thead tr {
+  background: #F8FAFC;
+  border-bottom: 1px solid #F1F5F9;
+}
+
+.data-table th {
+  padding: 16px;
+  font-size: 10px;
+  font-weight: 700;
+  color: #94A3B8;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  white-space: nowrap;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.col-check {
+  padding-left: 32px !important;
+  padding-right: 16px !important;
+  width: 48px;
+}
+
+.col-index {
+  width: 60px;
+  text-align: center;
+}
+
+.col-name {
+  width: 200px;
+}
+
+.col-publisher {
+  width: 80px;
+}
+
+.col-category {
+  width: 100px;
+}
+
+.col-paper {
+  width: 80px;
+}
+
+.col-exercise {
+  width: 100px;
+}
+
+.col-questions {
+  width: 80px;
+}
+
+.col-status {
+  width: 80px;
+}
+
+.col-time {
+  width: 120px;
+}
+
+.col-action {
+  width: 140px;
+  padding-right: 32px !important;
+  padding-left: 16px !important;
+}
+
+.table-row {
+  transition: background-color 0.2s;
+  border-bottom: 1px solid #F8FAFC;
+}
+
+.table-row:hover {
+  background-color: #F8FAFC;
+}
+
+.data-table td {
+  padding: 20px 16px;
+  vertical-align: middle;
+}
+
+.name-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+
+.name-text:hover {
+  color: #2563EB;
+}
+
+.name-text.is-system {
+  color: #334155;
+}
+
+.badge-system {
+  margin-left: 8px;
+  font-size: 9px;
+  font-weight: 700;
+  color: #3B82F6;
+  background: #EFF6FF;
+  padding: 2px 4px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+}
+
+.question-count {
+  font-weight: 700;
+  color: #2563EB;
+}
+
+.status-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: #94A3B8;
+  font-style: italic;
+}
+
+.col-time {
+  font-size: 12px;
+  color: #94A3B8;
+  font-family: monospace;
+}
+
+.action-btns {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: #2563EB;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: color 0.2s;
+}
+
+.btn-link:hover:not(:disabled) {
+  color: #1D4ED8;
+  text-decoration: underline;
+}
+
+.btn-link:disabled {
+  color: #CBD5E1;
+  cursor: not-allowed;
+}
+
+.btn-link-danger {
+  color: #EF4444;
+}
+
+.btn-link-danger:hover:not(:disabled) {
+  color: #DC2626;
+}
+
+.empty-row {
+  text-align: center;
+  padding: 40px;
+  color: #94A3B8;
+  font-size: 14px;
+}
+
+/* ============ 底部区域 ============ */
+.footer-area {
+  padding: 20px 32px;
+  border-top: 1px solid #F1F5F9;
+  background: rgba(248, 250, 252, 0.1);
+  flex-shrink: 0;
+}
+
+.notice-area {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 11px;
+  color: #94A3B8;
+  line-height: 1.6;
+  max-width: 800px;
+}
+
+.notice-icon {
+  width: 16px;
+  height: 16px;
+  color: #CBD5E1;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.notice-text {
+  margin: 0;
+}
+
+.notice-text p {
+  margin: 0;
+}
+
+.notice-text .mt-4 {
+  margin-top: 4px;
+}
+
+.footer-divider {
+  width: 100%;
+  height: 1px;
+  background: #F1F5F9;
+  margin: 16px 0;
+}
+
+.footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.batch-ops {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.batch-label {
+  font-size: 12px;
+  color: #94A3B8;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: -0.02em;
+}
+
+.btn-batch {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748B;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-batch:hover {
+  background: #F1F5F9;
+  border-color: #E2E8F0;
+}
+
+.btn-batch-danger {
+  color: #EF4444;
+}
+
+.btn-batch-danger:hover {
+  background: #FEF2F2;
+  border-color: #FECACA;
+}
+
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.page-info {
+  font-size: 11px;
+  color: #94A3B8;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.page-sep {
+  margin: 0 12px;
+  color: #E2E8F0;
+}
+
+.pagination-btns {
+  display: flex;
+  gap: 4px;
+}
+
+.page-btn {
   width: 32px;
   height: 32px;
-  border-radius: 6px;
+  border-radius: 4px;
+  border: 1px solid #E2E8F0;
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.pagination .current-page {
-  background: #1E293B;
-  color: white;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
   font-size: 10px;
   font-weight: 700;
+  color: #64748B;
 }
 
-/* 文件夹管理弹窗 */
+.page-btn:hover:not(:disabled) {
+  background: #F1F5F9;
+}
+
+.page-btn:disabled {
+  color: #CBD5E1;
+  cursor: not-allowed;
+}
+
+.page-btn-active {
+  background: #1E293B;
+  color: white;
+  border-color: #1E293B;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* ============ 文件夹管理弹窗 ============ */
 .folder-manager {
   padding: 8px 0;
 }
@@ -1414,43 +1288,13 @@ onMounted(async () => {
   gap: 8px;
 }
 
-/* 多维度视图 Tab */
-.view-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-  padding: 12px 16px;
-  background: white;
-  border-radius: 8px;
+/* ============ 滚动条 ============ */
+::-webkit-scrollbar {
+  width: 5px;
 }
 
-.tab-item {
-  padding: 8px 16px;
-  border-radius: 6px;
-  cursor: pointer;
-  color: #64748B;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.tab-item:hover {
-  background: #F1F5F9;
-}
-
-.tab-item.active {
-  background: #2563EB;
-  color: white;
-}
-
-.view-filter {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-  padding: 12px 16px;
-  background: #F8FAFC;
-  border-radius: 8px;
+::-webkit-scrollbar-thumb {
+  background: #E2E8F0;
+  border-radius: 10px;
 }
 </style>
