@@ -103,6 +103,7 @@
                 @open-checkout-mgr="checkoutMgrVisible = true"
                 @student-checkin="studentCheckinVisible = true"
                 @student-checkout="studentCheckoutVisible = true"
+                @student-scan-qr="openQrScanner"
               />
             </div>
 
@@ -118,8 +119,11 @@
                 :has-active-checkout="hasActiveCheckout"
                 :has-checked-in="hasCheckedIn"
                 :has-checked-out="hasCheckedOut"
+                :checkin-mode="currentSession?.checkin_mode ?? null"
+                :checkout-mode="currentSession?.checkout_mode ?? null"
                 @student-checkin="studentCheckinVisible = true"
                 @student-checkout="studentCheckoutVisible = true"
+                @student-scan-qr="openQrScanner"
               />
             </div>
 
@@ -221,6 +225,12 @@
         :session="currentSession"
         @refresh="fetchDetail"
       />
+
+      <QrScannerModal
+        v-model:visible="qrScannerVisible"
+        :action="qrScannerAction"
+        @refresh="fetchDetail"
+      />
     </template>
   </div>
 </template>
@@ -249,6 +259,7 @@ import CheckinManager from '@/components/classes/detail/CheckinManager.vue'
 import CheckoutManager from '@/components/classes/detail/CheckoutManager.vue'
 import StudentCheckinConfirm from '@/components/classes/detail/StudentCheckinConfirm.vue'
 import StudentCheckoutConfirm from '@/components/classes/detail/StudentCheckoutConfirm.vue'
+import QrScannerModal from '@/components/classes/detail/QrScannerModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -264,6 +275,13 @@ const checkinMgrVisible = ref(false)
 const checkoutMgrVisible = ref(false)
 const studentCheckinVisible = ref(false)
 const studentCheckoutVisible = ref(false)
+const qrScannerVisible = ref(false)
+const qrScannerAction = ref<'checkin' | 'checkout'>('checkin')
+
+function openQrScanner(action: 'checkin' | 'checkout') {
+  qrScannerAction.value = action
+  qrScannerVisible.value = true
+}
 
 // ---- computed ----
 

@@ -61,7 +61,9 @@
           <span class="cs-checked-label"><CheckCircleOutlined /> 已签到</span>
         </template>
         <template v-else-if="session.checkin_mode === 'qr'">
-          <span class="cs-qr-hint">请扫描教官展示的二维码进行签到</span>
+          <a-button type="primary" size="small" @click="$emit('studentScanQr', 'checkin')">
+            <ScanOutlined /> 扫码签到
+          </a-button>
         </template>
         <a-button
           v-else
@@ -78,7 +80,9 @@
           <span class="cs-checked-label"><CheckCircleOutlined /> 已签退</span>
         </template>
         <template v-else-if="session.checkout_mode === 'qr'">
-          <span class="cs-qr-hint">请扫描教官展示的二维码进行签退</span>
+          <a-button type="primary" size="small" @click="$emit('studentScanQr', 'checkout')">
+            <ScanOutlined /> 扫码签退
+          </a-button>
         </template>
         <a-button
           v-else
@@ -100,6 +104,7 @@ import {
   EnvironmentOutlined,
   UserOutlined,
   CheckCircleOutlined,
+  ScanOutlined,
 } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import type { CurrentSession } from './types'
@@ -120,6 +125,7 @@ defineEmits<{
   (e: 'openCheckoutMgr'): void
   (e: 'studentCheckin'): void
   (e: 'studentCheckout'): void
+  (e: 'studentScanQr', action: 'checkin' | 'checkout'): void
   (e: 'sessionAction', action: string): void
 }>()
 
