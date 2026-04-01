@@ -128,17 +128,17 @@
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { message } from 'ant-design-vue'
 import QrcodeVue from 'qrcode.vue'
-import dayjs from 'dayjs'
 import { useAuthStore } from '@/stores/auth'
 import {
-  getCheckinQrApiV1TrainingsTrainingIdCheckinQrGet,
   getCheckinRecordsApiV1TrainingsTrainingIdCheckinRecordsGet,
   startSessionCheckinApiV1TrainingsTrainingIdSessionsSessionKeyCheckinStartPost,
   endSessionCheckinApiV1TrainingsTrainingIdSessionsSessionKeyCheckinEndPost,
   checkinApiV1TrainingsTrainingIdCheckinPost,
 } from '@/api/generated/training-management/training-management'
-import type { CheckinResponse } from '@/api/generated/model'
+import type { CheckinResponse, TrainingCheckinQrResponse, TrainingResponse } from '@/api/generated/model'
 import type { CurrentSession, StudentItem } from './types'
+import { useAttendanceManager } from './useAttendanceManager'
+import { getAttendanceQr } from '@/services/attendance'
 
 const props = defineProps<{
   visible: boolean
@@ -149,7 +149,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:visible', val: boolean): void
-  (e: 'refresh'): void
+  (e: 'detail-updated', val: TrainingResponse): void
 }>()
 
 const authStore = useAuthStore()
@@ -158,12 +158,7 @@ const sessionActionLoading = ref(false)
 const checkinTab = ref('checked')
 const checkinRecords = ref<CheckinResponse[]>([])
 const checkinToggleLoading = ref<number | null>(null)
-const checkinMode = ref<'direct' | 'qr'>('direct')
-const checkinDuration = ref(10)
-const countdownText = ref('')
-const countdownTimer = ref<ReturnType<typeof setInterval> | null>(null)
 const isMobile = ref(window.innerWidth <= 768)
-const checkinQrUrl = ref('')
 
 function handleResize() {
   isMobile.value = window.innerWidth <= 768
@@ -171,7 +166,23 @@ function handleResize() {
 window.addEventListener('resize', handleResize)
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
-  stopCountdown()
+})
+
+const {
+  mode: checkinMode,
+  duration: checkinDuration,
+  qrUrl: checkinQrUrl,
+  countdownText,
+  syncFromSession,
+} = useAttendanceManager({
+  action: 'checkin',
+  visible: computed(() => props.visible),
+  session: computed(() => props.session),
+  fetchQrPayload: (sessionId: string, action: 'checkin' | 'checkout'): Promise<TrainingCheckinQrResponse> =>
+    getAttendanceQr(
+      Number(props.trainingId),
+      { session_key: sessionId, action },
+    ),
 })
 
 const isCheckinOngoing = computed(() => props.session?.status === 'checkin_open')
@@ -203,74 +214,29 @@ const checkinPercent = computed(() => {
   return Math.round((checkedInList.value.length / totalStudents.value) * 100)
 })
 
-// When modal opens, sync config from session and fetch records
-watch(() => props.visible, async (visible) => {
-  if (!visible) {
-    stopCountdown()
-    return
-  }
-  const sess = props.session
-  if (!sess) return
-  if (sess.checkin_mode === 'direct' || sess.checkin_mode === 'qr') {
-    checkinMode.value = sess.checkin_mode
-  }
-  if (sess.checkin_duration_minutes) {
-    checkinDuration.value = sess.checkin_duration_minutes
-  }
-  checkinTab.value = 'checked'
-  // 如果已是 qr 模式且签到进行中，恢复二维码
-  if (checkinMode.value === 'qr' && sess.status === 'checkin_open') {
-    await refreshQrToken()
-  } else {
-    checkinQrUrl.value = ''
-  }
-  await fetchCheckinRecords()
-  startCountdown()
-})
-
-async function refreshQrToken() {
-  const sess = props.session
-  if (!sess) return
-  try {
-    const data = await getCheckinQrApiV1TrainingsTrainingIdCheckinQrGet(
-      Number(props.trainingId),
-      { session_key: sess.session_id, action: 'checkin' },
-    )
-    if (data.token) {
-      checkinQrUrl.value = `${window.location.origin}/attendance/${data.token}/${sess.session_id}`
+watch(
+  [() => props.visible, () => props.session?.session_id],
+  async ([visible, sessionId]) => {
+    if (!visible || !sessionId) {
+      checkinRecords.value = []
+      return
     }
-  } catch {
-    checkinQrUrl.value = ''
-  }
-}
+    checkinTab.value = 'checked'
+    await fetchCheckinRecords(sessionId)
+  },
+  { immediate: true },
+)
 
-async function fetchCheckinRecords() {
-  const sess = props.session
-  if (!sess) return
+async function fetchCheckinRecords(sessionId = props.session?.session_id) {
+  if (!sessionId) return
   try {
     const data = await getCheckinRecordsApiV1TrainingsTrainingIdCheckinRecordsGet(
       Number(props.trainingId),
-      { session_key: sess.session_id },
+      { session_key: sessionId },
     )
     checkinRecords.value = data || []
   } catch {
     checkinRecords.value = []
-  }
-}
-
-async function fetchQrToken() {
-  const sess = props.session
-  if (!sess) return
-  try {
-    const data = await getCheckinQrApiV1TrainingsTrainingIdCheckinQrGet(
-      Number(props.trainingId),
-      { session_key: sess.session_id, action: 'checkin' },
-    )
-    if (data.token) {
-      checkinQrUrl.value = `${window.location.origin}/attendance/${data.token}/${sess.session_id}`
-    }
-  } catch {
-    checkinQrUrl.value = ''
   }
 }
 
@@ -279,18 +245,15 @@ async function doStartCheckin() {
   if (!sess) return
   sessionActionLoading.value = true
   try {
-    await startSessionCheckinApiV1TrainingsTrainingIdSessionsSessionKeyCheckinStartPost(
+    const detail = await startSessionCheckinApiV1TrainingsTrainingIdSessionsSessionKeyCheckinStartPost(
       Number(props.trainingId),
       sess.session_id,
       { checkin_mode: checkinMode.value, checkin_duration_minutes: checkinDuration.value },
     )
     message.success('签到已开始')
-    if (checkinMode.value === 'qr') {
-      await fetchQrToken()
-    }
-    emit('refresh')
-    await fetchCheckinRecords()
-    startCountdown()
+    emit('detail-updated', detail)
+    await syncFromSession((detail.current_session as CurrentSession | null) ?? sess)
+    await fetchCheckinRecords(sess.session_id)
   } catch (err: unknown) {
     message.error(err instanceof Error ? err.message : '操作失败')
   } finally {
@@ -303,12 +266,13 @@ async function doEndCheckin() {
   if (!sess) return
   sessionActionLoading.value = true
   try {
-    await endSessionCheckinApiV1TrainingsTrainingIdSessionsSessionKeyCheckinEndPost(
+    const detail = await endSessionCheckinApiV1TrainingsTrainingIdSessionsSessionKeyCheckinEndPost(
       Number(props.trainingId),
       sess.session_id,
     )
     message.success('操作成功')
-    emit('refresh')
+    emit('detail-updated', detail)
+    await syncFromSession((detail.current_session as CurrentSession | null) ?? null)
   } catch (err: unknown) {
     message.error(err instanceof Error ? err.message : '操作失败')
   } finally {
@@ -332,44 +296,12 @@ async function toggleCheckin(userId: number, action: 'checkin' | 'absent') {
         { user_id: userId, session_key: sess.session_id, status: 'absent' },
       )
     }
-    await fetchCheckinRecords()
+    await fetchCheckinRecords(sess.session_id)
   } catch (err: unknown) {
     message.error(err instanceof Error ? err.message : '操作失败')
   } finally {
     checkinToggleLoading.value = null
   }
-}
-
-// Countdown
-function startCountdown() {
-  stopCountdown()
-  updateCountdown()
-  countdownTimer.value = setInterval(updateCountdown, 1000)
-}
-
-function stopCountdown() {
-  if (countdownTimer.value) {
-    clearInterval(countdownTimer.value)
-    countdownTimer.value = null
-  }
-  countdownText.value = ''
-}
-
-function updateCountdown() {
-  const deadline = props.session?.checkin_deadline
-  if (!deadline) {
-    countdownText.value = ''
-    return
-  }
-  const remaining = dayjs(deadline).diff(dayjs(), 'second')
-  if (remaining <= 0) {
-    countdownText.value = '已截止'
-    stopCountdown()
-    return
-  }
-  const mins = Math.floor(remaining / 60)
-  const secs = remaining % 60
-  countdownText.value = `${mins}:${String(secs).padStart(2, '0')}`
 }
 </script>
 

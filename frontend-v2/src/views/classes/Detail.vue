@@ -197,7 +197,7 @@
         :training-id="detail.id"
         :session="currentSession"
         :students="detail.students || []"
-        @refresh="fetchDetail"
+        @detail-updated="applyDetail"
       />
 
       <CheckoutManager
@@ -205,7 +205,7 @@
         :training-id="detail.id"
         :session="currentSession"
         :students="detail.students || []"
-        @refresh="fetchDetail"
+        @detail-updated="applyDetail"
       />
 
       <StudentCheckinConfirm
@@ -387,6 +387,10 @@ function formatDateTime(val: string | null | undefined): string {
 function handleEnroll() { router.push(`/classes/${route.params.id}/enroll`) }
 function goHistory() { message.info('训历功能即将上线') }
 function goExam(examId: number) { router.push(`/exam/do/${examId}`) }
+
+function applyDetail(nextDetail: TrainingResponse) {
+  detail.value = nextDetail
+}
 
 async function fetchDetail() {
   const id = route.params.id

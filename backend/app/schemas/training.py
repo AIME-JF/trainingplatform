@@ -503,7 +503,7 @@ class TrainingAttendanceSummaryResponse(BaseModel):
 
 
 class TrainingCheckinQrResponse(BaseModel):
-    """签到二维码响应"""
+    """出勤二维码响应"""
 
     token: str
     training_id: int

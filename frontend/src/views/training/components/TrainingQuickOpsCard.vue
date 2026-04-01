@@ -1,22 +1,6 @@
 <template>
   <a-card title="常用入口" :bordered="false" style="margin-bottom:16px">
     <div class="quick-ops-grid">
-      <a-button
-        v-if="trainingData.status === 'active' && !isStudent"
-        class="span-2"
-        type="primary"
-        @click="$emit('global-checkin')"
-      >
-        <template #icon><QrcodeOutlined /></template>开班/上课签到
-      </a-button>
-      <a-button
-        v-if="trainingData.status === 'active' && isStudent && isEnrolled"
-        class="span-2"
-        type="primary"
-        @click="$emit('global-checkin')"
-      >
-        <template #icon><QrcodeOutlined /></template>扫码签到
-      </a-button>
       <a-button @click="$emit('view-schedule')">
         <template #icon><CalendarOutlined /></template>查看日程
       </a-button>
@@ -59,7 +43,7 @@
 </template>
 
 <script setup>
-import { CalendarOutlined, QrcodeOutlined, EditOutlined, DownloadOutlined } from '@ant-design/icons-vue'
+import { CalendarOutlined, EditOutlined, DownloadOutlined } from '@ant-design/icons-vue'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
 defineProps({
@@ -73,7 +57,7 @@ defineProps({
   aiScheduleTooltip: { type: String, default: '' },
 })
 
-defineEmits(['global-checkin', 'view-schedule', 'open-ai-schedule', 'change-tab', 'open-edit', 'export-students'])
+defineEmits(['view-schedule', 'open-ai-schedule', 'change-tab', 'open-edit', 'export-students'])
 </script>
 
 <style scoped>

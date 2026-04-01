@@ -188,28 +188,6 @@ def get_training_activities(
     return StandardResponse(data=data)
 
 
-@router.get("/checkin/qr/{token}", response_model=StandardResponse[TrainingCheckinQrResponse], summary="扫码签到信息")
-def get_checkin_qr_payload(
-    token: str,
-    current_user: Optional[TokenData] = Depends(get_current_user_optional),
-    db: Session = Depends(get_db),
-):
-    controller = TrainingController(db)
-    data = controller.get_checkin_qr_payload(token)
-    return StandardResponse(data=data)
-
-
-@router.post("/checkin/qr/{token}", response_model=StandardResponse[CheckinResponse], summary="扫码签到")
-def checkin_by_qr(
-    token: str,
-    current_user: TokenData = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    controller = TrainingController(db)
-    result = controller.checkin_by_qr(token, current_user.user_id)
-    return StandardResponse(data=result)
-
-
 @router.get("/attendance/qr/{token}", response_model=StandardResponse[TrainingCheckinQrResponse], summary="获取出勤二维码信息")
 def get_attendance_qr_payload(
     token: str,
@@ -217,7 +195,7 @@ def get_attendance_qr_payload(
     db: Session = Depends(get_db),
 ):
     controller = TrainingController(db)
-    data = controller.get_checkin_qr_payload(token)
+    data = controller.get_attendance_qr_payload(token)
     return StandardResponse(data=data)
 
 
@@ -749,8 +727,8 @@ def submit_training_evaluation(
     return StandardResponse(data=result)
 
 
-@router.get("/{training_id}/checkin/qr", response_model=StandardResponse[TrainingCheckinQrResponse], summary="生成出勤二维码")
-def get_checkin_qr(
+@router.get("/{training_id}/attendance/qr", response_model=StandardResponse[TrainingCheckinQrResponse], summary="生成出勤二维码")
+def get_attendance_qr(
     training_id: int,
     session_key: str = Query("start"),
     date: Optional[date] = None,
@@ -759,7 +737,7 @@ def get_checkin_qr(
     db: Session = Depends(get_db),
 ):
     controller = TrainingController(db)
-    data = controller.generate_checkin_qr(training_id, session_key, date, current_user.user_id, action=action)
+    data = controller.generate_attendance_qr(training_id, session_key, date, current_user.user_id, action=action)
     return StandardResponse(data=data)
 
 

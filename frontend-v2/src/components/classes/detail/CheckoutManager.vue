@@ -118,14 +118,15 @@ import { message } from 'ant-design-vue'
 import QrcodeVue from 'qrcode.vue'
 import { useAuthStore } from '@/stores/auth'
 import {
-  getCheckinQrApiV1TrainingsTrainingIdCheckinQrGet,
   getCheckinRecordsApiV1TrainingsTrainingIdCheckinRecordsGet,
   startSessionCheckoutApiV1TrainingsTrainingIdSessionsSessionKeyCheckoutStartPost,
   endSessionCheckoutApiV1TrainingsTrainingIdSessionsSessionKeyCheckoutEndPost,
   checkoutApiV1TrainingsTrainingIdCheckoutPost,
 } from '@/api/generated/training-management/training-management'
-import type { CheckinResponse } from '@/api/generated/model'
+import type { CheckinResponse, TrainingCheckinQrResponse, TrainingResponse } from '@/api/generated/model'
 import type { CurrentSession, StudentItem } from './types'
+import { useAttendanceManager } from './useAttendanceManager'
+import { getAttendanceQr } from '@/services/attendance'
 
 const props = defineProps<{
   visible: boolean
@@ -136,7 +137,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: 'update:visible', val: boolean): void
-  (e: 'refresh'): void
+  (e: 'detail-updated', val: TrainingResponse): void
 }>()
 
 const authStore = useAuthStore()
@@ -145,10 +146,7 @@ const sessionActionLoading = ref(false)
 const checkoutTab = ref('checked')
 const checkoutRecords = ref<CheckinResponse[]>([])
 const checkoutToggleLoading = ref<number | null>(null)
-const checkoutMode = ref<'direct' | 'qr'>('direct')
-const checkoutDurationMin = ref(10)
 const isMobile = ref(window.innerWidth <= 768)
-const checkoutQrUrl = ref('')
 
 function handleResize() {
   isMobile.value = window.innerWidth <= 768
@@ -156,6 +154,22 @@ function handleResize() {
 window.addEventListener('resize', handleResize)
 onUnmounted(() => {
   window.removeEventListener('resize', handleResize)
+})
+
+const {
+  mode: checkoutMode,
+  duration: checkoutDurationMin,
+  qrUrl: checkoutQrUrl,
+  syncFromSession,
+} = useAttendanceManager({
+  action: 'checkout',
+  visible: computed(() => props.visible),
+  session: computed(() => props.session),
+  fetchQrPayload: (sessionId: string, action: 'checkin' | 'checkout'): Promise<TrainingCheckinQrResponse> =>
+    getAttendanceQr(
+      Number(props.trainingId),
+      { session_key: sessionId, action },
+    ),
 })
 
 const isCheckoutOngoing = computed(() => props.session?.status === 'checkout_open')
@@ -182,71 +196,29 @@ const checkoutPercent = computed(() => {
   return Math.round((checkedOutList.value.length / totalStudents.value) * 100)
 })
 
-// When modal opens, fetch records
-watch(() => props.visible, async (visible) => {
-  if (!visible) return
-  const sess = props.session
-  if (!sess) return
-  // 从后端配置恢复签退模式（签退已开始时）
-  if (sess.checkout_mode === 'direct' || sess.checkout_mode === 'qr') {
-    checkoutMode.value = sess.checkout_mode
-  }
-  if (sess.checkout_duration_minutes) {
-    checkoutDurationMin.value = sess.checkout_duration_minutes
-  }
-  checkoutTab.value = 'checked'
-  // 如果已是 qr 模式且签退进行中，恢复二维码
-  if (checkoutMode.value === 'qr' && sess.status === 'checkout_open') {
-    await refreshQrToken()
-  } else {
-    checkoutQrUrl.value = ''
-  }
-  await fetchCheckoutRecords()
-})
-
-async function refreshQrToken() {
-  const sess = props.session
-  if (!sess) return
-  try {
-    const data = await getCheckinQrApiV1TrainingsTrainingIdCheckinQrGet(
-      Number(props.trainingId),
-      { session_key: sess.session_id, action: 'checkout' },
-    )
-    if (data.token) {
-      checkoutQrUrl.value = `${window.location.origin}/attendance/${data.token}/${sess.session_id}`
+watch(
+  [() => props.visible, () => props.session?.session_id],
+  async ([visible, sessionId]) => {
+    if (!visible || !sessionId) {
+      checkoutRecords.value = []
+      return
     }
-  } catch {
-    checkoutQrUrl.value = ''
-  }
-}
+    checkoutTab.value = 'checked'
+    await fetchCheckoutRecords(sessionId)
+  },
+  { immediate: true },
+)
 
-async function fetchCheckoutRecords() {
-  const sess = props.session
-  if (!sess) return
+async function fetchCheckoutRecords(sessionId = props.session?.session_id) {
+  if (!sessionId) return
   try {
     const data = await getCheckinRecordsApiV1TrainingsTrainingIdCheckinRecordsGet(
       Number(props.trainingId),
-      { session_key: sess.session_id },
+      { session_key: sessionId },
     )
     checkoutRecords.value = data || []
   } catch {
     checkoutRecords.value = []
-  }
-}
-
-async function fetchQrToken() {
-  const sess = props.session
-  if (!sess) return
-  try {
-    const data = await getCheckinQrApiV1TrainingsTrainingIdCheckinQrGet(
-      Number(props.trainingId),
-      { session_key: sess.session_id, action: 'checkout' },
-    )
-    if (data.token) {
-      checkoutQrUrl.value = `${window.location.origin}/attendance/${data.token}/${sess.session_id}`
-    }
-  } catch {
-    checkoutQrUrl.value = ''
   }
 }
 
@@ -255,17 +227,15 @@ async function doStartCheckout() {
   if (!sess) return
   sessionActionLoading.value = true
   try {
-    await startSessionCheckoutApiV1TrainingsTrainingIdSessionsSessionKeyCheckoutStartPost(
+    const detail = await startSessionCheckoutApiV1TrainingsTrainingIdSessionsSessionKeyCheckoutStartPost(
       Number(props.trainingId),
       sess.session_id,
       { checkout_mode: checkoutMode.value, checkout_duration_minutes: checkoutDurationMin.value },
     )
     message.success('签退已开始')
-    if (checkoutMode.value === 'qr') {
-      await fetchQrToken()
-    }
-    emit('refresh')
-    await fetchCheckoutRecords()
+    emit('detail-updated', detail)
+    await syncFromSession((detail.current_session as CurrentSession | null) ?? sess)
+    await fetchCheckoutRecords(sess.session_id)
   } catch (err: unknown) {
     message.error(err instanceof Error ? err.message : '操作失败')
   } finally {
@@ -278,12 +248,13 @@ async function doEndCheckout() {
   if (!sess) return
   sessionActionLoading.value = true
   try {
-    await endSessionCheckoutApiV1TrainingsTrainingIdSessionsSessionKeyCheckoutEndPost(
+    const detail = await endSessionCheckoutApiV1TrainingsTrainingIdSessionsSessionKeyCheckoutEndPost(
       Number(props.trainingId),
       sess.session_id,
     )
     message.success('签退已结束')
-    emit('refresh')
+    emit('detail-updated', detail)
+    await syncFromSession((detail.current_session as CurrentSession | null) ?? null)
   } catch (err: unknown) {
     message.error(err instanceof Error ? err.message : '操作失败')
   } finally {
@@ -300,7 +271,7 @@ async function toggleCheckout(userId: number) {
       Number(props.trainingId),
       { user_id: userId, session_key: sess.session_id },
     )
-    await fetchCheckoutRecords()
+    await fetchCheckoutRecords(sess.session_id)
   } catch (err: unknown) {
     message.error(err instanceof Error ? err.message : '操作失败')
   } finally {

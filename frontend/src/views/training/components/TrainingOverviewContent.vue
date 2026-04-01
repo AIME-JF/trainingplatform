@@ -68,24 +68,13 @@
           <div class="ci-time">{{ currentSession.date }} {{ currentSession.timeRange }}</div>
           <div class="ci-time">地点：{{ currentSession.location || '未设置' }} · 状态：{{ currentSessionStatusLabel }}</div>
         </div>
-        <div class="ci-right">
-          <a-space wrap>
-            <a-button v-if="currentSession.actionPermissions?.canStartCheckin" size="small" type="primary" @click="$emit('start-session-checkin')">开始签到</a-button>
-            <a-button v-if="currentSession.actionPermissions?.canEndCheckin" size="small" @click="$emit('end-session-checkin')">结束签到</a-button>
-            <a-button v-if="currentSession.actionPermissions?.canStartCheckout" size="small" type="primary" ghost @click="$emit('start-session-checkout')">开始签退</a-button>
-            <a-button v-if="currentSession.actionPermissions?.canEndCheckout" size="small" @click="$emit('end-session-checkout')">结束签退</a-button>
-            <a-button
-              v-if="isEnrolled && currentSession.status === 'checkin_open'"
-              size="small"
-              type="primary"
-              ghost
-              @click="$emit('go-current-session-checkin')"
-            >
-              学员签到
-            </a-button>
-            <a-button
-              v-if="isEnrolled && currentSession.status === 'checkout_open'"
-              size="small"
+          <div class="ci-right">
+            <a-space wrap>
+              <a-button v-if="currentSession.actionPermissions?.canStartCheckout" size="small" type="primary" ghost @click="$emit('start-session-checkout')">开始签退</a-button>
+              <a-button v-if="currentSession.actionPermissions?.canEndCheckout" size="small" @click="$emit('end-session-checkout')">结束签退</a-button>
+              <a-button
+                v-if="isEnrolled && currentSession.status === 'checkout_open'"
+                size="small"
               @click="$emit('go-current-session-checkout')"
             >
               学员签退
@@ -114,11 +103,8 @@ defineProps({
 
 defineEmits([
   'go-schedule',
-  'start-session-checkin',
-  'end-session-checkin',
   'start-session-checkout',
   'end-session-checkout',
-  'go-current-session-checkin',
   'go-current-session-checkout',
   'skip-current-session',
 ])
