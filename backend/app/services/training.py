@@ -6,6 +6,7 @@ import uuid
 from datetime import date, datetime, time, timedelta
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import func as sa_func
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -214,6 +215,11 @@ class TrainingService:
                 continue
             if scope_context and not can_view_training_with_context(scope_context, training):
                 continue
+            # 非管理员、非相关人员只能看到已发布的班级
+            if scope_context and not scope_context.is_admin:
+                related = is_training_related_user(training, current_user_id) if current_user_id else False
+                if not related and (training.publish_status or "draft") != "published":
+                    continue
             visible_trainings.append(training)
 
         if changed:
@@ -2423,7 +2429,30 @@ class TrainingService:
         current_enrollment = self._resolve_current_enrollment(training, current_user_id)
         current_enrollment_status = current_enrollment.status if current_enrollment else None
         current_step_key = self._resolve_current_step_key(training)
-        students = [self._enrollment_to_response(item) for item in approved_enrollments] if can_manage_all else []
+        if can_manage_all:
+            # 计算每个学员的签到率
+            total_sessions = sum(
+                1 for course in (training.courses or [])
+                for sch in (course.schedules or [])
+                if isinstance(sch, dict) and sch.get("status") in ("completed", "checkin_open", "checkin_closed", "checkout_open")
+            )
+            user_checkin_counts: dict[int, int] = {}
+            if total_sessions > 0:
+                checkin_rows = self.db.query(
+                    CheckinRecord.user_id, sa_func.count(CheckinRecord.id)
+                ).filter(
+                    CheckinRecord.training_id == training.id,
+                    CheckinRecord.status.in_(["on_time", "late"]),
+                ).group_by(CheckinRecord.user_id).all()
+                user_checkin_counts = {uid: cnt for uid, cnt in checkin_rows}
+            students = []
+            for item in approved_enrollments:
+                resp = self._enrollment_to_response(item)
+                cnt = user_checkin_counts.get(item.user_id, 0)
+                resp.checkin_rate = round(cnt / total_sessions, 2) if total_sessions > 0 else None
+                students.append(resp)
+        else:
+            students = []
         checkin_records = self._get_detail_checkin_records(training.id, current_user_id, can_manage_all) if has_full_access else []
         schedule_rule_config = self._resolve_training_schedule_rule_config(training)
 

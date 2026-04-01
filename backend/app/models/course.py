@@ -37,6 +37,7 @@ class Course(Base):
     notes = relationship("CourseNote", back_populates="course", cascade="all, delete-orphan")
     qa_list = relationship("CourseQA", back_populates="course", cascade="all, delete-orphan")
     tag_relations = relationship("CourseTagRelation", back_populates="course", cascade="all, delete-orphan")
+    knowledge_points = relationship("KnowledgePoint", back_populates="course")
 
 
 class Chapter(Base):

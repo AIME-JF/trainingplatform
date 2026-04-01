@@ -1,11 +1,22 @@
 <template>
   <div class="paper-manage-page">
-    <div class="page-header">
-      <div>
-        <h2>试卷仓库</h2>
-        <p class="page-sub">统一维护试卷草稿，智能组卷和智能生成试卷确认后会进入这里</p>
+    <!-- 顶部通栏 -->
+    <header class="page-header-bar">
+      <div class="header-left">
+        <div class="logo-icon">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+        </div>
+        <div class="header-title">
+          <span class="title-main">试卷仓库</span>
+          <div class="title-sub">
+            <span>考试系统</span>
+            <span class="text-slate-200">/</span>
+            <span>试卷管理</span>
+          </div>
+        </div>
       </div>
-      <a-space>
+      <div class="header-right">
+        <a-button @click="openManageFolderModal">管理目录</a-button>
         <permissions-tooltip
           :allowed="canOpenAiAssembleTask"
           tips="需要 GET_AI_PAPER_ASSEMBLY_TASKS 或 CREATE_AI_PAPER_ASSEMBLY_TASK 权限"
@@ -14,16 +25,6 @@
           <a-button :disabled="disabled" @click="$router.push('/paper/ai-assemble')">
             <template #icon><RobotOutlined /></template>
             智能组卷
-          </a-button>
-        </permissions-tooltip>
-        <permissions-tooltip
-          :allowed="canOpenAiGenerateTask"
-          tips="需要 GET_AI_PAPER_GENERATION_TASKS 或 CREATE_AI_PAPER_GENERATION_TASK 权限"
-          v-slot="{ disabled }"
-        >
-          <a-button :disabled="disabled" @click="$router.push('/paper/ai-assemble')">
-            <template #icon><RobotOutlined /></template>
-            智能出卷
           </a-button>
         </permissions-tooltip>
         <permissions-tooltip
@@ -36,153 +37,232 @@
             新建试卷
           </a-button>
         </permissions-tooltip>
-      </a-space>
-    </div>
+      </div>
+    </header>
 
-    <a-card :bordered="false">
-      <div class="content-layout">
-        <!-- 左侧文件夹树 -->
-        <div class="folder-panel">
-          <div class="folder-panel-header">
-            <a-input-search v-model:value="folderSearchText" placeholder="搜索文件夹..." allow-clear style="margin-bottom: 8px" />
-            <permissions-tooltip
-              :allowed="canManagePaper"
-              tips="需要 CREATE_EXAM 权限"
-              v-slot="{ disabled }"
-            >
-              <a-button type="link" size="small" :disabled="disabled" @click="openCreateFolderModal">
-                <template #icon><FolderAddOutlined /></template>
-                新建文件夹
-              </a-button>
-            </permissions-tooltip>
+    <!-- 内容区域 -->
+    <div class="content-area">
+      <div class="content-inner">
+        <!-- 标题和搜索 -->
+        <div class="page-title-row">
+          <div>
+            <h1 class="page-title">试卷仓库</h1>
+            <p class="page-desc">统一维护试卷草稿，智能组卷和智能生成试卷确认后会进入这里</p>
           </div>
-          <div class="folder-tree-container">
-            <a-tree
-              v-if="folderTree.length > 0"
-              :treeData="folderTree"
-              :selectedKeys="selectedFolderKeys"
-              :expandedKeys="expandedFolderKeys"
-              @select="handleFolderSelect"
-              @expand="handleFolderExpand"
-            >
-              <template #title="node">
-                <div class="folder-item" @contextmenu="(e) => handleFolderContextMenu(e, node)">
-                  <FolderOutlined />
-                  <span class="folder-name">{{ node.name }}</span>
-                  <span class="paper-count">({{ node.paperCount }})</span>
-                </div>
-              </template>
-            </a-tree>
-            <div v-else class="empty-tip">暂无文件夹</div>
+          <div class="search-box">
+            <a-input-search v-model:value="searchText" placeholder="搜索试卷名称..." allow-clear @search="handleSearch" style="width: 288px" />
           </div>
         </div>
 
-        <!-- 右侧试卷列表 -->
-        <div class="paper-list-panel">
-          <div class="paper-list-header">
-            <a-row :gutter="16">
-              <a-col :span="8">
-                <a-input-search v-model:value="searchText" placeholder="搜索试卷名称..." allow-clear @search="loadPapers" />
-              </a-col>
-              <a-col :span="5">
-                <a-select v-model:value="filterStatus" style="width:100%" @change="loadPapers">
-                  <a-select-option value="all">全部状态</a-select-option>
-                  <a-select-option value="draft">草稿</a-select-option>
-                  <a-select-option value="published">已发布</a-select-option>
-                  <a-select-option value="archived">已归档</a-select-option>
-                </a-select>
-              </a-col>
-              <a-col :span="5">
-                <a-select v-model:value="filterType" style="width:100%" @change="loadPapers">
-                  <a-select-option value="all">全部类型</a-select-option>
-                  <a-select-option value="formal">正式考核</a-select-option>
-                  <a-select-option value="quiz">测验</a-select-option>
-                </a-select>
-              </a-col>
-            </a-row>
+        <!-- 统一的大边框容器 -->
+        <div class="main-container">
+          <!-- 统计数据条 -->
+          <div class="stats-bar">
+            <div class="stats-content">
+              <div class="stat-item">
+                <span class="stat-label">目录总数</span>
+                <span class="stat-value">{{ folderCount }}</span>
+              </div>
+              <div class="stat-item">
+                <span class="stat-label">试卷总计</span>
+                <span class="stat-value">{{ statsState.total }}</span>
+              </div>
+              <div class="stat-divider"></div>
+              <div class="stat-legend">
+                <span class="legend-item"><i class="w-2 h-2 rounded-full bg-green-500"></i><span class="legend-num">{{ statsState.published }}</span>已发布</span>
+                <span class="legend-item"><i class="w-2 h-2 rounded-full bg-orange-500"></i><span class="legend-num">{{ statsState.draft }}</span>草稿</span>
+                <span class="legend-item"><i class="w-2 h-2 rounded-full bg-gray-400"></i><span class="legend-num">{{ statsState.archived }}</span>已归档</span>
+              </div>
+            </div>
           </div>
 
-          <a-table
-            :columns="columns"
-            :data-source="paperList"
-            row-key="id"
-            :loading="loading"
-            :pagination="pagination"
-            @change="handleTableChange"
-          >
-            <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'status'">
-                <a-tag :color="statusColors[record.status]">{{ statusLabels[record.status] }}</a-tag>
-              </template>
-              <template v-else-if="column.key === 'type'">
-                {{ typeLabels[record.type] || record.type }}
-              </template>
-              <template v-else-if="column.key === 'updatedAt'">
-                {{ formatDateTime(record.updatedAt || record.createdAt) }}
-              </template>
-              <template v-else-if="column.key === 'action'">
-                <a-space>
-                  <permissions-tooltip
-                    v-if="record.status === 'draft'"
-                    :allowed="canManagePaper"
-                    tips="需要 CREATE_EXAM 权限"
-                    v-slot="{ disabled }"
-                  >
-                    <a-button type="link" size="small" :disabled="disabled" @click="openEditDrawer(record)">编辑</a-button>
-                  </permissions-tooltip>
-                  <a-button v-else type="link" size="small" @click="openViewDrawer(record)">查看</a-button>
-                  <permissions-tooltip
-                    v-if="record.status === 'draft'"
-                    :allowed="canManagePaper"
-                    tips="需要 CREATE_EXAM 权限"
-                    v-slot="{ disabled }"
-                  >
-                    <a-button type="link" size="small" :disabled="disabled" @click="handlePublish(record)">发布</a-button>
-                  </permissions-tooltip>
-                  <permissions-tooltip
-                    v-if="record.status === 'published'"
-                    :allowed="canManagePaper"
-                    tips="需要 CREATE_EXAM 权限"
-                    v-slot="{ disabled }"
-                  >
-                    <a-button type="link" size="small" :disabled="disabled" @click="handleArchive(record)">归档</a-button>
-                  </permissions-tooltip>
-                  <a-dropdown>
-                    <a-button type="link" size="small">
-                      <EllipsisOutlined />
-                    </a-button>
-                    <template #overlay>
-                      <a-menu>
-                        <permissions-tooltip
-                          :allowed="canManagePaper"
-                          tips="需要 CREATE_EXAM 权限"
-                          v-slot="{ disabled }"
-                        >
-                          <a-menu-item key="move" :disabled="disabled" @click="openMoveModal(record)">
-                            <SwapOutlined /> 移动到文件夹
-                          </a-menu-item>
-                        </permissions-tooltip>
-                        <permissions-tooltip
-                          v-if="record.usageCount === 0"
-                          :allowed="canManagePaper"
-                          tips="需要 CREATE_EXAM 权限"
-                          v-slot="{ disabled }"
-                        >
-                          <a-menu-item key="delete" :disabled="disabled" danger @click="handleDelete(record)">
-                            <DeleteOutlined /> 删除
-                          </a-menu-item>
-                        </permissions-tooltip>
-                      </a-menu>
-                    </template>
-                  </a-dropdown>
-                </a-space>
-              </template>
-            </template>
-          </a-table>
+          <!-- Tab 切换栏 -->
+          <div class="view-tabs">
+            <div :class="['tab-item', { active: currentView === 'folder' }]" @click="switchView('folder')">
+              <FolderOutlined /> 文件夹视角
+            </div>
+            <div :class="['tab-item', { active: currentView === 'policeType' }]" @click="switchView('policeType')">
+              <TeamOutlined /> 警种视角
+            </div>
+            <div :class="['tab-item', { active: currentView === 'course' }]" @click="switchView('course')">
+              <BookOutlined /> 课程视角
+            </div>
+            <div :class="['tab-item', { active: currentView === 'knowledgePoint' }]" @click="switchView('knowledgePoint')">
+              <AimOutlined /> 知识点视角
+            </div>
+          </div>
+
+          <!-- 警种筛选 -->
+          <div v-if="currentView === 'policeType'" class="view-filter">
+            <a-select
+              v-model="selectedPoliceTypeIds"
+              mode="multiple"
+              placeholder="请选择警种筛选"
+              :options="policeTypeSelectOptions"
+              style="width: 400px"
+              @change="handleFilterChange"
+            />
+          </div>
+
+          <!-- 课程筛选 -->
+          <div v-if="currentView === 'course'" class="view-filter">
+            <a-select
+              v-model="selectedCourseIds"
+              mode="multiple"
+              placeholder="请选择课程"
+              :loading="courseLoading"
+              :options="courseSelectOptions"
+              show-search
+              :filter-option="false"
+              @search="handleCourseSearch"
+              @change="handleFilterChange"
+              style="width: 400px"
+            />
+          </div>
+
+          <!-- 知识点筛选 -->
+          <div v-if="currentView === 'knowledgePoint'" class="view-filter">
+            <a-select
+              v-model="selectedKpIds"
+              mode="multiple"
+              placeholder="请选择知识点"
+              :loading="kpLoading"
+              :options="kpSelectOptions"
+              show-search
+              :filter-option="false"
+              style="width: 500px"
+              @change="handleFilterChange"
+            />
+          </div>
+
+          <!-- 列表标题栏 -->
+          <div class="list-header">
+            <div class="col-folder">所属文件夹</div>
+            <div class="col-content">试卷名称</div>
+            <div class="col-status text-center">状态</div>
+            <div class="col-type text-center">类型</div>
+            <div class="col-count text-center">引用数</div>
+            <div class="col-action text-right">操作</div>
+          </div>
+
+          <!-- 文件夹分组区域 -->
+          <div class="folder-list">
+            <div
+              v-for="group in displayedGroups"
+              :key="group.id"
+              :class="['folder-group', { 'folder-collapsed': !group.expanded }]"
+            >
+              <!-- 文件夹标题行 -->
+              <div
+                class="folder-title"
+                :class="{ 'folder-drag-over': dragOverFolderId === group.id }"
+                @click="toggleFolder(group.id)"
+                @dragover="handleDragOver($event, group)"
+                @dragleave="handleDragLeave($event, group)"
+                @drop="handleDropToFolder($event, group)"
+              >
+                <div class="folder-title-left">
+                  <svg :class="['chevron-icon', { 'rotated': group.expanded }]" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
+                  <svg class="folder-icon" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2z"/></svg>
+                  <span class="folder-name">{{ group.name }}</span>
+                </div>
+                <div class="folder-title-desc">包含 {{ group.name }} 等 {{ group.paperCount }} 份试卷</div>
+                <div class="folder-title-actions">
+                  <a-button type="link" size="small" class="batch-move-btn" @click.stop="openBatchMoveModal(group)">批量移动</a-button>
+                </div>
+              </div>
+
+              <!-- 试卷内容区 -->
+              <div
+                class="folder-content"
+                :class="{ 'folder-drag-over': dragOverFolderId === group.id }"
+                @dragover="handleDragOver($event, group)"
+                @dragleave="handleDragLeave($event, group)"
+                @drop="handleDropToFolder($event, group)"
+              >
+                <div
+                  v-for="(record, index) in group.papers"
+                  :key="record.id"
+                  class="paper-row"
+                  draggable="true"
+                  @dragstart="handlePaperDragStart($event, record, group)"
+                  @dragend="handleDragEnd"
+                >
+                  <div class="col-folder text-xs text-slate-400">{{ group.name }}</div>
+                  <div class="col-content">
+                    <p class="paper-title text-sm text-slate-700 font-medium">{{ index + 1 }}. {{ record.title }}</p>
+                    <p class="paper-desc text-xs text-slate-400">{{ record.description || '暂无描述' }}</p>
+                  </div>
+                  <div class="col-status flex justify-center">
+                    <span :class="['tag-pill', statusTagColors[record.status]]">{{ statusLabels[record.status] }}</span>
+                  </div>
+                  <div class="col-type flex justify-center">
+                    <span :class="['tag-pill', typeTagColors[record.type]]">{{ typeLabels[record.type] }}</span>
+                  </div>
+                  <div class="col-count text-center text-sm font-semibold text-slate-600">{{ record.usageCount || 0 }}</div>
+                  <div class="col-action text-right flex justify-end gap-4">
+                    <a-button type="link" size="small" class="text-slate-400 hover:text-blue-600" @click="openViewDrawer(record)">查看</a-button>
+                    <permissions-tooltip
+                      v-if="record.status === 'draft'"
+                      :allowed="canManagePaper"
+                      tips="需要 CREATE_EXAM 权限"
+                      v-slot="{ disabled }"
+                    >
+                      <a-button type="link" size="small" class="text-slate-400 hover:text-blue-600" :disabled="disabled" @click="openEditDrawer(record)">编辑</a-button>
+                    </permissions-tooltip>
+                    <permissions-tooltip
+                      v-if="record.status === 'draft'"
+                      :allowed="canManagePaper"
+                      tips="需要 CREATE_EXAM 权限"
+                      v-slot="{ disabled }"
+                    >
+                      <a-button type="link" size="small" class="text-slate-400 hover:text-green-600" :disabled="disabled" @click="handlePublish(record)">发布</a-button>
+                    </permissions-tooltip>
+                    <permissions-tooltip
+                      v-if="record.status === 'published'"
+                      :allowed="canManagePaper"
+                      tips="需要 CREATE_EXAM 权限"
+                      v-slot="{ disabled }"
+                    >
+                      <a-button type="link" size="small" class="text-slate-400 hover:text-orange-600" :disabled="disabled" @click="handleArchive(record)">归档</a-button>
+                    </permissions-tooltip>
+                    <permissions-tooltip
+                      v-if="record.usageCount === 0"
+                      :allowed="canManagePaper"
+                      tips="需要 CREATE_EXAM 权限"
+                      v-slot="{ disabled }"
+                    >
+                      <a-button type="link" size="small" danger class="text-slate-300 hover:text-red-500" :disabled="disabled" @click="handleDelete(record)">
+                        <DeleteOutlined />
+                      </a-button>
+                    </permissions-tooltip>
+                  </div>
+                </div>
+                <div v-if="!group.papers || group.papers.length === 0" class="empty-folder">
+                  该文件夹下暂无试卷
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 底部 Footer -->
+          <div class="list-footer">
+            <div class="footer-info">
+              <span>当前展开 {{ expandedFolders.size }} 个目录</span>
+              <span class="text-slate-200">|</span>
+              <span>列表更新于 {{ currentTime }}</span>
+            </div>
+            <div class="pagination">
+              <a-button size="small" :disabled="pagination.current <= 1" @click="handlePrevPage"><LeftOutlined /></a-button>
+              <a-button size="small" class="current-page">{{ pagination.current }}</a-button>
+              <a-button size="small" :disabled="pagination.current >= totalPages" @click="handleNextPage"><RightOutlined /></a-button>
+            </div>
+          </div>
         </div>
       </div>
-    </a-card>
+    </div>
 
+    <!-- 新建/编辑试卷抽屉 -->
     <a-drawer v-model:open="drawerVisible" :title="drawerTitle" width="900px" @close="resetDraft">
       <paper-draft-editor
         v-model="paperDraft"
@@ -205,18 +285,73 @@
       </template>
     </a-drawer>
 
-    <!-- 新建/编辑文件夹弹窗 -->
+    <!-- 管理文件夹弹窗 -->
     <a-modal
       v-model:open="folderModalVisible"
-      :title="folderModalMode === 'create' ? '新建文件夹' : '编辑文件夹'"
+      title="管理目录"
+      width="600px"
       @ok="handleFolderSubmit"
       @cancel="resetFolderModal"
+    >
+      <div class="folder-manager">
+        <div class="folder-manager-header">
+          <a-input-search v-model:value="folderSearchText" placeholder="搜索文件夹..." allow-clear style="margin-bottom: 12px" />
+          <permissions-tooltip
+            :allowed="canManagePaper"
+            tips="需要 CREATE_EXAM 权限"
+            v-slot="{ disabled }"
+          >
+            <a-button type="primary" size="small" :disabled="disabled" @click="openCreateFolderModal">
+              <template #icon><PlusOutlined /></template>
+              新建文件夹
+            </a-button>
+          </permissions-tooltip>
+        </div>
+        <div class="folder-manager-list">
+          <div v-for="folder in filteredFolderList" :key="folder.id" class="folder-manager-item">
+            <div class="folder-manager-item-left">
+              <FolderOutlined />
+              <span>{{ folder.name }}</span>
+              <span class="text-xs text-slate-400">({{ folder.paperCount }}份试卷)</span>
+            </div>
+            <div class="folder-manager-item-actions">
+              <permissions-tooltip
+                :allowed="canManagePaper"
+                tips="需要 CREATE_EXAM 权限"
+                v-slot="{ disabled }"
+              >
+                <a-button type="link" size="small" :disabled="disabled" @click="openEditFolderModal(folder)">编辑</a-button>
+              </permissions-tooltip>
+              <permissions-tooltip
+                :allowed="canManagePaper"
+                tips="需要 CREATE_EXAM 权限"
+                v-slot="{ disabled }"
+              >
+                <a-button type="link" size="small" danger :disabled="disabled" @click="handleDeleteFolder(folder)">删除</a-button>
+              </permissions-tooltip>
+            </div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <a-space style="float:right">
+          <a-button @click="folderModalVisible = false">关闭</a-button>
+        </a-space>
+      </template>
+    </a-modal>
+
+    <!-- 新建/编辑文件夹弹窗 -->
+    <a-modal
+      v-model:open="folderFormModalVisible"
+      :title="editingFolderId ? '编辑文件夹' : '新建文件夹'"
+      @ok="handleFolderSubmit"
+      @cancel="resetFolderFormModal"
     >
       <a-form :model="folderForm" layout="vertical">
         <a-form-item label="文件夹名称" name="name" :rules="[{ required: true, message: '请输入文件夹名称' }]">
           <a-input v-model:value="folderForm.name" placeholder="请输入文件夹名称" :maxlength="100" />
         </a-form-item>
-        <a-form-item v-if="folderModalMode === 'edit'" label="移动到">
+        <a-form-item v-if="editingFolderId" label="移动到">
           <a-tree-select
             v-model:value="folderForm.parentId"
             :treeData="folderTreeData"
@@ -228,21 +363,20 @@
       </a-form>
     </a-modal>
 
-    <!-- 移动试卷到文件夹弹窗 -->
+    <!-- 批量移动弹窗 -->
     <a-modal
-      v-model:open="moveModalVisible"
-      title="移动试卷到文件夹"
-      @ok="handleMoveSubmit"
+      v-model:open="batchMoveModalVisible"
+      title="批量移动试卷"
+      @ok="handleBatchMove"
     >
       <a-form layout="vertical">
         <a-form-item label="选择目标文件夹">
-          <a-tree-select
-            v-model:value="moveTargetFolderId"
-            :treeData="folderTreeData"
-            placeholder="根目录（移出文件夹）"
-            allow-clear
-            tree-default-expand-all
-          />
+          <a-select v-model:value="batchMoveTargetFolderId" placeholder="请选择目标文件夹">
+            <a-select-option :value="null">根目录（移出文件夹）</a-select-option>
+            <a-select-option v-for="folder in allFolderList" :key="folder.id" :value="folder.id">
+              {{ folder.name }}
+            </a-select-option>
+          </a-select>
         </a-form-item>
       </a-form>
     </a-modal>
@@ -251,9 +385,9 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { message, Modal } from 'ant-design-vue'
-import { PlusOutlined, RobotOutlined, FolderOutlined, FolderAddOutlined, EllipsisOutlined, SwapOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
+import { message, Modal } from 'ant-design-vue'
+import { PlusOutlined, DeleteOutlined, LeftOutlined, RightOutlined, FolderOutlined, BookOutlined, AimOutlined, DownOutlined, RobotOutlined, SwapOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import {
   archiveExamPaper,
@@ -269,6 +403,9 @@ import {
   updateExamPaper,
   updatePaperFolder,
 } from '@/api/exam'
+import { getPoliceTypes } from '@/api/user'
+import { getCourses } from '@/api/course'
+import { getKnowledgePoints } from '@/api/knowledgePoint'
 import PaperDraftEditor from './components/PaperDraftEditor.vue'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
@@ -284,66 +421,424 @@ const editingId = ref(null)
 const handledQuickCreate = ref('')
 const paperList = ref([])
 const searchText = ref('')
-const filterStatus = ref('all')
-const filterType = ref('all')
+
+// 统计数据
+const statsState = reactive({
+  total: 0,
+  published: 0,
+  draft: 0,
+  archived: 0,
+})
+
+// 拖拽相关
+const draggedPaper = ref(null)
+const draggedFromFolder = ref(null)
+const dragOverFolderId = ref(null)
 
 // 文件夹相关
-const folderTree = ref([])
-const folderSearchText = ref('')
-const selectedFolderKeys = ref([])
-const expandedFolderKeys = ref([])
+const folderList = ref([])
+const expandedFolders = ref(new Set())
 const folderModalVisible = ref(false)
-const folderModalMode = ref('create')
+const folderFormModalVisible = ref(false)
+const folderSearchText = ref('')
 const editingFolderId = ref(null)
 const folderForm = reactive({ name: '', parentId: null })
-const moveModalVisible = ref(false)
-const moveTargetFolderId = ref(null)
-const movingPaperId = ref(null)
+const batchMoveModalVisible = ref(false)
+const batchMoveTargetFolderId = ref(null)
+const currentBatchMoveFolderId = ref(null)
+
+// 视角切换
+const currentView = ref('folder') // 'folder' | 'policeType' | 'course' | 'knowledgePoint'
+
+// 警种相关
+const policeTypeSelectOptions = ref([])
+const selectedPoliceTypeIds = ref([])
+
+// 课程相关
+const courseList = ref([])
+const courseSelectOptions = ref([])
+const selectedCourseIds = ref([])
+const courseLoading = ref(false)
+
+// 知识点相关
+const kpSelectOptions = ref([])
+const selectedKpIds = ref([])
+const kpLoading = ref(false)
+
+// 分页
+const pagination = reactive({ current: 1, pageSize: 50 })
+
+// 每页显示的展开文件夹列表
+const expandedFolderList = ref([])
+
+const currentTime = ref('')
 
 const statusLabels = { draft: '草稿', published: '已发布', archived: '已归档' }
-const statusColors = { draft: 'orange', published: 'green', archived: 'default' }
-const typeLabels = { formal: '正式考核', quiz: '测验', single: '单选题', multi: '多选题', judge: '判断题' }
+const statusTagColors = { draft: 'tag-orange', published: 'tag-green', archived: 'tag-gray' }
+const typeLabels = { formal: '正式考核', quiz: '测验' }
+const typeTagColors = { formal: 'tag-blue', quiz: 'tag-purple' }
 
-const columns = [
-  { title: '试卷名称', dataIndex: 'title', key: 'title' },
-  { title: '状态', key: 'status', width: 100 },
-  { title: '类型', key: 'type', width: 100 },
-  { title: '题目数', dataIndex: 'questionCount', key: 'questionCount', width: 90 },
-  { title: '引用数', dataIndex: 'usageCount', key: 'usageCount', width: 90 },
-  { title: '更新时间', key: 'updatedAt', width: 170 },
-  { title: '操作', key: 'action', width: 220 },
-]
+const flatFolderList = computed(() => {
+  const result = []
+  const flatten = (folders) => {
+    folders.forEach(folder => {
+      result.push(folder)
+      if (folder.children && folder.children.length > 0) {
+        flatten(folder.children)
+      }
+    })
+  }
+  flatten(folderList.value)
+  return result
+})
 
-const pagination = reactive({ current: 1, pageSize: 10, total: 0 })
-const paperDraft = reactive(createEmptyDraft())
+// 所有文件夹列表（扁平，用于批量移动选择）
+const allFolderList = computed(() => flatFolderList.value)
 
-const isViewMode = computed(() => drawerMode.value === 'view')
+// 过滤后的文件夹列表（管理弹窗用）
+const filteredFolderList = computed(() => {
+  if (!folderSearchText.value) return folderList.value
+  return folderList.value.filter(f => f.name.includes(folderSearchText.value))
+})
+
+// 文件夹树形数据（用于选择父文件夹）
+const folderTreeData = computed(() => {
+  const convert = (folders, level = 0) => {
+    return folders
+      .filter(f => f.id !== editingFolderId.value)
+      .map(f => ({
+        value: f.id,
+        label: f.name,
+        children: f.children ? convert(f.children, level + 1) : []
+      }))
+  }
+  return convert(folderList.value)
+})
+
+const folderCount = computed(() => folderList.value.length)
+
+const totalPages = computed(() => Math.ceil(statsState.total / pagination.pageSize) || 1)
+
 const canManagePaper = computed(() => authStore.hasPermission('CREATE_EXAM'))
 const canOpenAiAssembleTask = computed(() => authStore.hasAnyPermission(['GET_AI_PAPER_ASSEMBLY_TASKS', 'CREATE_AI_PAPER_ASSEMBLY_TASK']))
-const canOpenAiGenerateTask = computed(() => authStore.hasAnyPermission(['GET_AI_PAPER_GENERATION_TASKS', 'CREATE_AI_PAPER_GENERATION_TASK']))
+
+const isViewMode = computed(() => drawerMode.value === 'view')
 const drawerTitle = computed(() => {
   if (drawerMode.value === 'edit') return '编辑试卷'
   if (drawerMode.value === 'view') return '查看试卷'
   return '新建试卷'
 })
 
-// 将文件夹树转换为树形选择器数据
-const folderTreeData = computed(() => {
-  const convert = (folders, level = 0) => {
-    return folders.map(f => ({
-      value: f.id,
-      label: f.name,
-      children: f.children ? convert(f.children, level + 1) : []
-    }))
-  }
-  return [{ value: 0, label: '根目录', children: convert(folderTree.value) }]
+// 带展开状态的文件夹列表
+const displayedGroups = computed(() => {
+  return expandedFolderList.value.map(folder => ({
+    ...folder,
+    expanded: expandedFolders.value.has(folder.id),
+  }))
 })
 
-// 选中的文件夹ID（null表示根目录）
-const selectedFolderId = computed(() => {
-  if (selectedFolderKeys.value.length === 0) return null
-  return selectedFolderKeys.value[0]
-})
+function updateCurrentTime() {
+  const now = new Date()
+  currentTime.value = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
+}
+
+function toggleFolder(folderId) {
+  if (expandedFolders.value.has(folderId)) {
+    expandedFolders.value.delete(folderId)
+  } else {
+    expandedFolders.value.add(folderId)
+  }
+  expandedFolders.value = new Set(expandedFolders.value)
+}
+
+// 拖拽相关函数
+function handlePaperDragStart(event, paper, folder) {
+  draggedPaper.value = paper
+  draggedFromFolder.value = folder
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/plain', JSON.stringify({ paperId: paper.id, folderId: folder.id }))
+}
+
+function handleDragOver(event, folder) {
+  event.preventDefault()
+  event.stopPropagation()
+  event.dataTransfer.dropEffect = 'move'
+  dragOverFolderId.value = folder.id
+}
+
+function handleDragLeave(event, folder) {
+  event.stopPropagation()
+  if (!event.currentTarget.contains(event.relatedTarget)) {
+    dragOverFolderId.value = null
+  }
+}
+
+async function handleDropToFolder(event, targetFolder) {
+  event.preventDefault()
+  event.stopPropagation()
+  dragOverFolderId.value = null
+
+  if (!draggedPaper.value) {
+    console.warn('拖拽 paper 为空')
+    return
+  }
+
+  const paper = draggedPaper.value
+  const sourceFolderId = paper.folderId
+  const newFolderId = targetFolder.id === 0 ? null : targetFolder.id
+
+  // 如果是同一个文件夹，不做任何操作
+  if (sourceFolderId === newFolderId || (sourceFolderId == null && newFolderId == null)) {
+    console.log('同文件夹内拖拽，不移动')
+    draggedPaper.value = null
+    draggedFromFolder.value = null
+    return
+  }
+
+  console.log('移动试卷:', paper.id, paper.title, '从文件夹', sourceFolderId, '到', newFolderId, targetFolder.name)
+
+  try {
+    // 先更新前端状态，乐观响应
+    const targetGroup = expandedFolderList.value.find(g => g.id === newFolderId)
+    const sourceGroup = expandedFolderList.value.find(g => g.id === sourceFolderId)
+
+    if (targetGroup) {
+      // 从原文件夹移除
+      if (sourceGroup) {
+        sourceGroup.papers = sourceGroup.papers.filter(p => p.id !== paper.id)
+        sourceGroup.paperCount = sourceGroup.papers.length
+      }
+      // 添加到目标文件夹
+      const updatedPaper = { ...paper, folderId: newFolderId }
+      targetGroup.papers.push(updatedPaper)
+      targetGroup.paperCount = targetGroup.papers.length
+    }
+
+    // 调用 API 确认移动
+    await movePaperToFolder(paper.id, newFolderId)
+    message.success(`已将试卷移动到「${targetFolder.name}」`)
+
+    // 确保目标文件夹展开
+    if (!expandedFolders.value.has(targetFolder.id)) {
+      expandedFolders.value.add(targetFolder.id)
+      expandedFolders.value = new Set(expandedFolders.value)
+    }
+
+    // 重新加载统计数据
+    await loadStats()
+  } catch (error) {
+    console.error('移动失败:', error)
+    message.error(error.message || '移动失败')
+    // 失败时重新加载数据恢复状态
+    await loadPapers()
+  }
+  draggedPaper.value = null
+  draggedFromFolder.value = null
+}
+
+function handleDragEnd() {
+  draggedPaper.value = null
+  draggedFromFolder.value = null
+  dragOverFolderId.value = null
+}
+
+async function loadPapers() {
+  loading.value = true
+  try {
+    const result = await getExamPapers({
+      page: 1,
+      size: 1000,
+      status: undefined,
+      type: undefined,
+      search: searchText.value || undefined,
+    })
+    const papers = result.items || []
+
+    // 扩展试卷属性
+    paperList.value = papers.map(paper => ({
+      ...paper,
+      knowledgePointNames: paper.knowledgePointNames || [],
+    }))
+
+    // 按文件夹分组
+    groupPapersByFolder(paperList.value)
+    refreshExpandedState()
+    pagination.total = result.total || 0
+  } catch (error) {
+    message.error(error.message || '加载试卷失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+function refreshExpandedState() {
+  const currentExpanded = new Set(expandedFolders.value)
+  expandedFolderList.value.forEach(folder => {
+    if (currentExpanded.has(folder.id)) {
+      expandedFolders.value.add(folder.id)
+    }
+  })
+  expandedFolders.value = new Set(expandedFolders.value)
+}
+
+function groupPapersByFolder(papers) {
+  // 构建文件夹Map（扁平结构）
+  const folderMap = new Map()
+  flatFolderList.value.forEach(folder => {
+    folderMap.set(folder.id, { ...folder, papers: [], paperCount: 0 })
+  })
+
+  // 将试卷分配到文件夹
+  papers.forEach(paper => {
+    if (paper.folderId && folderMap.has(paper.folderId)) {
+      const folderData = folderMap.get(paper.folderId)
+      folderData.papers.push(paper)
+      folderData.paperCount = folderData.papers.length
+    }
+  })
+
+  // 未分类的试卷放入"未分类"文件夹
+  const uncategorizedPapers = papers.filter(p => !p.folderId || !folderMap.has(p.folderId))
+  if (uncategorizedPapers.length > 0) {
+    folderMap.set(0, { id: 0, name: '未分类', paperCount: uncategorizedPapers.length, papers: uncategorizedPapers, children: [], parentId: null, sortOrder: 999 })
+  }
+
+  // 更新文件夹列表
+  expandedFolderList.value = Array.from(folderMap.values())
+}
+
+async function loadFolders() {
+  try {
+    const result = await getPaperFolders()
+    folderList.value = result || []
+    // 默认展开第一个文件夹
+    if (folderList.value.length > 0 && expandedFolders.value.size === 0) {
+      expandedFolders.value.add(folderList.value[0].id)
+      expandedFolders.value = new Set(expandedFolders.value)
+    }
+  } catch (error) {
+    console.error('加载文件夹失败:', error)
+    folderList.value = []
+  }
+}
+
+async function loadStats() {
+  try {
+    const result = await getExamPapers({ page: 1, size: 1 })
+    const allPapers = result.items || []
+    statsState.total = result.total || 0
+    statsState.published = allPapers.filter(p => p.status === 'published').length || 0
+    statsState.draft = allPapers.filter(p => p.status === 'draft').length || 0
+    statsState.archived = allPapers.filter(p => p.status === 'archived').length || 0
+
+    // 重新获取完整列表来统计
+    const fullResult = await getExamPapers({ page: 1, size: 1000 })
+    const papers = fullResult.items || []
+    statsState.published = papers.filter(p => p.status === 'published').length
+    statsState.draft = papers.filter(p => p.status === 'draft').length
+    statsState.archived = papers.filter(p => p.status === 'archived').length
+  } catch {
+    // ignore
+  }
+}
+
+function handleSearch() {
+  pagination.current = 1
+  loadPapers()
+}
+
+function handlePrevPage() {
+  if (pagination.current > 1) {
+    pagination.current--
+  }
+}
+
+function handleNextPage() {
+  if (pagination.current < totalPages.value) {
+    pagination.current++
+  }
+}
+
+// ==================== 多维度视图相关 ====================
+
+function switchView(view) {
+  currentView.value = view
+  // 切换视角时重置筛选
+  if (view === 'folder') {
+    loadPapers()
+  } else if (view === 'policeType') {
+    selectedPoliceTypeIds.value = []
+    selectedCourseIds.value = []
+    selectedKpIds.value = []
+    loadPapers()
+  } else if (view === 'course') {
+    selectedPoliceTypeIds.value = []
+    selectedCourseIds.value = []
+    selectedKpIds.value = []
+    loadCourses()
+    loadPapers()
+  } else if (view === 'knowledgePoint') {
+    selectedPoliceTypeIds.value = []
+    selectedCourseIds.value = []
+    selectedKpIds.value = []
+    loadKnowledgePoints()
+    loadPapers()
+  }
+}
+
+function handleFilterChange() {
+  loadPapers()
+}
+
+async function loadPoliceTypes() {
+  try {
+    const result = await getPoliceTypes()
+    const items = result || []
+    policeTypeSelectOptions.value = items.map(c => ({ label: c.name, value: c.id }))
+  } catch {
+    policeTypeSelectOptions.value = []
+  }
+}
+
+async function loadCourses(search = '') {
+  courseLoading.value = true
+  try {
+    const result = await getCourses({ search, size: 100 })
+    const items = result.items || result || []
+    courseList.value = items
+    courseSelectOptions.value = items.map(c => ({ label: c.title, value: c.id }))
+  } catch {
+    courseSelectOptions.value = []
+  } finally {
+    courseLoading.value = false
+  }
+}
+
+let courseSearchTimer = null
+function handleCourseSearch(search) {
+  clearTimeout(courseSearchTimer)
+  courseSearchTimer = setTimeout(() => {
+    loadCourses(search)
+  }, 250)
+}
+
+async function loadKnowledgePoints() {
+  kpLoading.value = true
+  try {
+    const result = await getKnowledgePoints({ size: 500 })
+    const items = result.items || result || []
+    kpSelectOptions.value = items.map(kp => ({
+      label: kp.name,
+      value: kp.id,
+    }))
+  } catch {
+    kpSelectOptions.value = []
+  } finally {
+    kpLoading.value = false
+  }
+}
+
+// ==================== 试卷操作相关 ====================
 
 function createEmptyDraft() {
   return {
@@ -357,6 +852,8 @@ function createEmptyDraft() {
     folderId: null,
   }
 }
+
+const paperDraft = reactive(createEmptyDraft())
 
 function resetDraft() {
   Object.assign(paperDraft, createEmptyDraft())
@@ -387,57 +884,10 @@ function mapPaperQuestion(question) {
   }
 }
 
-async function loadFolders() {
-  try {
-    const result = await getPaperFolders()
-    folderTree.value = result || []
-    // 默认展开第一层
-    expandedFolderKeys.value = folderTree.value.map(f => f.id)
-  } catch (error) {
-    console.error('加载文件夹失败:', error)
-  }
-}
-
-async function loadPapers() {
-  loading.value = true
-  try {
-    const result = await getExamPapers({
-      page: pagination.current,
-      size: pagination.pageSize,
-      status: filterStatus.value !== 'all' ? filterStatus.value : undefined,
-      type: filterType.value !== 'all' ? filterType.value : undefined,
-      search: searchText.value || undefined,
-      folder_id: selectedFolderId.value || undefined,
-    })
-    paperList.value = result.items || []
-    pagination.total = result.total || 0
-  } catch (error) {
-    message.error(error.message || '加载试卷失败')
-  } finally {
-    loading.value = false
-  }
-}
-
-function handleTableChange(pag) {
-  pagination.current = pag.current
-  pagination.pageSize = pag.pageSize
-  loadPapers()
-}
-
-function handleFolderSelect(keys) {
-  selectedFolderKeys.value = keys
-  pagination.current = 1
-  loadPapers()
-}
-
-function handleFolderExpand(keys) {
-  expandedFolderKeys.value = keys
-}
-
 function openCreateDrawer() {
   if (!canManagePaper.value) return
   resetDraft()
-  paperDraft.folderId = selectedFolderId.value
+  paperDraft.folderId = null
   drawerMode.value = 'create'
   drawerVisible.value = true
 }
@@ -512,6 +962,7 @@ async function handleSave() {
     }
     resetDraft()
     loadPapers()
+    loadStats()
   } catch (error) {
     message.error(error.message || '保存失败')
   } finally {
@@ -529,6 +980,7 @@ function handlePublish(record) {
         await publishExamPaper(record.id)
         message.success('试卷已发布')
         loadPapers()
+        loadStats()
       } catch (error) {
         message.error(error.message || '发布失败')
       }
@@ -546,6 +998,7 @@ function handleArchive(record) {
         await archiveExamPaper(record.id)
         message.success('试卷已归档')
         loadPapers()
+        loadStats()
       } catch (error) {
         message.error(error.message || '归档失败')
       }
@@ -564,6 +1017,7 @@ function handleDelete(record) {
         await deleteExamPaper(record.id)
         message.success('试卷已删除')
         loadPapers()
+        loadStats()
       } catch (error) {
         message.error(error.message || '删除失败')
       }
@@ -571,22 +1025,26 @@ function handleDelete(record) {
   })
 }
 
-function openCreateFolderModal() {
-  if (!canManagePaper.value) return
-  folderModalMode.value = 'create'
-  editingFolderId.value = null
-  folderForm.name = ''
-  folderForm.parentId = selectedFolderKeys.value.length > 0 ? selectedFolderKeys.value[0] : null
+// ==================== 文件夹管理相关 ====================
+
+function openManageFolderModal() {
   folderModalVisible.value = true
 }
 
+function openCreateFolderModal() {
+  folderModalMode.value = 'create'
+  editingFolderId.value = null
+  folderForm.name = ''
+  folderForm.parentId = null
+  folderFormModalVisible.value = true
+}
+
 function openEditFolderModal(folder) {
-  if (!canManagePaper.value) return
   folderModalMode.value = 'edit'
   editingFolderId.value = folder.id
   folderForm.name = folder.name
   folderForm.parentId = folder.parentId
-  folderModalVisible.value = true
+  folderFormModalVisible.value = true
 }
 
 function resetFolderModal() {
@@ -596,50 +1054,40 @@ function resetFolderModal() {
   folderModalVisible.value = false
 }
 
+function resetFolderFormModal() {
+  folderForm.name = ''
+  folderForm.parentId = null
+  editingFolderId.value = null
+  folderFormModalVisible.value = false
+}
+
 async function handleFolderSubmit() {
   if (!folderForm.name?.trim()) {
     message.warning('请输入文件夹名称')
     return
   }
   try {
-    if (folderModalMode.value === 'create') {
-      await createPaperFolder({
-        name: folderForm.name,
-        parentId: folderForm.parentId,
-      })
-      message.success('文件夹已创建')
-    } else {
+    if (editingFolderId.value) {
       await updatePaperFolder(editingFolderId.value, {
         name: folderForm.name,
         parentId: folderForm.parentId,
       })
       message.success('文件夹已更新')
+    } else {
+      await createPaperFolder({
+        name: folderForm.name,
+        parentId: folderForm.parentId,
+      })
+      message.success('文件夹已创建')
     }
-    resetFolderModal()
+    resetFolderFormModal()
     loadFolders()
   } catch (error) {
     message.error(error.message || '操作失败')
   }
 }
 
-function handleFolderContextMenu(e, node) {
-  e.preventDefault()
-  if (!canManagePaper.value) return
-  Modal.confirm({
-    title: '文件夹操作',
-    content: `对文件夹「${node.name}」进行操作`,
-    okText: '编辑',
-    cancelText: '删除',
-    async onOk() {
-      openEditFolderModal(node)
-    },
-    onCancel() {
-      handleDeleteFolder(node)
-    },
-  })
-}
-
-function handleDeleteFolder(folder) {
+async function handleDeleteFolder(folder) {
   if (!canManagePaper.value) return
   Modal.confirm({
     title: '确认删除文件夹',
@@ -650,10 +1098,6 @@ function handleDeleteFolder(folder) {
         await deletePaperFolder(folder.id)
         message.success('文件夹已删除')
         loadFolders()
-        if (selectedFolderKeys.value.includes(folder.id)) {
-          selectedFolderKeys.value = []
-          loadPapers()
-        }
       } catch (error) {
         message.error(error.message || '删除失败')
       }
@@ -661,20 +1105,28 @@ function handleDeleteFolder(folder) {
   })
 }
 
-function openMoveModal(record) {
-  if (!canManagePaper.value) return
-  movingPaperId.value = record.id
-  moveTargetFolderId.value = record.folderId
-  moveModalVisible.value = true
+// ==================== 批量移动相关 ====================
+
+function openBatchMoveModal(folder) {
+  currentBatchMoveFolderId.value = folder.id
+  batchMoveTargetFolderId.value = null
+  batchMoveModalVisible.value = true
 }
 
-async function handleMoveSubmit() {
+async function handleBatchMove() {
+  if (currentBatchMoveFolderId.value === null) {
+    message.warning('请选择目标文件夹')
+    return
+  }
   try {
-    await movePaperToFolder(movingPaperId.value, moveTargetFolderId.value)
-    message.success('试卷已移动')
-    moveModalVisible.value = false
+    const papersInFolder = expandedFolderList.value.find(f => f.id === currentBatchMoveFolderId.value)?.papers || []
+    for (const paper of papersInFolder) {
+      await movePaperToFolder(paper.id, batchMoveTargetFolderId.value)
+    }
+    message.success(`已将 ${papersInFolder.length} 份试卷移动到目标文件夹`)
+    batchMoveModalVisible.value = false
     loadPapers()
-    loadFolders()
+    loadStats()
   } catch (error) {
     message.error(error.message || '移动失败')
   }
@@ -693,19 +1145,18 @@ function applyQuickCreateFromRoute() {
   handledQuickCreate.value = route.fullPath
 }
 
-function formatDateTime(value) {
-  if (!value) return '未设置'
-  return String(value).replace('T', ' ').slice(0, 16)
-}
-
-onMounted(() => {
-  loadFolders()
-  loadPapers()
+onMounted(async () => {
+  await loadFolders()
+  await loadPapers()
+  loadStats()
+  loadPoliceTypes()
+  loadCourses()
+  loadKnowledgePoints()
+  updateCurrentTime()
   applyQuickCreateFromRoute()
 })
 
 watch(() => route.fullPath, () => {
-  pagination.current = 1
   loadPapers()
   applyQuickCreateFromRoute()
 })
@@ -713,81 +1164,521 @@ watch(() => route.fullPath, () => {
 
 <style scoped>
 .paper-manage-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background-color: #F8FAFC;
+  color: #334155;
+  margin: 0;
   padding: 0;
 }
 
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  margin-bottom: 20px;
-}
-
-.page-header h2 {
-  margin: 0;
-  color: #001234;
-}
-
-.page-sub {
-  margin: 6px 0 0;
-  color: #8c8c8c;
-  font-size: 13px;
-}
-
-.content-layout {
-  display: flex;
-  gap: 16px;
-  min-height: 500px;
-}
-
-.folder-panel {
-  width: 260px;
-  flex-shrink: 0;
-  border-right: 1px solid #f0f0f0;
-  padding-right: 16px;
-}
-
-.folder-panel-header {
-  margin-bottom: 8px;
-}
-
-.folder-tree-container {
-  overflow-y: auto;
-  max-height: 600px;
-}
-
-.folder-item {
+/* 顶部通栏 */
+.page-header-bar {
+  height: 64px;
+  background: white;
+  border-bottom: 1px solid #E2E8F0;
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 0;
+  justify-content: space-between;
+  padding: 0 24px;
+  flex-shrink: 0;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.logo-icon {
+  width: 32px;
+  height: 32px;
+  background: #2563EB;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+}
+
+.header-title {
+  display: flex;
+  flex-direction: column;
+}
+
+.title-main {
+  font-weight: 700;
+  color: #1E293B;
+  font-size: 14px;
+  letter-spacing: -0.01em;
+}
+
+.title-sub {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  color: #94A3B8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 内容区域 */
+.content-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+.content-inner {
+  width: 100%;
+}
+
+.page-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 24px;
+}
+
+.page-title {
+  font-size: 28px;
+  font-weight: 600;
+  color: #1E293B;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+
+.page-desc {
+  margin: 8px 0 0;
+  color: #64748B;
+  font-size: 14px;
+}
+
+.search-box {
+  position: relative;
+}
+
+/* 主容器 */
+.main-container {
+  background: white;
+  border: 1px solid #E2E8F0;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 600px;
+}
+
+/* 统计条 */
+.stats-bar {
+  padding: 20px 32px;
+  border-bottom: 1px solid #F1F5F9;
+  background: #F8FAFC;
+}
+
+.stats-content {
+  display: flex;
+  align-items: center;
+  gap: 48px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94A3B8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 2px;
+}
+
+.stat-value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #1E293B;
+}
+
+.stat-divider {
+  width: 1px;
+  height: 32px;
+  background: #E2E8F0;
+}
+
+.stat-legend {
+  display: flex;
+  gap: 32px;
+}
+
+.legend-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+  color: #64748B;
+  font-weight: 600;
+}
+
+.legend-num {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1E293B;
+  line-height: 1;
+}
+
+/* 列表标题栏 */
+.list-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 32px;
+  border-bottom: 1px solid #E2E8F0;
+  font-size: 11px;
+  font-weight: 700;
+  color: #94A3B8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: white;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.col-folder { width: 160px; flex-shrink: 0; }
+.col-content { flex: 1; padding-right: 32px; }
+.col-status { width: 100px; flex-shrink: 0; }
+.col-type { width: 100px; flex-shrink: 0; }
+.col-count { width: 80px; flex-shrink: 0; }
+.col-action { width: 200px; flex-shrink: 0; }
+
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+
+/* 文件夹列表 */
+.folder-list {
+  flex: 1;
+}
+
+.folder-group {
+  border-bottom: 1px solid #F1F5F9;
+}
+
+.folder-title {
+  display: flex;
+  align-items: center;
+  padding: 14px 32px;
+  background: #F8FAFC;
+  border-bottom: 1px solid #F1F5F9;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.folder-title:hover {
+  background: #F1F5F9;
+}
+
+.folder-title.folder-drag-over {
+  background: #EFF6FF;
+  border-color: #2563EB;
+  outline: 2px dashed #2563EB;
+  outline-offset: -2px;
+}
+
+.folder-title-left {
+  width: 160px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.chevron-icon {
+  transition: transform 0.2s ease;
+  color: #94A3B8;
+}
+
+.chevron-icon.rotated {
+  transform: rotate(0deg);
+}
+
+.chevron-icon:not(.rotated) {
+  transform: rotate(-90deg);
+}
+
+.folder-icon {
+  color: #2563EB;
 }
 
 .folder-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.folder-title-desc {
   flex: 1;
+  font-size: 12px;
+  color: #94A3B8;
+  font-style: italic;
+}
+
+.folder-title-actions {
+  width: 200px;
+  flex-shrink: 0;
+  text-align: right;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.folder-title:hover .folder-title-actions {
+  opacity: 1;
+}
+
+.batch-move-btn {
+  font-size: 11px;
+  font-weight: 600;
+  color: #2563EB;
+  padding: 0;
+}
+
+/* 文件夹内容 */
+.folder-content {
+  max-height: 2000px;
+  overflow: visible;
+  transition: max-height 0.3s ease-out, background-color 0.15s;
+  min-height: 1px;
+}
+
+.folder-content.folder-drag-over {
+  background: #EFF6FF;
+  outline: 2px dashed #2563EB;
+  outline-offset: -2px;
+}
+
+.folder-collapsed .folder-content {
+  max-height: 0;
+  overflow: hidden;
+}
+
+.paper-row {
+  display: flex;
+  align-items: center;
+  padding: 16px 32px;
+  border-bottom: 1px solid #FAFAFA;
+  transition: background-color 0.15s;
+}
+
+.paper-row:hover {
+  background: #EFF6FF;
+}
+
+.paper-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  max-width: 500px;
 }
 
-.paper-count {
-  color: #8c8c8c;
-  font-size: 12px;
+.paper-desc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 500px;
+  margin-top: 4px;
 }
 
-.empty-tip {
-  color: #8c8c8c;
+.empty-folder {
+  padding: 20px 40px;
   text-align: center;
-  padding: 20px 0;
+  color: #94A3B8;
+  font-size: 14px;
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.paper-list-panel {
-  flex: 1;
-  min-width: 0;
+.folder-content:not(.folder-drag-over) .empty-folder {
+  color: #94A3B8;
 }
 
-.paper-list-header {
+.folder-content.folder-drag-over .empty-folder {
+  color: #2563EB;
+  font-weight: 500;
+}
+
+/* 标签样式 */
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.tag-blue { background: #EFF6FF; color: #2563EB; }
+.tag-purple { background: #FAF5FF; color: #9333EA; }
+.tag-amber { background: #FFFBEB; color: #D97706; }
+.tag-green { background: #F0FDF4; color: #16A34A; }
+.tag-cyan { background: #ECFEFF; color: #0891B2; }
+.tag-orange { background: #FFF7ED; color: #EA580C; }
+.tag-red { background: #FEF2F2; color: #DC2626; }
+.tag-gray { background: #F1F5F9; color: #64748B; }
+
+/* 底部 */
+.list-footer {
+  padding: 16px 32px;
+  border-top: 1px solid #F1F5F9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: white;
+  margin-top: auto;
+}
+
+.footer-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 12px;
+  color: #94A3B8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.pagination :deep(.ant-btn) {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pagination .current-page {
+  background: #1E293B;
+  color: white;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+/* 文件夹管理弹窗 */
+.folder-manager {
+  padding: 8px 0;
+}
+
+.folder-manager-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: 16px;
 }
+
+.folder-manager-list {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.folder-manager-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 8px;
+  border-bottom: 1px solid #F1F5F9;
+}
+
+.folder-manager-item:hover {
+  background: #F8FAFC;
+}
+
+.folder-manager-item-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #334155;
+}
+
+.folder-manager-item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 多维度视图 Tab */
+.view-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: white;
+  border-radius: 8px;
+}
+
+.tab-item {
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #64748B;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tab-item:hover {
+  background: #F1F5F9;
+}
+
+.tab-item.active {
+  background: #2563EB;
+  color: white;
+}
+
+.view-filter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: #F8FAFC;
+  border-radius: 8px;
+}
+
+/* 通用样式 */
+.text-xs { font-size: 12px; }
+.text-sm { font-size: 14px; }
+.text-slate-400 { color: #94A3B8; }
+.text-slate-700 { color: #334155; }
+.text-slate-200 { color: #CBD5E1; }
+.text-slate-300 { color: #CBD5E1; }
+.font-medium { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+.rounded-full { border-radius: 9999px; }
+.flex { display: flex; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.justify-end { justify-content: flex-end; }
+.gap-4 { gap: 16px; }
+.w-2 { width: 8px; }
+.h-2 { height: 8px; }
 </style>
