@@ -34,12 +34,14 @@ class KnowledgePoint(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False, unique=True, index=True, comment="知识点名称")
     description = Column(Text, nullable=True, comment="知识点描述")
+    course_id = Column(Integer, ForeignKey("courses.id"), nullable=True, comment="课程ID")
     is_active = Column(Boolean, default=True, comment="是否启用")
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True, comment="创建人ID")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), comment="更新时间")
 
     creator = relationship("User", foreign_keys=[created_by])
+    course = relationship("Course", back_populates="knowledge_points")
     questions = relationship(
         "Question",
         secondary=question_knowledge_point_relations,

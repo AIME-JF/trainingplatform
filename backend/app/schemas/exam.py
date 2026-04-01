@@ -277,6 +277,7 @@ class ExamPaperResponse(BaseModel):
     usage_count: int = 0
     linked_exam_count: int = 0
     linked_admission_exam_count: int = 0
+    knowledge_point_names: List[str] = Field(default_factory=list, description="知识点名称列表")
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

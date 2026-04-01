@@ -1209,6 +1209,17 @@ class ExamService:
     def _to_paper_response(self, paper: ExamPaper) -> ExamPaperResponse:
         linked_exam_count = len(paper.training_exams or [])
         linked_admission_exam_count = len(paper.admission_exams or [])
+
+        # 从试卷题目快照中提取知识点名称
+        knowledge_point_names: List[str] = []
+        seen_kp_names = set()
+        for pq in (paper.paper_questions or []):
+            if pq.knowledge_points:
+                for kp_name in pq.knowledge_points:
+                    if kp_name and kp_name not in seen_kp_names:
+                        seen_kp_names.add(kp_name)
+                        knowledge_point_names.append(kp_name)
+
         return ExamPaperResponse(
             id=paper.id,
             title=paper.title,
@@ -1218,12 +1229,14 @@ class ExamService:
             passing_score=paper.passing_score or 60,
             type=paper.type or "formal",
             status=paper.status or "draft",
+            folder_id=paper.folder_id,
             published_at=paper.published_at,
             created_by=paper.created_by,
             question_count=len(paper.paper_questions or []),
             usage_count=linked_exam_count + linked_admission_exam_count,
             linked_exam_count=linked_exam_count,
             linked_admission_exam_count=linked_admission_exam_count,
+            knowledge_point_names=knowledge_point_names,
             created_at=paper.created_at,
             updated_at=paper.updated_at,
         )
