@@ -171,10 +171,11 @@ function onMediaTouchEnd(event: TouchEvent) {
 <style scoped>
 .resource-viewer.mode-recommend {
   display: flex;
+  flex: 1 1 auto;
   width: 100%;
-  height: 100%;
+  height: var(--community-stage-height, 100%);
   min-width: 0;
-  min-height: 0;
+  min-height: var(--community-stage-height, 100%);
 }
 
 .viewer-card {
@@ -249,7 +250,7 @@ function onMediaTouchEnd(event: TouchEvent) {
 
 .recommend-shell {
   display: flex;
-  flex: 1;
+  flex: 1 1 auto;
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -258,13 +259,15 @@ function onMediaTouchEnd(event: TouchEvent) {
 
 .recommend-stage {
   display: flex;
-  flex: 1;
+  flex: 1 1 auto;
   align-items: stretch;
+  align-self: stretch;
   justify-content: stretch;
-  height: 100%;
+  height: var(--community-stage-height, 100%);
   width: 100%;
   min-width: 0;
-  min-height: 0;
+  min-height: var(--community-stage-height, 100%);
+  background: #000;
 }
 
 .recommend-info-card {
@@ -342,24 +345,40 @@ function onMediaTouchEnd(event: TouchEvent) {
 .mode-recommend .media-video,
 .mode-recommend .media-image {
   flex: 1;
-  height: 100%;
+  display: block;
+  height: var(--community-stage-height, 100%);
+  width: 100%;
+  align-self: stretch;
   min-width: 0;
-  min-height: 0;
+  min-height: var(--community-stage-height, 100%);
+  max-width: none;
   max-height: none;
+  object-fit: contain;
+  background: #000;
 }
 
 .mode-recommend .media-document.full {
   display: flex;
-  flex: 1;
+  flex: 1 1 auto;
   width: 100%;
-  height: 100%;
+  height: var(--community-stage-height, 100%);
+  align-self: stretch;
   min-width: 0;
-  min-height: 0;
+  min-height: var(--community-stage-height, 100%);
 }
 
 .mode-recommend .doc-frame {
-  min-height: 0;
-  height: 100%;
+  min-height: var(--community-stage-height, 100%);
+  height: var(--community-stage-height, 100%);
+  width: 100%;
+}
+
+.mode-recommend .recommend-stage,
+.mode-recommend .media-video,
+.mode-recommend .media-image,
+.mode-recommend .media-document.full,
+.mode-recommend .doc-frame {
+  border-radius: 0;
 }
 
 @media (max-width: 768px) {

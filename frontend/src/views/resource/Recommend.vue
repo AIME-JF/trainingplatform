@@ -258,13 +258,15 @@ function onTouchEnd(event) {
   display: flex;
   flex-direction: column;
   background: #000;
+  border-radius: 24px;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.18);
   overflow: hidden;
 }
 
 .recommend-top-actions {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: 16px;
+  right: 16px;
   z-index: 35;
   display: flex;
   gap: 8px;
@@ -290,9 +292,9 @@ function onTouchEnd(event) {
 
 .recommend-mobile-actions {
   position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: calc(12px + var(--player-control-safe-offset));
+  left: 16px;
+  right: 16px;
+  bottom: calc(16px + var(--player-control-safe-offset));
   z-index: 36;
   display: flex;
   align-items: center;
@@ -313,6 +315,10 @@ function onTouchEnd(event) {
 }
 
 @media (max-width: 768px) {
+  .resource-recommend-page {
+    border-radius: 18px;
+  }
+
   .recommend-top-actions {
     top: 10px;
     right: 10px;
