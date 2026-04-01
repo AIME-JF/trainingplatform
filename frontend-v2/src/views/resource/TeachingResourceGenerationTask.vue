@@ -8,8 +8,8 @@
         <p class="page-subtitle">描述教学需求，系统智能生成课件资源。</p>
       </div>
       <a-space>
-        <a-button @click="router.push('/resource/my')">返回我的资源</a-button>
-        <PermissionsTooltip :allowed="canCreateTaskPermission" tips="需要 CREATE_RESOURCE 或 VIEW_RESOURCE_ALL 权限">
+        <a-button @click="router.push('/resource/my')">返回我的空间</a-button>
+        <PermissionsTooltip :allowed="canCreateTaskPermission" tips="需要 USE_TEACHING_RESOURCE_GENERATION 权限">
           <template #default="{ disabled }">
             <a-button type="primary" :disabled="disabled" @click="createModalVisible = true">新建任务</a-button>
           </template>
@@ -173,7 +173,7 @@
                   role-hint="拥有选中角色的用户可以查看确认后的资源。"
                 />
               </a-form-item>
-              <PermissionsTooltip :allowed="canConfirmTaskPermission" tips="需要 CREATE_RESOURCE 或 VIEW_RESOURCE_ALL 权限">
+              <PermissionsTooltip :allowed="canConfirmTaskPermission" tips="需要 USE_TEACHING_RESOURCE_GENERATION 权限">
                 <template #default="{ disabled }">
                   <a-button type="primary" :loading="confirming" :disabled="disabled" @click="handleConfirmTask">
                     确认保存资源草稿
@@ -182,7 +182,7 @@
               </PermissionsTooltip>
             </a-form>
 
-            <a-result v-else status="success" title="已保存为资源草稿" sub-title="可继续在我的资源中走审核流程">
+            <a-result v-else status="success" title="已保存为资源草稿" sub-title="可继续在我的空间中走审核流程">
               <template #extra>
                 <a-button v-if="activeTask.confirmed_resource_id" type="primary" @click="router.push(`/resource/detail/${activeTask.confirmed_resource_id}`)">
                   查看资源
@@ -282,8 +282,8 @@ const {
   createTag: createResourceTag,
 })
 
-const canCreateTaskPermission = computed(() => authStore.hasAnyPermission(['CREATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
-const canConfirmTaskPermission = computed(() => authStore.hasAnyPermission(['CREATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
+const canCreateTaskPermission = computed(() => authStore.hasPermission('USE_TEACHING_RESOURCE_GENERATION'))
+const canConfirmTaskPermission = computed(() => authStore.hasPermission('USE_TEACHING_RESOURCE_GENERATION'))
 
 const maxDetailStep = computed(() => {
   if (!activeTask.value) {

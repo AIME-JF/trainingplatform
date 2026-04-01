@@ -70,15 +70,14 @@
         </div>
         <a-empty v-else description="暂无可预览文件" />
 
-        <div class="recommend-top">
-          <a-tag color="blue">{{ getResourceContentTypeLabel(resource.content_type) }}</a-tag>
-          <span v-if="mediaList.length > 1">{{ mediaIndex + 1 }} / {{ mediaList.length }}</span>
-        </div>
-
-        <div class="recommend-info">
-          <h3>{{ resource.title }}</h3>
-          <p>{{ resource.summary || '暂无摘要' }}</p>
-          <span>上传者：{{ resource.uploader_name || '-' }}</span>
+        <div class="recommend-info-card" :class="{ 'is-video': currentMediaKind === 'video' }">
+          <div class="recommend-info-head">
+            <span class="recommend-type">{{ getResourceContentTypeLabel(resource.content_type) }}</span>
+            <span v-if="mediaList.length > 1" class="recommend-media-count">{{ mediaIndex + 1 }} / {{ mediaList.length }}</span>
+          </div>
+          <h3 class="recommend-title">{{ resource.title }}</h3>
+          <p class="recommend-author">作者：{{ resource.uploader_name || '平台资源' }}</p>
+          <p class="recommend-summary">简介：{{ resource.summary || '暂无简介' }}</p>
           <p v-if="resource.tags?.length" class="recommend-tags"># {{ resource.tags.join(' # ') }}</p>
           <div v-if="currentMediaKind === 'document' && currentMedia?.file_url" class="recommend-actions">
             <a-button size="small" @click.stop="openCurrentMedia">打开文档</a-button>
@@ -204,7 +203,7 @@ function onMediaTouchEnd(event: TouchEvent) {
   position: relative;
   border-radius: var(--v2-radius);
   overflow: hidden;
-  background: #000;
+  background: transparent;
   min-height: 320px;
 }
 
@@ -214,7 +213,7 @@ function onMediaTouchEnd(event: TouchEvent) {
   max-height: 70vh;
   display: block;
   object-fit: contain;
-  background: #000;
+  background: transparent;
 }
 
 .media-document {
@@ -245,52 +244,99 @@ function onMediaTouchEnd(event: TouchEvent) {
 }
 
 .recommend-shell {
-  min-height: calc(100vh - 140px);
+  min-height: auto;
 }
 
 .recommend-stage {
-  min-height: calc(100vh - 140px);
-}
-
-.recommend-top {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  right: 16px;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  color: #fff;
+  align-items: stretch;
+  justify-content: center;
+  min-height: clamp(520px, calc(100vh - 260px), 840px);
 }
 
-.recommend-info {
+.recommend-info-card {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 28px 20px 22px;
+  left: 20px;
+  right: 118px;
+  bottom: 28px;
+  z-index: 12;
+  width: min(620px, calc(100% - 168px));
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
   color: #fff;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.78) 100%);
+  pointer-events: none;
 }
 
-.recommend-info h3 {
-  font-size: 22px;
-  margin-bottom: 8px;
+.recommend-info-card::before {
+  content: '';
+  position: absolute;
+  inset: -20px -22px -18px -22px;
+  z-index: -1;
+  border-radius: 28px;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.12) 32%, rgba(0, 0, 0, 0.38) 100%);
+  pointer-events: none;
 }
 
-.recommend-info p {
+.recommend-info-card.is-video {
+  bottom: 92px;
+}
+
+.recommend-info-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin-bottom: 10px;
+}
+
+.recommend-type,
+.recommend-media-count {
+  display: inline-block;
+  padding: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.82),
+    0 0 16px rgba(0, 0, 0, 0.34);
+}
+
+.recommend-title {
   margin-bottom: 8px;
-  color: rgba(255, 255, 255, 0.85);
-  line-height: 1.6;
+  font-size: 27px;
+  line-height: 1.22;
+  color: #fff;
+  text-shadow:
+    0 2px 6px rgba(0, 0, 0, 0.88),
+    0 0 20px rgba(0, 0, 0, 0.42);
+}
+
+.recommend-author,
+.recommend-summary,
+.recommend-tags {
+  margin-bottom: 6px;
+  line-height: 1.65;
+  color: rgba(255, 255, 255, 0.94);
+  text-shadow:
+    0 1px 4px rgba(0, 0, 0, 0.84),
+    0 0 16px rgba(0, 0, 0, 0.34);
+}
+
+.recommend-author {
+  font-weight: 700;
 }
 
 .recommend-tags {
-  margin: 10px 0 0;
-  color: rgba(255, 255, 255, 0.92);
+  margin-bottom: 0;
+  color: rgba(255, 255, 255, 0.84);
 }
 
 .recommend-actions {
   margin-top: 12px;
+  pointer-events: auto;
 }
 
 .recommend-nav {
@@ -301,17 +347,35 @@ function onMediaTouchEnd(event: TouchEvent) {
   display: flex;
   justify-content: space-between;
   transform: translateY(-50%);
+  pointer-events: none;
 }
 
 .nav-btn {
-  width: 36px;
-  height: 36px;
+  width: 40px;
+  height: 40px;
   border: 0;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(39, 49, 58, 0.48);
   color: #fff;
-  font-size: 22px;
+  font-size: 24px;
   cursor: pointer;
+  backdrop-filter: blur(8px);
+  pointer-events: auto;
+}
+
+.mode-recommend .media-video,
+.mode-recommend .media-image {
+  height: 100%;
+  max-height: none;
+}
+
+.mode-recommend .media-document.full {
+  width: 100%;
+  height: clamp(520px, calc(100vh - 260px), 840px);
+}
+
+.mode-recommend .doc-frame {
+  min-height: clamp(520px, calc(100vh - 260px), 840px);
 }
 
 @media (max-width: 768px) {
@@ -324,7 +388,30 @@ function onMediaTouchEnd(event: TouchEvent) {
 
   .recommend-shell,
   .recommend-stage {
-    min-height: calc(100vh - 170px);
+    min-height: clamp(460px, calc(100vh - 310px), 720px);
+  }
+
+  .recommend-info-card {
+    left: 14px;
+    right: 86px;
+    bottom: 14px;
+    width: auto;
+  }
+
+  .recommend-info-card.is-video {
+    bottom: 78px;
+  }
+
+  .recommend-title {
+    font-size: 20px;
+  }
+
+  .recommend-type,
+  .recommend-media-count,
+  .recommend-author,
+  .recommend-summary,
+  .recommend-tags {
+    font-size: 13px;
   }
 }
 </style>

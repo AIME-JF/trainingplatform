@@ -122,6 +122,8 @@ from .resource import (
     ResourceTagCreate, ResourceTagResponse,
     ResourceMediaLinkPayload, ResourceMediaLinkResponse,
     ResourceListItemResponse, ResourceDetailResponse,
+    ResourceCommentCreate, ResourceCommentResponse,
+    ResourceLikeStatusResponse, ResourceShareStatusResponse,
     CourseResourceBindRequest, TrainingResourceBindRequest
 )
 from .review import (
@@ -234,6 +236,8 @@ __all__ = [
     "ResourceTagCreate", "ResourceTagResponse",
     "ResourceMediaLinkPayload", "ResourceMediaLinkResponse",
     "ResourceListItemResponse", "ResourceDetailResponse",
+    "ResourceCommentCreate", "ResourceCommentResponse",
+    "ResourceLikeStatusResponse", "ResourceShareStatusResponse",
     "CourseResourceBindRequest", "TrainingResourceBindRequest",
     # 审核
     "ReviewPolicyCreate", "ReviewPolicyUpdate",

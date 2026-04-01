@@ -1,13 +1,13 @@
 """
 资源推荐与行为埋点相关数据模型
 """
-from typing import Optional, List
+from typing import Literal, Optional, List
 from datetime import datetime
 from pydantic import BaseModel, Field
 
 
 class ResourceBehaviorEventCreate(BaseModel):
-    event_type: str = Field(..., description='事件类型')
+    event_type: Literal['impression', 'click', 'play', 'complete', 'favorite'] = Field(..., description='事件类型')
     watch_seconds: int = Field(0, ge=0, description='观看时长')
     context_json: Optional[dict] = Field(None, description='上下文')
 

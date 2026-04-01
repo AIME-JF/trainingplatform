@@ -9,7 +9,7 @@
       </div>
       <a-space>
         <a-button @click="router.push('/resource/community')">资源社区</a-button>
-        <a-button @click="router.push('/resource/my')">我的资源</a-button>
+        <a-button @click="router.push('/resource/my')">我的空间</a-button>
         <PermissionsTooltip :allowed="canUploadResource" tips="需要 CREATE_RESOURCE 或 VIEW_RESOURCE_ALL 权限">
           <template #default="{ disabled }">
             <a-button type="primary" :disabled="disabled" @click="uploadModalOpen = true">上传资源</a-button>

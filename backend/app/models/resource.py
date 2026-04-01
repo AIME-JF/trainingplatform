@@ -32,6 +32,8 @@ class Resource(Base):
 
     view_count = Column(Integer, default=0, comment='浏览次数')
     like_count = Column(Integer, default=0, comment='点赞次数')
+    share_count = Column(Integer, default=0, comment='转发次数')
+    comment_count = Column(Integer, default=0, comment='评论次数')
     favorite_count = Column(Integer, default=0, comment='收藏次数')
 
     metadata_json = Column(JSON, nullable=True, comment='扩展字段')
@@ -44,6 +46,8 @@ class Resource(Base):
     media_links = relationship('ResourceMediaLink', back_populates='resource', cascade='all, delete-orphan')
     tag_relations = relationship('ResourceTagRelation', back_populates='resource', cascade='all, delete-orphan')
     visibility_scopes = relationship('ResourceVisibilityScope', back_populates='resource', cascade='all, delete-orphan')
+    likes = relationship('ResourceLike', back_populates='resource', cascade='all, delete-orphan')
+    comments = relationship('ResourceComment', back_populates='resource', cascade='all, delete-orphan')
 
 
 class ResourceMediaLink(Base):
@@ -141,3 +145,41 @@ class TrainingResourceRef(Base):
     )
 
     resource = relationship('Resource', foreign_keys=[resource_id])
+
+
+class ResourceLike(Base):
+    """资源点赞"""
+    __tablename__ = 'resource_likes'
+
+    id = Column(Integer, primary_key=True, index=True)
+    resource_id = Column(Integer, ForeignKey('resources.id', ondelete='CASCADE'), nullable=False, index=True, comment='资源ID')
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True, comment='用户ID')
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, comment='点赞时间')
+
+    __table_args__ = (
+        UniqueConstraint('resource_id', 'user_id', name='uq_resource_like_user'),
+        Index('ix_resource_like_user_time', 'user_id', 'created_at'),
+    )
+
+    resource = relationship('Resource', back_populates='likes')
+    user = relationship('User', foreign_keys=[user_id])
+
+
+class ResourceComment(Base):
+    """资源评论"""
+    __tablename__ = 'resource_comments'
+
+    id = Column(Integer, primary_key=True, index=True)
+    resource_id = Column(Integer, ForeignKey('resources.id', ondelete='CASCADE'), nullable=False, index=True, comment='资源ID')
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True, comment='评论用户ID')
+    content = Column(Text, nullable=False, comment='评论内容')
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False, comment='创建时间')
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False, comment='更新时间')
+
+    __table_args__ = (
+        Index('ix_resource_comment_resource_time', 'resource_id', 'created_at'),
+        Index('ix_resource_comment_user_time', 'user_id', 'created_at'),
+    )
+
+    resource = relationship('Resource', back_populates='comments')
+    user = relationship('User', foreign_keys=[user_id])

@@ -136,7 +136,7 @@ export const routes: RouteRecordRaw[] = [
         path: 'resource/my',
         name: 'MyResources',
         component: () => import('@/views/resource/MyResources.vue'),
-        meta: { title: '我的资源', anyPermissions: MY_RESOURCE_PERMISSIONS },
+        meta: { title: '我的空间', anyPermissions: MY_RESOURCE_PERMISSIONS },
       },
       {
         path: 'resource/teaching-generate',

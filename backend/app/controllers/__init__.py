@@ -22,6 +22,7 @@ from .ai import AIController
 from .talent import TalentController
 from .media import MediaController
 from .resource import ResourceController
+from .resource_comment import ResourceCommentController
 from .review import ReviewController
 from .recommendation import RecommendationController
 
@@ -47,6 +48,7 @@ __all__ = [
     "TalentController",
     "MediaController",
     "ResourceController",
+    "ResourceCommentController",
     "ReviewController",
     "RecommendationController",
 ]

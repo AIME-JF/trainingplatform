@@ -1,3 +1,4 @@
+import axiosInstance from '@/api/custom-instance'
 import type {
   AITaskSummaryResponse,
   CourseCreate,
@@ -29,8 +30,8 @@ import type {
   PaginatedResponseRoleSimpleResponse,
   PaginatedResponseUserSimpleResponse,
   ResourceCreate,
-  ResourceDetailResponse,
-  ResourceListItemResponse,
+  ResourceDetailResponse as GeneratedResourceDetailResponse,
+  ResourceListItemResponse as GeneratedResourceListItemResponse,
   ResourceTagCreate,
   ResourceTagResponse,
   ResourceUpdate,
@@ -117,8 +118,6 @@ export type {
   PaginatedResponseRoleSimpleResponse,
   PaginatedResponseUserSimpleResponse,
   ResourceCreate,
-  ResourceDetailResponse,
-  ResourceListItemResponse,
   ResourceTagResponse,
   ResourceUpdate,
   ReviewTaskResponse,
@@ -128,6 +127,24 @@ export type {
   TeachingResourceGenerationTaskCreateRequest,
   TeachingResourceGenerationTaskDetailResponse,
   UserSimpleResponse,
+}
+
+export interface ResourceListItemResponse extends GeneratedResourceListItemResponse {
+  like_count?: number
+  share_count?: number
+  comment_count?: number
+  current_user_liked?: boolean
+}
+
+export interface ResourceDetailResponse extends GeneratedResourceDetailResponse {
+  like_count?: number
+  share_count?: number
+  comment_count?: number
+  current_user_liked?: boolean
+}
+
+export interface PaginatedResourceListResponse extends Omit<PaginatedResponseResourceListItemResponse, 'items'> {
+  items: ResourceListItemResponse[]
 }
 
 export interface ResourceRecommendationItem {
@@ -142,8 +159,34 @@ export interface ResourceRecommendationFeed {
   total: number
 }
 
+export interface ResourceCommentCreate {
+  content: string
+}
+
+export interface ResourceCommentResponse {
+  id: number
+  resource_id: number
+  user_id: number
+  user_name?: string | null
+  content: string
+  can_delete: boolean
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export interface ResourceLikeStatusResponse {
+  resource_id: number
+  liked: boolean
+  like_count: number
+}
+
+export interface ResourceShareStatusResponse {
+  resource_id: number
+  share_count: number
+}
+
 export async function listResources(params?: GetResourcesApiV1ResourcesGetParams) {
-  return (await getResourcesApiV1ResourcesGet(params)) as PaginatedResponseResourceListItemResponse
+  return (await getResourcesApiV1ResourcesGet(params)) as PaginatedResourceListResponse
 }
 
 export async function getResourceDetail(resourceId: number) {
@@ -200,6 +243,36 @@ export async function listRecommendationFeed(params?: GetFeedApiV1ResourcesRecom
 
 export async function recordResourceEvent(resourceId: number, eventType: string) {
   return recordEventApiV1ResourcesResourceIdEventsPost(resourceId, { event_type: eventType })
+}
+
+export async function likeResource(resourceId: number) {
+  const response = await axiosInstance.post(`/resources/${resourceId}/likes`)
+  return response.data as ResourceLikeStatusResponse
+}
+
+export async function unlikeResource(resourceId: number) {
+  const response = await axiosInstance.delete(`/resources/${resourceId}/likes`)
+  return response.data as ResourceLikeStatusResponse
+}
+
+export async function shareResource(resourceId: number) {
+  const response = await axiosInstance.post(`/resources/${resourceId}/share`)
+  return response.data as ResourceShareStatusResponse
+}
+
+export async function listResourceComments(resourceId: number) {
+  const response = await axiosInstance.get(`/resources/${resourceId}/comments`)
+  return response.data as ResourceCommentResponse[]
+}
+
+export async function createResourceComment(resourceId: number, payload: ResourceCommentCreate) {
+  const response = await axiosInstance.post(`/resources/${resourceId}/comments`, payload)
+  return response.data as ResourceCommentResponse
+}
+
+export async function deleteResourceComment(resourceId: number, commentId: number) {
+  const response = await axiosInstance.delete(`/resources/${resourceId}/comments/${commentId}`)
+  return response.data as { success: boolean }
 }
 
 export async function listCourses(params?: GetCoursesApiV1CoursesGetParams) {

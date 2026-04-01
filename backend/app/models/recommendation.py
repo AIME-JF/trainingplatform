@@ -14,7 +14,7 @@ class ResourceBehaviorEvent(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True, comment='用户ID')
     resource_id = Column(Integer, ForeignKey('resources.id', ondelete='CASCADE'), nullable=False, index=True, comment='资源ID')
-    event_type = Column(String(30), nullable=False, index=True, comment='事件类型: impression/click/play/complete/like/favorite')
+    event_type = Column(String(30), nullable=False, index=True, comment='事件类型: impression/click/play/complete/like/unlike/share/favorite')
     watch_seconds = Column(Integer, default=0, comment='观看时长(秒)')
     context_json = Column(JSON, nullable=True, comment='上下文信息')
     event_time = Column(DateTime(timezone=True), server_default=func.now(), index=True, comment='事件时间')

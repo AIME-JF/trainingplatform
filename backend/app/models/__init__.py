@@ -29,7 +29,8 @@ from .media import MediaFile
 from .notice import Notice
 from .resource import (
     Resource, ResourceMediaLink, ResourceTag, ResourceTagRelation,
-    ResourceVisibilityScope, CourseResourceRef, TrainingResourceRef
+    ResourceVisibilityScope, CourseResourceRef, TrainingResourceRef,
+    ResourceLike, ResourceComment,
 )
 from .review import (
     ReviewPolicy, ReviewPolicyStage, ResourceReviewWorkflow,
@@ -76,6 +77,7 @@ __all__ = [
     # 资源库
     "Resource", "ResourceMediaLink", "ResourceTag", "ResourceTagRelation",
     "ResourceVisibilityScope", "CourseResourceRef", "TrainingResourceRef",
+    "ResourceLike", "ResourceComment",
     # 审核
     "ReviewPolicy", "ReviewPolicyStage", "ResourceReviewWorkflow",
     "ResourceReviewTask", "ResourceReviewLog",

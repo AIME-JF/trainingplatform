@@ -67,11 +67,11 @@ def _require_schedule_task_permission(db: Session, current_user: TokenData):
 
 
 def _require_teaching_resource_generation_permission(db: Session, current_user: TokenData):
-    if _has_permission(db, current_user, "CREATE_RESOURCE") or _has_permission(db, current_user, "VIEW_RESOURCE_ALL"):
+    if _has_permission(db, current_user, "USE_TEACHING_RESOURCE_GENERATION"):
         return
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
-        detail="权限不足，需要 CREATE_RESOURCE 或 VIEW_RESOURCE_ALL",
+        detail="权限不足，需要 USE_TEACHING_RESOURCE_GENERATION",
     )
 
 

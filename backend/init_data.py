@@ -164,6 +164,7 @@ def init_permissions():
                 {"path": "/api/v1/resources/list/department", "code": "VIEW_RESOURCE_DEPARTMENT", "description": "按部门查看资源"},
                 {"path": "/api/v1/resources/{id}/visibility", "code": "MANAGE_RESOURCE_VISIBILITY", "description": "管理资源可见域"},
                 {"path": "/api/v1/resources/{id}/submit", "code": "SUBMIT_RESOURCE_REVIEW", "description": "提交资源审核"},
+                {"path": "/api/v1/ai/teaching-resource-generation-tasks", "code": "USE_TEACHING_RESOURCE_GENERATION", "description": "使用教学资源生成功能"},
                 {"path": "/api/v1/reviews/tasks", "code": "REVIEW_RESOURCE_STAGE1", "description": "资源一级审核"},
                 {"path": "/api/v1/reviews/tasks", "code": "REVIEW_RESOURCE_STAGE2", "description": "资源二级审核"},
                 {"path": "/api/v1/review-policies", "code": "MANAGE_REVIEW_POLICY", "description": "管理审核策略"},
@@ -299,6 +300,7 @@ def init_roles():
                 "GET_AI_PAPER_ASSEMBLY_TASKS", "CREATE_AI_PAPER_ASSEMBLY_TASK", "UPDATE_AI_PAPER_ASSEMBLY_TASK", "CONFIRM_AI_PAPER_ASSEMBLY_TASK",
                 "GET_AI_PAPER_GENERATION_TASKS", "CREATE_AI_PAPER_GENERATION_TASK", "UPDATE_AI_PAPER_GENERATION_TASK", "CONFIRM_AI_PAPER_GENERATION_TASK",
                 "CREATE_RESOURCE", "UPDATE_RESOURCE", "VIEW_RESOURCE_DEPARTMENT",
+                "USE_TEACHING_RESOURCE_GENERATION",
                 "MANAGE_RESOURCE_VISIBILITY", "SUBMIT_RESOURCE_REVIEW",
                 "REVIEW_RESOURCE_STAGE1", "REVIEW_RESOURCE_STAGE2",
             ]

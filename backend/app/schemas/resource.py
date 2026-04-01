@@ -163,6 +163,10 @@ class ResourceListItemResponse(BaseModel):
     cover_media_file_id: Optional[int] = None
     cover_url: Optional[str] = None
     tags: List[str] = []
+    like_count: int = 0
+    share_count: int = 0
+    comment_count: int = 0
+    current_user_liked: bool = False
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -172,6 +176,42 @@ class ResourceListItemResponse(BaseModel):
 class ResourceDetailResponse(ResourceListItemResponse):
     media_links: List[ResourceMediaLinkResponse] = []
     visibility_scopes: List[int] = []
+
+
+class ResourceCommentCreate(BaseModel):
+    content: str = Field(..., min_length=1, max_length=1000, description='评论内容')
+
+    @field_validator('content')
+    @classmethod
+    def validate_content(cls, value: str) -> str:
+        normalized = str(value or '').strip()
+        if not normalized:
+            raise ValueError('评论内容不能为空')
+        return normalized
+
+
+class ResourceCommentResponse(BaseModel):
+    id: int
+    resource_id: int
+    user_id: int
+    user_name: Optional[str] = None
+    content: str
+    can_delete: bool = False
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ResourceLikeStatusResponse(BaseModel):
+    resource_id: int
+    liked: bool
+    like_count: int
+
+
+class ResourceShareStatusResponse(BaseModel):
+    resource_id: int
+    share_count: int
 
 
 class CourseResourceBindRequest(BaseModel):

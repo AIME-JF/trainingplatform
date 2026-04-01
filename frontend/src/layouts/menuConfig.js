@@ -66,7 +66,7 @@ export const appMenuConfig = [
       },
       {
         key: '/resource/my',
-        label: '我的资源',
+        label: '我的空间',
         anyPermissions: MY_RESOURCE_PAGE_PERMISSIONS,
       },
       {

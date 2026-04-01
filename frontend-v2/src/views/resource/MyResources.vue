@@ -4,12 +4,12 @@
 
     <div class="page-header">
       <div>
-        <h1 class="page-title">我的资源</h1>
+        <h1 class="page-title">我的空间</h1>
         <p class="page-subtitle">管理自己上传的资源和审核状态。</p>
       </div>
       <a-space wrap>
         <a-button @click="router.push('/resource/library')">资源库</a-button>
-        <PermissionsTooltip :allowed="canUploadResource" tips="需要 CREATE_RESOURCE 或 VIEW_RESOURCE_ALL 权限">
+        <PermissionsTooltip :allowed="canUseTeachingGeneration" tips="需要 USE_TEACHING_RESOURCE_GENERATION 权限">
           <template #default="{ disabled }">
             <a-button :disabled="disabled" @click="router.push('/resource/teaching-generate')">教学资源生成</a-button>
           </template>
@@ -33,7 +33,7 @@
           <a-select-option value="rejected">已驳回</a-select-option>
           <a-select-option value="offline">已下线</a-select-option>
         </a-select>
-        <ResourceSearchInput v-model:value="query.search" style="width: 320px" placeholder="搜索我的资源" @search="fetchMine" />
+        <ResourceSearchInput v-model:value="query.search" style="width: 320px" placeholder="搜索我的空间资源" @search="fetchMine" />
       </a-space>
     </a-card>
 
@@ -163,6 +163,7 @@ const workflowVisible = ref(false)
 const workflow = ref<ReviewWorkflowResponse | null>(null)
 
 const canUploadResource = computed(() => authStore.hasAnyPermission(['CREATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
+const canUseTeachingGeneration = computed(() => authStore.hasPermission('USE_TEACHING_RESOURCE_GENERATION'))
 const canSubmitReview = computed(() => authStore.hasAllPermissions(['CREATE_RESOURCE', 'SUBMIT_RESOURCE_REVIEW']))
 const canManageAnyResource = computed(() => authStore.hasAnyPermission(['UPDATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
 

@@ -3,7 +3,7 @@
     <div class="page-header">
       <h2>资源库</h2>
       <a-space>
-        <a-button @click="$router.push('/resource/my')">我的资源</a-button>
+        <a-button @click="$router.push('/resource/my')">我的空间</a-button>
         <permissions-tooltip
           v-if="!authStore.isStudent"
           :allowed="canUploadResource"

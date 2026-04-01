@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models import (
     Resource, ResourceMediaLink, ResourceTag, ResourceTagRelation,
-    ResourceVisibilityScope, CourseResourceRef, TrainingResourceRef,
+    ResourceVisibilityScope, CourseResourceRef, TrainingResourceRef, ResourceLike,
     Department, MediaFile, PoliceType, Role, User
 )
 from app.models.course import Course
@@ -110,7 +110,11 @@ class ResourceService:
             start = (page - 1) * size
             paged = filtered[start: start + size]
 
-        items = [self._to_list_item_response(r) for r in paged]
+        liked_resource_ids = self._get_user_liked_resource_ids(current_user_id, [item.id for item in paged])
+        items = [
+            self._to_list_item_response(r, current_user_liked=r.id in liked_resource_ids)
+            for r in paged
+        ]
         return PaginatedResponse(
             page=page,
             size=size if size != -1 else total,
@@ -178,6 +182,19 @@ class ResourceService:
         current_user_id: int,
         user_permissions: List[str],
     ) -> Optional[ResourceDetailResponse]:
+        resource = self.get_viewable_resource_entity(resource_id, current_user_id, user_permissions)
+        if not resource:
+            return None
+
+        liked_resource_ids = self._get_user_liked_resource_ids(current_user_id, [resource.id])
+        return self._to_detail_response(resource, current_user_liked=resource.id in liked_resource_ids)
+
+    def get_viewable_resource_entity(
+        self,
+        resource_id: int,
+        current_user_id: int,
+        user_permissions: List[str],
+    ) -> Optional[Resource]:
         resource = self._get_resource_entity(resource_id)
         if not resource:
             return None
@@ -185,7 +202,10 @@ class ResourceService:
         user_ctx = self._get_user_context(current_user_id)
         if not self._can_view_resource(resource, current_user_id, user_permissions, user_ctx):
             return None
-        return self._to_detail_response(resource)
+        return resource
+
+    def can_edit_resource(self, resource: Resource, user_id: int, user_permissions: List[str]) -> bool:
+        return self._can_edit_resource(resource, user_id, user_permissions)
 
     def update_resource(
         self,
@@ -748,6 +768,17 @@ class ResourceService:
             'role_ids': {r.id for r in (user.roles or [])},
         }
 
+    def _get_user_liked_resource_ids(self, user_id: int, resource_ids: List[int]) -> Set[int]:
+        normalized_resource_ids = [int(resource_id) for resource_id in resource_ids if resource_id]
+        if not user_id or not normalized_resource_ids:
+            return set()
+
+        rows = self.db.query(ResourceLike.resource_id).filter(
+            ResourceLike.user_id == user_id,
+            ResourceLike.resource_id.in_(normalized_resource_ids),
+        ).all()
+        return {int(resource_id) for (resource_id,) in rows if resource_id}
+
     def _can_edit_resource(self, resource: Resource, user_id: int, user_permissions: List[str]) -> bool:
         return (
             resource.uploader_id == user_id
@@ -868,7 +899,7 @@ class ResourceService:
                 return f'附件{index}'
         return '附件'
 
-    def _to_list_item_response(self, resource: Resource) -> ResourceListItemResponse:
+    def _to_list_item_response(self, resource: Resource, *, current_user_liked: bool = False) -> ResourceListItemResponse:
         tags = [rel.tag.name for rel in (resource.tag_relations or []) if rel.tag]
         scope_payload = self._resolve_resource_scope_payload(resource)
         return ResourceListItemResponse(
@@ -883,18 +914,22 @@ class ResourceService:
             scope_type=scope_payload['scope_type'],
             scope_target_ids=scope_payload['scope_target_ids'],
             uploader_id=resource.uploader_id,
-            uploader_name=resource.uploader.nickname if resource.uploader else None,
+            uploader_name=(resource.uploader.nickname or resource.uploader.username) if resource.uploader else None,
             owner_department_id=resource.owner_department_id,
             owner_department_name=resource.owner_department.name if resource.owner_department else None,
             cover_media_file_id=resource.cover_media_file_id,
             cover_url=self._build_media_url(resource.cover_media),
             tags=tags,
+            like_count=int(resource.like_count or 0),
+            share_count=int(resource.share_count or 0),
+            comment_count=int(resource.comment_count or 0),
+            current_user_liked=current_user_liked,
             created_at=resource.created_at,
             updated_at=resource.updated_at,
         )
 
-    def _to_detail_response(self, resource: Resource) -> ResourceDetailResponse:
-        base = self._to_list_item_response(resource)
+    def _to_detail_response(self, resource: Resource, *, current_user_liked: bool = False) -> ResourceDetailResponse:
+        base = self._to_list_item_response(resource, current_user_liked=current_user_liked)
         scope_payload = self._resolve_resource_scope_payload(resource)
         media_links = []
         ordered_links = sorted((resource.media_links or []), key=lambda x: (x.sort_order, x.id))

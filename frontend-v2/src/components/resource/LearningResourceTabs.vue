@@ -37,7 +37,7 @@ const tabs: TabItem[] = [
   { path: '/resource/courses', label: '课程资源', permissions: COURSE_PERMISSIONS },
   { path: '/resource/library', label: '资源库' },
   { path: '/resource/community', label: '资源社区' },
-  { path: '/resource/my', label: '我的资源', permissions: MY_RESOURCE_PERMISSIONS },
+  { path: '/resource/my', label: '我的空间', permissions: MY_RESOURCE_PERMISSIONS },
   { path: '/resource/teaching-generate', label: '教学资源生成', permissions: TEACHING_RESOURCE_GENERATION_PERMISSIONS },
 ]
 

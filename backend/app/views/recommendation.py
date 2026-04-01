@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.middleware.auth import get_current_user
-from app.schemas import StandardResponse, TokenData
+from app.schemas import StandardResponse, TokenData, ResourceLikeStatusResponse, ResourceShareStatusResponse
 from app.schemas.recommendation import ResourceBehaviorEventCreate
 from app.controllers.recommendation import RecommendationController
 
@@ -22,8 +22,41 @@ def record_event(
     db: Session = Depends(get_db),
 ):
     controller = RecommendationController(db)
-    result = controller.record_event(resource_id, current_user.user_id, data)
+    result = controller.record_event(resource_id, current_user.user_id, current_user.permissions, data)
     return StandardResponse(data={'id': result.id})
+
+
+@router.post('/resources/{resource_id}/likes', response_model=StandardResponse[ResourceLikeStatusResponse], summary='点赞资源')
+def like_resource(
+    resource_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = RecommendationController(db)
+    data = controller.like_resource(resource_id, current_user.user_id, current_user.permissions)
+    return StandardResponse(data=data)
+
+
+@router.delete('/resources/{resource_id}/likes', response_model=StandardResponse[ResourceLikeStatusResponse], summary='取消点赞资源')
+def unlike_resource(
+    resource_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = RecommendationController(db)
+    data = controller.unlike_resource(resource_id, current_user.user_id, current_user.permissions)
+    return StandardResponse(data=data)
+
+
+@router.post('/resources/{resource_id}/share', response_model=StandardResponse[ResourceShareStatusResponse], summary='转发资源')
+def share_resource(
+    resource_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = RecommendationController(db)
+    data = controller.share_resource(resource_id, current_user.user_id, current_user.permissions)
+    return StandardResponse(data=data)
 
 
 @router.get('/resources/recommendations/feed', response_model=StandardResponse, summary='推荐资源流')

@@ -6,9 +6,12 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from app.models import Resource
+from app.models import Resource, ResourceLike
 from app.models.recommendation import ResourceBehaviorEvent, ResourceRecommendScore
 from app.services.resource import ResourceService
+
+
+PASSIVE_EVENT_TYPES = {'impression', 'click', 'play', 'complete', 'favorite'}
 
 
 class RecommendationService:
@@ -22,33 +25,92 @@ class RecommendationService:
         self,
         resource_id: int,
         user_id: int,
+        user_permissions: List[str],
         event_type: str,
         watch_seconds: int = 0,
         context_json: Optional[dict] = None,
     ) -> ResourceBehaviorEvent:
-        resource = self.db.query(Resource).filter(Resource.id == resource_id).first()
+        resource = self.resource_service.get_viewable_resource_entity(resource_id, user_id, user_permissions)
         if not resource:
-            raise ValueError('资源不存在')
+            raise ValueError('资源不存在或无访问权限')
 
-        event = ResourceBehaviorEvent(
-            user_id=user_id,
+        normalized_event_type = str(event_type or '').strip()
+        if normalized_event_type not in PASSIVE_EVENT_TYPES:
+            raise ValueError('不支持的事件类型')
+
+        event = self._append_event(
             resource_id=resource_id,
-            event_type=event_type,
+            user_id=user_id,
+            event_type=normalized_event_type,
             watch_seconds=watch_seconds,
             context_json=context_json,
         )
-        self.db.add(event)
 
-        if event_type in ('click', 'play', 'complete'):
+        if normalized_event_type in {'click', 'play', 'complete'}:
             resource.view_count = (resource.view_count or 0) + 1
-        if event_type == 'like':
-            resource.like_count = (resource.like_count or 0) + 1
-        if event_type == 'favorite':
+        if normalized_event_type == 'favorite':
             resource.favorite_count = (resource.favorite_count or 0) + 1
 
         self.db.commit()
         self.db.refresh(event)
         return event
+
+    def like_resource(self, resource_id: int, user_id: int, user_permissions: List[str]) -> Dict[str, int | bool]:
+        resource = self.resource_service.get_viewable_resource_entity(resource_id, user_id, user_permissions)
+        if not resource:
+            raise ValueError('资源不存在或无访问权限')
+
+        existing_like = self.db.query(ResourceLike).filter(
+            ResourceLike.resource_id == resource_id,
+            ResourceLike.user_id == user_id,
+        ).first()
+
+        if not existing_like:
+            self.db.add(ResourceLike(resource_id=resource_id, user_id=user_id))
+            resource.like_count = int(resource.like_count or 0) + 1
+            self._append_event(resource_id=resource_id, user_id=user_id, event_type='like')
+
+        self.db.commit()
+        return {
+            'resource_id': resource_id,
+            'liked': True,
+            'like_count': int(resource.like_count or 0),
+        }
+
+    def unlike_resource(self, resource_id: int, user_id: int, user_permissions: List[str]) -> Dict[str, int | bool]:
+        resource = self.resource_service.get_viewable_resource_entity(resource_id, user_id, user_permissions)
+        if not resource:
+            raise ValueError('资源不存在或无访问权限')
+
+        existing_like = self.db.query(ResourceLike).filter(
+            ResourceLike.resource_id == resource_id,
+            ResourceLike.user_id == user_id,
+        ).first()
+
+        if existing_like:
+            self.db.delete(existing_like)
+            resource.like_count = max(int(resource.like_count or 0) - 1, 0)
+            self._append_event(resource_id=resource_id, user_id=user_id, event_type='unlike')
+
+        self.db.commit()
+        return {
+            'resource_id': resource_id,
+            'liked': False,
+            'like_count': int(resource.like_count or 0),
+        }
+
+    def share_resource(self, resource_id: int, user_id: int, user_permissions: List[str]) -> Dict[str, int]:
+        resource = self.resource_service.get_viewable_resource_entity(resource_id, user_id, user_permissions)
+        if not resource:
+            raise ValueError('资源不存在或无访问权限')
+
+        resource.share_count = int(resource.share_count or 0) + 1
+        self._append_event(resource_id=resource_id, user_id=user_id, event_type='share')
+        self.db.commit()
+        return {
+            'resource_id': resource_id,
+            'share_count': int(resource.share_count or 0),
+        }
 
     def get_recommendation_feed(self, user_id: int, page: int = 1, size: int = 10) -> Dict:
         user_ctx = self._get_user_context(user_id)
@@ -262,3 +324,21 @@ class RecommendationService:
         favorites = resource.favorite_count or 0
         raw = views * 0.01 + likes * 0.2 + favorites * 0.3
         return min(1.0, raw / 20.0)
+
+    def _append_event(
+        self,
+        resource_id: int,
+        user_id: int,
+        event_type: str,
+        watch_seconds: int = 0,
+        context_json: Optional[dict] = None,
+    ) -> ResourceBehaviorEvent:
+        event = ResourceBehaviorEvent(
+            user_id=user_id,
+            resource_id=resource_id,
+            event_type=event_type,
+            watch_seconds=watch_seconds,
+            context_json=context_json,
+        )
+        self.db.add(event)
+        return event

@@ -3,7 +3,7 @@
     <div class="detail-actions">
       <a-button @click="router.push('/resource/community')">返回资源社区</a-button>
       <a-button @click="router.push('/resource/library')">返回资源库</a-button>
-      <a-button @click="router.push('/resource/my')">我的资源</a-button>
+      <a-button @click="router.push('/resource/my')">我的空间</a-button>
     </div>
 
     <a-spin v-if="loading" size="large" class="loading-block" />
