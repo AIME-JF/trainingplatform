@@ -630,6 +630,8 @@ def start_session_checkin(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    from logger import logger
+    logger.info(f"[DEBUG] start_session_checkin called: training_id={training_id}, session_key={session_key}, checkin_mode={checkin_mode!r}, checkin_duration_minutes={checkin_duration_minutes}")
     controller = TrainingController(db)
     result = controller.start_session_checkin(training_id, session_key, current_user.user_id, checkin_mode, checkin_duration_minutes)
     return StandardResponse(data=result)
@@ -651,11 +653,13 @@ def end_session_checkin(
 def start_session_checkout(
     training_id: int,
     session_key: str,
+    checkout_mode: str = Query("direct", description="签退模式: direct/qr"),
+    checkout_duration_minutes: int = Query(15, ge=1, le=120, description="签退限时（分钟）"),
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     controller = TrainingController(db)
-    result = controller.start_session_checkout(training_id, session_key, current_user.user_id)
+    result = controller.start_session_checkout(training_id, session_key, current_user.user_id, checkout_mode, checkout_duration_minutes)
     return StandardResponse(data=result)
 
 

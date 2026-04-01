@@ -405,19 +405,22 @@
           <div class="config-row">
             <span class="config-label">签到途径</span>
             <a-radio-group
-              v-model:value="checkinConfig.mode"
+              :value="checkinMode"
               :disabled="isCheckinOngoing"
+              @change="onCheckinModeChange"
             >
               <a-radio value="direct">直接签到</a-radio>
               <a-radio value="qr">扫码签到</a-radio>
             </a-radio-group>
+            <span style="font-size:11px;color:red;margin-left:8px">[debug: {{ checkinMode }}]</span>
           </div>
           <div class="config-row">
             <span class="config-label">签到限时</span>
             <a-select
-              v-model:value="checkinConfig.duration"
+              :value="checkinDuration"
               style="width: 120px"
               :disabled="isCheckinOngoing"
+              @change="(val: number) => { checkinDuration = val }"
             >
               <a-select-option :value="5">5 分钟</a-select-option>
               <a-select-option :value="10">10 分钟</a-select-option>
@@ -425,7 +428,7 @@
               <a-select-option :value="30">30 分钟</a-select-option>
             </a-select>
           </div>
-          <div v-if="checkinConfig.mode === 'qr' && checkinQrUrl && isCheckinOngoing" class="qr-display">
+          <div v-if="checkinMode === 'qr' && checkinQrUrl && isCheckinOngoing" class="qr-display">
             <QrcodeVue :value="checkinQrUrl" :size="200" level="M" />
             <span class="qr-hint">学员扫描此二维码完成签到</span>
           </div>
@@ -527,8 +530,9 @@
           <div class="config-row">
             <span class="config-label">签退途径</span>
             <a-radio-group
-              v-model:value="checkoutConfig.mode"
+              :value="checkoutMode"
               :disabled="isCheckoutOngoing"
+              @change="(e: any) => { checkoutMode = e.target.value }"
             >
               <a-radio value="direct">直接签退</a-radio>
               <a-radio value="qr">扫码签退</a-radio>
@@ -537,9 +541,10 @@
           <div class="config-row">
             <span class="config-label">签退限时</span>
             <a-select
-              v-model:value="checkoutConfig.duration"
+              :value="checkoutDurationMin"
               style="width: 120px"
               :disabled="isCheckoutOngoing"
+              @change="(val: number) => { checkoutDurationMin = val }"
             >
               <a-select-option :value="5">5 分钟</a-select-option>
               <a-select-option :value="10">10 分钟</a-select-option>
@@ -547,7 +552,7 @@
               <a-select-option :value="30">30 分钟</a-select-option>
             </a-select>
           </div>
-          <div v-if="checkoutConfig.mode === 'qr' && checkinQrUrl && isCheckoutOngoing" class="qr-display">
+          <div v-if="checkoutMode === 'qr' && checkinQrUrl && isCheckoutOngoing" class="qr-display">
             <QrcodeVue :value="checkinQrUrl" :size="200" level="M" />
             <span class="qr-hint">学员扫描此二维码完成签退</span>
           </div>
@@ -832,7 +837,8 @@ const checkinMgrVisible = ref(false)
 const checkinTab = ref('checked')
 const checkinRecords = ref<CheckinRecord[]>([])
 const checkinToggleLoading = ref<number | null>(null)
-const checkinConfig = ref({ mode: 'direct' as 'direct' | 'qr', duration: 10 })
+const checkinMode = ref<'direct' | 'qr'>('direct')
+const checkinDuration = ref(10)
 const countdownText = ref('')
 const countdownTimer = ref<ReturnType<typeof setInterval> | null>(null)
 const isMobile = ref(window.innerWidth <= 768)
@@ -842,7 +848,8 @@ const checkoutMgrVisible = ref(false)
 const checkoutTab = ref('checked')
 const checkoutRecords = ref<CheckinRecord[]>([])
 const checkoutToggleLoading = ref<number | null>(null)
-const checkoutConfig = ref({ mode: 'direct' as 'direct' | 'qr', duration: 10 })
+const checkoutMode = ref<'direct' | 'qr'>('direct')
+const checkoutDurationMin = ref(10)
 
 // 学员签到相关
 const studentCheckinConfirmVisible = ref(false)
@@ -1156,11 +1163,11 @@ async function openCheckinMgr() {
   const sess = currentSession.value
   if (!sess) return
   // 如果签到已开始，用后端返回的配置；否则用默认值
-  if (sess.checkin_mode) {
-    checkinConfig.value.mode = sess.checkin_mode
+  if (sess.checkin_mode === 'direct' || sess.checkin_mode === 'qr') {
+    checkinMode.value = sess.checkin_mode
   }
   if (sess.checkin_duration_minutes) {
-    checkinConfig.value.duration = sess.checkin_duration_minutes
+    checkinDuration.value = sess.checkin_duration_minutes
   }
   checkinTab.value = 'checked'
   try {
@@ -1175,15 +1182,27 @@ async function openCheckinMgr() {
   checkinMgrVisible.value = true
 }
 
+function onCheckinModeChange(e: unknown) {
+  const val = (e as { target?: { value?: string } })?.target?.value
+  console.log('[DEBUG] onCheckinModeChange raw event:', e)
+  console.log('[DEBUG] onCheckinModeChange target.value:', val)
+  console.log('[DEBUG] checkinMode BEFORE:', checkinMode.value)
+  if (val === 'direct' || val === 'qr') {
+    checkinMode.value = val
+  }
+  console.log('[DEBUG] checkinMode AFTER:', checkinMode.value)
+}
+
 // 开始签到（带配置参数）
 async function doStartCheckin() {
   const sess = currentSession.value
   if (!sess) return
+  console.log('[DEBUG] doStartCheckin called, checkinMode.value:', checkinMode.value, 'checkinDuration.value:', checkinDuration.value)
+  const url = `/trainings/${route.params.id}/sessions/${sess.session_id}/checkin/start?checkin_mode=${checkinMode.value}&checkin_duration_minutes=${checkinDuration.value}`
+  console.log('[DEBUG] doStartCheckin URL:', url)
   sessionActionLoading.value = true
   try {
-    await axiosInstance.post(
-      `/trainings/${route.params.id}/sessions/${sess.session_id}/checkin/start?checkin_mode=${checkinConfig.value.mode}&checkin_duration_minutes=${checkinConfig.value.duration}`,
-    )
+    await axiosInstance.post(url)
     message.success('签到已开始')
     await fetchDetail()
     // 刷新签到记录
