@@ -70,22 +70,6 @@
             <a-button v-if="detail.current_enrollment_status === 'rejected'" disabled danger>
               审核未通过
             </a-button>
-            <a-button v-if="isEnrolled && hasActiveCheckin" type="primary" @click="goCheckin">
-              <CheckCircleOutlined /> 签到
-            </a-button>
-            <a-button v-if="isEnrolled && hasActiveCheckout" @click="goCheckout">
-              签退评课
-            </a-button>
-          </template>
-
-          <!-- 教官按钮 -->
-          <template v-if="authStore.isInstructor">
-            <a-button v-if="hasActiveCheckin" type="primary" @click="goCheckin">
-              <CheckCircleOutlined /> 签到
-            </a-button>
-            <a-button v-if="hasActiveCheckout" @click="goCheckout">
-              签退
-            </a-button>
           </template>
 
           <!-- 通用按钮 -->
@@ -140,52 +124,87 @@
                   </div>
                 </div>
                 <div class="cs-actions">
-                  <!-- 教官签到流程控制按钮 -->
-                  <template v-if="currentSession.action_permissions">
+                  <!-- 教官流程控制按钮（仅教官可见） -->
+                  <template v-if="authStore.isInstructor && currentSession.action_permissions">
                     <a-button
                       v-if="currentSession.action_permissions.can_start_checkin"
                       type="primary"
                       size="small"
-                      :loading="sessionActionLoading"
-                      @click="doSessionAction('checkin/start')"
+                      @click="openCheckinMgr"
                     >
                       开始签到
-                    </a-button>
-                    <a-button
-                      v-if="currentSession.action_permissions.can_end_checkin"
-                      size="small"
-                      :loading="sessionActionLoading"
-                      @click="doSessionAction('checkin/end')"
-                    >
-                      结束签到
                     </a-button>
                     <a-button
                       v-if="currentSession.action_permissions.can_start_checkout"
                       type="primary"
                       size="small"
-                      :loading="sessionActionLoading"
-                      @click="doSessionAction('checkout/start')"
+                      @click="openCheckinMgr"
                     >
                       开始签退
                     </a-button>
+                  </template>
+                  <!-- 签到/签退管理按钮（仅教官，签到开始后可见） -->
+                  <a-button
+                    v-if="authStore.isInstructor && isCheckinOrCheckoutPhase"
+                    size="small"
+                    @click="openCheckinMgr"
+                  >
+                    {{ isCheckoutPhase ? '签退管理' : '签到管理' }}
+                  </a-button>
+                  <!-- 学员签到按钮 -->
+                  <template v-if="authStore.isStudent && isEnrolled && hasActiveCheckin">
+                    <template v-if="currentSession.checkin_mode === 'qr'">
+                      <span class="cs-qr-hint">请扫描教官展示的二维码进行签到</span>
+                    </template>
                     <a-button
-                      v-if="currentSession.action_permissions.can_end_checkout"
+                      v-else
+                      type="primary"
                       size="small"
-                      :loading="sessionActionLoading"
-                      @click="doSessionAction('checkout/end')"
+                      @click="studentCheckinConfirmVisible = true"
                     >
-                      结束签退
+                      <CheckCircleOutlined /> 签到
                     </a-button>
                   </template>
-                  <!-- 签到详情按钮（签到开始后可见） -->
-                  <a-button
-                    v-if="isCheckinStarted"
-                    size="small"
-                    @click="openCheckinDetail"
-                  >
-                    签到详情
+                  <!-- 学员签退按钮 -->
+                  <template v-if="authStore.isStudent && isEnrolled && hasActiveCheckout">
+                    <a-button
+                      type="primary"
+                      size="small"
+                      @click="studentCheckoutConfirmVisible = true"
+                    >
+                      <CheckCircleOutlined /> 签退
+                    </a-button>
+                  </template>
+                </div>
+              </div>
+            </div>
+
+            <!-- 最近动态（仅本班人员可见） -->
+            <div v-if="hasFullAccess" class="overview-section">
+              <h3 class="section-label">最近动态</h3>
+              <div class="activity-feed">
+                <!-- 签到快捷提示 -->
+                <div v-if="authStore.isStudent && isEnrolled && hasActiveCheckin" class="activity-checkin-prompt">
+                  <span>当前课次正在签到中</span>
+                  <a-button type="primary" size="small" @click="studentCheckinConfirmVisible = true">
+                    立即签到
                   </a-button>
                 </div>
+                <!-- 签退快捷提示 -->
+                <div v-if="authStore.isStudent && isEnrolled && hasActiveCheckout" class="activity-checkin-prompt activity-checkout-prompt">
+                  <span>当前课次正在签退中</span>
+                  <a-button type="primary" size="small" @click="studentCheckoutConfirmVisible = true">
+                    立即签退
+                  </a-button>
+                </div>
+                <div v-for="(a, idx) in activityList" :key="a.id ?? idx" class="activity-item">
+                  <span class="activity-dot" :class="'dot-' + a.action_type" />
+                  <div class="activity-body">
+                    <span class="activity-content">{{ a.content }}</span>
+                    <span class="activity-time">{{ formatRelativeTime(a.created_at) }}</span>
+                  </div>
+                </div>
+                <div v-if="!activityList.length" class="activity-empty">暂无动态</div>
               </div>
             </div>
 
@@ -378,8 +397,61 @@
         </a-form>
       </a-modal>
 
-      <!-- ====== 签到详情弹窗 ====== -->
-      <a-modal v-model:open="checkinDetailVisible" title="签到详情" :footer="null" width="600px">
+      <!-- ====== 签到管理弹窗（教官） ====== -->
+      <a-modal
+        v-model:open="checkinMgrVisible"
+        :title="isCheckoutPhase ? '签退管理' : '签到管理'"
+        :footer="null"
+        width="640px"
+        :class="{ 'checkin-mgr-modal-mobile': isMobile }"
+        :style="isMobile ? { top: 0, maxWidth: '100vw', margin: 0, paddingBottom: 0 } : {}"
+        :bodyStyle="isMobile ? { height: 'calc(100vh - 55px)', overflow: 'auto' } : {}"
+      >
+        <!-- 上部：签到配置区 -->
+        <div class="checkin-config">
+          <div class="config-row">
+            <span class="config-label">签到途径</span>
+            <a-radio-group
+              v-model:value="checkinConfig.mode"
+              :disabled="isCheckinOngoing"
+            >
+              <a-radio value="direct">直接签到</a-radio>
+              <a-radio value="qr">扫码签到</a-radio>
+            </a-radio-group>
+          </div>
+          <div class="config-row">
+            <span class="config-label">签到限时</span>
+            <a-select
+              v-model:value="checkinConfig.duration"
+              style="width: 120px"
+              :disabled="isCheckinOngoing"
+            >
+              <a-select-option :value="5">5 分钟</a-select-option>
+              <a-select-option :value="10">10 分钟</a-select-option>
+              <a-select-option :value="15">15 分钟</a-select-option>
+              <a-select-option :value="30">30 分钟</a-select-option>
+            </a-select>
+          </div>
+          <div v-if="checkinConfig.mode === 'qr' && currentSession?.checkin_qr_token && isCheckinOngoing" class="qr-display">
+            <div class="qr-placeholder">
+              <span class="qr-token-label">扫码签到 Token</span>
+              <code class="qr-token-value">{{ currentSession.checkin_qr_token }}</code>
+            </div>
+          </div>
+        </div>
+
+        <!-- 中部：签到统计 -->
+        <div class="checkin-stats">
+          <div class="stat-progress">
+            <span>已签到 {{ checkedInList.length }} / {{ totalStudents }} 人</span>
+            <a-progress :percent="checkinPercent" size="small" :show-info="false" />
+          </div>
+          <div v-if="countdownText" class="stat-countdown">
+            剩余 {{ countdownText }}
+          </div>
+        </div>
+
+        <!-- 下部：签到名单 -->
         <a-tabs v-model:activeKey="checkinTab" size="small" style="margin-top: 8px">
           <a-tab-pane key="checked" :tab="`已签到 (${checkedInList.length})`">
             <a-empty v-if="!checkedInList.length" description="暂无签到记录" />
@@ -424,13 +496,74 @@
             </div>
           </a-tab-pane>
         </a-tabs>
+
+        <!-- 底部按钮区 -->
+        <div class="checkin-mgr-footer">
+          <a-button
+            v-if="currentSession?.action_permissions?.can_start_checkin"
+            type="primary"
+            :loading="sessionActionLoading"
+            @click="doStartCheckin"
+          >
+            开始签到
+          </a-button>
+          <a-button
+            v-if="currentSession?.action_permissions?.can_end_checkin"
+            danger
+            :loading="sessionActionLoading"
+            @click="doSessionAction('checkin/end')"
+          >
+            结束签到
+          </a-button>
+          <a-button v-if="isCheckinEnded" @click="checkinMgrVisible = false">
+            关闭
+          </a-button>
+        </div>
+      </a-modal>
+
+      <!-- ====== 学员签到确认弹窗 ====== -->
+      <a-modal
+        v-model:open="studentCheckinConfirmVisible"
+        title="确认签到"
+        :ok-text="'确认签到'"
+        :confirm-loading="studentCheckinLoading"
+        @ok="handleStudentCheckin"
+        centered
+        width="360px"
+      >
+        <div class="student-checkin-confirm">
+          <CheckCircleOutlined class="student-checkin-icon" />
+          <p>确认为当前课次进行签到？</p>
+          <p class="student-checkin-session-info" v-if="currentSession">
+            {{ currentSession.course_name }} · {{ currentSession.time_range?.replace('~', ' - ') }}
+          </p>
+        </div>
+      </a-modal>
+
+      <!-- ====== 学员签退确认弹窗 ====== -->
+      <a-modal
+        v-model:open="studentCheckoutConfirmVisible"
+        title="确认签退"
+        :ok-text="'确认签退'"
+        :confirm-loading="studentCheckoutLoading"
+        @ok="handleStudentCheckout"
+        centered
+        width="360px"
+      >
+        <div class="student-checkin-confirm">
+          <CheckCircleOutlined class="student-checkin-icon" />
+          <p>确认为当前课次进行签退？</p>
+          <p class="student-checkin-session-info" v-if="currentSession">
+            {{ currentSession.course_name }} · {{ currentSession.time_range?.replace('~', ' - ') }}
+          </p>
+        </div>
       </a-modal>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   UserOutlined,
@@ -520,6 +653,10 @@ interface CurrentSession {
   primary_instructor_id?: number
   primary_instructor_name?: string
   action_permissions?: SessionActionPermissions
+  checkin_mode?: 'direct' | 'qr' | null
+  checkin_duration_minutes?: number | null
+  checkin_deadline?: string | null
+  checkin_qr_token?: string | null
 }
 
 interface CheckinRecord {
@@ -530,6 +667,17 @@ interface CheckinRecord {
   time?: string
   date?: string
   session_key?: string
+}
+
+interface ActivityItem {
+  id: number
+  training_id: number
+  user_id: number | null
+  user_name: string | null
+  action_type: string
+  content: string
+  extra_json: Record<string, unknown> | null
+  created_at: string | null
 }
 
 interface ClassDetail {
@@ -575,10 +723,64 @@ const noticeForm = ref({ title: '', content: '' })
 
 // ---- 签到相关 ----
 const sessionActionLoading = ref(false)
-const checkinDetailVisible = ref(false)
+const checkinMgrVisible = ref(false)
 const checkinTab = ref('checked')
 const checkinRecords = ref<CheckinRecord[]>([])
 const checkinToggleLoading = ref<number | null>(null)
+const checkinConfig = ref({ mode: 'direct' as 'direct' | 'qr', duration: 10 })
+const countdownText = ref('')
+const countdownTimer = ref<ReturnType<typeof setInterval> | null>(null)
+const isMobile = ref(window.innerWidth <= 768)
+
+// 学员签到相关
+const studentCheckinConfirmVisible = ref(false)
+const studentCheckinLoading = ref(false)
+const studentCheckoutConfirmVisible = ref(false)
+const studentCheckoutLoading = ref(false)
+
+// ---- 最近动态 ----
+const activityList = ref<ActivityItem[]>([])
+let activityWs: WebSocket | null = null
+
+async function fetchActivities() {
+  try {
+    const res = await axiosInstance.get(`/trainings/${route.params.id}/activities`, { params: { limit: 20 } })
+    activityList.value = (res.data as ActivityItem[]) || []
+  } catch { activityList.value = [] }
+}
+
+function connectActivityWs() {
+  const token = localStorage.getItem('token')
+  if (!token) return
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const host = import.meta.env.VITE_API_BASE_URL
+    ? new URL(import.meta.env.VITE_API_BASE_URL as string).host
+    : location.host
+  const url = `${protocol}//${host}/ws/trainings/${route.params.id}/activities?token=${token}`
+
+  activityWs = new WebSocket(url)
+  activityWs.onmessage = (event) => {
+    try {
+      const data = JSON.parse(event.data) as ActivityItem
+      activityList.value.unshift(data)
+      if (activityList.value.length > 50) activityList.value.pop()
+    } catch { /* ignore malformed messages */ }
+  }
+  activityWs.onclose = () => { activityWs = null }
+}
+
+function disconnectActivityWs() {
+  if (activityWs) { activityWs.close(); activityWs = null }
+}
+
+function formatRelativeTime(time: string | null | undefined): string {
+  if (!time) return ''
+  const diff = Date.now() - new Date(time).getTime()
+  if (diff < 60000) return '刚刚'
+  if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`
+  return dayjs(time).format('MM/DD HH:mm')
+}
 
 // ---- computed ----
 
@@ -680,13 +882,30 @@ const currentSessionSchedule = computed<ScheduleItem | null>(() => {
   return { date: currentSession.value.date, time_range: currentSession.value.time_range, status: currentSession.value.status }
 })
 
-const isCheckinStarted = computed(() => {
+const isCheckinOrCheckoutPhase = computed(() => {
   const s = currentSession.value?.status
-  return s === 'checkin_open' || s === 'checkin_closed' || s === 'checkout_open' || s === 'completed'
+  return s === 'checkin_open' || s === 'checkin_closed' || s === 'checkout_open'
 })
+
+const isCheckoutPhase = computed(() => {
+  const s = currentSession.value?.status
+  return s === 'checkout_open'
+})
+
+// 保留旧名兼容其他引用
+const isCheckinStarted = isCheckinOrCheckoutPhase
 
 const canManageCheckin = computed(() => {
   return authStore.isInstructor && currentSession.value?.action_permissions != null
+})
+
+// 签到进行中
+const isCheckinOngoing = computed(() => currentSession.value?.status === 'checkin_open')
+
+// 签到已结束（已关闭签到或后续状态）
+const isCheckinEnded = computed(() => {
+  const s = currentSession.value?.status
+  return s === 'checkin_closed' || s === 'checkout_open' || s === 'completed'
 })
 
 // 已签到 / 未签到列表
@@ -699,6 +918,13 @@ const uncheckedList = computed(() => {
   return (detail.value?.students || [])
     .filter((s) => !checkedIds.has(s.user_id))
     .map((s) => ({ user_id: s.user_id, user_name: s.user_name, user_nickname: s.user_nickname, status: 'absent', time: '' }))
+})
+
+const totalStudents = computed(() => detail.value?.students?.length || 0)
+
+const checkinPercent = computed(() => {
+  if (!totalStudents.value) return 0
+  return Math.round((checkedInList.value.length / totalStudents.value) * 100)
 })
 
 // ---- methods ----
@@ -756,7 +982,6 @@ function truncate(text: string | undefined | null, len: number): string {
 }
 
 function handleEnroll() { router.push(`/classes/${route.params.id}/enroll`) }
-function goCheckin() { router.push(`/classes/${route.params.id}/checkin`) }
 function goCheckout() { router.push(`/classes/${route.params.id}/checkout`) }
 function goHistory() { message.info('训历功能即将上线') }
 
@@ -776,10 +1001,17 @@ async function doSessionAction(action: string) {
   }
 }
 
-// 签到详情
-async function openCheckinDetail() {
+// 打开签到管理弹窗
+async function openCheckinMgr() {
   const sess = currentSession.value
   if (!sess) return
+  // 如果签到已开始，用后端返回的配置；否则用默认值
+  if (sess.checkin_mode) {
+    checkinConfig.value.mode = sess.checkin_mode
+  }
+  if (sess.checkin_duration_minutes) {
+    checkinConfig.value.duration = sess.checkin_duration_minutes
+  }
   checkinTab.value = 'checked'
   try {
     const res = await axiosInstance.get(`/trainings/${route.params.id}/checkin/records`, {
@@ -789,7 +1021,105 @@ async function openCheckinDetail() {
   } catch {
     checkinRecords.value = []
   }
-  checkinDetailVisible.value = true
+  startCountdown()
+  checkinMgrVisible.value = true
+}
+
+// 开始签到（带配置参数）
+async function doStartCheckin() {
+  const sess = currentSession.value
+  if (!sess) return
+  sessionActionLoading.value = true
+  try {
+    await axiosInstance.post(`/trainings/${route.params.id}/sessions/${sess.session_id}/checkin/start`, {
+      mode: checkinConfig.value.mode,
+      duration_minutes: checkinConfig.value.duration,
+    })
+    message.success('签到已开始')
+    await fetchDetail()
+    // 刷新签到记录
+    const res = await axiosInstance.get(`/trainings/${route.params.id}/checkin/records`, {
+      params: { session_key: sess.session_id },
+    })
+    checkinRecords.value = (res.data as CheckinRecord[]) || []
+    startCountdown()
+  } catch (err: unknown) {
+    message.error(err instanceof Error ? err.message : '操作失败')
+  } finally {
+    sessionActionLoading.value = false
+  }
+}
+
+// 倒计时
+function startCountdown() {
+  stopCountdown()
+  updateCountdown()
+  countdownTimer.value = setInterval(updateCountdown, 1000)
+}
+
+function stopCountdown() {
+  if (countdownTimer.value) {
+    clearInterval(countdownTimer.value)
+    countdownTimer.value = null
+  }
+  countdownText.value = ''
+}
+
+function updateCountdown() {
+  const deadline = currentSession.value?.checkin_deadline
+  if (!deadline) {
+    countdownText.value = ''
+    return
+  }
+  const remaining = dayjs(deadline).diff(dayjs(), 'second')
+  if (remaining <= 0) {
+    countdownText.value = '已截止'
+    stopCountdown()
+    return
+  }
+  const mins = Math.floor(remaining / 60)
+  const secs = remaining % 60
+  countdownText.value = `${mins}:${String(secs).padStart(2, '0')}`
+}
+
+// 学员签到
+async function handleStudentCheckin() {
+  const sess = currentSession.value
+  if (!sess) return
+  studentCheckinLoading.value = true
+  try {
+    await axiosInstance.post(`/trainings/${route.params.id}/checkin`)
+    message.success('签到成功')
+    studentCheckinConfirmVisible.value = false
+    await fetchDetail()
+  } catch (err: unknown) {
+    message.error(err instanceof Error ? err.message : '签到失败')
+  } finally {
+    studentCheckinLoading.value = false
+  }
+}
+
+async function handleStudentCheckout() {
+  const sess = currentSession.value
+  if (!sess) return
+  studentCheckoutLoading.value = true
+  try {
+    await axiosInstance.post(`/trainings/${route.params.id}/checkout`, {
+      session_key: sess.session_id,
+    })
+    message.success('签退成功')
+    studentCheckoutConfirmVisible.value = false
+    await fetchDetail()
+  } catch (err: unknown) {
+    message.error(err instanceof Error ? err.message : '签退失败')
+  } finally {
+    studentCheckoutLoading.value = false
+  }
+}
+
+// 响应式移动端检测
+function handleResize() {
+  isMobile.value = window.innerWidth <= 768
 }
 
 // 切换签到状态
@@ -875,7 +1205,25 @@ async function fetchDetail() {
   }
 }
 
-onMounted(fetchDetail)
+onMounted(async () => {
+  await fetchDetail()
+  if (detail.value) {
+    fetchActivities()
+    connectActivityWs()
+  }
+  window.addEventListener('resize', handleResize)
+})
+
+onUnmounted(() => {
+  stopCountdown()
+  disconnectActivityWs()
+  window.removeEventListener('resize', handleResize)
+})
+
+// 弹窗关闭时停止倒计时
+watch(checkinMgrVisible, (visible) => {
+  if (!visible) stopCountdown()
+})
 </script>
 
 <style scoped>
@@ -1067,6 +1415,99 @@ onMounted(fetchDetail)
 .overview-desc-empty {
   color: var(--v2-text-muted);
   font-size: 14px;
+}
+
+/* -- 最近动态 -- */
+.activity-feed {
+  display: flex;
+  flex-direction: column;
+}
+
+.activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 0;
+}
+
+.activity-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 6px;
+  background: var(--v2-text-muted);
+}
+
+.dot-checkin { background: var(--v2-success); }
+.dot-checkout { background: var(--v2-primary); }
+.dot-session_checkin_start,
+.dot-session_checkin_end,
+.dot-session_checkout_start,
+.dot-session_checkout_end,
+.dot-notice { background: var(--v2-warning); }
+.dot-enroll { background: #8b5cf6; }
+
+.activity-body {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.activity-content {
+  font-size: 13px;
+  color: var(--v2-text-secondary);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-time {
+  font-size: 12px;
+  color: var(--v2-text-muted);
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.activity-empty {
+  padding: 16px 0;
+  text-align: center;
+  font-size: 13px;
+  color: var(--v2-text-muted);
+}
+
+.activity-checkin-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  border-radius: var(--v2-radius-sm);
+  background: rgba(52, 199, 89, 0.08);
+  font-size: 13px;
+  color: var(--v2-success);
+  font-weight: 500;
+}
+
+.activity-checkout-prompt {
+  background: rgba(75, 110, 245, 0.08);
+  color: var(--v2-primary);
+}
+
+@media (max-width: 768px) {
+  .activity-body {
+    flex-direction: column;
+    gap: 2px;
+  }
+  .activity-time {
+    text-align: left;
+  }
 }
 
 /* -- 当前课次卡片 -- */
@@ -1512,4 +1953,147 @@ onMounted(fetchDetail)
 .rate-good { color: var(--v2-success); }
 .rate-warn { color: var(--v2-warning); }
 .rate-bad { color: var(--v2-danger); }
+
+/* ====== 签到管理弹窗 ====== */
+.checkin-config {
+  padding: 16px;
+  background: var(--v2-bg);
+  border-radius: var(--v2-radius-sm);
+  margin-bottom: 16px;
+}
+
+.config-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.config-row:last-child { margin-bottom: 0; }
+
+.config-label {
+  font-size: 14px;
+  color: var(--v2-text-secondary);
+  min-width: 70px;
+  flex-shrink: 0;
+}
+
+.qr-display {
+  margin-top: 12px;
+  padding: 16px;
+  background: var(--v2-bg-card);
+  border: 1px dashed var(--v2-border);
+  border-radius: var(--v2-radius-sm);
+  text-align: center;
+}
+
+.qr-token-label {
+  display: block;
+  font-size: 12px;
+  color: var(--v2-text-muted);
+  margin-bottom: 8px;
+}
+
+.qr-token-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--v2-primary);
+  letter-spacing: 2px;
+}
+
+.checkin-stats {
+  padding: 12px 16px;
+  background: var(--v2-bg);
+  border-radius: var(--v2-radius-sm);
+  margin-bottom: 12px;
+}
+
+.stat-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--v2-text-primary);
+}
+
+.stat-progress span { white-space: nowrap; flex-shrink: 0; }
+.stat-progress .ant-progress { flex: 1; }
+
+.stat-countdown {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--v2-warning);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.checkin-mgr-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--v2-border-light);
+}
+
+/* 学员签到确认弹窗 */
+.student-checkin-confirm {
+  text-align: center;
+  padding: 16px 0;
+}
+
+.student-checkin-icon {
+  font-size: 48px;
+  color: var(--v2-primary);
+  margin-bottom: 16px;
+}
+
+.student-checkin-confirm p {
+  font-size: 15px;
+  color: var(--v2-text-primary);
+  margin: 0 0 8px;
+}
+
+.student-checkin-session-info {
+  font-size: 13px;
+  color: var(--v2-text-muted);
+}
+
+.cs-qr-hint {
+  font-size: 12px;
+  color: var(--v2-warning);
+  display: flex;
+  align-items: center;
+}
+
+/* 移动端签到管理弹窗 */
+@media (max-width: 768px) {
+  .checkin-config {
+    padding: 12px;
+  }
+
+  .config-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .checkin-list .checkin-row {
+    padding: 8px 2px;
+    gap: 8px;
+  }
+
+  .checkin-mgr-footer {
+    flex-direction: column;
+  }
+
+  .checkin-mgr-footer .ant-btn {
+    min-height: 44px;
+    width: 100%;
+  }
+
+  .student-checkin-confirm .ant-btn {
+    min-height: 44px;
+  }
+}
 </style>

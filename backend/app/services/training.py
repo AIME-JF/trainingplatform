@@ -26,6 +26,7 @@ from app.models import (
     Role,
     ScheduleItem,
     Training,
+    TrainingActivity,
     TrainingBase,
     TrainingCourseChangeLog,
     TrainingCourse,
@@ -39,6 +40,7 @@ from app.schemas.training import (
     CalendarEventResponse,
     CheckinCreate,
     CheckinResponse,
+    TrainingActivityResponse,
     TrainingCheckinQrResponse,
     CheckoutCreate,
     EnrollmentCreate,
@@ -996,6 +998,51 @@ class TrainingService:
         records = query.order_by(CheckinRecord.date.desc(), CheckinRecord.time.asc().nulls_last()).all()
         return [self._checkin_to_response(record) for record in records]
 
+    def get_training_activities(self, training_id: int, limit: int = 20) -> List[TrainingActivityResponse]:
+        """获取培训班动态列表"""
+        activities = self.db.query(TrainingActivity).filter(
+            TrainingActivity.training_id == training_id
+        ).order_by(TrainingActivity.created_at.desc()).limit(limit).all()
+        return [TrainingActivityResponse.model_validate(a) for a in activities]
+
+    def _record_activity(
+        self,
+        training_id: int,
+        user_id: Optional[int],
+        user_name: Optional[str],
+        action_type: str,
+        content: str,
+        extra_json: Optional[dict] = None,
+    ):
+        """写入一条培训动态记录（不单独 commit，由调用方统一 commit）"""
+        activity = TrainingActivity(
+            training_id=training_id,
+            user_id=user_id,
+            user_name=user_name,
+            action_type=action_type,
+            content=content,
+            extra_json=extra_json,
+        )
+        self.db.add(activity)
+        self.db.flush()
+        try:
+            import asyncio
+            from app.websocket import broadcast_activity
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(broadcast_activity(training_id, {
+                    "id": activity.id,
+                    "training_id": training_id,
+                    "user_id": user_id,
+                    "user_name": user_name,
+                    "action_type": action_type,
+                    "content": content,
+                    "extra_json": extra_json,
+                    "created_at": activity.created_at.isoformat() if activity.created_at else None,
+                }))
+        except RuntimeError:
+            pass
+
     def checkin(self, training_id: int, user_id: int, data: CheckinCreate) -> CheckinResponse:
         """签到"""
         training = self.db.query(Training).options(
@@ -1036,8 +1083,18 @@ class TrainingService:
 
         record.time = checkin_time
         record.status = status
-        record.checkin_method = "manual" if data.user_id else "qr"
+        if data.user_id:
+            checkin_method = "manual"
+        elif session["schedule"].get("checkin_mode") == "direct":
+            checkin_method = "direct"
+        else:
+            checkin_method = "qr"
+        record.checkin_method = checkin_method
         record.absence_reason = None
+
+        checkin_user = self.db.query(User).filter(User.id == target_user_id).first()
+        checkin_user_name = (checkin_user.nickname or checkin_user.username) if checkin_user else str(target_user_id)
+        self._record_activity(training_id, target_user_id, checkin_user_name, "checkin", f"{checkin_user_name} 已签到")
 
         self._refresh_training_histories(training_id, [target_user_id])
         self.db.commit()
@@ -1087,6 +1144,10 @@ class TrainingService:
         if record.status == "absent":
             record.status = "on_time"
             record.absence_reason = None
+
+        checkout_user = self.db.query(User).filter(User.id == target_user_id).first()
+        checkout_user_name = (checkout_user.nickname or checkout_user.username) if checkout_user else str(target_user_id)
+        self._record_activity(training_id, target_user_id, checkout_user_name, "checkout", f"{checkout_user_name} 已签退")
 
         self._refresh_training_histories(training_id, [target_user_id])
         self.db.commit()
@@ -1165,17 +1226,24 @@ class TrainingService:
             session_status=self._find_schedule_session(training, session_key)["status"] if training and self._find_schedule_session(training, session_key) else None,
         )
 
-    def start_session_checkin(self, training_id: int, session_key: str, user_id: int) -> TrainingResponse:
+    def start_session_checkin(self, training_id: int, session_key: str, user_id: int, checkin_mode: str = "direct", checkin_duration_minutes: int = 15) -> TrainingResponse:
         training, session = self._load_training_session(training_id, session_key)
         self._assert_training_course_editable(training, "修改课次状态")
         if not self._can_operate_schedule(training, session["course"], session["schedule"], user_id, "start_checkin"):
             raise ValueError("当前用户无权开始该课次签到，或课次状态不允许")
         before_course = self._snapshot_course_entity(session["course"])
-        now = datetime.now().isoformat()
+        now = datetime.now()
+        now_iso = now.isoformat()
         schedule = session["schedule"]
         schedule["status"] = self.SESSION_CHECKIN_OPEN
-        schedule["started_at"] = schedule.get("started_at") or now
-        schedule["checkin_started_at"] = now
+        schedule["started_at"] = schedule.get("started_at") or now_iso
+        schedule["checkin_started_at"] = now_iso
+        schedule["checkin_mode"] = checkin_mode
+        schedule["checkin_duration_minutes"] = checkin_duration_minutes
+        schedule["checkin_deadline"] = (now + timedelta(minutes=checkin_duration_minutes)).isoformat()
+        if checkin_mode == "qr":
+            qr_resp = self.generate_checkin_qr(training_id, session_key)
+            schedule["checkin_qr_token"] = qr_resp.token
         flag_modified(session["course"], "schedules")
         if training.status != "ended":
             if training.publish_status != "published":
@@ -1184,6 +1252,10 @@ class TrainingService:
                 self._mark_training_locked(training, user_id)
             training.status = "active"
         self._record_course_entity_changes(training.id, before_course, session["course"], user_id, "start_checkin")
+        _user = self.db.query(User).filter(User.id == user_id).first()
+        _uname = (_user.nickname or _user.username) if _user else str(user_id)
+        _cname = session["course"].name
+        self._record_activity(training_id, user_id, _uname, "session_checkin_start", f"签到已开始：{_cname}")
         self._refresh_training_histories(training_id)
         self.db.commit()
         detail = self.get_training_by_id(training_id, user_id)
@@ -1201,6 +1273,10 @@ class TrainingService:
         session["schedule"]["checkin_ended_at"] = datetime.now().isoformat()
         flag_modified(session["course"], "schedules")
         self._record_course_entity_changes(training.id, before_course, session["course"], user_id, "end_checkin")
+        _user = self.db.query(User).filter(User.id == user_id).first()
+        _uname = (_user.nickname or _user.username) if _user else str(user_id)
+        _cname = session["course"].name
+        self._record_activity(training_id, user_id, _uname, "session_checkin_end", f"签到已结束：{_cname}")
         self.db.commit()
         detail = self.get_training_by_id(training_id, user_id)
         if not detail:
@@ -1217,6 +1293,10 @@ class TrainingService:
         session["schedule"]["checkout_started_at"] = datetime.now().isoformat()
         flag_modified(session["course"], "schedules")
         self._record_course_entity_changes(training.id, before_course, session["course"], user_id, "start_checkout")
+        _user = self.db.query(User).filter(User.id == user_id).first()
+        _uname = (_user.nickname or _user.username) if _user else str(user_id)
+        _cname = session["course"].name
+        self._record_activity(training_id, user_id, _uname, "session_checkout_start", f"签退已开始：{_cname}")
         self.db.commit()
         detail = self.get_training_by_id(training_id, user_id)
         if not detail:
@@ -1236,6 +1316,10 @@ class TrainingService:
         schedule["ended_at"] = now
         flag_modified(session["course"], "schedules")
         self._record_course_entity_changes(training.id, before_course, session["course"], user_id, "end_checkout")
+        _user = self.db.query(User).filter(User.id == user_id).first()
+        _uname = (_user.nickname or _user.username) if _user else str(user_id)
+        _cname = session["course"].name
+        self._record_activity(training_id, user_id, _uname, "session_checkout_end", f"签退已结束：{_cname}")
         self._sync_absent_records(training, session_key, session["date"])
         self._refresh_training_histories(training_id)
         self.db.commit()
@@ -2334,19 +2418,24 @@ class TrainingService:
         user_ids = [course.primary_instructor_id, *(course.assistant_instructor_ids or [])]
         user_name_map = self._load_user_name_map([item for item in user_ids if item])
         assistant_ids = [int(item) for item in (course.assistant_instructor_ids or []) if item is not None]
+        sched = session["schedule"]
         return TrainingCurrentSessionResponse(
             course_id=course.id,
             course_name=course.name,
             session_id=session["session_id"],
             session_label=session["session_label"],
             date=session["date"],
-            time_range=session["schedule"].get("time_range") or "",
+            time_range=sched.get("time_range") or "",
             status=session["status"],
-            location=session["schedule"].get("location") or course.location,
+            location=sched.get("location") or course.location,
             primary_instructor_id=course.primary_instructor_id,
             primary_instructor_name=user_name_map.get(course.primary_instructor_id),
             assistant_instructor_ids=assistant_ids,
             assistant_instructor_names=[user_name_map[item] for item in assistant_ids if item in user_name_map],
+            checkin_mode=sched.get("checkin_mode"),
+            checkin_duration_minutes=sched.get("checkin_duration_minutes"),
+            checkin_deadline=sched.get("checkin_deadline"),
+            checkin_qr_token=sched.get("checkin_qr_token"),
             action_permissions=self._build_session_action_permissions(training, session, current_user_id),
         )
 
@@ -2408,11 +2497,13 @@ class TrainingService:
                 ))
             notices = self._list_training_notices(training.id)
             resources = self.list_training_resources(training.id)
+            recent_activities = self.get_training_activities(training.id, limit=5)
         else:
             courses = []
             exam_sessions = []
             notices = []
             resources = []
+            recent_activities = []
 
         user_permission_codes = self._get_user_permission_codes(current_user_id) if current_user_id else set()
         can_edit_training = bool(
@@ -2506,6 +2597,7 @@ class TrainingService:
             workflow_steps=self._build_workflow_steps(training),
             current_step_key=current_step_key,
             current_session=self._build_current_session_response(training, current_user_id),
+            recent_activities=recent_activities,
             can_manage_all=can_manage_all,
             can_manage_training=can_manage_training_directly,
             can_edit_training=can_edit_training,

@@ -3,7 +3,7 @@ Police training platform backend.
 """
 __version__ = "1.0.0"
 
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Query as WSQuery
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
@@ -12,6 +12,8 @@ from app.database import init_db
 from app.middleware import RequestLoggingMiddleware, register_exception_handlers
 from app.schemas import StandardResponse
 from app.views import all_routers
+from app.websocket import connect, disconnect
+from app.services.auth import auth_service
 from config import settings
 from logger import logger
 
@@ -63,6 +65,32 @@ def health_check():
 
 for router in all_routers:
     app.include_router(router, prefix=settings.API_V1_STR)
+
+
+@app.websocket("/ws/trainings/{training_id}/activities")
+async def ws_training_activities(
+    websocket: WebSocket,
+    training_id: int,
+    token: str = WSQuery(default=""),
+):
+    if not token:
+        await websocket.close(code=4001)
+        return
+    try:
+        payload = auth_service.verify_token(token)
+        if payload is None:
+            await websocket.close(code=4001)
+            return
+    except Exception:
+        await websocket.close(code=4001)
+        return
+
+    await connect(training_id, websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        disconnect(training_id, websocket)
 
 
 @app.on_event("startup")
