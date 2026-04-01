@@ -215,6 +215,11 @@ class TrainingService:
                 continue
             if scope_context and not can_view_training_with_context(scope_context, training):
                 continue
+            # 非管理员、非相关人员只能看到已发布的班级
+            if scope_context and not scope_context.is_admin:
+                related = is_training_related_user(training, current_user_id) if current_user_id else False
+                if not related and (training.publish_status or "draft") != "published":
+                    continue
             visible_trainings.append(training)
 
         if changed:
