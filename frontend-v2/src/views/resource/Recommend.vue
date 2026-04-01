@@ -5,83 +5,62 @@
     @touchmove.capture="onTouchMove"
     @touchend.capture="onTouchEnd"
   >
-    <LearningResourceTabs />
-
-    <div class="community-header">
-      <div class="community-header-panel">
-        <div class="community-header-top">
-          <div class="community-heading">
-            <h1 class="page-title">资源社区</h1>
-            <p class="page-subtitle">
-              按推荐流连续浏览优先资源，点击视频后可用滚轮或键盘上下键切换。
-              <span v-if="isMobile">移动端支持上下滑切换资源。</span>
-            </p>
-          </div>
-
-          <div class="community-toolbar">
-            <div class="community-search">
-              <a-input
-                v-model:value="searchKeyword"
-                class="community-search-input"
-                size="large"
-                placeholder="搜索标题、简介、作者或标签"
-                @pressEnter="handleSearch"
-              >
-                <template #prefix>
-                  <SearchOutlined class="community-search-icon" />
-                </template>
-                <template #suffix>
-                  <button
-                    type="button"
-                    class="community-search-trigger"
-                    :disabled="searching"
-                    @click="handleSearch"
-                  >
-                    {{ searching ? '搜索中' : '搜索' }}
-                  </button>
-                </template>
-              </a-input>
-            </div>
-
-            <div class="community-channel-switch" role="tablist" aria-label="资源社区频道">
-              <button
-                type="button"
-                class="channel-tab"
-                :class="{ active: activeFeedTab === 'recommended' }"
-                @click="activeFeedTab = 'recommended'"
-              >
-                推荐
-              </button>
-              <button
-                type="button"
-                class="channel-tab"
-                :class="{ active: activeFeedTab === 'featured' }"
-                @click="activeFeedTab = 'featured'"
-              >
-                精选
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div v-if="currentResource" class="community-meta-line">
-          <span>当前第 {{ currentIndex + 1 }} 条 / {{ currentDisplayTotal }}</span>
-          <span v-if="currentFeedItem">推荐分 {{ formatScore(currentFeedItem.score) }}</span>
-          <span>点击视频后滚轮接管切换</span>
-          <span v-if="activeFeedTab === 'featured'">精选内容当前先复用推荐流</span>
-        </div>
-      </div>
-    </div>
-
     <div class="community-shell">
       <a-spin :spinning="loadingResource || loadingFeed" class="community-spin">
         <a-empty v-if="!currentResource && !loadingResource" description="暂无社区内容" class="community-empty" />
 
         <template v-else-if="currentResource">
           <div class="community-player-shell">
+            <div class="community-overlay-bar">
+              <div class="community-channel-switch" role="tablist" aria-label="资源社区频道">
+                <button
+                  type="button"
+                  class="channel-tab"
+                  :class="{ active: activeFeedTab === 'recommended' }"
+                  @click="activeFeedTab = 'recommended'"
+                >
+                  推荐
+                </button>
+                <button
+                  type="button"
+                  class="channel-tab"
+                  :class="{ active: activeFeedTab === 'featured' }"
+                  @click="activeFeedTab = 'featured'"
+                >
+                  精选
+                </button>
+              </div>
+
+              <div class="community-search">
+                <a-input
+                  v-model:value="searchKeyword"
+                  class="community-search-input"
+                  size="large"
+                  placeholder="搜索标题、简介、作者或标签"
+                  @pressEnter="handleSearch"
+                >
+                  <template #prefix>
+                    <SearchOutlined class="community-search-icon" />
+                  </template>
+                  <template #suffix>
+                    <button
+                      type="button"
+                      class="community-search-trigger"
+                      :aria-label="searching ? '搜索中' : '执行搜索'"
+                      :disabled="searching"
+                      @click="handleSearch"
+                    >
+                      <SearchOutlined class="community-search-trigger-icon" />
+                    </button>
+                  </template>
+                </a-input>
+              </div>
+            </div>
+
             <div
               ref="communityViewerRef"
               class="community-viewer"
+              @mouseenter="handleViewerMouseEnter"
               @mouseleave="handleViewerMouseLeave"
               @mousedown.capture="handleViewerMouseDown"
             >
@@ -232,7 +211,6 @@ import {
   unlikeResource,
 } from '@/api/learning-resource'
 import { useMobile } from '@/composables/useMobile'
-import LearningResourceTabs from '@/components/resource/LearningResourceTabs.vue'
 import ResourceViewer from '@/components/resource/ResourceViewer.vue'
 import { formatDateTime } from '@/utils/learning-resource'
 
@@ -263,6 +241,7 @@ const commentDraft = ref('')
 const navigationLockedUntil = ref(0)
 const communityViewerRef = ref<HTMLElement | null>(null)
 const wheelNavigationArmed = ref(false)
+const viewerPointerInside = ref(false)
 const resourceCache = new Map<number, ResourceDetailResponse>()
 const impressionRecorded = new Set<number>()
 const gesture = ref({
@@ -445,11 +424,26 @@ function isInteractiveTarget(target: EventTarget | null) {
   ))
 }
 
-function isViewerTarget(target: EventTarget | null) {
-  return target instanceof Element && Boolean(target.closest('.community-viewer'))
+function isPointerInsideViewer(clientX: number, clientY: number) {
+  if (!communityViewerRef.value) {
+    return false
+  }
+
+  const rect = communityViewerRef.value.getBoundingClientRect()
+  return (
+    clientX >= rect.left &&
+    clientX <= rect.right &&
+    clientY >= rect.top &&
+    clientY <= rect.bottom
+  )
+}
+
+function handleViewerMouseEnter() {
+  viewerPointerInside.value = true
 }
 
 function handleViewerMouseLeave() {
+  viewerPointerInside.value = false
   wheelNavigationArmed.value = false
 }
 
@@ -457,6 +451,7 @@ function handleViewerMouseDown(event: MouseEvent) {
   if (event.button !== 0) {
     return
   }
+  viewerPointerInside.value = true
   wheelNavigationArmed.value = true
 }
 
@@ -469,6 +464,7 @@ function handleDocumentClick(event: MouseEvent) {
     return
   }
 
+  viewerPointerInside.value = false
   wheelNavigationArmed.value = false
 }
 
@@ -477,9 +473,11 @@ function handleWheel(event: WheelEvent) {
     return
   }
 
-  if (!wheelNavigationArmed.value || !isViewerTarget(event.target)) {
+  const pointerInsideViewer = viewerPointerInside.value || isPointerInsideViewer(event.clientX, event.clientY)
+  if (!wheelNavigationArmed.value || !pointerInsideViewer) {
     return
   }
+  viewerPointerInside.value = pointerInsideViewer
 
   if (Math.abs(event.deltaY) < 48) {
     return
@@ -850,143 +848,87 @@ function onTouchEnd(event: TouchEvent) {
 
 <style scoped>
 .community-page {
-  min-height: 100vh;
-}
-
-.community-header {
-  margin-bottom: 22px;
-}
-
-.community-header-panel {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 24px 28px 22px;
-  border: 1px solid rgba(55, 70, 82, 0.08);
-  border-radius: 30px;
-  background:
-    radial-gradient(circle at top left, rgba(77, 101, 255, 0.1), transparent 28%),
-    linear-gradient(140deg, rgba(255, 255, 255, 0.98), rgba(244, 247, 250, 0.94));
-  box-shadow: 0 20px 46px rgba(63, 76, 89, 0.08);
-}
-
-.community-header-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-}
-
-.community-heading {
-  min-width: 0;
-  max-width: 560px;
-}
-
-.community-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 14px;
-  flex: 1;
-  min-width: 0;
-}
-
-.page-title {
-  margin: 0;
-  font-size: 28px;
-  font-weight: 800;
-  color: #18202a;
-}
-
-.page-subtitle {
-  margin: 8px 0 0;
-  color: rgba(43, 54, 65, 0.72);
-  line-height: 1.75;
-}
-
-.community-meta-line {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px 12px;
-  color: rgba(49, 62, 73, 0.8);
-  font-size: 13px;
-}
-
-.community-meta-line span {
-  display: inline-flex;
-  align-items: center;
-  min-height: 34px;
-  padding: 6px 14px;
-  border-radius: 999px;
-  background: rgba(24, 32, 42, 0.05);
-  box-shadow: inset 0 0 0 1px rgba(24, 32, 42, 0.06);
+  min-height: 0;
+  height: calc(100vh - var(--v2-bottomnav-height));
+  padding: 0 !important;
+  overflow: hidden;
 }
 
 .community-search {
-  flex: 1;
-  min-width: 300px;
-  max-width: 560px;
+  width: min(100%, 520px);
+  margin-left: auto;
 }
 
-.community-search-input :deep(.ant-input-affix-wrapper) {
-  height: 58px;
+.community-search :deep(.community-search-input.ant-input-affix-wrapper) {
+  height: 54px;
   padding: 7px 8px 7px 18px;
-  border: none;
+  border: none !important;
   border-radius: 22px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow:
-    inset 0 0 0 1px rgba(27, 38, 48, 0.08),
-    0 10px 22px rgba(61, 76, 90, 0.08);
+  background: transparent !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(8px);
 }
 
-.community-search-input :deep(.ant-input-affix-wrapper:hover),
-.community-search-input :deep(.ant-input-affix-wrapper-focused) {
-  box-shadow:
-    inset 0 0 0 1px rgba(27, 38, 48, 0.12),
-    0 14px 28px rgba(61, 76, 90, 0.12);
+.community-search :deep(.community-search-input.ant-input-affix-wrapper:hover),
+.community-search :deep(.community-search-input.ant-input-affix-wrapper-focused) {
+  background: transparent !important;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
 }
 
-.community-search-input :deep(.ant-input) {
+.community-search :deep(.community-search-input.ant-input-affix-wrapper > input.ant-input) {
   font-size: 15px;
-  color: #1d2732;
-  background: transparent;
+  color: rgba(255, 255, 255, 0.96);
+  background: transparent !important;
 }
 
-.community-search-input :deep(.ant-input::placeholder) {
-  color: rgba(82, 95, 108, 0.55);
+.community-search :deep(.community-search-input.ant-input-affix-wrapper > input.ant-input::placeholder) {
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.community-search :deep(.community-search-input.ant-input-affix-wrapper .ant-input-prefix),
+.community-search :deep(.community-search-input.ant-input-affix-wrapper .ant-input-suffix) {
+  background: transparent !important;
 }
 
 .community-search-icon {
-  color: rgba(29, 39, 50, 0.42);
+  color: rgba(255, 255, 255, 0.74);
   font-size: 18px;
 }
 
 .community-search-trigger {
   border: none;
-  min-width: 78px;
-  height: 42px;
-  padding: 0 16px;
-  border-radius: 16px;
-  background: linear-gradient(135deg, #1f2937, #111827);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  padding: 0;
+  border-radius: 999px;
+  background: transparent;
   color: #fff;
-  font-size: 14px;
-  font-weight: 700;
   cursor: pointer;
-  box-shadow: 0 12px 24px rgba(17, 24, 39, 0.18);
+  box-shadow: none;
   transition:
     transform 0.2s ease,
-    box-shadow 0.2s ease,
+    color 0.2s ease,
     opacity 0.2s ease;
 }
 
 .community-search-trigger:hover:not(:disabled) {
   transform: translateY(-1px);
-  box-shadow: 0 16px 28px rgba(17, 24, 39, 0.22);
+  color: rgba(255, 255, 255, 0.82);
 }
 
 .community-search-trigger:disabled {
   cursor: not-allowed;
   opacity: 0.68;
+}
+
+.community-search-trigger-icon {
+  font-size: 16px;
 }
 
 .community-channel-switch {
@@ -995,19 +937,22 @@ function onTouchEnd(event: TouchEvent) {
   gap: 8px;
   padding: 6px;
   border-radius: 22px;
-  background: rgba(24, 32, 42, 0.06);
-  box-shadow: inset 0 0 0 1px rgba(24, 32, 42, 0.07);
+  background: rgba(14, 20, 31, 0.34);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    0 16px 30px rgba(4, 10, 18, 0.18);
+  backdrop-filter: blur(12px);
 }
 
 .channel-tab {
   border: none;
   background: transparent;
-  min-width: 84px;
-  padding: 10px 18px;
+  min-width: 78px;
+  padding: 8px 16px;
   border-radius: 16px;
-  color: rgba(17, 17, 17, 0.48);
+  color: rgba(255, 255, 255, 0.72);
   font-family: SimHei, 'Microsoft YaHei', sans-serif;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 700;
   cursor: pointer;
   transition:
@@ -1018,43 +963,89 @@ function onTouchEnd(event: TouchEvent) {
 }
 
 .channel-tab:hover {
-  color: #111;
-  background: rgba(255, 255, 255, 0.72);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
 }
 
 .channel-tab.active {
-  background: linear-gradient(135deg, #18202a, #0f1720);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.94);
+  color: #111827;
   transform: translateY(-1px);
-  box-shadow: 0 14px 28px rgba(24, 32, 42, 0.2);
+  box-shadow: 0 14px 28px rgba(255, 255, 255, 0.16);
+}
+
+.community-overlay-bar {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  right: 18px;
+  z-index: 22;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  pointer-events: none;
+}
+
+.community-overlay-bar > * {
+  pointer-events: auto;
 }
 
 .community-shell {
   position: relative;
+  display: flex;
+  flex: 1 1 0;
+  min-height: 0;
+  width: 100%;
+  padding: 0 !important;
+  overflow: hidden;
 }
 
 .community-spin,
 .community-spin :deep(.ant-spin-nested-loading),
 .community-spin :deep(.ant-spin-container) {
-  display: block;
-  min-height: calc(100vh - 228px);
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
 }
 
 .community-empty {
-  padding: 84px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 0;
 }
 
 .community-player-shell {
   position: relative;
+  display: flex;
+  align-items: stretch;
+  flex: 1 1 0;
+  min-height: 0;
+  height: 100%;
+  width: 100%;
+  max-width: none;
+  margin: 0;
 }
 
 .community-viewer {
   overflow: hidden;
-  border-radius: 28px;
+  display: flex;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 100%;
+  border-radius: 0;
   background:
     radial-gradient(circle at top right, rgba(208, 218, 226, 0.68), transparent 30%),
     linear-gradient(180deg, rgba(245, 247, 249, 0.98), rgba(231, 236, 240, 0.92));
-  box-shadow: 0 20px 42px rgba(65, 79, 92, 0.14);
+  box-shadow: none;
+  color: #fff;
 }
 
 .community-side-actions {
@@ -1215,33 +1206,22 @@ function onTouchEnd(event: TouchEvent) {
 }
 
 @media (max-width: 1024px) {
-  .community-header-top {
-    flex-direction: column;
-  }
-
-  .community-toolbar {
-    width: 100%;
-    justify-content: space-between;
-  }
-
   .community-search {
-    max-width: none;
+    width: min(100%, 460px);
   }
 }
 
 @media (max-width: 768px) {
-  .community-header-panel {
-    padding: 20px 18px 18px;
-    border-radius: 24px;
+  .community-page {
+    padding-bottom: var(--v2-bottomnav-height) !important;
   }
 
-  .community-toolbar {
+  .community-overlay-bar {
+    top: 12px;
+    left: 12px;
+    right: 12px;
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .community-search {
-    min-width: 0;
   }
 
   .community-search-input :deep(.ant-input-affix-wrapper) {
@@ -1250,18 +1230,17 @@ function onTouchEnd(event: TouchEvent) {
   }
 
   .community-channel-switch {
-    width: 100%;
-    justify-content: space-between;
+    align-self: flex-start;
   }
 
   .community-spin,
   .community-spin :deep(.ant-spin-nested-loading),
   .community-spin :deep(.ant-spin-container) {
-    min-height: calc(100vh - 286px);
+    height: 100%;
   }
 
   .community-viewer {
-    border-radius: 24px;
+    border-radius: 0;
   }
 
   .community-side-actions {
@@ -1297,6 +1276,13 @@ function onTouchEnd(event: TouchEvent) {
   .comment-editor-actions {
     flex-direction: column;
     align-items: flex-start;
+  }
+}
+
+@media (min-width: 769px) {
+  .community-page {
+    height: 100vh;
+    padding-bottom: 0 !important;
   }
 }
 </style>
