@@ -280,6 +280,7 @@ class EnrollmentResponse(BaseModel):
     approved_at: Optional[datetime] = None
     reviewed_at: Optional[datetime] = None
     enroll_time: Optional[datetime] = None
+    checkin_rate: Optional[float] = None
 
     model_config = ConfigDict(from_attributes=True)
 

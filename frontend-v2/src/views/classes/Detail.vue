@@ -61,11 +61,7 @@
         <div class="action-bar">
           <!-- 学员按钮 -->
           <template v-if="authStore.isStudent">
-            <a-button
-              v-if="canEnroll"
-              type="primary"
-              @click="handleEnroll"
-            >
+            <a-button v-if="canEnroll" type="primary" @click="handleEnroll">
               {{ detail.enrollment_requires_approval ? '报名申请' : '加入班级' }}
             </a-button>
             <a-button v-if="detail.current_enrollment_status === 'pending'" disabled>
@@ -74,40 +70,26 @@
             <a-button v-if="detail.current_enrollment_status === 'rejected'" disabled danger>
               审核未通过
             </a-button>
-            <a-button
-              v-if="isEnrolled && hasActiveCheckin"
-              type="primary"
-              @click="goCheckin"
-            >
+            <a-button v-if="isEnrolled && hasActiveCheckin" type="primary" @click="goCheckin">
               <CheckCircleOutlined /> 签到
             </a-button>
-            <a-button
-              v-if="isEnrolled && hasActiveCheckout"
-              @click="goCheckout"
-            >
+            <a-button v-if="isEnrolled && hasActiveCheckout" @click="goCheckout">
               签退评课
             </a-button>
           </template>
 
-          <!-- 教官按钮（普通教官，非管理员） -->
+          <!-- 教官按钮 -->
           <template v-if="authStore.isInstructor">
-            <a-button
-              v-if="hasActiveCheckin"
-              type="primary"
-              @click="goCheckin"
-            >
+            <a-button v-if="hasActiveCheckin" type="primary" @click="goCheckin">
               <CheckCircleOutlined /> 签到
             </a-button>
-            <a-button
-              v-if="hasActiveCheckout"
-              @click="goCheckout"
-            >
+            <a-button v-if="hasActiveCheckout" @click="goCheckout">
               签退
             </a-button>
           </template>
 
           <!-- 通用按钮 -->
-          <a-button v-if="isEnrolled || authStore.isInstructor" @click="activeTab = 'schedule'">
+          <a-button v-if="hasFullAccess && (isEnrolled || authStore.isInstructor)" @click="activeTab = 'schedule'">
             <CalendarOutlined /> 查看课表
           </a-button>
           <a-button v-if="detail.status === 'ended'" @click="goHistory">
@@ -129,53 +111,145 @@
             </span>
           </div>
 
-          <!-- 概览 -->
+          <!-- ========== 概览 ========== -->
           <div v-if="activeTab === 'overview'" class="tab-panel">
-            <div v-if="detail.description" class="overview-desc">
-              <h3 class="section-label">班级简介</h3>
-              <p>{{ detail.description }}</p>
-            </div>
 
-            <div v-if="detail.notices?.length" class="overview-notices">
-              <h3 class="section-label">最新公告</h3>
-              <div v-for="n in detail.notices.slice(0, 3)" :key="n.id" class="notice-row">
-                <NotificationOutlined class="notice-icon" />
-                <span class="notice-title">{{ n.title }}</span>
-                <span class="notice-time">{{ formatDate(n.created_at) }}</span>
+            <!-- 最近课次（仅本班人员可见） -->
+            <div v-if="hasFullAccess && upcomingSessions.length" class="overview-section">
+              <h3 class="section-label">最近课程</h3>
+              <div class="upcoming-list">
+                <div v-for="s in upcomingSessions" :key="s.key" class="upcoming-item">
+                  <div class="upcoming-date-col">
+                    <span class="upcoming-day">{{ s.dayNum }}</span>
+                    <span class="upcoming-weekday">{{ s.weekday }}</span>
+                  </div>
+                  <div class="upcoming-body">
+                    <div class="upcoming-header">
+                      <strong class="upcoming-course">{{ s.courseName }}</strong>
+                      <a-tag :color="s.courseType === 'practice' ? 'green' : 'blue'" size="small">
+                        {{ s.courseType === 'practice' ? '实操' : '理论' }}
+                      </a-tag>
+                    </div>
+                    <div class="upcoming-meta">
+                      <span><ClockCircleOutlined /> {{ s.timeRange }}</span>
+                      <span v-if="s.location"><EnvironmentOutlined /> {{ s.location }}</span>
+                      <span v-if="s.instructor"><UserOutlined /> {{ s.instructor }}</span>
+                    </div>
+                  </div>
+                  <a-tag v-if="s.status && s.status !== 'pending'" size="small">{{ sessionStatusLabel(s.status) }}</a-tag>
+                </div>
               </div>
             </div>
 
-            <a-empty v-if="!detail.description && !detail.notices?.length" description="暂无内容" />
-          </div>
+            <!-- 班级简介（始终显示） -->
+            <div class="overview-section">
+              <h3 class="section-label">班级简介</h3>
+              <p v-if="detail.description" class="overview-desc-text">{{ detail.description }}</p>
+              <p v-else class="overview-desc-empty">暂无简介</p>
+            </div>
 
-          <!-- 课表 -->
-          <div v-if="activeTab === 'schedule'" class="tab-panel">
-            <a-empty v-if="!detail.courses?.length" description="暂无课程安排" />
-            <div v-else class="schedule-list">
-              <div v-for="course in detail.courses" :key="course.course_key || course.name" class="schedule-course">
-                <div class="schedule-course-header">
-                  <span class="course-name">{{ course.name }}</span>
-                  <a-tag v-if="course.type" :color="course.type === 'practice' ? 'green' : 'blue'" size="small">
-                    {{ course.type === 'practice' ? '实操' : '理论' }}
-                  </a-tag>
-                </div>
-                <div class="schedule-course-meta">
-                  <span v-if="course.instructor">{{ course.instructor }}</span>
-                  <span v-if="course.hours">{{ course.hours }} 课时</span>
-                </div>
-                <div v-if="course.schedules?.length" class="schedule-sessions">
-                  <div v-for="(s, i) in course.schedules" :key="i" class="session-row">
-                    <span class="session-date">{{ s.date }}</span>
-                    <span class="session-time">{{ s.time_range }}</span>
-                    <span v-if="s.location" class="session-location">{{ s.location }}</span>
-                    <a-tag v-if="s.status && s.status !== 'pending'" size="small">{{ sessionStatusLabel(s.status) }}</a-tag>
+            <!-- 公告通知（仅本班人员可见） -->
+            <div v-if="hasFullAccess" class="overview-section">
+              <div class="section-header">
+                <h3 class="section-label">公告通知</h3>
+                <a-button v-if="canPublishNotice" size="small" type="primary" @click="openNoticeForm()">
+                  <PlusOutlined /> 发布公告
+                </a-button>
+              </div>
+              <a-empty v-if="!detail.notices?.length" description="暂无公告" :image="simpleImage" />
+              <div v-else class="notice-list">
+                <div
+                  v-for="n in detail.notices"
+                  :key="n.id"
+                  class="notice-card"
+                  @click="openNoticeDetail(n)"
+                >
+                  <div class="notice-card-main">
+                    <h4 class="notice-card-title">{{ n.title }}</h4>
+                    <p class="notice-card-summary">{{ truncate(n.content, 60) }}</p>
+                  </div>
+                  <div class="notice-card-side">
+                    <span class="notice-card-author" v-if="n.author_name">{{ n.author_name }}</span>
+                    <span class="notice-card-time">{{ formatDate(n.created_at) }}</span>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- 考试 -->
+          <!-- ========== 课表 ========== -->
+          <div v-if="activeTab === 'schedule'" class="tab-panel">
+            <!-- 课表统计 -->
+            <div v-if="detail.courses?.length" class="sched-stats">
+              <div class="sched-stat">
+                <span class="sched-stat-num">{{ detail.courses.length }}</span>
+                <span class="sched-stat-label">门课程</span>
+              </div>
+              <div class="sched-stat">
+                <span class="sched-stat-num">{{ totalSessions }}</span>
+                <span class="sched-stat-label">个课次</span>
+              </div>
+              <div class="sched-stat">
+                <span class="sched-stat-num">{{ totalHours }}</span>
+                <span class="sched-stat-label">总课时</span>
+              </div>
+            </div>
+
+            <a-empty v-if="!detail.courses?.length" description="暂无课程安排" />
+            <div v-else class="sched-course-list">
+              <div
+                v-for="course in detail.courses"
+                :key="course.course_key || course.name"
+                class="sched-course-card"
+                :class="`sched-type-${course.type || 'theory'}`"
+              >
+                <!-- 课程头 -->
+                <div class="sched-course-top">
+                  <div class="sched-course-info">
+                    <h4 class="sched-course-name">{{ course.name }}</h4>
+                    <div class="sched-course-meta">
+                      <a-tag :color="course.type === 'practice' ? 'green' : 'blue'" size="small">
+                        {{ course.type === 'practice' ? '实操' : '理论' }}
+                      </a-tag>
+                      <span v-if="course.instructor"><UserOutlined /> {{ course.instructor }}</span>
+                      <span v-if="course.hours"><ClockCircleOutlined /> {{ course.hours }} 课时</span>
+                      <span>共 {{ (course.schedules || []).length }} 个课次</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- 课次时间线 -->
+                <div v-if="course.schedules?.length" class="sched-timeline">
+                  <div
+                    v-for="(s, i) in course.schedules"
+                    :key="i"
+                    class="sched-session"
+                    :class="{ 'is-past': isSessionPast(s), 'is-active': isSessionActive(s) }"
+                  >
+                    <div class="sched-dot-line">
+                      <span class="sched-dot" />
+                      <span v-if="i < course.schedules.length - 1" class="sched-line" />
+                    </div>
+                    <div class="sched-session-body">
+                      <div class="sched-session-row">
+                        <strong class="sched-session-date">{{ formatSessionDate(s.date) }}</strong>
+                        <span class="sched-session-time">{{ s.time_range?.replace('~', ' - ') }}</span>
+                        <a-tag v-if="s.status && s.status !== 'pending'" size="small" :color="sessionTagColor(s.status)">
+                          {{ sessionStatusLabel(s.status) }}
+                        </a-tag>
+                      </div>
+                      <div v-if="s.location" class="sched-session-location">
+                        <EnvironmentOutlined /> {{ s.location }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div v-else class="sched-no-session">暂无排课</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- ========== 考试 ========== -->
           <div v-if="activeTab === 'exam'" class="tab-panel">
             <a-empty v-if="!detail.exam_sessions?.length" description="暂无考试安排" />
             <div v-else class="exam-list">
@@ -196,7 +270,7 @@
             </div>
           </div>
 
-          <!-- 学员名单（仅教官可见） -->
+          <!-- ========== 学员名单 ========== -->
           <div v-if="activeTab === 'students'" class="tab-panel">
             <div v-if="detail.students?.length" class="student-toolbar">
               <a-input-search
@@ -215,6 +289,9 @@
                   <span class="student-name">{{ studentDisplayName(s) }}</span>
                   <span v-if="s.departments?.length" class="student-dept">{{ s.departments.join(' / ') }}</span>
                 </div>
+                <span class="student-checkin-rate" :class="checkinRateClass(s.checkin_rate)">
+                  {{ formatCheckinRate(s.checkin_rate) }}
+                </span>
                 <a-tag v-if="s.status && s.status !== 'approved'" size="small" :color="s.status === 'pending' ? 'orange' : 'red'">
                   {{ enrollStatusLabel(s.status) }}
                 </a-tag>
@@ -223,6 +300,35 @@
           </div>
         </div>
       </section>
+
+      <!-- ====== 公告详情弹窗 ====== -->
+      <a-modal v-model:open="noticeDetailVisible" :title="noticeDetailData?.title" :footer="null" width="560px">
+        <div v-if="noticeDetailData" class="notice-detail-modal">
+          <div class="notice-detail-meta">
+            <span v-if="noticeDetailData.author_name">{{ noticeDetailData.author_name }}</span>
+            <span>{{ formatDateTime(noticeDetailData.created_at) }}</span>
+          </div>
+          <div class="notice-detail-content">{{ noticeDetailData.content }}</div>
+        </div>
+      </a-modal>
+
+      <!-- ====== 发布/编辑公告弹窗 ====== -->
+      <a-modal
+        v-model:open="noticeFormVisible"
+        :title="noticeFormId ? '编辑公告' : '发布公告'"
+        @ok="handleNoticeSubmit"
+        :confirm-loading="noticeSubmitting"
+        ok-text="发布"
+      >
+        <a-form layout="vertical" style="margin-top: 16px">
+          <a-form-item label="标题" required>
+            <a-input v-model:value="noticeForm.title" placeholder="请输入公告标题" :maxlength="200" />
+          </a-form-item>
+          <a-form-item label="内容" required>
+            <a-textarea v-model:value="noticeForm.content" placeholder="请输入公告内容" :rows="5" />
+          </a-form-item>
+        </a-form>
+      </a-modal>
     </template>
   </div>
 </template>
@@ -238,9 +344,10 @@ import {
   CheckCircleOutlined,
   ClockCircleOutlined,
   HistoryOutlined,
-  NotificationOutlined,
+  PlusOutlined,
 } from '@ant-design/icons-vue'
-import { message } from 'ant-design-vue'
+import { Empty, message } from 'ant-design-vue'
+import dayjs from 'dayjs'
 import axiosInstance from '@/api/custom-instance'
 import { useAuthStore } from '@/stores/auth'
 
@@ -249,6 +356,9 @@ const router = useRouter()
 const authStore = useAuthStore()
 const loading = ref(false)
 const activeTab = ref('overview')
+const simpleImage = Empty.PRESENTED_IMAGE_SIMPLE
+
+// ---- interfaces ----
 
 interface ScheduleItem {
   date: string
@@ -283,11 +393,14 @@ interface StudentItem {
   user_nickname?: string
   departments?: string[]
   status?: string
+  checkin_rate?: number | null
 }
 
 interface NoticeItem {
   id: number
   title: string
+  content?: string
+  author_name?: string
   created_at?: string
 }
 
@@ -324,6 +437,16 @@ interface ClassDetail {
 const detail = ref<ClassDetail | null>(null)
 const studentSearch = ref('')
 
+// ---- 公告相关 ----
+const noticeDetailVisible = ref(false)
+const noticeDetailData = ref<NoticeItem | null>(null)
+const noticeFormVisible = ref(false)
+const noticeFormId = ref<number | null>(null)
+const noticeSubmitting = ref(false)
+const noticeForm = ref({ title: '', content: '' })
+
+// ---- computed ----
+
 const filteredStudents = computed(() => {
   const list = detail.value?.students || []
   const kw = studentSearch.value.trim().toLowerCase()
@@ -334,44 +457,75 @@ const filteredStudents = computed(() => {
   })
 })
 
-function studentDisplayName(s: StudentItem): string {
-  return s.user_nickname || s.user_name || String(s.user_id)
-}
-
 const statusLabels: Record<string, string> = {
   upcoming: '未开始',
   active: '进行中',
   ended: '已结束',
 }
 
-
-// 是否已报名通过
 const isEnrolled = computed(() => detail.value?.current_enrollment_status === 'approved')
 
-// 是否可以报名
 const canEnroll = computed(() => {
   const d = detail.value
   if (!d) return false
-  if (d.current_enrollment_status) return false // 已有报名记录
+  if (d.current_enrollment_status) return false
   if (d.status === 'ended') return false
   if (d.publish_status !== 'published') return false
   if (d.is_locked) return false
   return true
 })
 
-// 签到/签退窗口
-const hasActiveCheckin = computed(() => {
-  const s = detail.value?.current_session?.status
-  return s === 'checkin_open'
+const hasActiveCheckin = computed(() => detail.value?.current_session?.status === 'checkin_open')
+const hasActiveCheckout = computed(() => detail.value?.current_session?.status === 'checkout_open')
+
+// 判断当前用户是否有完整访问权限（后端对非相关用户返回空课表/通知）
+const hasFullAccess = computed(() => {
+  const d = detail.value
+  if (!d) return false
+  return !!(d.courses?.length || d.notices?.length || d.exam_sessions?.length || isEnrolled.value)
 })
 
-const hasActiveCheckout = computed(() => {
-  const s = detail.value?.current_session?.status
-  return s === 'checkout_open'
+// 教官可以在班级内发布公告（且需要有完整访问权限）
+const canPublishNotice = computed(() => authStore.isInstructor && hasFullAccess.value)
+
+// 课表统计
+const totalSessions = computed(() =>
+  (detail.value?.courses || []).reduce((sum, c) => sum + (c.schedules || []).length, 0),
+)
+const totalHours = computed(() => {
+  const h = (detail.value?.courses || []).reduce((sum, c) => sum + (c.hours || 0), 0)
+  return Number.isInteger(h) ? h : h.toFixed(1)
 })
 
-// Tab 列表：教官可看学员名单，学员不可
+function isSessionPast(s: ScheduleItem): boolean {
+  if (!s.date) return false
+  return s.date < dayjs().format('YYYY-MM-DD')
+}
+
+function isSessionActive(s: ScheduleItem): boolean {
+  if (!s.status) return false
+  return ['checkin_open', 'checkin_closed', 'checkout_open'].includes(s.status)
+}
+
+function formatSessionDate(date: string | undefined): string {
+  if (!date) return '-'
+  const d = dayjs(date)
+  const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+  return `${d.format('MM/DD')} ${weekdays[d.day()]}`
+}
+
+function sessionTagColor(status: string): string {
+  const map: Record<string, string> = {
+    checkin_open: 'processing', checkin_closed: 'processing', checkout_open: 'warning',
+    completed: 'success', skipped: 'default', missed: 'error',
+  }
+  return map[status] || 'default'
+}
+
 const visibleTabs = computed(() => {
+  if (!hasFullAccess.value) {
+    return [{ key: 'overview', label: '概览' }]
+  }
   const tabs = [
     { key: 'overview', label: '概览' },
     { key: 'schedule', label: '课表' },
@@ -383,25 +537,77 @@ const visibleTabs = computed(() => {
   return tabs
 })
 
+// 最近课次：从所有课程的 schedules 中展开，取当天及之后最近 5 条
+interface UpcomingSession {
+  key: string
+  courseName: string
+  courseType: string
+  date: string
+  dayNum: string
+  weekday: string
+  timeRange: string
+  location: string
+  instructor: string
+  status: string
+}
+
+const upcomingSessions = computed<UpcomingSession[]>(() => {
+  if (!detail.value?.courses?.length) return []
+  const today = dayjs().format('YYYY-MM-DD')
+  const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
+  const items: UpcomingSession[] = []
+
+  for (const course of detail.value.courses) {
+    for (const s of course.schedules || []) {
+      if (!s.date || s.date < today) continue
+      const d = dayjs(s.date)
+      items.push({
+        key: `${course.course_key || course.name}-${s.session_id || s.date}-${s.time_range}`,
+        courseName: course.name,
+        courseType: course.type || 'theory',
+        date: s.date,
+        dayNum: String(d.date()),
+        weekday: weekdays[d.day()],
+        timeRange: s.time_range?.replace('~', ' - ') || '',
+        location: s.location || course.instructor || '',
+        instructor: course.instructor || '',
+        status: s.status || 'pending',
+      })
+    }
+  }
+
+  items.sort((a, b) => `${a.date} ${a.timeRange}`.localeCompare(`${b.date} ${b.timeRange}`))
+  return items.slice(0, 5)
+})
+
+// ---- methods ----
+
+function studentDisplayName(s: StudentItem): string {
+  return s.user_nickname || s.user_name || String(s.user_id)
+}
+
+function formatCheckinRate(rate: number | null | undefined): string {
+  if (rate === null || rate === undefined) return '-'
+  return `${Math.round(rate * 100)}%`
+}
+
+function checkinRateClass(rate: number | null | undefined): string {
+  if (rate === null || rate === undefined) return 'rate-na'
+  if (rate >= 0.9) return 'rate-good'
+  if (rate >= 0.6) return 'rate-warn'
+  return 'rate-bad'
+}
+
 function sessionStatusLabel(status: string): string {
   const map: Record<string, string> = {
-    pending: '待开始',
-    checkin_open: '签到中',
-    checkin_closed: '进行中',
-    checkout_open: '签退中',
-    completed: '已完成',
-    skipped: '已跳过',
-    missed: '已缺课',
+    pending: '待开始', checkin_open: '签到中', checkin_closed: '进行中',
+    checkout_open: '签退中', completed: '已完成', skipped: '已跳过', missed: '已缺课',
   }
   return map[status] || status
 }
 
 function enrollStatusLabel(status: string): string {
-  const map: Record<string, string> = {
-    approved: '已通过',
-    pending: '待审核',
-    rejected: '未通过',
-  }
+  const map: Record<string, string> = { approved: '已通过', pending: '待审核', rejected: '未通过' }
   return map[status] || status
 }
 
@@ -423,25 +629,52 @@ function formatDateTime(val: string | null | undefined): string {
   return String(val).slice(0, 16).replace('T', ' ')
 }
 
-function handleEnroll() {
-  router.push(`/classes/${route.params.id}/enroll`)
+function truncate(text: string | undefined | null, len: number): string {
+  if (!text) return ''
+  return text.length > len ? text.slice(0, len) + '...' : text
 }
 
-function goCheckin() {
-  router.push(`/classes/${route.params.id}/checkin`)
+function handleEnroll() { router.push(`/classes/${route.params.id}/enroll`) }
+function goCheckin() { router.push(`/classes/${route.params.id}/checkin`) }
+function goCheckout() { router.push(`/classes/${route.params.id}/checkout`) }
+function goHistory() { message.info('训历功能即将上线') }
+function goExam(examId: number) { router.push(`/exam/do/${examId}`) }
+
+// 公告详情弹窗
+function openNoticeDetail(n: NoticeItem) {
+  noticeDetailData.value = n
+  noticeDetailVisible.value = true
 }
 
-function goCheckout() {
-  router.push(`/classes/${route.params.id}/checkout`)
+// 发布公告
+function openNoticeForm() {
+  noticeFormId.value = null
+  noticeForm.value = { title: '', content: '' }
+  noticeFormVisible.value = true
 }
 
-function goHistory() {
-  // 训历暂用详情页
-  message.info('训历功能即将上线')
-}
-
-function goExam(examId: number) {
-  router.push(`/exam/do/${examId}`)
+async function handleNoticeSubmit() {
+  if (!noticeForm.value.title.trim() || !noticeForm.value.content.trim()) {
+    message.warning('请填写标题和内容')
+    return
+  }
+  noticeSubmitting.value = true
+  try {
+    const payload = {
+      title: noticeForm.value.title.trim(),
+      content: noticeForm.value.content.trim(),
+      type: 'training',
+      training_id: Number(route.params.id),
+    }
+    await axiosInstance.post('/notices', payload)
+    message.success('公告发布成功')
+    noticeFormVisible.value = false
+    await fetchDetail()
+  } catch (err: unknown) {
+    message.error(err instanceof Error ? err.message : '发布失败')
+  } finally {
+    noticeSubmitting.value = false
+  }
 }
 
 async function fetchDetail() {
@@ -519,7 +752,7 @@ onMounted(fetchDetail)
   flex-wrap: wrap;
 }
 
-/* -- 右侧信息卡片（毛玻璃融入深色头部） -- */
+/* -- 右侧信息卡片 -- */
 .header-cards {
   display: flex;
   gap: 10px;
@@ -542,9 +775,7 @@ onMounted(fetchDetail)
   transition: background 0.2s;
 }
 
-.info-card:hover {
-  background: rgba(255, 255, 255, 0.12);
-}
+.info-card:hover { background: rgba(255, 255, 255, 0.12); }
 
 .info-card-top {
   display: flex;
@@ -553,10 +784,7 @@ onMounted(fetchDetail)
   margin-bottom: 6px;
 }
 
-.info-card--status {
-  flex: 1.6;
-  min-width: 180px;
-}
+.info-card--status { flex: 1.6; min-width: 180px; }
 
 .info-card-extra {
   margin-top: 8px;
@@ -566,10 +794,7 @@ onMounted(fetchDetail)
   gap: 4px;
 }
 
-.info-card-label {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.5);
-}
+.info-card-label { font-size: 12px; color: rgba(255, 255, 255, 0.5); }
 
 .info-card-badge {
   font-size: 11px;
@@ -581,24 +806,12 @@ onMounted(fetchDetail)
 .badge-active   { background: rgba(52, 199, 89, 0.25);  color: #6EE49A; }
 .badge-ended    { background: rgba(255, 255, 255, 0.1);  color: rgba(255, 255, 255, 0.4); }
 
-.info-card-num {
-  font-size: 18px;
-  font-weight: 600;
-  color: #fff;
-}
-
-.info-unit {
-  font-size: 12px;
-  font-weight: 400;
-  color: rgba(255, 255, 255, 0.45);
-}
+.info-card-num { font-size: 18px; font-weight: 600; color: #fff; }
+.info-unit { font-size: 12px; font-weight: 400; color: rgba(255, 255, 255, 0.45); }
 
 /* ====== 主体 ====== */
-.detail-body {
-  padding-top: 20px;
-}
+.detail-body { padding-top: 20px; }
 
-/* -- 操作按钮栏 -- */
 .action-bar {
   display: flex;
   gap: 10px;
@@ -615,7 +828,6 @@ onMounted(fetchDetail)
 
 .tab-bar {
   display: flex;
-  gap: 0;
   border-bottom: 1px solid var(--v2-border-light);
   padding: 0 20px;
 }
@@ -639,92 +851,341 @@ onMounted(fetchDetail)
   border-bottom-color: var(--v2-primary);
 }
 
-.tab-panel {
-  padding: 20px;
-  min-height: 200px;
+.tab-panel { padding: 20px; min-height: 200px; }
+
+/* ====== 概览 ====== */
+.overview-section { margin-bottom: 28px; }
+.overview-section:last-child { margin-bottom: 0; }
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
 }
 
-/* -- 概览 -- */
+.section-header .section-label { margin-bottom: 0; }
+
 .section-label {
   font-size: 15px;
   font-weight: 600;
   color: var(--v2-text-primary);
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
-.overview-desc {
-  margin-bottom: 24px;
-}
-
-.overview-desc p {
+.overview-desc-text {
   white-space: pre-wrap;
   color: var(--v2-text-secondary);
   font-size: 14px;
   line-height: 1.7;
 }
 
-.notice-row {
+.overview-desc-empty {
+  color: var(--v2-text-muted);
+  font-size: 14px;
+}
+
+/* -- 最近课次 -- */
+.upcoming-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.upcoming-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--v2-border-light);
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: var(--v2-radius-sm);
+  background: var(--v2-bg);
+  transition: background 0.15s;
 }
 
-.notice-row:last-child { border-bottom: none; }
-.notice-icon { color: var(--v2-warning); font-size: 14px; }
-.notice-title { flex: 1; font-size: 14px; color: var(--v2-text-primary); }
-.notice-time { font-size: 12px; color: var(--v2-text-muted); }
+.upcoming-item:hover { background: var(--v2-primary-light); }
 
-/* -- 课表 -- */
-.schedule-course {
-  padding: 16px 0;
-  border-bottom: 1px solid var(--v2-border-light);
+.upcoming-date-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 40px;
 }
 
-.schedule-course:last-child { border-bottom: none; }
+.upcoming-day {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--v2-text-primary);
+  line-height: 1;
+}
 
-.schedule-course-header {
+.upcoming-weekday {
+  font-size: 11px;
+  color: var(--v2-text-muted);
+  margin-top: 2px;
+}
+
+.upcoming-body { flex: 1; min-width: 0; }
+
+.upcoming-header {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 4px;
 }
 
-.course-name {
-  font-size: 15px;
-  font-weight: 500;
+.upcoming-course {
+  font-size: 14px;
   color: var(--v2-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.schedule-course-meta {
-  font-size: 12px;
-  color: var(--v2-text-muted);
+.upcoming-meta {
   display: flex;
   gap: 12px;
-  margin-bottom: 8px;
+  font-size: 12px;
+  color: var(--v2-text-muted);
+  flex-wrap: wrap;
 }
 
-.schedule-sessions {
-  display: flex;
-  flex-direction: column;
+.upcoming-meta span {
+  display: inline-flex;
+  align-items: center;
   gap: 4px;
 }
 
-.session-row {
+/* -- 公告卡片 -- */
+.notice-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.notice-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border-radius: var(--v2-radius-sm);
+  border: 1px solid var(--v2-border-light);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.notice-card:hover {
+  background: var(--v2-bg);
+  border-color: var(--v2-border);
+}
+
+.notice-card-main { flex: 1; min-width: 0; }
+
+.notice-card-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--v2-text-primary);
+  margin: 0 0 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notice-card-summary {
+  font-size: 13px;
+  color: var(--v2-text-muted);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notice-card-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.notice-card-author { font-size: 12px; color: var(--v2-text-secondary); }
+.notice-card-time { font-size: 11px; color: var(--v2-text-muted); }
+
+/* -- 公告详情弹窗 -- */
+.notice-detail-meta {
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--v2-text-muted);
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--v2-border-light);
+}
+
+.notice-detail-content {
+  font-size: 14px;
+  color: var(--v2-text-primary);
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+
+/* ====== 课表 ====== */
+.sched-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.sched-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  padding: 10px 16px;
+  border-radius: var(--v2-radius-sm);
+  background: var(--v2-bg);
+}
+
+.sched-stat-num { font-size: 20px; font-weight: 700; color: var(--v2-primary); }
+.sched-stat-label { font-size: 12px; color: var(--v2-text-muted); }
+
+.sched-course-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sched-course-card {
+  border-radius: var(--v2-radius);
+  border: 1px solid var(--v2-border-light);
+  overflow: hidden;
+}
+
+.sched-course-top {
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--v2-border-light);
+}
+
+.sched-type-theory .sched-course-top { background: linear-gradient(135deg, rgba(75,110,245,0.04) 0%, transparent 100%); }
+.sched-type-practice .sched-course-top { background: linear-gradient(135deg, rgba(52,199,89,0.04) 0%, transparent 100%); }
+
+.sched-course-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--v2-text-primary);
+  margin: 0 0 8px;
+}
+
+.sched-course-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 12px;
+  color: var(--v2-text-muted);
+  flex-wrap: wrap;
+}
+
+.sched-course-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* -- 时间线 -- */
+.sched-timeline {
+  padding: 16px 18px 12px;
+}
+
+.sched-session {
+  display: flex;
+  gap: 14px;
+  position: relative;
+}
+
+.sched-dot-line {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 12px;
+  flex-shrink: 0;
+  padding-top: 6px;
+}
+
+.sched-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--v2-border);
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.sched-session.is-active .sched-dot {
+  background: var(--v2-primary);
+  box-shadow: 0 0 0 3px rgba(75,110,245,0.2);
+}
+
+.sched-session.is-past .sched-dot { background: var(--v2-text-muted); }
+
+.sched-line {
+  width: 1px;
+  flex: 1;
+  background: var(--v2-border-light);
+  margin: 4px 0;
+}
+
+.sched-session-body {
+  flex: 1;
+  padding-bottom: 16px;
+  min-width: 0;
+}
+
+.sched-session:last-child .sched-session-body { padding-bottom: 4px; }
+
+.sched-session-row {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 13px;
-  color: var(--v2-text-secondary);
-  padding: 4px 0;
+  margin-bottom: 2px;
 }
 
-.session-date { font-weight: 500; min-width: 90px; }
-.session-time { color: var(--v2-text-muted); }
-.session-location { color: var(--v2-text-muted); }
+.sched-session-date {
+  font-size: 14px;
+  color: var(--v2-text-primary);
+  min-width: 90px;
+}
 
-/* -- 考试 -- */
+.sched-session.is-past .sched-session-date { color: var(--v2-text-muted); }
+
+.sched-session-time {
+  font-size: 13px;
+  color: var(--v2-text-secondary);
+  min-width: 110px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sched-session.is-past .sched-session-time { color: var(--v2-text-muted); }
+
+.sched-session-location {
+  font-size: 12px;
+  color: var(--v2-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sched-no-session {
+  padding: 20px 18px;
+  font-size: 13px;
+  color: var(--v2-text-muted);
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .sched-stats { flex-wrap: wrap; }
+  .sched-stat { flex: 1; min-width: 80px; }
+}
+
+/* ====== 考试 ====== */
 .exam-row {
   display: flex;
   align-items: center;
@@ -738,8 +1199,7 @@ onMounted(fetchDetail)
 .exam-time { font-size: 12px; color: var(--v2-text-muted); margin-top: 2px; }
 .exam-info { display: flex; flex-direction: column; }
 
-/* -- 学员名单 -- */
-/* -- 学员名单 -- */
+/* ====== 学员名单 ====== */
 .student-toolbar {
   display: flex;
   align-items: center;
@@ -748,16 +1208,9 @@ onMounted(fetchDetail)
   gap: 12px;
 }
 
-.student-count {
-  font-size: 13px;
-  color: var(--v2-text-muted);
-  white-space: nowrap;
-}
+.student-count { font-size: 13px; color: var(--v2-text-muted); white-space: nowrap; }
 
-.student-list {
-  display: flex;
-  flex-direction: column;
-}
+.student-list { display: flex; flex-direction: column; }
 
 .student-row {
   display: flex;
@@ -771,12 +1224,7 @@ onMounted(fetchDetail)
 .student-row:last-child { border-bottom: none; }
 .student-row:hover { background: var(--v2-bg); }
 
-.student-avatar {
-  background: var(--v2-primary);
-  color: #fff;
-  font-size: 13px;
-  flex-shrink: 0;
-}
+.student-avatar { background: var(--v2-primary); color: #fff; font-size: 13px; flex-shrink: 0; }
 
 .student-info {
   flex: 1;
@@ -802,4 +1250,18 @@ onMounted(fetchDetail)
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.student-checkin-rate {
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  min-width: 40px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.rate-na { color: var(--v2-text-muted); }
+.rate-good { color: var(--v2-success); }
+.rate-warn { color: var(--v2-warning); }
+.rate-bad { color: var(--v2-danger); }
 </style>
