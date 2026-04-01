@@ -37,7 +37,7 @@
 import { onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import type { ResourceDetailResponse } from '@/api/learning-resource'
+import type { ResourceBehaviorEventCreateEventType, ResourceDetailResponse } from '@/api/learning-resource'
 import { getResourceDetail, recordResourceEvent } from '@/api/learning-resource'
 import ResourceViewer from '@/components/resource/ResourceViewer.vue'
 import {
@@ -72,7 +72,7 @@ async function fetchDetail() {
   }
 }
 
-async function recordEvent(eventType: string) {
+async function recordEvent(eventType: ResourceBehaviorEventCreateEventType) {
   if (!resource.value?.id) {
     return
   }

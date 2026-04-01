@@ -24,6 +24,10 @@ export interface ResourceDetailResponse {
   cover_media_file_id?: number | null;
   cover_url?: string | null;
   tags?: string[];
+  like_count?: number;
+  share_count?: number;
+  comment_count?: number;
+  current_user_liked?: boolean;
   created_at?: string | null;
   updated_at?: string | null;
   media_links?: ResourceMediaLinkResponse[];

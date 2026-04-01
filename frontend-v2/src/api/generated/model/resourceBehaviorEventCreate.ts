@@ -5,10 +5,11 @@
  * OpenAPI spec version: 1.0.0
  */
 import type { ResourceBehaviorEventCreateContextJson } from './resourceBehaviorEventCreateContextJson';
+import type { ResourceBehaviorEventCreateEventType } from './resourceBehaviorEventCreateEventType';
 
 export interface ResourceBehaviorEventCreate {
   /** 事件类型 */
-  event_type: string;
+  event_type: ResourceBehaviorEventCreateEventType;
   /**
      * 观看时长
      * @minimum 0

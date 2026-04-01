@@ -8,48 +8,68 @@
     <LearningResourceTabs />
 
     <div class="community-header">
-      <div class="community-heading">
-        <h1 class="page-title">资源社区</h1>
-        <p class="page-subtitle">
-          按推荐流连续浏览优先资源，支持鼠标滚轮或键盘上下键切换。
-          <span v-if="isMobile">移动端支持上下滑切换资源。</span>
-        </p>
+      <div class="community-header-panel">
+        <div class="community-header-top">
+          <div class="community-heading">
+            <h1 class="page-title">资源社区</h1>
+            <p class="page-subtitle">
+              按推荐流连续浏览优先资源，点击视频后可用滚轮或键盘上下键切换。
+              <span v-if="isMobile">移动端支持上下滑切换资源。</span>
+            </p>
+          </div>
+
+          <div class="community-toolbar">
+            <div class="community-search">
+              <a-input
+                v-model:value="searchKeyword"
+                class="community-search-input"
+                size="large"
+                placeholder="搜索标题、简介、作者或标签"
+                @pressEnter="handleSearch"
+              >
+                <template #prefix>
+                  <SearchOutlined class="community-search-icon" />
+                </template>
+                <template #suffix>
+                  <button
+                    type="button"
+                    class="community-search-trigger"
+                    :disabled="searching"
+                    @click="handleSearch"
+                  >
+                    {{ searching ? '搜索中' : '搜索' }}
+                  </button>
+                </template>
+              </a-input>
+            </div>
+
+            <div class="community-channel-switch" role="tablist" aria-label="资源社区频道">
+              <button
+                type="button"
+                class="channel-tab"
+                :class="{ active: activeFeedTab === 'recommended' }"
+                @click="activeFeedTab = 'recommended'"
+              >
+                推荐
+              </button>
+              <button
+                type="button"
+                class="channel-tab"
+                :class="{ active: activeFeedTab === 'featured' }"
+                @click="activeFeedTab = 'featured'"
+              >
+                精选
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div v-if="currentResource" class="community-meta-line">
           <span>当前第 {{ currentIndex + 1 }} 条 / {{ currentDisplayTotal }}</span>
           <span v-if="currentFeedItem">推荐分 {{ formatScore(currentFeedItem.score) }}</span>
+          <span>点击视频后滚轮接管切换</span>
           <span v-if="activeFeedTab === 'featured'">精选内容当前先复用推荐流</span>
         </div>
-      </div>
-
-      <div class="community-search">
-        <a-input-search
-          v-model:value="searchKeyword"
-          allow-clear
-          size="large"
-          :loading="searching"
-          placeholder="搜索标题、简介、作者或标签"
-          enter-button="搜索"
-          @search="handleSearch"
-        />
-      </div>
-
-      <div class="community-channel-switch" role="tablist" aria-label="资源社区频道">
-        <button
-          type="button"
-          class="channel-tab"
-          :class="{ active: activeFeedTab === 'recommended' }"
-          @click="activeFeedTab = 'recommended'"
-        >
-          推荐
-        </button>
-        <button
-          type="button"
-          class="channel-tab"
-          :class="{ active: activeFeedTab === 'featured' }"
-          @click="activeFeedTab = 'featured'"
-        >
-          精选
-        </button>
       </div>
     </div>
 
@@ -190,9 +210,11 @@ import {
   HeartOutlined,
   MessageOutlined,
   ProfileOutlined,
+  SearchOutlined,
   ShareAltOutlined,
 } from '@ant-design/icons-vue'
 import type {
+  ResourceBehaviorEventCreateEventType,
   ResourceCommentResponse,
   ResourceDetailResponse,
   ResourceRecommendationItem,
@@ -522,7 +544,7 @@ async function recordImpression(resourceId: number) {
   }
 }
 
-async function recordCurrentEvent(eventType: string) {
+async function recordCurrentEvent(eventType: ResourceBehaviorEventCreateEventType) {
   if (!currentResource.value?.id) {
     return
   }
@@ -832,67 +854,179 @@ function onTouchEnd(event: TouchEvent) {
 }
 
 .community-header {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(320px, 520px) auto;
-  align-items: start;
-  gap: 20px;
   margin-bottom: 22px;
+}
+
+.community-header-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 24px 28px 22px;
+  border: 1px solid rgba(55, 70, 82, 0.08);
+  border-radius: 30px;
+  background:
+    radial-gradient(circle at top left, rgba(77, 101, 255, 0.1), transparent 28%),
+    linear-gradient(140deg, rgba(255, 255, 255, 0.98), rgba(244, 247, 250, 0.94));
+  box-shadow: 0 20px 46px rgba(63, 76, 89, 0.08);
+}
+
+.community-header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
 }
 
 .community-heading {
   min-width: 0;
+  max-width: 560px;
+}
+
+.community-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+  flex: 1;
+  min-width: 0;
 }
 
 .page-title {
-  font-size: 24px;
-  font-weight: 700;
-  margin-bottom: 6px;
+  margin: 0;
+  font-size: 28px;
+  font-weight: 800;
+  color: #18202a;
 }
 
 .page-subtitle {
-  color: var(--v2-text-secondary);
-  line-height: 1.7;
+  margin: 8px 0 0;
+  color: rgba(43, 54, 65, 0.72);
+  line-height: 1.75;
 }
 
 .community-meta-line {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px 18px;
-  margin-top: 10px;
-  color: rgba(49, 62, 73, 0.74);
+  gap: 10px 12px;
+  color: rgba(49, 62, 73, 0.8);
   font-size: 13px;
 }
 
+.community-meta-line span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(24, 32, 42, 0.05);
+  box-shadow: inset 0 0 0 1px rgba(24, 32, 42, 0.06);
+}
+
 .community-search {
-  align-self: center;
+  flex: 1;
+  min-width: 300px;
+  max-width: 560px;
+}
+
+.community-search-input :deep(.ant-input-affix-wrapper) {
+  height: 58px;
+  padding: 7px 8px 7px 18px;
+  border: none;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow:
+    inset 0 0 0 1px rgba(27, 38, 48, 0.08),
+    0 10px 22px rgba(61, 76, 90, 0.08);
+}
+
+.community-search-input :deep(.ant-input-affix-wrapper:hover),
+.community-search-input :deep(.ant-input-affix-wrapper-focused) {
+  box-shadow:
+    inset 0 0 0 1px rgba(27, 38, 48, 0.12),
+    0 14px 28px rgba(61, 76, 90, 0.12);
+}
+
+.community-search-input :deep(.ant-input) {
+  font-size: 15px;
+  color: #1d2732;
+  background: transparent;
+}
+
+.community-search-input :deep(.ant-input::placeholder) {
+  color: rgba(82, 95, 108, 0.55);
+}
+
+.community-search-icon {
+  color: rgba(29, 39, 50, 0.42);
+  font-size: 18px;
+}
+
+.community-search-trigger {
+  border: none;
+  min-width: 78px;
+  height: 42px;
+  padding: 0 16px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #1f2937, #111827);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 12px 24px rgba(17, 24, 39, 0.18);
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.community-search-trigger:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 28px rgba(17, 24, 39, 0.22);
+}
+
+.community-search-trigger:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
 }
 
 .community-channel-switch {
   display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 18px;
-  padding-top: 6px;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 22px;
+  background: rgba(24, 32, 42, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(24, 32, 42, 0.07);
 }
 
 .channel-tab {
   border: none;
   background: transparent;
-  padding: 0;
-  color: rgba(17, 17, 17, 0.45);
+  min-width: 84px;
+  padding: 10px 18px;
+  border-radius: 16px;
+  color: rgba(17, 17, 17, 0.48);
   font-family: SimHei, 'Microsoft YaHei', sans-serif;
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 700;
   cursor: pointer;
   transition:
+    background 0.2s ease,
     color 0.2s ease,
-    transform 0.2s ease;
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
-.channel-tab:hover,
-.channel-tab.active {
+.channel-tab:hover {
   color: #111;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.channel-tab.active {
+  background: linear-gradient(135deg, #18202a, #0f1720);
+  color: #fff;
   transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(24, 32, 42, 0.2);
 }
 
 .community-shell {
@@ -1081,21 +1215,45 @@ function onTouchEnd(event: TouchEvent) {
 }
 
 @media (max-width: 1024px) {
-  .community-header {
-    grid-template-columns: 1fr;
+  .community-header-top {
+    flex-direction: column;
+  }
+
+  .community-toolbar {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .community-search {
-    width: 100%;
-  }
-
-  .community-channel-switch {
-    justify-content: flex-start;
-    padding-top: 0;
+    max-width: none;
   }
 }
 
 @media (max-width: 768px) {
+  .community-header-panel {
+    padding: 20px 18px 18px;
+    border-radius: 24px;
+  }
+
+  .community-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .community-search {
+    min-width: 0;
+  }
+
+  .community-search-input :deep(.ant-input-affix-wrapper) {
+    height: 54px;
+    padding-left: 16px;
+  }
+
+  .community-channel-switch {
+    width: 100%;
+    justify-content: space-between;
+  }
+
   .community-spin,
   .community-spin :deep(.ant-spin-nested-loading),
   .community-spin :deep(.ant-spin-container) {
@@ -1124,7 +1282,9 @@ function onTouchEnd(event: TouchEvent) {
   }
 
   .channel-tab {
-    font-size: 22px;
+    flex: 1;
+    min-width: 0;
+    font-size: 18px;
   }
 
   .comment-list-wrapper,

@@ -7,12 +7,15 @@
 import type {
   GetResourceTagsApiV1ResourcesTagsGetParams,
   GetResourcesApiV1ResourcesGetParams,
+  ResourceCommentCreate,
   ResourceCreate,
   ResourceTagCreate,
   ResourceUpdate,
   StandardResponseDict,
+  StandardResponseListResourceCommentResponse,
   StandardResponseListResourceTagResponse,
   StandardResponsePaginatedResponseResourceListItemResponse,
+  StandardResponseResourceCommentResponse,
   StandardResponseResourceDetailResponse,
   StandardResponseResourceTagResponse
 } from '../model';
@@ -68,6 +71,43 @@ export const createResourceTagApiV1ResourcesTagsPost = (
       {url: `/api/v1/resources/tags`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: resourceTagCreate
+    },
+      );
+    }
+  /**
+ * @summary 资源评论列表
+ */
+export const getResourceCommentsApiV1ResourcesResourceIdCommentsGet = (
+    resourceId: number,
+ ) => {
+      return customInstance<StandardResponseListResourceCommentResponse>(
+      {url: `/api/v1/resources/${resourceId}/comments`, method: 'GET'
+    },
+      );
+    }
+  /**
+ * @summary 发表评论
+ */
+export const createResourceCommentApiV1ResourcesResourceIdCommentsPost = (
+    resourceId: number,
+    resourceCommentCreate: ResourceCommentCreate,
+ ) => {
+      return customInstance<StandardResponseResourceCommentResponse>(
+      {url: `/api/v1/resources/${resourceId}/comments`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: resourceCommentCreate
+    },
+      );
+    }
+  /**
+ * @summary 删除资源评论
+ */
+export const deleteResourceCommentApiV1ResourcesResourceIdCommentsCommentIdDelete = (
+    resourceId: number,
+    commentId: number,
+ ) => {
+      return customInstance<StandardResponseDict>(
+      {url: `/api/v1/resources/${resourceId}/comments/${commentId}`, method: 'DELETE'
     },
       );
     }
@@ -133,6 +173,9 @@ export const offlineResourceApiV1ResourcesResourceIdOfflinePost = (
 export type CreateResourceApiV1ResourcesPostResult = NonNullable<Awaited<ReturnType<typeof createResourceApiV1ResourcesPost>>>
 export type GetResourceTagsApiV1ResourcesTagsGetResult = NonNullable<Awaited<ReturnType<typeof getResourceTagsApiV1ResourcesTagsGet>>>
 export type CreateResourceTagApiV1ResourcesTagsPostResult = NonNullable<Awaited<ReturnType<typeof createResourceTagApiV1ResourcesTagsPost>>>
+export type GetResourceCommentsApiV1ResourcesResourceIdCommentsGetResult = NonNullable<Awaited<ReturnType<typeof getResourceCommentsApiV1ResourcesResourceIdCommentsGet>>>
+export type CreateResourceCommentApiV1ResourcesResourceIdCommentsPostResult = NonNullable<Awaited<ReturnType<typeof createResourceCommentApiV1ResourcesResourceIdCommentsPost>>>
+export type DeleteResourceCommentApiV1ResourcesResourceIdCommentsCommentIdDeleteResult = NonNullable<Awaited<ReturnType<typeof deleteResourceCommentApiV1ResourcesResourceIdCommentsCommentIdDelete>>>
 export type GetResourceApiV1ResourcesResourceIdGetResult = NonNullable<Awaited<ReturnType<typeof getResourceApiV1ResourcesResourceIdGet>>>
 export type UpdateResourceApiV1ResourcesResourceIdPutResult = NonNullable<Awaited<ReturnType<typeof updateResourceApiV1ResourcesResourceIdPut>>>
 export type DeleteResourceApiV1ResourcesResourceIdDeleteResult = NonNullable<Awaited<ReturnType<typeof deleteResourceApiV1ResourcesResourceIdDelete>>>

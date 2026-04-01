@@ -6,7 +6,13 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.middleware.auth import get_current_user
-from app.schemas import StandardResponse, TokenData, ResourceLikeStatusResponse, ResourceShareStatusResponse
+from app.schemas import (
+    StandardResponse,
+    TokenData,
+    ResourceLikeStatusResponse,
+    ResourceShareStatusResponse,
+    ResourceRecommendationFeedResponse,
+)
 from app.schemas.recommendation import ResourceBehaviorEventCreate
 from app.controllers.recommendation import RecommendationController
 
@@ -59,7 +65,11 @@ def share_resource(
     return StandardResponse(data=data)
 
 
-@router.get('/resources/recommendations/feed', response_model=StandardResponse, summary='推荐资源流')
+@router.get(
+    '/resources/recommendations/feed',
+    response_model=StandardResponse[ResourceRecommendationFeedResponse],
+    summary='推荐资源流',
+)
 def get_feed(
     page: int = Query(1, ge=1),
     size: int = Query(10, ge=1, le=100),

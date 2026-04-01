@@ -7,7 +7,10 @@
 import type {
   GetFeedApiV1ResourcesRecommendationsFeedGetParams,
   ResourceBehaviorEventCreate,
-  StandardResponse
+  StandardResponse,
+  StandardResponseResourceLikeStatusResponse,
+  StandardResponseResourceRecommendationFeedResponse,
+  StandardResponseResourceShareStatusResponse
 } from '../model';
 
 import { customInstance } from '../../custom-instance';
@@ -29,16 +32,52 @@ export const recordEventApiV1ResourcesResourceIdEventsPost = (
       );
     }
   /**
+ * @summary 点赞资源
+ */
+export const likeResourceApiV1ResourcesResourceIdLikesPost = (
+    resourceId: number,
+ ) => {
+      return customInstance<StandardResponseResourceLikeStatusResponse>(
+      {url: `/api/v1/resources/${resourceId}/likes`, method: 'POST'
+    },
+      );
+    }
+  /**
+ * @summary 取消点赞资源
+ */
+export const unlikeResourceApiV1ResourcesResourceIdLikesDelete = (
+    resourceId: number,
+ ) => {
+      return customInstance<StandardResponseResourceLikeStatusResponse>(
+      {url: `/api/v1/resources/${resourceId}/likes`, method: 'DELETE'
+    },
+      );
+    }
+  /**
+ * @summary 转发资源
+ */
+export const shareResourceApiV1ResourcesResourceIdSharePost = (
+    resourceId: number,
+ ) => {
+      return customInstance<StandardResponseResourceShareStatusResponse>(
+      {url: `/api/v1/resources/${resourceId}/share`, method: 'POST'
+    },
+      );
+    }
+  /**
  * @summary 推荐资源流
  */
 export const getFeedApiV1ResourcesRecommendationsFeedGet = (
     params?: GetFeedApiV1ResourcesRecommendationsFeedGetParams,
  ) => {
-      return customInstance<StandardResponse>(
+      return customInstance<StandardResponseResourceRecommendationFeedResponse>(
       {url: `/api/v1/resources/recommendations/feed`, method: 'GET',
         params
     },
       );
     }
   export type RecordEventApiV1ResourcesResourceIdEventsPostResult = NonNullable<Awaited<ReturnType<typeof recordEventApiV1ResourcesResourceIdEventsPost>>>
+export type LikeResourceApiV1ResourcesResourceIdLikesPostResult = NonNullable<Awaited<ReturnType<typeof likeResourceApiV1ResourcesResourceIdLikesPost>>>
+export type UnlikeResourceApiV1ResourcesResourceIdLikesDeleteResult = NonNullable<Awaited<ReturnType<typeof unlikeResourceApiV1ResourcesResourceIdLikesDelete>>>
+export type ShareResourceApiV1ResourcesResourceIdSharePostResult = NonNullable<Awaited<ReturnType<typeof shareResourceApiV1ResourcesResourceIdSharePost>>>
 export type GetFeedApiV1ResourcesRecommendationsFeedGetResult = NonNullable<Awaited<ReturnType<typeof getFeedApiV1ResourcesRecommendationsFeedGet>>>
