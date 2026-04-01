@@ -244,8 +244,13 @@ AI 运行时配置：
 - 培训班报名模式：`enrollment_requires_approval`（`true` = 待审核，`false` = 直接通过）
 - 培训班数据归属：`department_id`、`police_type_id`、`training_base_id`、`created_by`
 - 课次状态流：`pending → checkin_open → checkin_closed → checkout_open → completed`（另有 `skipped`、`missed`）
+- 签到签退采用统一出勤二维码：`GET /{training_id}/attendance/qr?action=checkin|checkout` 生成含 `action` 字段的 QR payload，`POST /attendance/qr/{token}` 根据 `action` 自动路由到签到或签退
+- 签到 / 签退模式（`checkin_mode` / `checkout_mode`）、截止时间（`checkin_deadline` / `checkout_deadline`）等字段在课次 JSON 中持久保存
+- 自动状态刷新（`_refresh_schedule_states`）优先尊重签到 / 签退窗口截止时间，窗口有效期内不会将课次标记为 `missed`
+- `checkout_method` 判定：带 `user_id` 为 `manual`（教官标记），通过 QR 为 `qr`，学员直接签退为 `direct`
 - 培训班开班后，课程和课次的任何变更都会写入 `TrainingCourseChangeLog`
 - 培训班支持 `schedule_rule_config`（AI 排课、手工排课、课时换算共用，系统默认值来自配置组 `training_schedule`）
+- 如果前端重新生成 OpenAPI 客户端后仍看到旧 `/checkin/qr` 路径，说明生成时连接的不是当前仓库对应的后端实例，需要先核对实际暴露的 `/api/v1/openapi.json`
 
 智能建班（`POST /api/v1/trainings/ai-create`，SSE 流式）：
 
@@ -268,6 +273,20 @@ AI 个训任务支持：
 
 - 按学员画像生成目标、动作、资源推荐
 - 确认后落版本化快照（`PersonalTrainingPlanSnapshot`）
+
+出勤（签到签退）接口：
+
+| 接口 | 说明 |
+| --- | --- |
+| `POST /api/v1/trainings/{id}/checkin` | 签到（学员自行或教官标记） |
+| `POST /api/v1/trainings/{id}/checkout` | 签退（学员自行或教官标记） |
+| `POST /api/v1/trainings/{id}/sessions/{key}/checkin/start` | 开始课次签到 |
+| `POST /api/v1/trainings/{id}/sessions/{key}/checkin/end` | 结束课次签到 |
+| `POST /api/v1/trainings/{id}/sessions/{key}/checkout/start` | 开始课次签退 |
+| `POST /api/v1/trainings/{id}/sessions/{key}/checkout/end` | 结束课次签退 |
+| `GET /api/v1/trainings/{id}/attendance/qr?action=checkin\|checkout` | 生成出勤二维码（签到或签退） |
+| `GET /api/v1/trainings/attendance/qr/{token}` | 获取出勤二维码信息 |
+| `POST /api/v1/trainings/attendance/qr/{token}` | 扫码出勤（根据 action 自动路由） |
 
 批量导入接口：
 
@@ -624,7 +643,7 @@ python migrate.py generate "msg"   # 生成新迁移
 - AI 智能出题依赖系统配置组 `ai` 中的模型配置；未配置则任务失败
 - AI 排课自然语言解析未配置模型或调用失败时，会留下 `parse_warnings` 并按规则兜底继续生成
 - AI 自动组卷 / 自动生成试卷的题型配置允许单项题型数量为 `0`，但不允许全部为 `0`
-- 培训二维码签到依赖 Redis；Redis 不可用时，扫码签到链路不可用
+- 培训二维码出勤（签到 / 签退）依赖 Redis；Redis 不可用时，扫码出勤链路不可用
 - `checkin_closed` 的真实语义是"课程仍在进行，但签到窗口已结束"，前端应按"进行中"理解
 - 默认 Compose 没有启动 `beat`，推荐刷新脚本也还没有接入正式周期调度
 

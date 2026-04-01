@@ -25,7 +25,7 @@ export const getNoticesApiV1NoticesGet = (
     params?: GetNoticesApiV1NoticesGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseNoticeResponse>(
-      {url: `/api/v1/notices`, method: 'GET',
+      {url: `/notices`, method: 'GET',
         params
     },
       );
@@ -38,7 +38,7 @@ export const createNoticeApiV1NoticesPost = (
     noticeCreate: NoticeCreate,
  ) => {
       return customInstance<StandardResponseNoticeResponse>(
-      {url: `/api/v1/notices`, method: 'POST',
+      {url: `/notices`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: noticeCreate
     },
@@ -53,7 +53,7 @@ export const updateNoticeApiV1NoticesNoticeIdPut = (
     noticeUpdate: NoticeUpdate,
  ) => {
       return customInstance<StandardResponseNoticeResponse>(
-      {url: `/api/v1/notices/${noticeId}`, method: 'PUT',
+      {url: `/notices/${noticeId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: noticeUpdate
     },
@@ -67,7 +67,7 @@ export const deleteNoticeApiV1NoticesNoticeIdDelete = (
     noticeId: number,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/notices/${noticeId}`, method: 'DELETE'
+      {url: `/notices/${noticeId}`, method: 'DELETE'
     },
       );
     }

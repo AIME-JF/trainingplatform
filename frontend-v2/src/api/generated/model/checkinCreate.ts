@@ -17,4 +17,6 @@ export interface CheckinCreate {
   user_id?: number | null;
   /** 签到状态，默认自动判断 */
   status?: string | null;
+  /** 签到方式: direct/qr/manual，默认自动判断 */
+  method?: string | null;
 }

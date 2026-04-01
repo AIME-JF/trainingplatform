@@ -22,5 +22,11 @@ export interface TrainingCurrentSessionResponse {
   primary_instructor_name?: string | null;
   assistant_instructor_ids?: number[];
   assistant_instructor_names?: string[];
+  checkin_mode?: string | null;
+  checkin_duration_minutes?: number | null;
+  checkin_deadline?: string | null;
+  checkout_mode?: string | null;
+  checkout_duration_minutes?: number | null;
+  checkout_deadline?: string | null;
   action_permissions?: TrainingSessionActionPermissions;
 }

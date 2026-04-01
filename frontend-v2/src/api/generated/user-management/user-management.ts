@@ -32,7 +32,7 @@ export const getUsersApiV1UsersGet = (
     params?: GetUsersApiV1UsersGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseUserSimpleResponse>(
-      {url: `/api/v1/users`, method: 'GET',
+      {url: `/users`, method: 'GET',
         params
     },
       );
@@ -45,7 +45,7 @@ export const createUserApiV1UsersPost = (
     userCreate: UserCreate,
  ) => {
       return customInstance<StandardResponseUserSimpleResponse>(
-      {url: `/api/v1/users`, method: 'POST',
+      {url: `/users`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: userCreate
     },
@@ -58,7 +58,7 @@ export const downloadUserImportTemplateApiV1UsersImportTemplateGet = (
 
  ) => {
       return customInstance<unknown>(
-      {url: `/api/v1/users/import/template`, method: 'GET'
+      {url: `/users/import/template`, method: 'GET'
     },
       );
     }
@@ -69,7 +69,7 @@ export const exportUsersExcelApiV1UsersExportGet = (
     params?: ExportUsersExcelApiV1UsersExportGetParams,
  ) => {
       return customInstance<unknown>(
-      {url: `/api/v1/users/export`, method: 'GET',
+      {url: `/users/export`, method: 'GET',
         params
     },
       );
@@ -86,7 +86,7 @@ if(bodyImportUsersExcelApiV1UsersImportPost.default_role !== undefined) {
  }
 
       return customInstance<StandardResponse>(
-      {url: `/api/v1/users/import`, method: 'POST',
+      {url: `/users/import`, method: 'POST',
        data: formData
     },
       );
@@ -103,7 +103,7 @@ if(bodyImportPoliceBaseApiV1UsersImportPoliceBasePost.default_role !== undefined
  }
 
       return customInstance<StandardResponse>(
-      {url: `/api/v1/users/import/police-base`, method: 'POST',
+      {url: `/users/import/police-base`, method: 'POST',
        data: formData
     },
       );
@@ -116,7 +116,7 @@ export const getUserApiV1UsersUserIdGet = (
     userId: number,
  ) => {
       return customInstance<StandardResponseUserSimpleResponse>(
-      {url: `/api/v1/users/${userId}`, method: 'GET'
+      {url: `/users/${userId}`, method: 'GET'
     },
       );
     }
@@ -129,7 +129,7 @@ export const updateUserApiV1UsersUserIdPut = (
     userUpdate: UserUpdate,
  ) => {
       return customInstance<StandardResponseUserSimpleResponse>(
-      {url: `/api/v1/users/${userId}`, method: 'PUT',
+      {url: `/users/${userId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: userUpdate
     },
@@ -143,7 +143,7 @@ export const deleteUserApiV1UsersUserIdDelete = (
     userId: number,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/users/${userId}`, method: 'DELETE'
+      {url: `/users/${userId}`, method: 'DELETE'
     },
       );
     }
@@ -156,7 +156,7 @@ export const updateUserRolesApiV1UsersUserIdRolesPut = (
     bodyUpdateUserRolesApiV1UsersUserIdRolesPut: BodyUpdateUserRolesApiV1UsersUserIdRolesPut,
  ) => {
       return customInstance<StandardResponseUserSimpleResponse>(
-      {url: `/api/v1/users/${userId}/roles`, method: 'PUT',
+      {url: `/users/${userId}/roles`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: bodyUpdateUserRolesApiV1UsersUserIdRolesPut
     },
@@ -171,7 +171,7 @@ export const updateUserDepartmentsApiV1UsersUserIdDepartmentsPut = (
     bodyUpdateUserDepartmentsApiV1UsersUserIdDepartmentsPut: BodyUpdateUserDepartmentsApiV1UsersUserIdDepartmentsPut,
  ) => {
       return customInstance<StandardResponseUserSimpleResponse>(
-      {url: `/api/v1/users/${userId}/departments`, method: 'PUT',
+      {url: `/users/${userId}/departments`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: bodyUpdateUserDepartmentsApiV1UsersUserIdDepartmentsPut
     },
@@ -186,7 +186,7 @@ export const updateUserPoliceTypesApiV1UsersUserIdPoliceTypesPut = (
     bodyUpdateUserPoliceTypesApiV1UsersUserIdPoliceTypesPut: BodyUpdateUserPoliceTypesApiV1UsersUserIdPoliceTypesPut,
  ) => {
       return customInstance<StandardResponseUserSimpleResponse>(
-      {url: `/api/v1/users/${userId}/police-types`, method: 'PUT',
+      {url: `/users/${userId}/police-types`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: bodyUpdateUserPoliceTypesApiV1UsersUserIdPoliceTypesPut
     },
@@ -201,7 +201,7 @@ export const resetPasswordApiV1UsersUserIdPasswordPut = (
     bodyResetPasswordApiV1UsersUserIdPasswordPut: BodyResetPasswordApiV1UsersUserIdPasswordPut,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/users/${userId}/password`, method: 'PUT',
+      {url: `/users/${userId}/password`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: bodyResetPasswordApiV1UsersUserIdPasswordPut
     },

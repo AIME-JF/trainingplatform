@@ -73,6 +73,7 @@ function normalizeGeneratedUrl(url?: string): string | undefined {
   if (!url) {
     return url
   }
+  // 兼容已生成的旧代码；新生成代码会在 Orval transformer 阶段去掉 /api/v1。
   if (url.startsWith('/api/v1/')) {
     return url.slice('/api/v1'.length)
   }

@@ -22,7 +22,7 @@ export const getTalentsApiV1TalentGet = (
     params?: GetTalentsApiV1TalentGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseTalentResponse>(
-      {url: `/api/v1/talent`, method: 'GET',
+      {url: `/talent`, method: 'GET',
         params
     },
       );
@@ -35,7 +35,7 @@ export const getStatsApiV1TalentStatsGet = (
 
  ) => {
       return customInstance<StandardResponseTalentStatsResponse>(
-      {url: `/api/v1/talent/stats`, method: 'GET'
+      {url: `/talent/stats`, method: 'GET'
     },
       );
     }

@@ -23,7 +23,7 @@ export const getProfileApiV1ProfileGet = (
 
  ) => {
       return customInstance<StandardResponseProfileResponse>(
-      {url: `/api/v1/profile`, method: 'GET'
+      {url: `/profile`, method: 'GET'
     },
       );
     }
@@ -35,7 +35,7 @@ export const updateProfileApiV1ProfilePut = (
     profileUpdate: ProfileUpdate,
  ) => {
       return customInstance<StandardResponseProfileResponse>(
-      {url: `/api/v1/profile`, method: 'PUT',
+      {url: `/profile`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: profileUpdate
     },
@@ -49,7 +49,7 @@ export const getStudyStatsApiV1ProfileStudyStatsGet = (
 
  ) => {
       return customInstance<StandardResponseStudyStatsResponse>(
-      {url: `/api/v1/profile/study-stats`, method: 'GET'
+      {url: `/profile/study-stats`, method: 'GET'
     },
       );
     }
@@ -61,7 +61,7 @@ export const getExamHistoryApiV1ProfileExamHistoryGet = (
 
  ) => {
       return customInstance<StandardResponseListExamHistoryResponse>(
-      {url: `/api/v1/profile/exam-history`, method: 'GET'
+      {url: `/profile/exam-history`, method: 'GET'
     },
       );
     }

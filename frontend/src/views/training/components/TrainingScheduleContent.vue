@@ -148,8 +148,6 @@
               </a-button>
             </template>
             <template v-if="currentSession && currentSession.sessionId === record.sessionId">
-              <a-button v-if="currentSession.actionPermissions?.canStartCheckin" size="small" type="link" @click="$emit('start-session-checkin')">开始签到</a-button>
-              <a-button v-if="currentSession.actionPermissions?.canEndCheckin" size="small" type="link" @click="$emit('end-session-checkin')">结束签到</a-button>
               <a-button v-if="currentSession.actionPermissions?.canStartCheckout" size="small" type="link" @click="$emit('start-session-checkout')">开始签退</a-button>
               <a-button v-if="currentSession.actionPermissions?.canEndCheckout" size="small" type="link" @click="$emit('end-session-checkout')">结束签退</a-button>
               <a-button v-if="currentSession.actionPermissions?.canSkip" size="small" type="link" danger @click="$emit('skip-current-session')">跳过</a-button>
@@ -189,8 +187,6 @@ defineEmits([
   'remove-course',
   'edit-schedule',
   'remove-schedule',
-  'start-session-checkin',
-  'end-session-checkin',
   'start-session-checkout',
   'end-session-checkout',
   'skip-current-session',

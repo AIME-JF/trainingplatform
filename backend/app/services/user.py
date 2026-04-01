@@ -12,6 +12,7 @@ from app.schemas import (
     UserCreate, UserUpdate, UserResponse, UserSimpleResponse, PaginatedResponse,
     UserRoleUpdate, UserDepartmentUpdate, UserPoliceTypeUpdate
 )
+from app.services.auth import auth_service
 from logger import logger
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -28,6 +29,11 @@ class UserService:
     
     def __init__(self, db: Session):
         self.db = db
+
+    def _to_user_response(self, user: User) -> UserResponse:
+        response = UserResponse.model_validate(user)
+        response.permissions = auth_service.get_user_permissions(self.db, user.id)
+        return response
     
     def create_user(self, user_data: UserCreate) -> UserResponse:
         """创建用户"""
@@ -81,7 +87,7 @@ class UserService:
         self.db.refresh(db_user)
 
         logger.info(f"创建用户成功: {user_data.username}")
-        return UserResponse.model_validate(db_user)
+        return self._to_user_response(db_user)
     
     def get_user_by_id(self, user_id: int) -> Optional[UserResponse]:
         """根据ID获取用户"""
@@ -94,7 +100,7 @@ class UserService:
         if not user:
             return None
     
-        return UserResponse.model_validate(user)
+        return self._to_user_response(user)
     
     def get_user_by_username(self, username: str) -> Optional[User]:
         """根据用户名获取用户"""
@@ -217,7 +223,7 @@ class UserService:
             self.db.refresh(user)
             
         logger.info(f"更新用户成功: {user.username}")
-        return UserResponse.model_validate(user)
+        return self._to_user_response(user)
     
     def delete_user(self, user_id: int) -> bool:
         """删除用户"""
@@ -268,7 +274,7 @@ class UserService:
         self.db.refresh(user)
         
         logger.info(f"更新用户角色成功: {user.username}")
-        return UserResponse.model_validate(user)
+        return self._to_user_response(user)
 
     def update_user_departments(self, user_id: int, department_data: UserDepartmentUpdate) -> Optional[UserResponse]:
         """更新用户部门"""
@@ -288,7 +294,7 @@ class UserService:
         self.db.refresh(user)
         
         logger.info(f"更新用户部门成功: {user.username}")
-        return UserResponse.model_validate(user)
+        return self._to_user_response(user)
 
     def update_user_police_types(self, user_id: int, data: UserPoliceTypeUpdate) -> Optional[UserResponse]:
         """更新用户警种"""
@@ -306,7 +312,7 @@ class UserService:
         self.db.refresh(user)
 
         logger.info(f"更新用户警种成功: {user.username}")
-        return UserResponse.model_validate(user)
+        return self._to_user_response(user)
 
 
 

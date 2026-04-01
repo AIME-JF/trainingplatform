@@ -189,9 +189,7 @@ const openKeys = ref([])
 const isMobile = ref(window.innerWidth <= 768)
 const isMounted = ref(false)
 
-const isImmersiveRoute = computed(() =>
-  route.path.startsWith('/resource/recommend')
-)
+const isImmersiveRoute = computed(() => route.meta?.immersive === true)
 const desktopSidebarWidth = computed(() => {
   if (isMobile.value) {
     return 0

@@ -25,7 +25,7 @@ export const getPoliceTypesApiV1PoliceTypesGet = (
     params?: GetPoliceTypesApiV1PoliceTypesGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponsePoliceTypeSimpleResponse>(
-      {url: `/api/v1/police-types`, method: 'GET',
+      {url: `/police-types`, method: 'GET',
         params
     },
       );
@@ -38,7 +38,7 @@ export const createPoliceTypeApiV1PoliceTypesPost = (
     policeTypeCreate: PoliceTypeCreate,
  ) => {
       return customInstance<StandardResponsePoliceTypeSimpleResponse>(
-      {url: `/api/v1/police-types`, method: 'POST',
+      {url: `/police-types`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: policeTypeCreate
     },
@@ -52,7 +52,7 @@ export const getPoliceTypeApiV1PoliceTypesPoliceTypeIdGet = (
     policeTypeId: number,
  ) => {
       return customInstance<StandardResponsePoliceTypeSimpleResponse>(
-      {url: `/api/v1/police-types/${policeTypeId}`, method: 'GET'
+      {url: `/police-types/${policeTypeId}`, method: 'GET'
     },
       );
     }
@@ -65,7 +65,7 @@ export const updatePoliceTypeApiV1PoliceTypesPoliceTypeIdPut = (
     policeTypeUpdate: PoliceTypeUpdate,
  ) => {
       return customInstance<StandardResponsePoliceTypeSimpleResponse>(
-      {url: `/api/v1/police-types/${policeTypeId}`, method: 'PUT',
+      {url: `/police-types/${policeTypeId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: policeTypeUpdate
     },
@@ -79,7 +79,7 @@ export const deletePoliceTypeApiV1PoliceTypesPoliceTypeIdDelete = (
     policeTypeId: number,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/police-types/${policeTypeId}`, method: 'DELETE'
+      {url: `/police-types/${policeTypeId}`, method: 'DELETE'
     },
       );
     }

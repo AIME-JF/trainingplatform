@@ -15,4 +15,6 @@ export interface CheckoutCreate {
   /** 课次标识 */
   session_key?: string;
   user_id?: number | null;
+  /** 签退方式: direct/qr/manual，默认自动判断 */
+  method?: string | null;
 }

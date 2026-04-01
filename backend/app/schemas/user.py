@@ -170,6 +170,7 @@ class UserResponse(BaseModel):
 
     created_at: datetime
     updated_at: Optional[datetime] = None
+    permissions: List[str] = []
     roles: List[RoleResponse] = []
     departments: List[DepartmentSimpleResponse] = []
     police_types: List[PoliceTypeSimpleResponse] = []

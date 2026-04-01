@@ -46,7 +46,10 @@ frontend-v2/
     ├── env.d.ts                 # Vite 环境变量类型声明
     ├── api/
     │   ├── custom-instance.ts   # Orval mutator（Bearer token + 信封解包 + 401）
+    │   ├── transformers/        # Orval 输入转换器（如去掉 /api/v1 前缀）
     │   └── generated/           # Orval 自动生成（按 tag 拆文件 + model/）
+    ├── services/
+    │   └── attendance.ts        # 统一出勤二维码适配层（临时手写，禁止挪到 generated/ 手改）
     ├── router/
     │   ├── index.ts             # createRouter + beforeEach 守卫
     │   └── routes.ts            # 路由表（仅教官/学员）
@@ -66,9 +69,22 @@ frontend-v2/
     ├── constants/
     │   └── permissions.ts       # 页面权限常量
     ├── components/              # 公共组件
+    ├── components/              # 公共组件
+    │   └── classes/detail/      # 班级详情子组件
+    │       ├── types.ts             # 类型定义（CurrentSession 等）
+    │       ├── CurrentSessionCard.vue   # 当前课次卡片
+    │       ├── ActivityFeed.vue     # 最近动态（含 WebSocket）
+    │       ├── NoticeList.vue       # 公告列表
+    │       ├── CourseScheduleTab.vue # 课程安排 Tab
+    │       ├── CheckinManager.vue   # 签到管理弹窗（教官）
+    │       ├── CheckoutManager.vue  # 签退管理弹窗（教官）
+    │       ├── StudentCheckinConfirm.vue  # 学员签到确认
+    │       └── StudentCheckoutConfirm.vue # 学员签退确认
     └── views/                   # 页面组件
         ├── auth/Login.vue       # 登录页
         ├── dashboard/Index.vue  # 工作台
+        ├── attendance/
+        │   └── Scan.vue         # 扫码出勤（签到/签退统一页面）
         └── classes/
             ├── List.vue         # 班级列表（卡片网格，调用 GET /trainings）
             └── Detail.vue       # 班级详情（调用 GET /trainings/:id）
@@ -82,6 +98,8 @@ pnpm build          # 生产构建
 pnpm preview        # 预览构建产物
 pnpm api:generate   # 从后端 OpenAPI 生成 API 客户端（需后端运行）
 ```
+
+> **重要：** 每次修改后端接口（新增/修改/删除 `views/`、`schemas/` 下的端点或模型）后，必须在后端运行的情况下执行 `pnpm api:generate` 重新生成前端 API 客户端，再提交生成的文件。详见下方 [Orval API 同步](#orval-api-同步) 章节。
 
 ## 环境变量
 
@@ -119,6 +137,44 @@ pnpm api:generate
 ```
 
 生成的文件位于 `src/api/generated/`，按后端 tag 拆分。生成的类型使用 snake_case（与后端一致），前端代码直接使用 snake_case 字段名，不做运行时转换。
+
+**禁止手动修改：**
+
+- `src/api/generated/**`
+- `src/api/generated/model/**`
+
+这些文件会在每次执行 `pnpm api:generate` 时被覆盖。业务代码不要通过“手改生成文件”修接口命名或路径。
+
+**Orval 输入源说明：**
+
+- `pnpm api:generate` 读取的是 [orval.config.ts](/g:/exam/police-training-platform/police-training-platform/frontend-v2/orval.config.ts) 中的 `input.target`
+- 默认是 `http://127.0.0.1:8001/api/v1/openapi.json`
+- 也可以通过环境变量 `ORVAL_INPUT_TARGET` 覆盖
+- `VITE_API_BASE_URL` 只影响前端运行时请求，不影响 Orval 生成
+
+**排查旧接口生成结果：**
+
+- 如果重新生成后仍出现旧的 `/checkin/qr` 命名，先不要修改 `src/api/generated/**`
+- 先确认 `orval.config.ts` 当前实际连到的 OpenAPI 地址
+- 直接打开目标地址对应的 `/api/v1/openapi.json`，确认其中是否仍暴露旧接口
+- 只有 OpenAPI 源修正后，再重新执行 `pnpm api:generate`
+
+**何时必须执行：**
+
+| 需要执行 | 不需要执行 |
+| --- | --- |
+| 新增 / 修改 / 删除 `backend/app/views/` 下的 API 端点 | 仅修改 service / controller 内部逻辑 |
+| 修改 `backend/app/schemas/` 下的请求 / 响应模型 | 仅修改前端代码 |
+| 修改 `backend/app/models/` 导致 Schema 字段变化 | 修改数据库迁移文件 |
+| 新增路由模块并在 `views/__init__.py` 注册 | |
+
+**前端代码规范：**
+
+- 默认优先使用 `src/api/generated/` 下 Orval 生成的函数
+- 不要手改 `src/api/generated/**`
+- `src/api/custom-instance.ts` 仅作为 Orval mutator 底层使用
+- 当前统一出勤二维码链路是例外，临时使用 `src/services/attendance.ts` 调用 `/trainings/{id}/attendance/qr` 与 `/trainings/attendance/qr/{token}`
+- 这层手写适配的目的，是在 OpenAPI 源尚未完全统一前，避免去手改自动生成文件
 
 ## 设计规范
 
@@ -312,6 +368,7 @@ AI (品牌图标)
 | `/classes/:id/enroll` | 报名 |
 | `/classes/:id/checkin` | 签到 |
 | `/classes/:id/checkout` | 签退 |
+| `/attendance/:token/:sessionKey?` | 扫码出勤（签到/签退统一页面） |
 | `/exam/list` | 在线考试 |
 | `/exam/do/:id` | 考试作答 |
 | `/exam/result/:id` | 考试结果 |

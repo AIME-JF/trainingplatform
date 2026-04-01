@@ -18,6 +18,8 @@ export interface TrainingCreate {
   name: string;
   /** 培训类型: basic/special/promotion/online */
   type: string;
+  /** 培训班类型ID，不传时根据 type 自动匹配 */
+  training_type_id?: number | null;
   /** 状态 */
   status?: string;
   /** 发布状态 */

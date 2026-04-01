@@ -1,12 +1,12 @@
 <template>
   <div
-    class="page-content community-page resource-page"
+    class="community-page"
     @touchstart.capture="onTouchStart"
     @touchmove.capture="onTouchMove"
     @touchend.capture="onTouchEnd"
   >
     <div class="community-shell">
-      <a-spin :spinning="loadingResource || loadingFeed" class="community-spin">
+      <div class="community-stage">
         <a-empty v-if="!currentResource && !loadingResource" description="暂无社区内容" class="community-empty" />
 
         <template v-else-if="currentResource">
@@ -65,6 +65,7 @@
               @mousedown.capture="handleViewerMouseDown"
             >
               <ResourceViewer
+                class="community-viewer-frame"
                 :resource="currentResource"
                 mode="recommend"
                 @click="recordCurrentEvent('click')"
@@ -118,7 +119,11 @@
             </div>
           </div>
         </template>
-      </a-spin>
+
+        <div v-if="loadingResource || loadingFeed" class="community-loading-overlay">
+          <a-spin size="large" />
+        </div>
+      </div>
     </div>
 
     <a-drawer
@@ -848,12 +853,17 @@ function onTouchEnd(event: TouchEvent) {
 
 <style scoped>
 .community-page {
+  --community-stage-height: calc(100dvh - var(--v2-bottomnav-height));
+  position: fixed;
+  inset: 0 0 var(--v2-bottomnav-height) 0;
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  height: calc(100vh - var(--v2-bottomnav-height));
+  min-width: 0;
+  min-height: var(--community-stage-height);
   padding: 0 !important;
+  background: #000;
   overflow: hidden;
+  z-index: 1;
 }
 
 .community-search {
@@ -994,58 +1004,93 @@ function onTouchEnd(event: TouchEvent) {
 .community-shell {
   position: relative;
   display: flex;
-  flex: 1 1 0;
-  min-height: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: var(--community-stage-height);
   width: 100%;
+  height: var(--community-stage-height);
   padding: 0 !important;
   overflow: hidden;
 }
 
-.community-spin,
-.community-spin :deep(.ant-spin-nested-loading),
-.community-spin :deep(.ant-spin-container) {
+.community-stage {
+  position: relative;
   display: flex;
-  flex: 1 1 0;
-  flex-direction: column;
-  min-height: 0;
-  height: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: var(--community-stage-height);
+  height: var(--community-stage-height);
   width: 100%;
   overflow: hidden;
 }
 
 .community-empty {
   display: flex;
+  flex: 1 1 auto;
   align-items: center;
   justify-content: center;
-  flex: 1;
+  min-width: 0;
+  min-height: var(--community-stage-height);
+  width: 100%;
+  height: var(--community-stage-height);
   padding: 0;
+  background: #000;
 }
 
 .community-player-shell {
   position: relative;
   display: flex;
   align-items: stretch;
-  flex: 1 1 0;
-  min-height: 0;
-  height: 100%;
+  align-self: stretch;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: var(--community-stage-height);
+  height: var(--community-stage-height);
   width: 100%;
   max-width: none;
   margin: 0;
 }
 
-.community-viewer {
-  overflow: hidden;
+.community-loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 26;
   display: flex;
-  flex: 1;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.22);
+  pointer-events: none;
+}
+
+.community-loading-overlay :deep(.ant-spin-dot-item) {
+  background-color: rgba(255, 255, 255, 0.92);
+}
+
+.community-viewer {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: stretch;
+  justify-content: stretch;
+  min-width: 0;
+  min-height: var(--community-stage-height);
   width: 100%;
-  height: 100%;
-  min-height: 100%;
+  height: var(--community-stage-height);
   border-radius: 0;
-  background:
-    radial-gradient(circle at top right, rgba(208, 218, 226, 0.68), transparent 30%),
-    linear-gradient(180deg, rgba(245, 247, 249, 0.98), rgba(231, 236, 240, 0.92));
+  background: #000;
   box-shadow: none;
   color: #fff;
+  overflow: hidden;
+}
+
+.community-viewer-frame,
+.community-viewer :deep(.resource-viewer) {
+  display: flex;
+  flex: 1 1 auto;
+  align-self: stretch;
+  min-width: 0;
+  min-height: var(--community-stage-height);
+  width: 100%;
+  height: var(--community-stage-height);
 }
 
 .community-side-actions {
@@ -1213,7 +1258,9 @@ function onTouchEnd(event: TouchEvent) {
 
 @media (max-width: 768px) {
   .community-page {
-    padding-bottom: var(--v2-bottomnav-height) !important;
+    --community-stage-height: calc(100dvh - var(--v2-bottomnav-height));
+    inset: 0 0 var(--v2-bottomnav-height) 0;
+    padding-bottom: 0 !important;
   }
 
   .community-overlay-bar {
@@ -1231,12 +1278,6 @@ function onTouchEnd(event: TouchEvent) {
 
   .community-channel-switch {
     align-self: flex-start;
-  }
-
-  .community-spin,
-  .community-spin :deep(.ant-spin-nested-loading),
-  .community-spin :deep(.ant-spin-container) {
-    height: 100%;
   }
 
   .community-viewer {
@@ -1281,7 +1322,8 @@ function onTouchEnd(event: TouchEvent) {
 
 @media (min-width: 769px) {
   .community-page {
-    height: 100vh;
+    --community-stage-height: 100dvh;
+    inset: 0 0 0 var(--v2-sidebar-width);
     padding-bottom: 0 !important;
   }
 }

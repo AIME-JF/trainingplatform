@@ -33,7 +33,7 @@ export const getConfigGroupsApiV1SystemConfigGroupsGet = (
     params?: GetConfigGroupsApiV1SystemConfigGroupsGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseConfigGroupResponse>(
-      {url: `/api/v1/system/config-groups`, method: 'GET',
+      {url: `/system/config-groups`, method: 'GET',
         params
     },
       );
@@ -45,7 +45,7 @@ export const createConfigGroupApiV1SystemConfigGroupsPost = (
     configGroupCreate: ConfigGroupCreate,
  ) => {
       return customInstance<StandardResponseConfigGroupResponse>(
-      {url: `/api/v1/system/config-groups`, method: 'POST',
+      {url: `/system/config-groups`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: configGroupCreate
     },
@@ -58,7 +58,7 @@ export const getConfigGroupApiV1SystemConfigGroupsGroupIdGet = (
     groupId: number,
  ) => {
       return customInstance<StandardResponseConfigGroupDetailResponse>(
-      {url: `/api/v1/system/config-groups/${groupId}`, method: 'GET'
+      {url: `/system/config-groups/${groupId}`, method: 'GET'
     },
       );
     }
@@ -70,7 +70,7 @@ export const updateConfigGroupApiV1SystemConfigGroupsGroupIdPut = (
     configGroupUpdate: ConfigGroupUpdate,
  ) => {
       return customInstance<StandardResponseConfigGroupResponse>(
-      {url: `/api/v1/system/config-groups/${groupId}`, method: 'PUT',
+      {url: `/system/config-groups/${groupId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: configGroupUpdate
     },
@@ -83,7 +83,7 @@ export const deleteConfigGroupApiV1SystemConfigGroupsGroupIdDelete = (
     groupId: number,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/system/config-groups/${groupId}`, method: 'DELETE'
+      {url: `/system/config-groups/${groupId}`, method: 'DELETE'
     },
       );
     }
@@ -94,7 +94,7 @@ export const resetConfigGroupApiV1SystemConfigGroupsGroupIdResetPost = (
     groupId: number,
  ) => {
       return customInstance<StandardResponseConfigGroupDetailResponse>(
-      {url: `/api/v1/system/config-groups/${groupId}/reset`, method: 'POST'
+      {url: `/system/config-groups/${groupId}/reset`, method: 'POST'
     },
       );
     }
@@ -105,7 +105,7 @@ export const getConfigsApiV1SystemConfigsGet = (
     params?: GetConfigsApiV1SystemConfigsGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseConfigResponse>(
-      {url: `/api/v1/system/configs`, method: 'GET',
+      {url: `/system/configs`, method: 'GET',
         params
     },
       );
@@ -117,7 +117,7 @@ export const createConfigApiV1SystemConfigsPost = (
     configCreate: ConfigCreate,
  ) => {
       return customInstance<StandardResponseConfigResponse>(
-      {url: `/api/v1/system/configs`, method: 'POST',
+      {url: `/system/configs`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: configCreate
     },
@@ -130,7 +130,7 @@ export const getConfigApiV1SystemConfigsConfigIdGet = (
     configId: number,
  ) => {
       return customInstance<StandardResponseConfigResponse>(
-      {url: `/api/v1/system/configs/${configId}`, method: 'GET'
+      {url: `/system/configs/${configId}`, method: 'GET'
     },
       );
     }
@@ -142,7 +142,7 @@ export const updateConfigApiV1SystemConfigsConfigIdPut = (
     configUpdate: ConfigUpdate,
  ) => {
       return customInstance<StandardResponseConfigResponse>(
-      {url: `/api/v1/system/configs/${configId}`, method: 'PUT',
+      {url: `/system/configs/${configId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: configUpdate
     },
@@ -155,7 +155,7 @@ export const deleteConfigApiV1SystemConfigsConfigIdDelete = (
     configId: number,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/system/configs/${configId}`, method: 'DELETE'
+      {url: `/system/configs/${configId}`, method: 'DELETE'
     },
       );
     }
@@ -167,7 +167,7 @@ export const getDashboardModulesApiV1SystemDashboardModulesGet = (
 
  ) => {
       return customInstance<StandardResponseListDashboardModuleConfigResponse>(
-      {url: `/api/v1/system/dashboard-modules`, method: 'GET'
+      {url: `/system/dashboard-modules`, method: 'GET'
     },
       );
     }
@@ -179,7 +179,7 @@ export const updateDashboardModuleApiV1SystemDashboardModulesModuleIdPut = (
     dashboardModuleConfigUpdate: DashboardModuleConfigUpdate,
  ) => {
       return customInstance<StandardResponseDashboardModuleConfigResponse>(
-      {url: `/api/v1/system/dashboard-modules/${moduleId}`, method: 'PUT',
+      {url: `/system/dashboard-modules/${moduleId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: dashboardModuleConfigUpdate
     },

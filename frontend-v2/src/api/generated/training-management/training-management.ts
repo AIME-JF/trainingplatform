@@ -20,6 +20,7 @@ import type {
   GetCheckinRecordsApiV1TrainingsTrainingIdCheckinRecordsGetParams,
   GetEnrollmentsApiV1TrainingsTrainingIdEnrollmentsGetParams,
   GetStudentsApiV1TrainingsTrainingIdStudentsGetParams,
+  GetTrainingActivitiesApiV1TrainingsTrainingIdActivitiesGetParams,
   GetTrainingHistoriesApiV1TrainingsTrainingIdHistoriesGetParams,
   GetTrainingsApiV1TrainingsGetParams,
   StandardResponse,
@@ -30,6 +31,7 @@ import type {
   StandardResponseListEnrollmentResponse,
   StandardResponseListResourceListItemResponse,
   StandardResponseListScheduleItemResponse,
+  StandardResponseListTrainingActivityResponse,
   StandardResponseListTrainingCourseChangeLogResponse,
   StandardResponseListTrainingHistoryResponse,
   StandardResponsePaginatedResponseEnrollmentResponse,
@@ -39,6 +41,8 @@ import type {
   StandardResponseTrainingCheckinQrResponse,
   StandardResponseTrainingResponse,
   StandardResponseTrainingStatsResponse,
+  StartSessionCheckinApiV1TrainingsTrainingIdSessionsSessionKeyCheckinStartPostParams,
+  StartSessionCheckoutApiV1TrainingsTrainingIdSessionsSessionKeyCheckoutStartPostParams,
   TrainingCreate,
   TrainingEvaluationCreate,
   TrainingResourceBindRequest,
@@ -60,7 +64,7 @@ export const getMyTrainingHistoriesApiV1TrainingsHistoriesMeGet = (
 
  ) => {
       return customInstance<StandardResponseListTrainingHistoryResponse>(
-      {url: `/api/v1/trainings/histories/me`, method: 'GET'
+      {url: `/trainings/histories/me`, method: 'GET'
     },
       );
     }
@@ -71,7 +75,7 @@ export const getTrainingsApiV1TrainingsGet = (
     params?: GetTrainingsApiV1TrainingsGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseTrainingListResponse>(
-      {url: `/api/v1/trainings`, method: 'GET',
+      {url: `/trainings`, method: 'GET',
         params
     },
       );
@@ -83,7 +87,7 @@ export const createTrainingApiV1TrainingsPost = (
     trainingCreate: TrainingCreate,
  ) => {
       return customInstance<StandardResponseTrainingResponse>(
-      {url: `/api/v1/trainings`, method: 'POST',
+      {url: `/trainings`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: trainingCreate
     },
@@ -96,7 +100,7 @@ export const getTrainingStatsApiV1TrainingsStatsGet = (
 
  ) => {
       return customInstance<StandardResponseTrainingStatsResponse>(
-      {url: `/api/v1/trainings/stats`, method: 'GET'
+      {url: `/trainings/stats`, method: 'GET'
     },
       );
     }
@@ -107,7 +111,20 @@ export const getCalendarEventsApiV1TrainingsCalendarGet = (
     params?: GetCalendarEventsApiV1TrainingsCalendarGetParams,
  ) => {
       return customInstance<StandardResponseListCalendarEventResponse>(
-      {url: `/api/v1/trainings/calendar`, method: 'GET',
+      {url: `/trainings/calendar`, method: 'GET',
+        params
+    },
+      );
+    }
+  /**
+ * @summary 培训班动态
+ */
+export const getTrainingActivitiesApiV1TrainingsTrainingIdActivitiesGet = (
+    trainingId: number,
+    params?: GetTrainingActivitiesApiV1TrainingsTrainingIdActivitiesGetParams,
+ ) => {
+      return customInstance<StandardResponseListTrainingActivityResponse>(
+      {url: `/trainings/${trainingId}/activities`, method: 'GET',
         params
     },
       );
@@ -119,7 +136,7 @@ export const getCheckinQrPayloadApiV1TrainingsCheckinQrTokenGet = (
     token: string,
  ) => {
       return customInstance<StandardResponseTrainingCheckinQrResponse>(
-      {url: `/api/v1/trainings/checkin/qr/${token}`, method: 'GET'
+      {url: `/trainings/checkin/qr/${token}`, method: 'GET'
     },
       );
     }
@@ -130,7 +147,29 @@ export const checkinByQrApiV1TrainingsCheckinQrTokenPost = (
     token: string,
  ) => {
       return customInstance<StandardResponseCheckinResponse>(
-      {url: `/api/v1/trainings/checkin/qr/${token}`, method: 'POST'
+      {url: `/trainings/checkin/qr/${token}`, method: 'POST'
+    },
+      );
+    }
+  /**
+ * @summary 获取出勤二维码信息
+ */
+export const getAttendanceQrPayloadApiV1TrainingsAttendanceQrTokenGet = (
+    token: string,
+ ) => {
+      return customInstance<StandardResponseTrainingCheckinQrResponse>(
+      {url: `/trainings/attendance/qr/${token}`, method: 'GET'
+    },
+      );
+    }
+  /**
+ * @summary 扫码出勤（签到或签退）
+ */
+export const attendanceByQrApiV1TrainingsAttendanceQrTokenPost = (
+    token: string,
+ ) => {
+      return customInstance<StandardResponseCheckinResponse>(
+      {url: `/trainings/attendance/qr/${token}`, method: 'POST'
     },
       );
     }
@@ -141,7 +180,7 @@ export const getTrainingApiV1TrainingsTrainingIdGet = (
     trainingId: number,
  ) => {
       return customInstance<StandardResponseTrainingResponse>(
-      {url: `/api/v1/trainings/${trainingId}`, method: 'GET'
+      {url: `/trainings/${trainingId}`, method: 'GET'
     },
       );
     }
@@ -153,7 +192,7 @@ export const updateTrainingApiV1TrainingsTrainingIdPut = (
     trainingUpdate: TrainingUpdate,
  ) => {
       return customInstance<StandardResponseTrainingResponse>(
-      {url: `/api/v1/trainings/${trainingId}`, method: 'PUT',
+      {url: `/trainings/${trainingId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: trainingUpdate
     },
@@ -166,7 +205,7 @@ export const deleteTrainingApiV1TrainingsTrainingIdDelete = (
     trainingId: number,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/trainings/${trainingId}`, method: 'DELETE'
+      {url: `/trainings/${trainingId}`, method: 'DELETE'
     },
       );
     }
@@ -178,7 +217,7 @@ export const manageTrainingApiV1TrainingsTrainingIdManagePut = (
     trainingUpdate: TrainingUpdate,
  ) => {
       return customInstance<StandardResponseTrainingResponse>(
-      {url: `/api/v1/trainings/${trainingId}/manage`, method: 'PUT',
+      {url: `/trainings/${trainingId}/manage`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: trainingUpdate
     },
@@ -192,7 +231,7 @@ export const publishTrainingApiV1TrainingsTrainingIdPublishPost = (
     trainingWorkflowActionRequestNull: TrainingWorkflowActionRequest | null,
  ) => {
       return customInstance<StandardResponseTrainingResponse>(
-      {url: `/api/v1/trainings/${trainingId}/publish`, method: 'POST',
+      {url: `/trainings/${trainingId}/publish`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: trainingWorkflowActionRequestNull
     },
@@ -206,7 +245,7 @@ export const lockTrainingApiV1TrainingsTrainingIdLockPost = (
     trainingWorkflowActionRequestNull: TrainingWorkflowActionRequest | null,
  ) => {
       return customInstance<StandardResponseTrainingResponse>(
-      {url: `/api/v1/trainings/${trainingId}/lock`, method: 'POST',
+      {url: `/trainings/${trainingId}/lock`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: trainingWorkflowActionRequestNull
     },
@@ -220,7 +259,7 @@ export const startTrainingApiV1TrainingsTrainingIdStartPost = (
     trainingWorkflowActionRequestNull: TrainingWorkflowActionRequest | null,
  ) => {
       return customInstance<StandardResponseTrainingResponse>(
-      {url: `/api/v1/trainings/${trainingId}/start`, method: 'POST',
+      {url: `/trainings/${trainingId}/start`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: trainingWorkflowActionRequestNull
     },
@@ -233,7 +272,7 @@ export const endTrainingApiV1TrainingsTrainingIdEndPost = (
     trainingId: number,
  ) => {
       return customInstance<StandardResponseTrainingResponse>(
-      {url: `/api/v1/trainings/${trainingId}/end`, method: 'POST'
+      {url: `/trainings/${trainingId}/end`, method: 'POST'
     },
       );
     }
@@ -245,7 +284,7 @@ export const getStudentsApiV1TrainingsTrainingIdStudentsGet = (
     params?: GetStudentsApiV1TrainingsTrainingIdStudentsGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseEnrollmentResponse>(
-      {url: `/api/v1/trainings/${trainingId}/students`, method: 'GET',
+      {url: `/trainings/${trainingId}/students`, method: 'GET',
         params
     },
       );
@@ -257,7 +296,7 @@ export const getScheduleApiV1TrainingsTrainingIdScheduleGet = (
     trainingId: number,
  ) => {
       return customInstance<StandardResponseListScheduleItemResponse>(
-      {url: `/api/v1/trainings/${trainingId}/schedule`, method: 'GET'
+      {url: `/trainings/${trainingId}/schedule`, method: 'GET'
     },
       );
     }
@@ -268,7 +307,7 @@ export const downloadTrainingStudentImportTemplateApiV1TrainingsImportStudentsTe
 
  ) => {
       return customInstance<unknown>(
-      {url: `/api/v1/trainings/import/students/template`, method: 'GET'
+      {url: `/trainings/import/students/template`, method: 'GET'
     },
       );
     }
@@ -279,7 +318,7 @@ export const downloadTrainingStudentImportTemplateForTrainingApiV1TrainingsTrain
     trainingId: number,
  ) => {
       return customInstance<unknown>(
-      {url: `/api/v1/trainings/${trainingId}/import/students/template`, method: 'GET'
+      {url: `/trainings/${trainingId}/import/students/template`, method: 'GET'
     },
       );
     }
@@ -290,7 +329,7 @@ export const downloadTrainingInstructorImportTemplateApiV1TrainingsTrainingIdImp
     trainingId: number,
  ) => {
       return customInstance<unknown>(
-      {url: `/api/v1/trainings/${trainingId}/import/instructors/template`, method: 'GET'
+      {url: `/trainings/${trainingId}/import/instructors/template`, method: 'GET'
     },
       );
     }
@@ -301,7 +340,7 @@ export const downloadTrainingCourseImportTemplateApiV1TrainingsTrainingIdImportC
     trainingId: number,
  ) => {
       return customInstance<unknown>(
-      {url: `/api/v1/trainings/${trainingId}/import/courses/template`, method: 'GET'
+      {url: `/trainings/${trainingId}/import/courses/template`, method: 'GET'
     },
       );
     }
@@ -312,7 +351,7 @@ export const downloadTrainingSessionImportTemplateApiV1TrainingsTrainingIdImport
     trainingId: number,
  ) => {
       return customInstance<unknown>(
-      {url: `/api/v1/trainings/${trainingId}/import/sessions/template`, method: 'GET'
+      {url: `/trainings/${trainingId}/import/sessions/template`, method: 'GET'
     },
       );
     }
@@ -323,7 +362,7 @@ export const downloadTrainingScheduleImportTemplateApiV1TrainingsTrainingIdImpor
     trainingId: number,
  ) => {
       return customInstance<unknown>(
-      {url: `/api/v1/trainings/${trainingId}/import/schedule/template`, method: 'GET'
+      {url: `/trainings/${trainingId}/import/schedule/template`, method: 'GET'
     },
       );
     }
@@ -337,7 +376,7 @@ export const importStudentsApiV1TrainingsTrainingIdImportStudentsPost = (
 formData.append(`file`, bodyImportStudentsApiV1TrainingsTrainingIdImportStudentsPost.file);
 
       return customInstance<StandardResponse>(
-      {url: `/api/v1/trainings/${trainingId}/import/students`, method: 'POST',
+      {url: `/trainings/${trainingId}/import/students`, method: 'POST',
        data: formData
     },
       );
@@ -352,7 +391,7 @@ export const importInstructorsApiV1TrainingsTrainingIdImportInstructorsPost = (
 formData.append(`file`, bodyImportInstructorsApiV1TrainingsTrainingIdImportInstructorsPost.file);
 
       return customInstance<StandardResponse>(
-      {url: `/api/v1/trainings/${trainingId}/import/instructors`, method: 'POST',
+      {url: `/trainings/${trainingId}/import/instructors`, method: 'POST',
        data: formData
     },
       );
@@ -367,7 +406,7 @@ export const importCoursesApiV1TrainingsTrainingIdImportCoursesPost = (
 formData.append(`file`, bodyImportCoursesApiV1TrainingsTrainingIdImportCoursesPost.file);
 
       return customInstance<StandardResponse>(
-      {url: `/api/v1/trainings/${trainingId}/import/courses`, method: 'POST',
+      {url: `/trainings/${trainingId}/import/courses`, method: 'POST',
        data: formData
     },
       );
@@ -382,7 +421,7 @@ export const importSessionsApiV1TrainingsTrainingIdImportSessionsPost = (
 formData.append(`file`, bodyImportSessionsApiV1TrainingsTrainingIdImportSessionsPost.file);
 
       return customInstance<StandardResponse>(
-      {url: `/api/v1/trainings/${trainingId}/import/sessions`, method: 'POST',
+      {url: `/trainings/${trainingId}/import/sessions`, method: 'POST',
        data: formData
     },
       );
@@ -400,7 +439,7 @@ if(bodyImportScheduleApiV1TrainingsTrainingIdImportSchedulePost.replace_existing
  }
 
       return customInstance<StandardResponse>(
-      {url: `/api/v1/trainings/${trainingId}/import/schedule`, method: 'POST',
+      {url: `/trainings/${trainingId}/import/schedule`, method: 'POST',
        data: formData
     },
       );
@@ -413,7 +452,7 @@ export const enrollApiV1TrainingsTrainingIdEnrollPost = (
     enrollmentCreateNull: EnrollmentCreate | null,
  ) => {
       return customInstance<StandardResponseEnrollmentResponse>(
-      {url: `/api/v1/trainings/${trainingId}/enroll`, method: 'POST',
+      {url: `/trainings/${trainingId}/enroll`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: enrollmentCreateNull
     },
@@ -427,7 +466,7 @@ export const getEnrollmentsApiV1TrainingsTrainingIdEnrollmentsGet = (
     params?: GetEnrollmentsApiV1TrainingsTrainingIdEnrollmentsGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseEnrollmentResponse>(
-      {url: `/api/v1/trainings/${trainingId}/enrollments`, method: 'GET',
+      {url: `/trainings/${trainingId}/enrollments`, method: 'GET',
         params
     },
       );
@@ -440,7 +479,7 @@ export const approveEnrollmentApiV1TrainingsTrainingIdEnrollmentsEidApprovePut =
     eid: number,
  ) => {
       return customInstance<StandardResponseEnrollmentResponse>(
-      {url: `/api/v1/trainings/${trainingId}/enrollments/${eid}/approve`, method: 'PUT'
+      {url: `/trainings/${trainingId}/enrollments/${eid}/approve`, method: 'PUT'
     },
       );
     }
@@ -453,7 +492,7 @@ export const rejectEnrollmentApiV1TrainingsTrainingIdEnrollmentsEidRejectPut = (
     bodyRejectEnrollmentApiV1TrainingsTrainingIdEnrollmentsEidRejectPut: BodyRejectEnrollmentApiV1TrainingsTrainingIdEnrollmentsEidRejectPut,
  ) => {
       return customInstance<StandardResponseEnrollmentResponse>(
-      {url: `/api/v1/trainings/${trainingId}/enrollments/${eid}/reject`, method: 'PUT',
+      {url: `/trainings/${trainingId}/enrollments/${eid}/reject`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: bodyRejectEnrollmentApiV1TrainingsTrainingIdEnrollmentsEidRejectPut
     },
@@ -467,7 +506,7 @@ export const updateRosterAssignmentsApiV1TrainingsTrainingIdRosterPut = (
     trainingRosterAssignment: TrainingRosterAssignment[],
  ) => {
       return customInstance<StandardResponseListEnrollmentResponse>(
-      {url: `/api/v1/trainings/${trainingId}/roster`, method: 'PUT',
+      {url: `/trainings/${trainingId}/roster`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: trainingRosterAssignment
     },
@@ -481,7 +520,7 @@ export const getCheckinRecordsApiV1TrainingsTrainingIdCheckinRecordsGet = (
     params?: GetCheckinRecordsApiV1TrainingsTrainingIdCheckinRecordsGetParams,
  ) => {
       return customInstance<StandardResponseListCheckinResponse>(
-      {url: `/api/v1/trainings/${trainingId}/checkin/records`, method: 'GET',
+      {url: `/trainings/${trainingId}/checkin/records`, method: 'GET',
         params
     },
       );
@@ -494,7 +533,7 @@ export const getAttendanceSummaryApiV1TrainingsTrainingIdAttendanceSummaryGet = 
     params: GetAttendanceSummaryApiV1TrainingsTrainingIdAttendanceSummaryGetParams,
  ) => {
       return customInstance<StandardResponseTrainingAttendanceSummaryResponse>(
-      {url: `/api/v1/trainings/${trainingId}/attendance/summary`, method: 'GET',
+      {url: `/trainings/${trainingId}/attendance/summary`, method: 'GET',
         params
     },
       );
@@ -505,9 +544,11 @@ export const getAttendanceSummaryApiV1TrainingsTrainingIdAttendanceSummaryGet = 
 export const startSessionCheckinApiV1TrainingsTrainingIdSessionsSessionKeyCheckinStartPost = (
     trainingId: number,
     sessionKey: string,
+    params?: StartSessionCheckinApiV1TrainingsTrainingIdSessionsSessionKeyCheckinStartPostParams,
  ) => {
       return customInstance<StandardResponseTrainingResponse>(
-      {url: `/api/v1/trainings/${trainingId}/sessions/${sessionKey}/checkin/start`, method: 'POST'
+      {url: `/trainings/${trainingId}/sessions/${sessionKey}/checkin/start`, method: 'POST',
+        params
     },
       );
     }
@@ -519,7 +560,7 @@ export const endSessionCheckinApiV1TrainingsTrainingIdSessionsSessionKeyCheckinE
     sessionKey: string,
  ) => {
       return customInstance<StandardResponseTrainingResponse>(
-      {url: `/api/v1/trainings/${trainingId}/sessions/${sessionKey}/checkin/end`, method: 'POST'
+      {url: `/trainings/${trainingId}/sessions/${sessionKey}/checkin/end`, method: 'POST'
     },
       );
     }
@@ -529,9 +570,11 @@ export const endSessionCheckinApiV1TrainingsTrainingIdSessionsSessionKeyCheckinE
 export const startSessionCheckoutApiV1TrainingsTrainingIdSessionsSessionKeyCheckoutStartPost = (
     trainingId: number,
     sessionKey: string,
+    params?: StartSessionCheckoutApiV1TrainingsTrainingIdSessionsSessionKeyCheckoutStartPostParams,
  ) => {
       return customInstance<StandardResponseTrainingResponse>(
-      {url: `/api/v1/trainings/${trainingId}/sessions/${sessionKey}/checkout/start`, method: 'POST'
+      {url: `/trainings/${trainingId}/sessions/${sessionKey}/checkout/start`, method: 'POST',
+        params
     },
       );
     }
@@ -543,7 +586,7 @@ export const endSessionCheckoutApiV1TrainingsTrainingIdSessionsSessionKeyCheckou
     sessionKey: string,
  ) => {
       return customInstance<StandardResponseTrainingResponse>(
-      {url: `/api/v1/trainings/${trainingId}/sessions/${sessionKey}/checkout/end`, method: 'POST'
+      {url: `/trainings/${trainingId}/sessions/${sessionKey}/checkout/end`, method: 'POST'
     },
       );
     }
@@ -556,7 +599,7 @@ export const skipSessionApiV1TrainingsTrainingIdSessionsSessionKeySkipPost = (
     trainingSkipCourseRequestNull: TrainingSkipCourseRequest | null,
  ) => {
       return customInstance<StandardResponseTrainingResponse>(
-      {url: `/api/v1/trainings/${trainingId}/sessions/${sessionKey}/skip`, method: 'POST',
+      {url: `/trainings/${trainingId}/sessions/${sessionKey}/skip`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: trainingSkipCourseRequestNull
     },
@@ -570,7 +613,7 @@ export const checkinApiV1TrainingsTrainingIdCheckinPost = (
     checkinCreateNull: CheckinCreate | null,
  ) => {
       return customInstance<StandardResponseCheckinResponse>(
-      {url: `/api/v1/trainings/${trainingId}/checkin`, method: 'POST',
+      {url: `/trainings/${trainingId}/checkin`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: checkinCreateNull
     },
@@ -584,7 +627,7 @@ export const checkoutApiV1TrainingsTrainingIdCheckoutPost = (
     checkoutCreateNull: CheckoutCreate | null,
  ) => {
       return customInstance<StandardResponseCheckinResponse>(
-      {url: `/api/v1/trainings/${trainingId}/checkout`, method: 'POST',
+      {url: `/trainings/${trainingId}/checkout`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: checkoutCreateNull
     },
@@ -598,21 +641,21 @@ export const submitTrainingEvaluationApiV1TrainingsTrainingIdEvaluationPost = (
     trainingEvaluationCreate: TrainingEvaluationCreate,
  ) => {
       return customInstance<StandardResponseCheckinResponse>(
-      {url: `/api/v1/trainings/${trainingId}/evaluation`, method: 'POST',
+      {url: `/trainings/${trainingId}/evaluation`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: trainingEvaluationCreate
     },
       );
     }
   /**
- * @summary 生成签到二维码
+ * @summary 生成出勤二维码
  */
 export const getCheckinQrApiV1TrainingsTrainingIdCheckinQrGet = (
     trainingId: number,
     params?: GetCheckinQrApiV1TrainingsTrainingIdCheckinQrGetParams,
  ) => {
       return customInstance<StandardResponseTrainingCheckinQrResponse>(
-      {url: `/api/v1/trainings/${trainingId}/checkin/qr`, method: 'GET',
+      {url: `/trainings/${trainingId}/checkin/qr`, method: 'GET',
         params
     },
       );
@@ -625,7 +668,7 @@ export const getTrainingHistoriesApiV1TrainingsTrainingIdHistoriesGet = (
     params?: GetTrainingHistoriesApiV1TrainingsTrainingIdHistoriesGetParams,
  ) => {
       return customInstance<StandardResponseListTrainingHistoryResponse>(
-      {url: `/api/v1/trainings/${trainingId}/histories`, method: 'GET',
+      {url: `/trainings/${trainingId}/histories`, method: 'GET',
         params
     },
       );
@@ -637,7 +680,7 @@ export const getTrainingCourseChangeLogsApiV1TrainingsTrainingIdCourseChangeLogs
     trainingId: number,
  ) => {
       return customInstance<StandardResponseListTrainingCourseChangeLogResponse>(
-      {url: `/api/v1/trainings/${trainingId}/course-change-logs`, method: 'GET'
+      {url: `/trainings/${trainingId}/course-change-logs`, method: 'GET'
     },
       );
     }
@@ -649,7 +692,7 @@ export const addTrainingResourceApiV1TrainingsTrainingIdResourcesPost = (
     trainingResourceBindRequest: TrainingResourceBindRequest,
  ) => {
       return customInstance<StandardResponseResourceListItemResponse>(
-      {url: `/api/v1/trainings/${trainingId}/resources`, method: 'POST',
+      {url: `/trainings/${trainingId}/resources`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: trainingResourceBindRequest
     },
@@ -662,7 +705,7 @@ export const listTrainingResourcesApiV1TrainingsTrainingIdResourcesGet = (
     trainingId: number,
  ) => {
       return customInstance<StandardResponseListResourceListItemResponse>(
-      {url: `/api/v1/trainings/${trainingId}/resources`, method: 'GET'
+      {url: `/trainings/${trainingId}/resources`, method: 'GET'
     },
       );
     }
@@ -674,7 +717,7 @@ export const removeTrainingResourceApiV1TrainingsTrainingIdResourcesResourceIdDe
     resourceId: number,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/trainings/${trainingId}/resources/${resourceId}`, method: 'DELETE'
+      {url: `/trainings/${trainingId}/resources/${resourceId}`, method: 'DELETE'
     },
       );
     }
@@ -685,7 +728,7 @@ export const aiCreateTrainingApiV1TrainingsAiCreatePost = (
     _aiCreateRequest: _AiCreateRequest,
  ) => {
       return customInstance<unknown>(
-      {url: `/api/v1/trainings/ai-create`, method: 'POST',
+      {url: `/trainings/ai-create`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: _aiCreateRequest
     },
@@ -696,8 +739,11 @@ export type GetTrainingsApiV1TrainingsGetResult = NonNullable<Awaited<ReturnType
 export type CreateTrainingApiV1TrainingsPostResult = NonNullable<Awaited<ReturnType<typeof createTrainingApiV1TrainingsPost>>>
 export type GetTrainingStatsApiV1TrainingsStatsGetResult = NonNullable<Awaited<ReturnType<typeof getTrainingStatsApiV1TrainingsStatsGet>>>
 export type GetCalendarEventsApiV1TrainingsCalendarGetResult = NonNullable<Awaited<ReturnType<typeof getCalendarEventsApiV1TrainingsCalendarGet>>>
+export type GetTrainingActivitiesApiV1TrainingsTrainingIdActivitiesGetResult = NonNullable<Awaited<ReturnType<typeof getTrainingActivitiesApiV1TrainingsTrainingIdActivitiesGet>>>
 export type GetCheckinQrPayloadApiV1TrainingsCheckinQrTokenGetResult = NonNullable<Awaited<ReturnType<typeof getCheckinQrPayloadApiV1TrainingsCheckinQrTokenGet>>>
 export type CheckinByQrApiV1TrainingsCheckinQrTokenPostResult = NonNullable<Awaited<ReturnType<typeof checkinByQrApiV1TrainingsCheckinQrTokenPost>>>
+export type GetAttendanceQrPayloadApiV1TrainingsAttendanceQrTokenGetResult = NonNullable<Awaited<ReturnType<typeof getAttendanceQrPayloadApiV1TrainingsAttendanceQrTokenGet>>>
+export type AttendanceByQrApiV1TrainingsAttendanceQrTokenPostResult = NonNullable<Awaited<ReturnType<typeof attendanceByQrApiV1TrainingsAttendanceQrTokenPost>>>
 export type GetTrainingApiV1TrainingsTrainingIdGetResult = NonNullable<Awaited<ReturnType<typeof getTrainingApiV1TrainingsTrainingIdGet>>>
 export type UpdateTrainingApiV1TrainingsTrainingIdPutResult = NonNullable<Awaited<ReturnType<typeof updateTrainingApiV1TrainingsTrainingIdPut>>>
 export type DeleteTrainingApiV1TrainingsTrainingIdDeleteResult = NonNullable<Awaited<ReturnType<typeof deleteTrainingApiV1TrainingsTrainingIdDelete>>>

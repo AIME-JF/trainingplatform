@@ -21,7 +21,7 @@ export const getDashboardApiV1DashboardGet = (
     params?: GetDashboardApiV1DashboardGetParams,
  ) => {
       return customInstance<StandardResponseDashboardResponse>(
-      {url: `/api/v1/dashboard`, method: 'GET',
+      {url: `/dashboard`, method: 'GET',
         params
     },
       );

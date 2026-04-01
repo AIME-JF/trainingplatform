@@ -14,9 +14,13 @@ export const useAuthStore = defineStore('auth', () => {
 
   function extractPermissionCodes(user) {
     const codeSet = new Set()
-    for (const code of user?.permissions || []) {
-      if (code) {
-        codeSet.add(String(code).trim())
+    for (const permission of user?.permissions || []) {
+      if (typeof permission === 'string' && permission.trim()) {
+        codeSet.add(permission.trim())
+        continue
+      }
+      if (permission?.code) {
+        codeSet.add(String(permission.code).trim())
       }
     }
     for (const roleItem of user?.roles || []) {

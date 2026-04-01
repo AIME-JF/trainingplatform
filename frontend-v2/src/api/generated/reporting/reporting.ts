@@ -26,7 +26,7 @@ export const getKpiApiV1ReportKpiGet = (
 
  ) => {
       return customInstance<StandardResponseKpiResponse>(
-      {url: `/api/v1/report/kpi`, method: 'GET'
+      {url: `/report/kpi`, method: 'GET'
     },
       );
     }
@@ -38,7 +38,7 @@ export const getTrendApiV1ReportTrendGet = (
 
  ) => {
       return customInstance<StandardResponseListTrendItem>(
-      {url: `/api/v1/report/trend`, method: 'GET'
+      {url: `/report/trend`, method: 'GET'
     },
       );
     }
@@ -50,7 +50,7 @@ export const getTrainingTrendApiV1ReportTrainingTrendGet = (
 
  ) => {
       return customInstance<StandardResponseListTrainingTrendItem>(
-      {url: `/api/v1/report/training-trend`, method: 'GET'
+      {url: `/report/training-trend`, method: 'GET'
     },
       );
     }
@@ -62,7 +62,7 @@ export const getTrainingCityAttendanceApiV1ReportTrainingCityAttendanceGet = (
 
  ) => {
       return customInstance<StandardResponseListCityAttendanceItem>(
-      {url: `/api/v1/report/training-city-attendance`, method: 'GET'
+      {url: `/report/training-city-attendance`, method: 'GET'
     },
       );
     }
@@ -74,7 +74,7 @@ export const getTrainingCityCompletionApiV1ReportTrainingCityCompletionGet = (
 
  ) => {
       return customInstance<StandardResponseListCityCompletionItem>(
-      {url: `/api/v1/report/training-city-completion`, method: 'GET'
+      {url: `/report/training-city-completion`, method: 'GET'
     },
       );
     }
@@ -86,7 +86,7 @@ export const exportReportApiV1ReportExportGet = (
 
  ) => {
       return customInstance<unknown>(
-      {url: `/api/v1/report/export`, method: 'GET'
+      {url: `/report/export`, method: 'GET'
     },
       );
     }
@@ -98,7 +98,7 @@ export const getPoliceTypeDistributionApiV1ReportPoliceTypeDistributionGet = (
 
  ) => {
       return customInstance<StandardResponseListPoliceTypeDistribution>(
-      {url: `/api/v1/report/police-type-distribution`, method: 'GET'
+      {url: `/report/police-type-distribution`, method: 'GET'
     },
       );
     }
@@ -110,7 +110,7 @@ export const getCityRankingApiV1ReportCityRankingGet = (
 
  ) => {
       return customInstance<StandardResponseListCityRanking>(
-      {url: `/api/v1/report/city-ranking`, method: 'GET'
+      {url: `/report/city-ranking`, method: 'GET'
     },
       );
     }

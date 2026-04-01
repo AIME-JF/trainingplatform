@@ -23,7 +23,7 @@ export const getCertificatesApiV1CertificatesGet = (
     params?: GetCertificatesApiV1CertificatesGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseCertificateResponse>(
-      {url: `/api/v1/certificates`, method: 'GET',
+      {url: `/certificates`, method: 'GET',
         params
     },
       );
@@ -36,7 +36,7 @@ export const createCertificateApiV1CertificatesPost = (
     certificateCreate: CertificateCreate,
  ) => {
       return customInstance<StandardResponseCertificateResponse>(
-      {url: `/api/v1/certificates`, method: 'POST',
+      {url: `/certificates`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: certificateCreate
     },

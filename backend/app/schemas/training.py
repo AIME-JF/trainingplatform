@@ -86,7 +86,9 @@ class TrainingCurrentSessionResponse(BaseModel):
     checkin_mode: Optional[str] = None  # "direct" or "qr"
     checkin_duration_minutes: Optional[int] = None
     checkin_deadline: Optional[str] = None  # ISO datetime
-    checkin_qr_token: Optional[str] = None
+    checkout_mode: Optional[str] = None  # "direct" or "qr"
+    checkout_duration_minutes: Optional[int] = None
+    checkout_deadline: Optional[str] = None  # ISO datetime
     action_permissions: TrainingSessionActionPermissions = Field(default_factory=TrainingSessionActionPermissions)
 
 
@@ -298,6 +300,7 @@ class CheckinCreate(BaseModel):
     session_key: str = Field("start", description="课次标识")
     user_id: Optional[int] = None
     status: Optional[str] = Field(None, description="签到状态，默认自动判断")
+    method: Optional[str] = Field(None, description="签到方式: direct/qr/manual，默认自动判断")
 
 
 class CheckoutCreate(BaseModel):
@@ -307,6 +310,7 @@ class CheckoutCreate(BaseModel):
     time: Optional[str] = Field(None, description="签退时间 HH:MM")
     session_key: str = Field("start", description="课次标识")
     user_id: Optional[int] = None
+    method: Optional[str] = Field(None, description="签退方式: direct/qr/manual，默认自动判断")
 
 
 class TrainingEvaluationCreate(BaseModel):
@@ -499,7 +503,7 @@ class TrainingAttendanceSummaryResponse(BaseModel):
 
 
 class TrainingCheckinQrResponse(BaseModel):
-    """签到二维码响应"""
+    """出勤二维码响应"""
 
     token: str
     training_id: int
@@ -510,6 +514,7 @@ class TrainingCheckinQrResponse(BaseModel):
     url: str
     expire_at: datetime
     expires_in_seconds: int
+    action: str = Field("checkin", description="出勤动作: checkin/checkout")
 
 
 class ScheduleItemCreate(BaseModel):

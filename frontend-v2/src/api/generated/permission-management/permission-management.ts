@@ -25,7 +25,7 @@ export const createPermissionApiV1PermissionsCreatePost = (
     permissionCreate: PermissionCreate,
  ) => {
       return customInstance<StandardResponsePermissionResponse>(
-      {url: `/api/v1/permissions/create`, method: 'POST',
+      {url: `/permissions/create`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: permissionCreate
     },
@@ -38,7 +38,7 @@ export const createPermissionApiV1PermissionsPost = (
     permissionCreate: PermissionCreate,
  ) => {
       return customInstance<StandardResponsePermissionResponse>(
-      {url: `/api/v1/permissions`, method: 'POST',
+      {url: `/permissions`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: permissionCreate
     },
@@ -51,7 +51,7 @@ export const getPermissionDetailApiV1PermissionsPermissionIdDetailGet = (
     permissionId: number,
  ) => {
       return customInstance<StandardResponsePermissionResponse>(
-      {url: `/api/v1/permissions/${permissionId}/detail`, method: 'GET'
+      {url: `/permissions/${permissionId}/detail`, method: 'GET'
     },
       );
     }
@@ -62,7 +62,7 @@ export const getPermissionListApiV1PermissionsListGet = (
     params?: GetPermissionListApiV1PermissionsListGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponsePermissionResponse>(
-      {url: `/api/v1/permissions/list`, method: 'GET',
+      {url: `/permissions/list`, method: 'GET',
         params
     },
       );
@@ -75,7 +75,7 @@ export const updatePermissionApiV1PermissionsPermissionIdPut = (
     permissionUpdate: PermissionUpdate,
  ) => {
       return customInstance<StandardResponsePermissionResponse>(
-      {url: `/api/v1/permissions/${permissionId}`, method: 'PUT',
+      {url: `/permissions/${permissionId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: permissionUpdate
     },
@@ -88,7 +88,7 @@ export const deletePermissionApiV1PermissionsPermissionIdDelete = (
     permissionId: number,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/permissions/${permissionId}`, method: 'DELETE'
+      {url: `/permissions/${permissionId}`, method: 'DELETE'
     },
       );
     }
@@ -100,7 +100,7 @@ export const updatePermissionApiV1PermissionsPermissionIdUpdatePost = (
     permissionUpdate: PermissionUpdate,
  ) => {
       return customInstance<StandardResponsePermissionResponse>(
-      {url: `/api/v1/permissions/${permissionId}/update`, method: 'POST',
+      {url: `/permissions/${permissionId}/update`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: permissionUpdate
     },
@@ -113,7 +113,7 @@ export const deletePermissionApiV1PermissionsPermissionIdDeletePost = (
     permissionId: number,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/permissions/${permissionId}/delete`, method: 'POST'
+      {url: `/permissions/${permissionId}/delete`, method: 'POST'
     },
       );
     }
@@ -124,7 +124,7 @@ export const syncPermissionsApiV1PermissionsSyncPost = (
 
  ) => {
       return customInstance<StandardResponseListPermissionResponse>(
-      {url: `/api/v1/permissions/sync`, method: 'POST'
+      {url: `/permissions/sync`, method: 'POST'
     },
       );
     }

@@ -48,7 +48,7 @@ export const getExamPapersApiV1ExamsPapersGet = (
     params?: GetExamPapersApiV1ExamsPapersGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseExamPaperResponse>(
-      {url: `/api/v1/exams/papers`, method: 'GET',
+      {url: `/exams/papers`, method: 'GET',
         params
     },
       );
@@ -60,7 +60,7 @@ export const createExamPaperApiV1ExamsPapersPost = (
     examPaperCreate: ExamPaperCreate,
  ) => {
       return customInstance<StandardResponseExamPaperDetailResponse>(
-      {url: `/api/v1/exams/papers`, method: 'POST',
+      {url: `/exams/papers`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: examPaperCreate
     },
@@ -73,7 +73,7 @@ export const getExamPaperApiV1ExamsPapersPaperIdGet = (
     paperId: number,
  ) => {
       return customInstance<StandardResponseExamPaperDetailResponse>(
-      {url: `/api/v1/exams/papers/${paperId}`, method: 'GET'
+      {url: `/exams/papers/${paperId}`, method: 'GET'
     },
       );
     }
@@ -85,7 +85,7 @@ export const updateExamPaperApiV1ExamsPapersPaperIdPut = (
     examPaperUpdate: ExamPaperUpdate,
  ) => {
       return customInstance<StandardResponseExamPaperDetailResponse>(
-      {url: `/api/v1/exams/papers/${paperId}`, method: 'PUT',
+      {url: `/exams/papers/${paperId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: examPaperUpdate
     },
@@ -98,7 +98,7 @@ export const deleteExamPaperApiV1ExamsPapersPaperIdDelete = (
     paperId: number,
  ) => {
       return customInstance<StandardResponseDict>(
-      {url: `/api/v1/exams/papers/${paperId}`, method: 'DELETE'
+      {url: `/exams/papers/${paperId}`, method: 'DELETE'
     },
       );
     }
@@ -109,7 +109,7 @@ export const publishExamPaperApiV1ExamsPapersPaperIdPublishPost = (
     paperId: number,
  ) => {
       return customInstance<StandardResponseExamPaperDetailResponse>(
-      {url: `/api/v1/exams/papers/${paperId}/publish`, method: 'POST'
+      {url: `/exams/papers/${paperId}/publish`, method: 'POST'
     },
       );
     }
@@ -120,7 +120,7 @@ export const archiveExamPaperApiV1ExamsPapersPaperIdArchivePost = (
     paperId: number,
  ) => {
       return customInstance<StandardResponseExamPaperDetailResponse>(
-      {url: `/api/v1/exams/papers/${paperId}/archive`, method: 'POST'
+      {url: `/exams/papers/${paperId}/archive`, method: 'POST'
     },
       );
     }
@@ -131,7 +131,7 @@ export const getPaperFoldersApiV1ExamsPaperFoldersGet = (
 
  ) => {
       return customInstance<StandardResponseListPaperFolderResponse>(
-      {url: `/api/v1/exams/paper-folders`, method: 'GET'
+      {url: `/exams/paper-folders`, method: 'GET'
     },
       );
     }
@@ -142,7 +142,7 @@ export const createPaperFolderApiV1ExamsPaperFoldersPost = (
     paperFolderCreate: PaperFolderCreate,
  ) => {
       return customInstance<StandardResponsePaperFolderResponse>(
-      {url: `/api/v1/exams/paper-folders`, method: 'POST',
+      {url: `/exams/paper-folders`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: paperFolderCreate
     },
@@ -156,7 +156,7 @@ export const updatePaperFolderApiV1ExamsPaperFoldersFolderIdPut = (
     paperFolderUpdate: PaperFolderUpdate,
  ) => {
       return customInstance<StandardResponsePaperFolderResponse>(
-      {url: `/api/v1/exams/paper-folders/${folderId}`, method: 'PUT',
+      {url: `/exams/paper-folders/${folderId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: paperFolderUpdate
     },
@@ -169,7 +169,7 @@ export const deletePaperFolderApiV1ExamsPaperFoldersFolderIdDelete = (
     folderId: number,
  ) => {
       return customInstance<StandardResponseDict>(
-      {url: `/api/v1/exams/paper-folders/${folderId}`, method: 'DELETE'
+      {url: `/exams/paper-folders/${folderId}`, method: 'DELETE'
     },
       );
     }
@@ -181,7 +181,7 @@ export const movePaperToFolderApiV1ExamsPapersPaperIdFolderPatch = (
     paperMoveRequest: PaperMoveRequest,
  ) => {
       return customInstance<StandardResponseExamPaperDetailResponse>(
-      {url: `/api/v1/exams/papers/${paperId}/folder`, method: 'PATCH',
+      {url: `/exams/papers/${paperId}/folder`, method: 'PATCH',
       headers: {'Content-Type': 'application/json', },
       data: paperMoveRequest
     },
@@ -194,7 +194,7 @@ export const getAdmissionExamsApiV1ExamsAdmissionGet = (
     params?: GetAdmissionExamsApiV1ExamsAdmissionGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseAdmissionExamResponse>(
-      {url: `/api/v1/exams/admission`, method: 'GET',
+      {url: `/exams/admission`, method: 'GET',
         params
     },
       );
@@ -206,7 +206,7 @@ export const createAdmissionExamApiV1ExamsAdmissionPost = (
     admissionExamCreate: AdmissionExamCreate,
  ) => {
       return customInstance<StandardResponseAdmissionExamResponse>(
-      {url: `/api/v1/exams/admission`, method: 'POST',
+      {url: `/exams/admission`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: admissionExamCreate
     },
@@ -220,7 +220,7 @@ export const updateAdmissionExamApiV1ExamsAdmissionExamIdPut = (
     admissionExamUpdate: AdmissionExamUpdate,
  ) => {
       return customInstance<StandardResponseAdmissionExamResponse>(
-      {url: `/api/v1/exams/admission/${examId}`, method: 'PUT',
+      {url: `/exams/admission/${examId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: admissionExamUpdate
     },
@@ -233,7 +233,7 @@ export const getAdmissionExamApiV1ExamsAdmissionExamIdGet = (
     examId: number,
  ) => {
       return customInstance<StandardResponseAdmissionExamDetailResponse>(
-      {url: `/api/v1/exams/admission/${examId}`, method: 'GET'
+      {url: `/exams/admission/${examId}`, method: 'GET'
     },
       );
     }
@@ -245,7 +245,7 @@ export const submitAdmissionExamApiV1ExamsAdmissionExamIdSubmitPost = (
     examSubmit: ExamSubmit,
  ) => {
       return customInstance<StandardResponseAdmissionExamRecordResponse>(
-      {url: `/api/v1/exams/admission/${examId}/submit`, method: 'POST',
+      {url: `/exams/admission/${examId}/submit`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: examSubmit
     },
@@ -258,7 +258,7 @@ export const getAdmissionExamResultApiV1ExamsAdmissionExamIdResultGet = (
     examId: number,
  ) => {
       return customInstance<StandardResponseAdmissionExamRecordResponse>(
-      {url: `/api/v1/exams/admission/${examId}/result`, method: 'GET'
+      {url: `/exams/admission/${examId}/result`, method: 'GET'
     },
       );
     }
@@ -270,7 +270,7 @@ export const getAdmissionExamScoresApiV1ExamsAdmissionExamIdScoresGet = (
     params?: GetAdmissionExamScoresApiV1ExamsAdmissionExamIdScoresGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseAdmissionExamRecordResponse>(
-      {url: `/api/v1/exams/admission/${examId}/scores`, method: 'GET',
+      {url: `/exams/admission/${examId}/scores`, method: 'GET',
         params
     },
       );
@@ -282,7 +282,7 @@ export const getAdmissionExamAnalysisApiV1ExamsAdmissionExamIdRecordsAnalysisGet
     examId: number,
  ) => {
       return customInstance<unknown>(
-      {url: `/api/v1/exams/admission/${examId}/records/analysis`, method: 'GET'
+      {url: `/exams/admission/${examId}/records/analysis`, method: 'GET'
     },
       );
     }
@@ -293,7 +293,7 @@ export const getExamsApiV1ExamsGet = (
     params?: GetExamsApiV1ExamsGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseExamResponse>(
-      {url: `/api/v1/exams`, method: 'GET',
+      {url: `/exams`, method: 'GET',
         params
     },
       );
@@ -305,7 +305,7 @@ export const createExamApiV1ExamsPost = (
     examCreate: ExamCreate,
  ) => {
       return customInstance<StandardResponseExamResponse>(
-      {url: `/api/v1/exams`, method: 'POST',
+      {url: `/exams`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: examCreate
     },
@@ -319,7 +319,7 @@ export const updateExamApiV1ExamsExamIdPut = (
     examUpdate: ExamUpdate,
  ) => {
       return customInstance<StandardResponseExamResponse>(
-      {url: `/api/v1/exams/${examId}`, method: 'PUT',
+      {url: `/exams/${examId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: examUpdate
     },
@@ -332,7 +332,7 @@ export const getExamApiV1ExamsExamIdGet = (
     examId: number,
  ) => {
       return customInstance<StandardResponseExamDetailResponse>(
-      {url: `/api/v1/exams/${examId}`, method: 'GET'
+      {url: `/exams/${examId}`, method: 'GET'
     },
       );
     }
@@ -344,7 +344,7 @@ export const submitExamApiV1ExamsExamIdSubmitPost = (
     examSubmit: ExamSubmit,
  ) => {
       return customInstance<StandardResponseExamRecordResponse>(
-      {url: `/api/v1/exams/${examId}/submit`, method: 'POST',
+      {url: `/exams/${examId}/submit`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: examSubmit
     },
@@ -357,7 +357,7 @@ export const getExamResultApiV1ExamsExamIdResultGet = (
     examId: number,
  ) => {
       return customInstance<StandardResponseExamRecordResponse>(
-      {url: `/api/v1/exams/${examId}/result`, method: 'GET'
+      {url: `/exams/${examId}/result`, method: 'GET'
     },
       );
     }
@@ -369,7 +369,7 @@ export const getExamScoresApiV1ExamsExamIdScoresGet = (
     params?: GetExamScoresApiV1ExamsExamIdScoresGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseExamRecordResponse>(
-      {url: `/api/v1/exams/${examId}/scores`, method: 'GET',
+      {url: `/exams/${examId}/scores`, method: 'GET',
         params
     },
       );
@@ -381,7 +381,7 @@ export const getExamAnalysisApiV1ExamsExamIdRecordsAnalysisGet = (
     examId: number,
  ) => {
       return customInstance<unknown>(
-      {url: `/api/v1/exams/${examId}/records/analysis`, method: 'GET'
+      {url: `/exams/${examId}/records/analysis`, method: 'GET'
     },
       );
     }
