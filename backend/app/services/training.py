@@ -86,8 +86,8 @@ _UNSET = object()
 class TrainingService:
     """培训服务"""
 
-    CHECKIN_QR_PREFIX = "training:checkin:qr:"
-    CHECKIN_QR_TTL_SECONDS = 15 * 60
+    ATTENDANCE_QR_PREFIX = "training:attendance:qr:"
+    ATTENDANCE_QR_TTL_SECONDS = 15 * 60
     SESSION_PENDING = "pending"
     SESSION_CHECKIN_OPEN = "checkin_open"
     SESSION_CHECKIN_CLOSED = "checkin_closed"
@@ -1358,7 +1358,7 @@ class TrainingService:
             raise ValueError("培训班不存在")
         return detail
 
-    def generate_checkin_qr(
+    def generate_attendance_qr(
         self,
         training_id: int,
         session_key: str = "start",
@@ -1388,7 +1388,7 @@ class TrainingService:
 
         token = str(uuid.uuid4())
         session_date = target_date or session["date"]
-        expire_at = datetime.now() + timedelta(seconds=self.CHECKIN_QR_TTL_SECONDS)
+        expire_at = datetime.now() + timedelta(seconds=self.ATTENDANCE_QR_TTL_SECONDS)
         payload = {
             "training_id": training_id,
             "training_name": training.name,
@@ -1401,8 +1401,8 @@ class TrainingService:
 
         redis_client = self._get_redis_client()
         redis_client.setex(
-            f"{self.CHECKIN_QR_PREFIX}{token}",
-            self.CHECKIN_QR_TTL_SECONDS,
+            f"{self.ATTENDANCE_QR_PREFIX}{token}",
+            self.ATTENDANCE_QR_TTL_SECONDS,
             json.dumps(payload, ensure_ascii=False),
         )
 
@@ -1415,13 +1415,13 @@ class TrainingService:
             date=session_date,
             url=f"/attendance/{token}/{session_key}",
             expire_at=expire_at,
-            expires_in_seconds=self.CHECKIN_QR_TTL_SECONDS,
+            expires_in_seconds=self.ATTENDANCE_QR_TTL_SECONDS,
             action=action,
         )
 
-    def get_checkin_qr_payload(self, token: str) -> Optional[TrainingCheckinQrResponse]:
+    def get_attendance_qr_payload(self, token: str) -> Optional[TrainingCheckinQrResponse]:
         """获取扫码出勤载荷"""
-        payload = self._load_checkin_qr_payload(token)
+        payload = self._load_attendance_qr_payload(token)
         if not payload:
             return None
 
@@ -1437,30 +1437,13 @@ class TrainingService:
             date=date.fromisoformat(raw_date) if raw_date else None,
             url=f"/attendance/{token}/{payload['session_key']}",
             expire_at=datetime.fromisoformat(raw_expire_at) if raw_expire_at else datetime.now(),
-            expires_in_seconds=max(0, self._get_redis_client().ttl(f"{self.CHECKIN_QR_PREFIX}{token}")),
+            expires_in_seconds=max(0, self._get_redis_client().ttl(f"{self.ATTENDANCE_QR_PREFIX}{token}")),
             action=action,
-        )
-
-    def checkin_by_qr(self, token: str, user_id: int) -> CheckinResponse:
-        """通过二维码签到"""
-        payload = self._load_checkin_qr_payload(token)
-        if not payload:
-            raise ValueError("签到二维码不存在或已失效")
-
-        raw_date = payload.get("date")
-        return self.checkin(
-            int(payload["training_id"]),
-            user_id,
-            CheckinCreate(
-                session_key=str(payload["session_key"]),
-                date=date.fromisoformat(raw_date) if raw_date else None,
-                method="qr",
-            ),
         )
 
     def attendance_by_qr(self, token: str, user_id: int) -> CheckinResponse:
         """通过二维码进行签到或签退（根据 action 字段自动路由）"""
-        payload = self._load_checkin_qr_payload(token)
+        payload = self._load_attendance_qr_payload(token)
         if not payload:
             raise ValueError("二维码不存在或已失效")
 
@@ -2037,11 +2020,11 @@ class TrainingService:
         try:
             return get_redis()
         except Exception as exc:
-            logger.error("获取签到二维码缓存失败: %s", exc)
-            raise ValueError("Redis 不可用，暂时无法处理扫码签到")
+            logger.error("获取出勤二维码缓存失败: %s", exc)
+            raise ValueError("Redis 不可用，暂时无法处理扫码出勤")
 
-    def _load_checkin_qr_payload(self, token: str) -> Optional[Dict[str, Any]]:
-        cache_value = self._get_redis_client().get(f"{self.CHECKIN_QR_PREFIX}{token}")
+    def _load_attendance_qr_payload(self, token: str) -> Optional[Dict[str, Any]]:
+        cache_value = self._get_redis_client().get(f"{self.ATTENDANCE_QR_PREFIX}{token}")
         if not cache_value:
             return None
         return json.loads(cache_value)

@@ -161,12 +161,6 @@ const router = createRouter({
           meta: { title: '培训班详情', anyPermissions: TRAINING_PAGE_PERMISSIONS },
         },
         {
-          path: 'training/:id/checkin/:sessionKey?',
-          name: 'Checkin',
-          component: () => import('../views/training/Checkin.vue'),
-          meta: { title: '扫码签到' },
-        },
-        {
           path: 'training/:id/checkout/:sessionKey?',
           name: 'Checkout',
           component: () => import('../views/training/Checkout.vue'),
@@ -339,12 +333,6 @@ const router = createRouter({
           meta: { title: '结业证书', anyPermissions: CERTIFICATE_PAGE_PERMISSIONS },
         },
       ],
-    },
-    {
-      path: '/mobile/checkin/:token/:sessionKey?',
-      name: 'MobileCheckin',
-      component: () => import('../views/mobile/Checkin.vue'),
-      meta: { title: '扫码签到' },
     },
     { path: '/:pathMatch(.*)*', redirect: '/login' },
   ],

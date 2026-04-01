@@ -53,11 +53,8 @@
                 :current-session-status-label="currentSessionStatusLabel"
                 :is-enrolled="isEnrolled"
                 @go-schedule="activeTab = 'schedule'"
-                @start-session-checkin="handleStartSessionCheckin"
-                @end-session-checkin="handleEndSessionCheckin"
                 @start-session-checkout="handleStartSessionCheckout"
                 @end-session-checkout="handleEndSessionCheckout"
-                @go-current-session-checkin="goCurrentSessionCheckin"
                 @go-current-session-checkout="$router.push({ name: 'Checkout', params: { id: trainingData.id, sessionKey: currentSession?.sessionId } })"
                 @skip-current-session="handleSkipCurrentSession"
               />
@@ -85,8 +82,6 @@
                 @remove-course="removeCourse"
                 @edit-schedule="openScheduleModal"
                 @remove-schedule="removeSchedule"
-                @start-session-checkin="handleStartSessionCheckin"
-                @end-session-checkin="handleEndSessionCheckin"
                 @start-session-checkout="handleStartSessionCheckout"
                 @end-session-checkout="handleEndSessionCheckout"
                 @skip-current-session="handleSkipCurrentSession"
@@ -168,7 +163,6 @@
             :can-export-students="canExportStudents"
             :training-manage-tooltip="trainingManageTooltip"
             :ai-schedule-tooltip="scheduleEditTooltip"
-            @global-checkin="handleGlobalCheckin"
             @view-schedule="$router.push('/training/schedule/' + trainingData.id)"
             @open-ai-schedule="openAiScheduleTask"
             @change-tab="activeTab = $event"
@@ -725,8 +719,6 @@ import {
   lockTraining,
   startTraining,
   endTraining,
-  startTrainingSessionCheckin,
-  endTrainingSessionCheckin,
   startTrainingSessionCheckout,
   endTrainingSessionCheckout,
   skipTrainingSession,
@@ -1649,18 +1641,6 @@ const filteredStudents = computed(() =>
   studentSearch.value ? mockStudents.value.filter(s => s.name.includes(studentSearch.value) || (s.idCardNumber || '').includes(studentSearch.value)) : mockStudents.value
 )
 
-function handleGlobalCheckin() {
-  if (!currentSession.value?.sessionId) {
-    message.warning('当前没有可签到的课次')
-    return
-  }
-  router.push(`/training/${trainingData.id}/checkin/${currentSession.value.sessionId}`)
-}
-
-function goCurrentSessionCheckin() {
-  handleGlobalCheckin()
-}
-
 function goTrainingExamManage() {
   router.push({
     name: 'ExamManage',
@@ -1791,28 +1771,6 @@ async function handleEnd() {
       }
     },
   })
-}
-
-async function handleStartSessionCheckin() {
-  if (!currentSession.value?.sessionId) return
-  try {
-    await startTrainingSessionCheckin(trainingId, currentSession.value.sessionId)
-    message.success('已开始签到')
-    await loadTrainingDetail()
-  } catch (error) {
-    message.error(error.message || '开始签到失败')
-  }
-}
-
-async function handleEndSessionCheckin() {
-  if (!currentSession.value?.sessionId) return
-  try {
-    await endTrainingSessionCheckin(trainingId, currentSession.value.sessionId)
-    message.success('已结束签到')
-    await loadTrainingDetail()
-  } catch (error) {
-    message.error(error.message || '结束签到失败')
-  }
 }
 
 async function handleStartSessionCheckout() {

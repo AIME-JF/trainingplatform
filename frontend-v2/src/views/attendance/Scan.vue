@@ -65,12 +65,8 @@ import {
   LoginOutlined,
   LogoutOutlined,
 } from '@ant-design/icons-vue'
-import {
-  getAttendanceQrPayloadApiV1TrainingsAttendanceQrTokenGet,
-  attendanceByQrApiV1TrainingsAttendanceQrTokenPost,
-  getCheckinQrPayloadApiV1TrainingsCheckinQrTokenGet,
-} from '@/api/generated/training-management/training-management'
 import type { TrainingCheckinQrResponse } from '@/api/generated/model'
+import { getAttendanceQrPayload, submitAttendanceByQr } from '@/services/attendance'
 
 const route = useRoute()
 const router = useRouter()
@@ -110,15 +106,7 @@ onMounted(async () => {
   }
 
   try {
-    // Try unified attendance endpoint first, fallback to legacy checkin endpoint
-    let data: TrainingCheckinQrResponse
-    try {
-      data = await getAttendanceQrPayloadApiV1TrainingsAttendanceQrTokenGet(token)
-    } catch {
-      data = await getCheckinQrPayloadApiV1TrainingsCheckinQrTokenGet(token)
-      if (!data.action) data.action = 'checkin'
-    }
-    qrPayload.value = data
+    qrPayload.value = await getAttendanceQrPayload(token)
   } catch (err: unknown) {
     errorMsg.value = err instanceof Error ? err.message : '二维码不存在或已失效'
   } finally {
@@ -131,7 +119,7 @@ async function handleSubmit() {
   if (!payload) return
   submitting.value = true
   try {
-    await attendanceByQrApiV1TrainingsAttendanceQrTokenPost(payload.token)
+    await submitAttendanceByQr(payload.token)
     success.value = true
   } catch (err: unknown) {
     errorMsg.value = err instanceof Error ? err.message : '操作失败'
