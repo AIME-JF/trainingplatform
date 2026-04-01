@@ -5,10 +5,9 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">资源库</h1>
-        <p class="page-subtitle">浏览平台内已发布的学习资源，也可以进入资源社区按推荐流沉浸式浏览。</p>
+        <p class="page-subtitle">浏览平台内已发布的学习资源。</p>
       </div>
       <a-space>
-        <a-button @click="router.push('/resource/community')">资源社区</a-button>
         <a-button @click="router.push('/resource/my')">我的空间</a-button>
         <PermissionsTooltip :allowed="canUploadResource" tips="需要 CREATE_RESOURCE 或 VIEW_RESOURCE_ALL 权限">
           <template #default="{ disabled }">
@@ -42,10 +41,12 @@
 
     <div v-else class="resource-grid">
       <div v-for="item in resources" :key="item.id" class="resource-card">
-        <div class="resource-cover">
-          <span>{{ getResourceContentTypeLabel(item.content_type) }}</span>
-          <a-tag color="blue">{{ getResourceStatusLabel(item.status) }}</a-tag>
-        </div>
+        <ResourceCardCover
+          :title="item.title"
+          :content-type="item.content_type"
+          :cover-url="item.cover_url"
+          :status-label="getResourceStatusLabel(item.status)"
+        />
         <div class="resource-body">
           <h3>{{ item.title }}</h3>
           <p>{{ item.summary || '暂无摘要' }}</p>
@@ -96,9 +97,10 @@ import { listResources, offlineResource } from '@/api/learning-resource'
 import { useAuthStore } from '@/stores/auth'
 import LearningResourceTabs from '@/components/resource/LearningResourceTabs.vue'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
+import ResourceCardCover from '@/components/resource/ResourceCardCover.vue'
 import ResourceSearchInput from '@/components/resource/ResourceSearchInput.vue'
 import ResourceUploadModal from '@/components/resource/ResourceUploadModal.vue'
-import { formatDateTime, getResourceContentTypeLabel, getResourceStatusLabel } from '@/utils/learning-resource'
+import { formatDateTime, getResourceStatusLabel } from '@/utils/learning-resource'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -199,40 +201,56 @@ function handleUploadSuccess() {
 .resource-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 16px;
+  gap: 18px;
 }
 
 .resource-card {
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
   border-radius: var(--v2-radius-lg);
   background: var(--v2-bg-card);
+  border: 1px solid rgba(15, 23, 42, 0.06);
   box-shadow: var(--v2-shadow-sm);
+  transition:
+    transform 0.22s ease,
+    box-shadow 0.22s ease,
+    border-color 0.22s ease;
 }
 
-.resource-cover {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 88px;
-  padding: 18px;
-  background: var(--v2-cover-blue);
-  font-weight: 600;
+.resource-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(59, 130, 246, 0.12);
+  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.1);
 }
 
 .resource-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   padding: 18px;
 }
 
 .resource-body h3 {
   font-size: 18px;
-  margin-bottom: 8px;
+  line-height: 1.4;
+  margin: 0 0 8px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  min-height: 50px;
 }
 
 .resource-body p {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+  min-height: 48px;
+  margin: 0 0 12px;
   color: var(--v2-text-secondary);
-  min-height: 44px;
   line-height: 1.7;
-  margin-bottom: 12px;
 }
 
 .resource-meta,
@@ -244,13 +262,23 @@ function handleUploadSuccess() {
 }
 
 .resource-meta {
+  flex-wrap: wrap;
+  align-items: flex-start;
   color: var(--v2-text-secondary);
   font-size: 12px;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
+}
+
+.resource-meta span {
+  flex: 1 1 120px;
 }
 
 .resource-tags {
   margin-bottom: 12px;
+}
+
+.resource-actions {
+  margin-top: auto;
 }
 
 .pagination-wrapper {

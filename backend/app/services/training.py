@@ -242,11 +242,20 @@ class TrainingService:
             normalized.append(value)
         return normalized
 
+    def _resolve_training_type_id(self, type_code: Optional[str]) -> Optional[int]:
+        """根据 type code 查找 training_type_id"""
+        if not type_code:
+            return None
+        from app.models.training_type import TrainingType
+        tt = self.db.query(TrainingType.id).filter(TrainingType.code == type_code).first()
+        return tt.id if tt else None
+
     def create_training(self, data: TrainingCreate, user_id: int) -> TrainingResponse:
         """创建培训班"""
         training = Training(
             name=data.name,
             type=data.type,
+            training_type_id=data.training_type_id or self._resolve_training_type_id(data.type),
             status=data.status,
             publish_status=data.publish_status or "draft",
             start_date=data.start_date,
@@ -366,6 +375,11 @@ class TrainingService:
 
         for field, value in update_data.items():
             setattr(training, field, value)
+
+        # type 变更时自动同步 training_type_id
+        if "type" in update_data and update_data["type"]:
+            if not training.training_type_id or training.training_type_id != self._resolve_training_type_id(update_data["type"]):
+                training.training_type_id = self._resolve_training_type_id(update_data["type"])
 
         if (training.visibility_scope or "all") == "all":
             training.visibility_department_ids = None
@@ -1092,10 +1106,6 @@ class TrainingService:
         record.checkin_method = checkin_method
         record.absence_reason = None
 
-        checkin_user = self.db.query(User).filter(User.id == target_user_id).first()
-        checkin_user_name = (checkin_user.nickname or checkin_user.username) if checkin_user else str(target_user_id)
-        self._record_activity(training_id, target_user_id, checkin_user_name, "checkin", f"{checkin_user_name} 已签到")
-
         self._refresh_training_histories(training_id, [target_user_id])
         self.db.commit()
         self.db.refresh(record)
@@ -1144,10 +1154,6 @@ class TrainingService:
         if record.status == "absent":
             record.status = "on_time"
             record.absence_reason = None
-
-        checkout_user = self.db.query(User).filter(User.id == target_user_id).first()
-        checkout_user_name = (checkout_user.nickname or checkout_user.username) if checkout_user else str(target_user_id)
-        self._record_activity(training_id, target_user_id, checkout_user_name, "checkout", f"{checkout_user_name} 已签退")
 
         self._refresh_training_histories(training_id, [target_user_id])
         self.db.commit()

@@ -1,7 +1,7 @@
 """add_training_activities_table
 
 Revision ID: 819162486835
-Revises: 9c2e1f4a6b7d
+Revises: a1b2c3d4e5f7
 Create Date: 2026-04-01 17:08:01.901902
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '819162486835'
-down_revision: Union[str, None] = '9c2e1f4a6b7d'
+down_revision: Union[str, None] = 'a1b2c3d4e5f7'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
