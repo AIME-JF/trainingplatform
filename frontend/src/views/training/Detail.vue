@@ -495,12 +495,26 @@
       @ok="saveClassInfo"
       ok-text="保存"
       cancel-text="取消"
-      width="640px"
+      width="720px"
     >
       <a-form layout="vertical" style="margin-top:12px">
         <a-form-item label="培训班名称" required>
           <a-input v-model:value="editForm.name" />
         </a-form-item>
+        <a-row :gutter="12">
+          <a-col :span="12">
+            <a-form-item label="培训类型">
+              <a-select v-model:value="editForm.type" placeholder="请选择培训类型">
+                <a-select-option v-for="t in trainingTypeOptions" :key="t.code" :value="t.code">{{ t.name }}</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="班级容量">
+              <a-input-number v-model:value="editForm.capacity" :min="1" style="width:100%" />
+            </a-form-item>
+          </a-col>
+        </a-row>
         <a-row :gutter="12">
           <a-col :span="12">
             <a-form-item label="开始日期" required>
@@ -523,8 +537,8 @@
             </a-form-item>
           </a-col>
         </a-row>
-        <a-form-item label="培训地点" required>
-          <a-input v-model:value="editForm.location" />
+        <a-form-item label="培训地点">
+          <a-input v-model:value="editForm.location" placeholder="手动输入地点，或下方选择培训基地" />
         </a-form-item>
         <a-row :gutter="12">
           <a-col :span="12">
@@ -534,6 +548,7 @@
                 placeholder="从教官库选定班主任"
                 show-search
                 option-filter-prop="label"
+                allow-clear
                 @change="onEditInstructorChange"
               >
                 <a-select-option
@@ -548,8 +563,26 @@
             </a-form-item>
           </a-col>
           <a-col :span="12">
-            <a-form-item label="班级容量">
-              <a-input-number v-model:value="editForm.capacity" :min="1" style="width:100%" />
+            <a-form-item label="培训基地">
+              <a-select v-model:value="editForm.trainingBaseId" placeholder="选择培训基地" allow-clear>
+                <a-select-option v-for="b in trainingBaseOptions" :key="b.id" :value="b.id">{{ b.name }}</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-row :gutter="12">
+          <a-col :span="12">
+            <a-form-item label="所属部门">
+              <a-select v-model:value="editForm.departmentId" placeholder="选择部门" show-search option-filter-prop="label" allow-clear>
+                <a-select-option v-for="d in departmentOptions" :key="d.id" :value="d.id" :label="d.name">{{ d.name }}</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="警种">
+              <a-select v-model:value="editForm.policeTypeId" placeholder="选择警种" allow-clear>
+                <a-select-option v-for="p in policeTypeOptions" :key="p.id" :value="p.id">{{ p.name }}</a-select-option>
+              </a-select>
             </a-form-item>
           </a-col>
         </a-row>
@@ -567,7 +600,7 @@
           </a-radio-group>
         </a-form-item>
         <a-form-item label="培训简介">
-          <a-textarea v-model:value="editForm.description" :rows="2" />
+          <a-textarea v-model:value="editForm.description" :rows="3" />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -704,7 +737,10 @@ import {
   importTrainingSessions,
   downloadTrainingSessionImportTemplate,
 } from '@/api/training'
-import { getUsers } from '@/api/user'
+import { getUsers, getPoliceTypes } from '@/api/user'
+import { getDepartmentList } from '@/api/department'
+import { getTrainingBases } from '@/api/training'
+import { getTrainingTypes } from '@/api/trainingType'
 import { createNotice as apiCreateNotice, updateNotice as apiUpdateNotice, deleteNotice as apiDeleteNotice } from '@/api/notice'
 import { useAuthStore } from '@/stores/auth'
 import { formatDateTime } from '@/utils/datetime'
@@ -801,6 +837,10 @@ const trainingData = reactive({
 
 const allUserList = ref([])
 const rosterUserList = ref([])
+const departmentOptions = ref([])
+const policeTypeOptions = ref([])
+const trainingBaseOptions = ref([])
+const trainingTypeOptions = ref([])
 const studentImportDialog = reactive({ visible: false, submitting: false })
 const courseImportDialog = reactive({ visible: false, submitting: false })
 const scheduleImportDialog = reactive({ visible: false, submitting: false })
@@ -2595,15 +2635,20 @@ function removeSchedule(record) {
 const showEditModal = ref(false)
 const editFormDates = ref([null, null]) // dayjs values for date pickers
 const editForm = reactive({
-  name: trainingData.name, startDate: trainingData.startDate, endDate: trainingData.endDate,
+  name: trainingData.name, type: trainingData.type || 'basic',
+  startDate: trainingData.startDate, endDate: trainingData.endDate,
   location: trainingData.location, instructorId: trainingData.instructorId || null, instructorName: trainingData.instructorName,
   capacity: trainingData.capacity, status: trainingData.status, description: trainingData.description || '',
   enrollmentRequiresApproval: true,
+  departmentId: trainingData.departmentId || null,
+  policeTypeId: trainingData.policeTypeId || null,
+  trainingBaseId: trainingData.trainingBaseId || null,
 })
 const scheduleRuleSaving = ref(false)
 
 function syncEditFormFromTraining() {
   editForm.name = trainingData.name
+  editForm.type = trainingData.type || 'basic'
   editForm.startDate = trainingData.startDate
   editForm.endDate = trainingData.endDate
   editForm.location = trainingData.location
@@ -2613,6 +2658,9 @@ function syncEditFormFromTraining() {
   editForm.status = trainingData.status
   editForm.description = trainingData.description || ''
   editForm.enrollmentRequiresApproval = trainingData.enrollmentRequiresApproval !== false
+  editForm.departmentId = trainingData.departmentId || null
+  editForm.policeTypeId = trainingData.policeTypeId || null
+  editForm.trainingBaseId = trainingData.trainingBaseId || null
   editFormDates.value = [
     trainingData.startDate ? dayjs(trainingData.startDate) : null,
     trainingData.endDate ? dayjs(trainingData.endDate) : null,
@@ -2624,15 +2672,32 @@ function onEditInstructorChange(userId) {
   if (inst) editForm.instructorName = inst.name
 }
 
+async function ensureEditLookups() {
+  const loads = [ensureInstructorOptionsLoaded(true)]
+  if (!departmentOptions.value.length) {
+    loads.push(getDepartmentList({ size: -1 }).then(r => { departmentOptions.value = r.items || [] }).catch(() => {}))
+  }
+  if (!policeTypeOptions.value.length) {
+    loads.push(getPoliceTypes().then(r => { policeTypeOptions.value = r || [] }).catch(() => {}))
+  }
+  if (!trainingBaseOptions.value.length) {
+    loads.push(getTrainingBases({ size: -1 }).then(r => { trainingBaseOptions.value = r.items || r || [] }).catch(() => {}))
+  }
+  if (!trainingTypeOptions.value.length) {
+    loads.push(getTrainingTypes({ size: -1, is_active: true }).then(r => { trainingTypeOptions.value = r.items || r || [] }).catch(() => {}))
+  }
+  await Promise.all(loads)
+}
+
 async function openEditModal() {
   if (!canEdit.value) return
   showEditModal.value = true
-  await ensureInstructorOptionsLoaded(true)
+  await ensureEditLookups()
 }
 
 async function saveClassInfo() {
   if (!canEdit.value) return
-  if (!editForm.name || !editForm.startDate || !editForm.endDate || !editForm.location) { message.warning('请填写必填项'); return }
+  if (!editForm.name || !editForm.startDate || !editForm.endDate) { message.warning('请填写必填项'); return }
   try {
     await submitTrainingUpdate({ ...editForm })
     message.success('班级信息已更新')

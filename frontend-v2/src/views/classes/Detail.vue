@@ -114,29 +114,77 @@
           <!-- ========== 概览 ========== -->
           <div v-if="activeTab === 'overview'" class="tab-panel">
 
-            <!-- 最近课次（仅本班人员可见） -->
-            <div v-if="hasFullAccess && upcomingSessions.length" class="overview-section">
-              <h3 class="section-label">最近课程</h3>
-              <div class="upcoming-list">
-                <div v-for="s in upcomingSessions" :key="s.key" class="upcoming-item">
-                  <div class="upcoming-date-col">
-                    <span class="upcoming-day">{{ s.dayNum }}</span>
-                    <span class="upcoming-weekday">{{ s.weekday }}</span>
+            <!-- 当前/下一节课次（仅本班人员可见） -->
+            <div v-if="hasFullAccess && currentSession" class="overview-section">
+              <h3 class="section-label">
+                {{ currentSessionSchedule && isSessionActive(currentSessionSchedule) ? '正在进行' : '下一节课' }}
+              </h3>
+              <div class="current-session-card" :class="{ 'is-active': currentSessionSchedule && isSessionActive(currentSessionSchedule) }">
+                <div class="cs-left">
+                  <div class="cs-date-col">
+                    <span class="cs-day">{{ dayjs(currentSession.date).date() }}</span>
+                    <span class="cs-weekday">{{ ['周日','周一','周二','周三','周四','周五','周六'][dayjs(currentSession.date).day()] }}</span>
                   </div>
-                  <div class="upcoming-body">
-                    <div class="upcoming-header">
-                      <strong class="upcoming-course">{{ s.courseName }}</strong>
-                      <a-tag :color="s.courseType === 'practice' ? 'green' : 'blue'" size="small">
-                        {{ s.courseType === 'practice' ? '实操' : '理论' }}
+                  <div class="cs-body">
+                    <div class="cs-header">
+                      <strong class="cs-course">{{ currentSession.course_name }}</strong>
+                      <a-tag :color="sessionTagColor(currentSession.status)" size="small">
+                        {{ sessionStatusLabel(currentSession.status) }}
                       </a-tag>
                     </div>
-                    <div class="upcoming-meta">
-                      <span><ClockCircleOutlined /> {{ s.timeRange }}</span>
-                      <span v-if="s.location"><EnvironmentOutlined /> {{ s.location }}</span>
-                      <span v-if="s.instructor"><UserOutlined /> {{ s.instructor }}</span>
+                    <div class="cs-meta">
+                      <span><ClockCircleOutlined /> {{ currentSession.time_range?.replace('~', ' - ') }}</span>
+                      <span v-if="currentSession.location"><EnvironmentOutlined /> {{ currentSession.location }}</span>
+                      <span v-if="currentSession.primary_instructor_name"><UserOutlined /> {{ currentSession.primary_instructor_name }}</span>
                     </div>
                   </div>
-                  <a-tag v-if="s.status && s.status !== 'pending'" size="small">{{ sessionStatusLabel(s.status) }}</a-tag>
+                </div>
+                <div class="cs-actions">
+                  <!-- 教官签到流程控制按钮 -->
+                  <template v-if="currentSession.action_permissions">
+                    <a-button
+                      v-if="currentSession.action_permissions.can_start_checkin"
+                      type="primary"
+                      size="small"
+                      :loading="sessionActionLoading"
+                      @click="doSessionAction('checkin/start')"
+                    >
+                      开始签到
+                    </a-button>
+                    <a-button
+                      v-if="currentSession.action_permissions.can_end_checkin"
+                      size="small"
+                      :loading="sessionActionLoading"
+                      @click="doSessionAction('checkin/end')"
+                    >
+                      结束签到
+                    </a-button>
+                    <a-button
+                      v-if="currentSession.action_permissions.can_start_checkout"
+                      type="primary"
+                      size="small"
+                      :loading="sessionActionLoading"
+                      @click="doSessionAction('checkout/start')"
+                    >
+                      开始签退
+                    </a-button>
+                    <a-button
+                      v-if="currentSession.action_permissions.can_end_checkout"
+                      size="small"
+                      :loading="sessionActionLoading"
+                      @click="doSessionAction('checkout/end')"
+                    >
+                      结束签退
+                    </a-button>
+                  </template>
+                  <!-- 签到详情按钮（签到开始后可见） -->
+                  <a-button
+                    v-if="isCheckinStarted"
+                    size="small"
+                    @click="openCheckinDetail"
+                  >
+                    签到详情
+                  </a-button>
                 </div>
               </div>
             </div>
@@ -329,6 +377,54 @@
           </a-form-item>
         </a-form>
       </a-modal>
+
+      <!-- ====== 签到详情弹窗 ====== -->
+      <a-modal v-model:open="checkinDetailVisible" title="签到详情" :footer="null" width="600px">
+        <a-tabs v-model:activeKey="checkinTab" size="small" style="margin-top: 8px">
+          <a-tab-pane key="checked" :tab="`已签到 (${checkedInList.length})`">
+            <a-empty v-if="!checkedInList.length" description="暂无签到记录" />
+            <div v-else class="checkin-list">
+              <div v-for="r in checkedInList" :key="r.user_id" class="checkin-row">
+                <a-avatar :size="28" class="checkin-avatar">{{ (r.user_nickname || r.user_name || '').slice(0, 1) }}</a-avatar>
+                <div class="checkin-info">
+                  <span class="checkin-name">{{ r.user_nickname || r.user_name }}</span>
+                  <span class="checkin-time">{{ r.time || '' }} {{ r.status === 'late' ? '(迟到)' : '' }}</span>
+                </div>
+                <a-button
+                  v-if="canManageCheckin"
+                  size="small"
+                  danger
+                  @click="toggleCheckin(r.user_id, 'absent')"
+                  :loading="checkinToggleLoading === r.user_id"
+                >
+                  标记未签到
+                </a-button>
+              </div>
+            </div>
+          </a-tab-pane>
+          <a-tab-pane key="unchecked" :tab="`未签到 (${uncheckedList.length})`">
+            <a-empty v-if="!uncheckedList.length" description="全部已签到" />
+            <div v-else class="checkin-list">
+              <div v-for="s in uncheckedList" :key="s.user_id" class="checkin-row">
+                <a-avatar :size="28" class="checkin-avatar absent">{{ (s.user_nickname || s.user_name || '').slice(0, 1) }}</a-avatar>
+                <div class="checkin-info">
+                  <span class="checkin-name">{{ s.user_nickname || s.user_name }}</span>
+                  <span class="checkin-absent-label">未签到</span>
+                </div>
+                <a-button
+                  v-if="canManageCheckin"
+                  size="small"
+                  type="primary"
+                  @click="toggleCheckin(s.user_id, 'checkin')"
+                  :loading="checkinToggleLoading === s.user_id"
+                >
+                  标记已签到
+                </a-button>
+              </div>
+            </div>
+          </a-tab-pane>
+        </a-tabs>
+      </a-modal>
     </template>
   </div>
 </template>
@@ -404,6 +500,38 @@ interface NoticeItem {
   created_at?: string
 }
 
+interface SessionActionPermissions {
+  can_start_checkin: boolean
+  can_end_checkin: boolean
+  can_start_checkout: boolean
+  can_end_checkout: boolean
+  can_skip: boolean
+}
+
+interface CurrentSession {
+  course_id: number
+  course_name: string
+  session_id: string
+  session_label: string
+  date: string
+  time_range: string
+  status: string
+  location?: string
+  primary_instructor_id?: number
+  primary_instructor_name?: string
+  action_permissions?: SessionActionPermissions
+}
+
+interface CheckinRecord {
+  user_id: number
+  user_name?: string
+  user_nickname?: string
+  status: string
+  time?: string
+  date?: string
+  session_key?: string
+}
+
 interface ClassDetail {
   id: number
   name: string
@@ -427,7 +555,7 @@ interface ClassDetail {
   current_enrollment_status: string | null
   can_enter_training: boolean
   current_step_key: string
-  current_session: { session_id: string; status: string } | null
+  current_session: CurrentSession | null
   courses: CourseItem[]
   exam_sessions: ExamItem[]
   students: StudentItem[]
@@ -444,6 +572,13 @@ const noticeFormVisible = ref(false)
 const noticeFormId = ref<number | null>(null)
 const noticeSubmitting = ref(false)
 const noticeForm = ref({ title: '', content: '' })
+
+// ---- 签到相关 ----
+const sessionActionLoading = ref(false)
+const checkinDetailVisible = ref(false)
+const checkinTab = ref('checked')
+const checkinRecords = ref<CheckinRecord[]>([])
+const checkinToggleLoading = ref<number | null>(null)
 
 // ---- computed ----
 
@@ -537,47 +672,33 @@ const visibleTabs = computed(() => {
   return tabs
 })
 
-// 最近课次：从所有课程的 schedules 中展开，取当天及之后最近 5 条
-interface UpcomingSession {
-  key: string
-  courseName: string
-  courseType: string
-  date: string
-  dayNum: string
-  weekday: string
-  timeRange: string
-  location: string
-  instructor: string
-  status: string
-}
+// 当前/下一节课次
+const currentSession = computed(() => detail.value?.current_session || null)
 
-const upcomingSessions = computed<UpcomingSession[]>(() => {
-  if (!detail.value?.courses?.length) return []
-  const today = dayjs().format('YYYY-MM-DD')
-  const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六']
-  const items: UpcomingSession[] = []
+const currentSessionSchedule = computed<ScheduleItem | null>(() => {
+  if (!currentSession.value) return null
+  return { date: currentSession.value.date, time_range: currentSession.value.time_range, status: currentSession.value.status }
+})
 
-  for (const course of detail.value.courses) {
-    for (const s of course.schedules || []) {
-      if (!s.date || s.date < today) continue
-      const d = dayjs(s.date)
-      items.push({
-        key: `${course.course_key || course.name}-${s.session_id || s.date}-${s.time_range}`,
-        courseName: course.name,
-        courseType: course.type || 'theory',
-        date: s.date,
-        dayNum: String(d.date()),
-        weekday: weekdays[d.day()],
-        timeRange: s.time_range?.replace('~', ' - ') || '',
-        location: s.location || course.instructor || '',
-        instructor: course.instructor || '',
-        status: s.status || 'pending',
-      })
-    }
-  }
+const isCheckinStarted = computed(() => {
+  const s = currentSession.value?.status
+  return s === 'checkin_open' || s === 'checkin_closed' || s === 'checkout_open' || s === 'completed'
+})
 
-  items.sort((a, b) => `${a.date} ${a.timeRange}`.localeCompare(`${b.date} ${b.timeRange}`))
-  return items.slice(0, 5)
+const canManageCheckin = computed(() => {
+  return authStore.isInstructor && currentSession.value?.action_permissions != null
+})
+
+// 已签到 / 未签到列表
+const checkedInList = computed(() =>
+  checkinRecords.value.filter((r) => r.status === 'on_time' || r.status === 'late'),
+)
+
+const uncheckedList = computed(() => {
+  const checkedIds = new Set(checkedInList.value.map((r) => r.user_id))
+  return (detail.value?.students || [])
+    .filter((s) => !checkedIds.has(s.user_id))
+    .map((s) => ({ user_id: s.user_id, user_name: s.user_name, user_nickname: s.user_nickname, status: 'absent', time: '' }))
 })
 
 // ---- methods ----
@@ -638,6 +759,69 @@ function handleEnroll() { router.push(`/classes/${route.params.id}/enroll`) }
 function goCheckin() { router.push(`/classes/${route.params.id}/checkin`) }
 function goCheckout() { router.push(`/classes/${route.params.id}/checkout`) }
 function goHistory() { message.info('训历功能即将上线') }
+
+// 课次操作（开始签到/结束签到/开始签退/结束签退）
+async function doSessionAction(action: string) {
+  const sess = currentSession.value
+  if (!sess) return
+  sessionActionLoading.value = true
+  try {
+    await axiosInstance.post(`/trainings/${route.params.id}/sessions/${sess.session_id}/${action}`)
+    message.success('操作成功')
+    await fetchDetail()
+  } catch (err: unknown) {
+    message.error(err instanceof Error ? err.message : '操作失败')
+  } finally {
+    sessionActionLoading.value = false
+  }
+}
+
+// 签到详情
+async function openCheckinDetail() {
+  const sess = currentSession.value
+  if (!sess) return
+  checkinTab.value = 'checked'
+  try {
+    const res = await axiosInstance.get(`/trainings/${route.params.id}/checkin/records`, {
+      params: { session_key: sess.session_id },
+    })
+    checkinRecords.value = (res.data as CheckinRecord[]) || []
+  } catch {
+    checkinRecords.value = []
+  }
+  checkinDetailVisible.value = true
+}
+
+// 切换签到状态
+async function toggleCheckin(userId: number, action: 'checkin' | 'absent') {
+  const sess = currentSession.value
+  if (!sess) return
+  checkinToggleLoading.value = userId
+  try {
+    if (action === 'checkin') {
+      await axiosInstance.post(`/trainings/${route.params.id}/checkin`, {
+        user_id: userId,
+        session_key: sess.session_id,
+      })
+    } else {
+      // 标记为缺勤：用 checkin 接口 status=absent
+      await axiosInstance.post(`/trainings/${route.params.id}/checkin`, {
+        user_id: userId,
+        session_key: sess.session_id,
+        status: 'absent',
+      })
+    }
+    // 刷新签到记录
+    const res = await axiosInstance.get(`/trainings/${route.params.id}/checkin/records`, {
+      params: { session_key: sess.session_id },
+    })
+    checkinRecords.value = (res.data as CheckinRecord[]) || []
+  } catch (err: unknown) {
+    message.error(err instanceof Error ? err.message : '操作失败')
+  } finally {
+    checkinToggleLoading.value = null
+  }
+}
 function goExam(examId: number) { router.push(`/exam/do/${examId}`) }
 
 // 公告详情弹窗
@@ -885,63 +1069,70 @@ onMounted(fetchDetail)
   font-size: 14px;
 }
 
-/* -- 最近课次 -- */
-.upcoming-list {
+/* -- 当前课次卡片 -- */
+.current-session-card {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border-radius: var(--v2-radius);
+  background: var(--v2-bg);
+  border: 1px solid var(--v2-border-light);
+  flex-wrap: wrap;
 }
 
-.upcoming-item {
+.current-session-card.is-active {
+  background: var(--v2-primary-light);
+  border-color: rgba(75, 110, 245, 0.2);
+}
+
+.cs-left {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 12px 14px;
-  border-radius: var(--v2-radius-sm);
-  background: var(--v2-bg);
-  transition: background 0.15s;
+  flex: 1;
+  min-width: 0;
 }
 
-.upcoming-item:hover { background: var(--v2-primary-light); }
-
-.upcoming-date-col {
+.cs-date-col {
   display: flex;
   flex-direction: column;
   align-items: center;
   min-width: 40px;
 }
 
-.upcoming-day {
-  font-size: 20px;
+.cs-day {
+  font-size: 22px;
   font-weight: 700;
   color: var(--v2-text-primary);
   line-height: 1;
 }
 
-.upcoming-weekday {
+.cs-weekday {
   font-size: 11px;
   color: var(--v2-text-muted);
   margin-top: 2px;
 }
 
-.upcoming-body { flex: 1; min-width: 0; }
+.cs-body { flex: 1; min-width: 0; }
 
-.upcoming-header {
+.cs-header {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 4px;
 }
 
-.upcoming-course {
-  font-size: 14px;
+.cs-course {
+  font-size: 15px;
   color: var(--v2-text-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.upcoming-meta {
+.cs-meta {
   display: flex;
   gap: 12px;
   font-size: 12px;
@@ -949,10 +1140,67 @@ onMounted(fetchDetail)
   flex-wrap: wrap;
 }
 
-.upcoming-meta span {
+.cs-meta span {
   display: inline-flex;
   align-items: center;
   gap: 4px;
+}
+
+.cs-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+/* -- 签到详情弹窗 -- */
+.checkin-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.checkin-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--v2-border-light);
+}
+
+.checkin-row:last-child { border-bottom: none; }
+
+.checkin-avatar {
+  background: var(--v2-success);
+  color: #fff;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.checkin-avatar.absent {
+  background: var(--v2-text-muted);
+}
+
+.checkin-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.checkin-name {
+  font-size: 14px;
+  color: var(--v2-text-primary);
+}
+
+.checkin-time {
+  font-size: 12px;
+  color: var(--v2-text-muted);
+}
+
+.checkin-absent-label {
+  font-size: 12px;
+  color: var(--v2-danger);
 }
 
 /* -- 公告卡片 -- */
