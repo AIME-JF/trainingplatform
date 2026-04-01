@@ -66,6 +66,7 @@
 import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
+  AppstoreOutlined,
   HomeOutlined,
   CalendarOutlined,
   ReadOutlined,
@@ -76,6 +77,16 @@ import {
 } from '@ant-design/icons-vue'
 import { useMobile } from '@/composables/useMobile'
 import { useAuthStore } from '@/stores/auth'
+import {
+  COURSE_PERMISSIONS,
+  DASHBOARD_PERMISSIONS,
+  MY_RESOURCE_PERMISSIONS,
+  PROFILE_PERMISSIONS,
+  RESOURCE_LIBRARY_PERMISSIONS,
+  TEACHING_RESOURCE_GENERATION_PERMISSIONS,
+  TRAINING_PERMISSIONS,
+  TRAINING_SCHEDULE_PERMISSIONS,
+} from '@/constants/permissions'
 
 const router = useRouter()
 const currentRoute = useRoute()
@@ -85,36 +96,101 @@ const { isMobile } = useMobile()
 const displayName = computed(() => authStore.currentUser?.name || authStore.currentUser?.username || '用户')
 const avatarText = computed(() => (displayName.value || '').slice(0, 1))
 
-const sidebarItems = [
-  { path: '/', label: '首页', icon: HomeOutlined },
-  { path: '/classes/schedule', label: '日历', icon: CalendarOutlined },
-  { path: '/classes', label: '班级', icon: ReadOutlined },
-  { path: '/resource/courses', label: '学习资源', icon: DatabaseOutlined },
+interface NavItem {
+  path: string
+  label: string
+  icon: unknown
+  permissions?: string[]
+  matchPaths?: string[]
+}
+
+const resourceNavPermissions = [
+  ...new Set([
+    ...COURSE_PERMISSIONS,
+    ...RESOURCE_LIBRARY_PERMISSIONS,
+    ...MY_RESOURCE_PERMISSIONS,
+    ...TEACHING_RESOURCE_GENERATION_PERMISSIONS,
+  ]),
 ]
 
-const bottomTabs = [
-  { path: '/', label: '首页', icon: HomeOutlined },
-  { path: '/classes', label: '班级', icon: ReadOutlined },
-  { path: '/resource/courses', label: '资源', icon: DatabaseOutlined },
-  { path: '/profile', label: '我的', icon: UserOutlined },
+const sidebarNavConfig: NavItem[] = [
+  { path: '/', label: '首页', icon: HomeOutlined, permissions: DASHBOARD_PERMISSIONS },
+  { path: '/classes/schedule', label: '日历', icon: CalendarOutlined, permissions: TRAINING_SCHEDULE_PERMISSIONS },
+  { path: '/classes', label: '班级', icon: ReadOutlined, permissions: TRAINING_PERMISSIONS },
+  {
+    path: '/resource/courses',
+    label: '学习资源',
+    icon: DatabaseOutlined,
+    permissions: resourceNavPermissions,
+    matchPaths: [
+      '/resource/courses',
+      '/resource/library',
+      '/resource/my',
+      '/resource/teaching-generate',
+      '/resource/ai-generate',
+    ],
+  },
+  {
+    path: '/resource/community',
+    label: '资源社区',
+    icon: AppstoreOutlined,
+    matchPaths: ['/resource/community', '/resource/recommend'],
+  },
 ]
 
-const activeSidebarPath = computed(() => {
-  const sortedItems = [...sidebarItems].sort((left, right) => right.path.length - left.path.length)
-  return sortedItems.find((item) => isRouteMatch(item.path))?.path || ''
+const bottomNavConfig: NavItem[] = [
+  { path: '/', label: '首页', icon: HomeOutlined, permissions: DASHBOARD_PERMISSIONS },
+  { path: '/classes', label: '班级', icon: ReadOutlined, permissions: TRAINING_PERMISSIONS },
+  {
+    path: '/resource/courses',
+    label: '资源',
+    icon: DatabaseOutlined,
+    permissions: resourceNavPermissions,
+    matchPaths: [
+      '/resource/courses',
+      '/resource/library',
+      '/resource/my',
+      '/resource/teaching-generate',
+      '/resource/ai-generate',
+    ],
+  },
+  {
+    path: '/resource/community',
+    label: '社区',
+    icon: AppstoreOutlined,
+    matchPaths: ['/resource/community', '/resource/recommend'],
+  },
+  { path: '/profile', label: '我的', icon: UserOutlined, permissions: PROFILE_PERMISSIONS },
+]
+
+const sidebarItems = computed(() => sidebarNavConfig.filter((item) => authStore.hasAnyPermission(item.permissions || [])))
+const bottomTabs = computed(() => bottomNavConfig.filter((item) => authStore.hasAnyPermission(item.permissions || [])))
+
+const activeNavPath = computed(() => {
+  if (currentRoute.path.startsWith('/resource/detail/')) {
+    return currentRoute.query.from === 'community' ? '/resource/community' : '/resource/courses'
+  }
+
+  const mergedItems = [...sidebarItems.value, ...bottomTabs.value.filter((item) => !sidebarItems.value.some((side) => side.path === item.path))]
+  const sortedItems = mergedItems.sort((left, right) => right.path.length - left.path.length)
+  return sortedItems.find((item) => isNavItemMatch(item))?.path || ''
 })
 
-function isRouteMatch(path: string): boolean {
+function isPathMatch(path: string): boolean {
   if (path === '/') return currentRoute.path === '/'
   return currentRoute.path === path || currentRoute.path.startsWith(`${path}/`)
 }
 
+function isNavItemMatch(item: NavItem): boolean {
+  return (item.matchPaths || [item.path]).some((path) => isPathMatch(path))
+}
+
 function isSidebarActive(path: string): boolean {
-  return activeSidebarPath.value === path
+  return activeNavPath.value === path
 }
 
 function isTabActive(path: string): boolean {
-  return isRouteMatch(path)
+  return activeNavPath.value === path
 }
 
 function navigateTo(path: string) {
