@@ -25,7 +25,7 @@ export const recordEventApiV1ResourcesResourceIdEventsPost = (
     resourceBehaviorEventCreate: ResourceBehaviorEventCreate,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/resources/${resourceId}/events`, method: 'POST',
+      {url: `/resources/${resourceId}/events`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: resourceBehaviorEventCreate
     },
@@ -38,7 +38,7 @@ export const likeResourceApiV1ResourcesResourceIdLikesPost = (
     resourceId: number,
  ) => {
       return customInstance<StandardResponseResourceLikeStatusResponse>(
-      {url: `/api/v1/resources/${resourceId}/likes`, method: 'POST'
+      {url: `/resources/${resourceId}/likes`, method: 'POST'
     },
       );
     }
@@ -49,7 +49,7 @@ export const unlikeResourceApiV1ResourcesResourceIdLikesDelete = (
     resourceId: number,
  ) => {
       return customInstance<StandardResponseResourceLikeStatusResponse>(
-      {url: `/api/v1/resources/${resourceId}/likes`, method: 'DELETE'
+      {url: `/resources/${resourceId}/likes`, method: 'DELETE'
     },
       );
     }
@@ -60,7 +60,7 @@ export const shareResourceApiV1ResourcesResourceIdSharePost = (
     resourceId: number,
  ) => {
       return customInstance<StandardResponseResourceShareStatusResponse>(
-      {url: `/api/v1/resources/${resourceId}/share`, method: 'POST'
+      {url: `/resources/${resourceId}/share`, method: 'POST'
     },
       );
     }
@@ -71,7 +71,7 @@ export const getFeedApiV1ResourcesRecommendationsFeedGet = (
     params?: GetFeedApiV1ResourcesRecommendationsFeedGetParams,
  ) => {
       return customInstance<StandardResponseResourceRecommendationFeedResponse>(
-      {url: `/api/v1/resources/recommendations/feed`, method: 'GET',
+      {url: `/resources/recommendations/feed`, method: 'GET',
         params
     },
       );

@@ -8,6 +8,7 @@ import type { CheckinResponse } from './checkinResponse';
 import type { EnrollmentResponse } from './enrollmentResponse';
 import type { NoticeResponse } from './noticeResponse';
 import type { ResourceListItemResponse } from './resourceListItemResponse';
+import type { TrainingActivityResponse } from './trainingActivityResponse';
 import type { TrainingCourseResponse } from './trainingCourseResponse';
 import type { TrainingCurrentSessionResponse } from './trainingCurrentSessionResponse';
 import type { TrainingExamSummary } from './trainingExamSummary';
@@ -67,6 +68,7 @@ export interface TrainingResponse {
   workflow_steps?: TrainingWorkflowStepResponse[];
   current_step_key?: string;
   current_session?: TrainingCurrentSessionResponse | null;
+  recent_activities?: TrainingActivityResponse[];
   can_manage_all?: boolean;
   can_manage_training?: boolean;
   can_edit_training?: boolean;

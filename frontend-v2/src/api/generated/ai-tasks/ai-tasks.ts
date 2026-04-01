@@ -15,6 +15,7 @@ import type {
   AIQuestionTaskUpdateRequest,
   AIScheduleTaskCreateRequestInput,
   AIScheduleTaskUpdateRequest,
+  BodyParseDocumentFileApiV1AiFilesParsePost,
   ListPaperAssemblyTasksApiV1AiPaperAssemblyTasksGetParams,
   ListPaperDocumentGenerationTasksApiV1AiPaperDocumentGenerationTasksGetParams,
   ListPaperGenerationTasksApiV1AiPaperGenerationTasksGetParams,
@@ -23,6 +24,7 @@ import type {
   ListScheduleTasksApiV1AiScheduleTasksGetParams,
   ListTeachingResourceGenerationTasksApiV1AiResourceGenerationTasksGetParams,
   ListTeachingResourceGenerationTasksApiV1AiTeachingResourceGenerationTasksGetParams,
+  StandardResponse,
   StandardResponseAIPaperAssemblyTaskDetailResponse,
   StandardResponseAIPaperDocumentGenerationTaskDetailResponse,
   StandardResponseAIPaperGenerationTaskDetailResponse,
@@ -48,7 +50,7 @@ export const listQuestionTasksApiV1AiQuestionTasksGet = (
     params?: ListQuestionTasksApiV1AiQuestionTasksGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseAITaskSummaryResponse>(
-      {url: `/api/v1/ai/question-tasks`, method: 'GET',
+      {url: `/ai/question-tasks`, method: 'GET',
         params
     },
       );
@@ -60,7 +62,7 @@ export const createQuestionTaskApiV1AiQuestionTasksPost = (
     aIQuestionTaskCreateRequest: AIQuestionTaskCreateRequest,
  ) => {
       return customInstance<StandardResponseAIQuestionTaskDetailResponse>(
-      {url: `/api/v1/ai/question-tasks`, method: 'POST',
+      {url: `/ai/question-tasks`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: aIQuestionTaskCreateRequest
     },
@@ -73,7 +75,7 @@ export const getQuestionTaskDetailApiV1AiQuestionTasksTaskIdGet = (
     taskId: number,
  ) => {
       return customInstance<StandardResponseAIQuestionTaskDetailResponse>(
-      {url: `/api/v1/ai/question-tasks/${taskId}`, method: 'GET'
+      {url: `/ai/question-tasks/${taskId}`, method: 'GET'
     },
       );
     }
@@ -85,7 +87,7 @@ export const updateQuestionTaskApiV1AiQuestionTasksTaskIdResultPut = (
     aIQuestionTaskUpdateRequest: AIQuestionTaskUpdateRequest,
  ) => {
       return customInstance<StandardResponseAIQuestionTaskDetailResponse>(
-      {url: `/api/v1/ai/question-tasks/${taskId}/result`, method: 'PUT',
+      {url: `/ai/question-tasks/${taskId}/result`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: aIQuestionTaskUpdateRequest
     },
@@ -98,7 +100,7 @@ export const confirmQuestionTaskApiV1AiQuestionTasksTaskIdConfirmPost = (
     taskId: number,
  ) => {
       return customInstance<StandardResponseAIQuestionTaskDetailResponse>(
-      {url: `/api/v1/ai/question-tasks/${taskId}/confirm`, method: 'POST'
+      {url: `/ai/question-tasks/${taskId}/confirm`, method: 'POST'
     },
       );
     }
@@ -109,7 +111,7 @@ export const listPaperAssemblyTasksApiV1AiPaperAssemblyTasksGet = (
     params?: ListPaperAssemblyTasksApiV1AiPaperAssemblyTasksGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseAITaskSummaryResponse>(
-      {url: `/api/v1/ai/paper-assembly-tasks`, method: 'GET',
+      {url: `/ai/paper-assembly-tasks`, method: 'GET',
         params
     },
       );
@@ -121,7 +123,7 @@ export const createPaperAssemblyTaskApiV1AiPaperAssemblyTasksPost = (
     aIPaperAssemblyTaskCreateRequest: AIPaperAssemblyTaskCreateRequest,
  ) => {
       return customInstance<StandardResponseAIPaperAssemblyTaskDetailResponse>(
-      {url: `/api/v1/ai/paper-assembly-tasks`, method: 'POST',
+      {url: `/ai/paper-assembly-tasks`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: aIPaperAssemblyTaskCreateRequest
     },
@@ -134,7 +136,18 @@ export const getPaperAssemblyTaskDetailApiV1AiPaperAssemblyTasksTaskIdGet = (
     taskId: number,
  ) => {
       return customInstance<StandardResponseAIPaperAssemblyTaskDetailResponse>(
-      {url: `/api/v1/ai/paper-assembly-tasks/${taskId}`, method: 'GET'
+      {url: `/ai/paper-assembly-tasks/${taskId}`, method: 'GET'
+    },
+      );
+    }
+  /**
+ * @summary 删除 AI 自动组卷任务
+ */
+export const deletePaperAssemblyTaskApiV1AiPaperAssemblyTasksTaskIdDelete = (
+    taskId: number,
+ ) => {
+      return customInstance<StandardResponse>(
+      {url: `/ai/paper-assembly-tasks/${taskId}`, method: 'DELETE'
     },
       );
     }
@@ -146,7 +159,7 @@ export const updatePaperAssemblyTaskApiV1AiPaperAssemblyTasksTaskIdResultPut = (
     aIPaperTaskUpdateRequest: AIPaperTaskUpdateRequest,
  ) => {
       return customInstance<StandardResponseAIPaperAssemblyTaskDetailResponse>(
-      {url: `/api/v1/ai/paper-assembly-tasks/${taskId}/result`, method: 'PUT',
+      {url: `/ai/paper-assembly-tasks/${taskId}/result`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: aIPaperTaskUpdateRequest
     },
@@ -159,7 +172,7 @@ export const confirmPaperAssemblyTaskApiV1AiPaperAssemblyTasksTaskIdConfirmPost 
     taskId: number,
  ) => {
       return customInstance<StandardResponseAIPaperAssemblyTaskDetailResponse>(
-      {url: `/api/v1/ai/paper-assembly-tasks/${taskId}/confirm`, method: 'POST'
+      {url: `/ai/paper-assembly-tasks/${taskId}/confirm`, method: 'POST'
     },
       );
     }
@@ -170,7 +183,7 @@ export const listPaperGenerationTasksApiV1AiPaperGenerationTasksGet = (
     params?: ListPaperGenerationTasksApiV1AiPaperGenerationTasksGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseAITaskSummaryResponse>(
-      {url: `/api/v1/ai/paper-generation-tasks`, method: 'GET',
+      {url: `/ai/paper-generation-tasks`, method: 'GET',
         params
     },
       );
@@ -182,7 +195,7 @@ export const createPaperGenerationTaskApiV1AiPaperGenerationTasksPost = (
     aIPaperGenerationTaskCreateRequest: AIPaperGenerationTaskCreateRequest,
  ) => {
       return customInstance<StandardResponseAIPaperGenerationTaskDetailResponse>(
-      {url: `/api/v1/ai/paper-generation-tasks`, method: 'POST',
+      {url: `/ai/paper-generation-tasks`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: aIPaperGenerationTaskCreateRequest
     },
@@ -195,7 +208,18 @@ export const getPaperGenerationTaskDetailApiV1AiPaperGenerationTasksTaskIdGet = 
     taskId: number,
  ) => {
       return customInstance<StandardResponseAIPaperGenerationTaskDetailResponse>(
-      {url: `/api/v1/ai/paper-generation-tasks/${taskId}`, method: 'GET'
+      {url: `/ai/paper-generation-tasks/${taskId}`, method: 'GET'
+    },
+      );
+    }
+  /**
+ * @summary 删除 AI 自动生成试卷任务
+ */
+export const deletePaperGenerationTaskApiV1AiPaperGenerationTasksTaskIdDelete = (
+    taskId: number,
+ ) => {
+      return customInstance<StandardResponse>(
+      {url: `/ai/paper-generation-tasks/${taskId}`, method: 'DELETE'
     },
       );
     }
@@ -207,7 +231,7 @@ export const updatePaperGenerationTaskApiV1AiPaperGenerationTasksTaskIdResultPut
     aIPaperTaskUpdateRequest: AIPaperTaskUpdateRequest,
  ) => {
       return customInstance<StandardResponseAIPaperGenerationTaskDetailResponse>(
-      {url: `/api/v1/ai/paper-generation-tasks/${taskId}/result`, method: 'PUT',
+      {url: `/ai/paper-generation-tasks/${taskId}/result`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: aIPaperTaskUpdateRequest
     },
@@ -220,7 +244,7 @@ export const confirmPaperGenerationTaskApiV1AiPaperGenerationTasksTaskIdConfirmP
     taskId: number,
  ) => {
       return customInstance<StandardResponseAIPaperGenerationTaskDetailResponse>(
-      {url: `/api/v1/ai/paper-generation-tasks/${taskId}/confirm`, method: 'POST'
+      {url: `/ai/paper-generation-tasks/${taskId}/confirm`, method: 'POST'
     },
       );
     }
@@ -231,7 +255,7 @@ export const listPaperDocumentGenerationTasksApiV1AiPaperDocumentGenerationTasks
     params?: ListPaperDocumentGenerationTasksApiV1AiPaperDocumentGenerationTasksGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseAITaskSummaryResponse>(
-      {url: `/api/v1/ai/paper-document-generation-tasks`, method: 'GET',
+      {url: `/ai/paper-document-generation-tasks`, method: 'GET',
         params
     },
       );
@@ -243,7 +267,7 @@ export const createPaperDocumentGenerationTaskApiV1AiPaperDocumentGenerationTask
     aIPaperDocumentGenerationTaskCreateRequest: AIPaperDocumentGenerationTaskCreateRequest,
  ) => {
       return customInstance<StandardResponseAIPaperDocumentGenerationTaskDetailResponse>(
-      {url: `/api/v1/ai/paper-document-generation-tasks`, method: 'POST',
+      {url: `/ai/paper-document-generation-tasks`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: aIPaperDocumentGenerationTaskCreateRequest
     },
@@ -256,7 +280,18 @@ export const getPaperDocumentGenerationTaskDetailApiV1AiPaperDocumentGenerationT
     taskId: number,
  ) => {
       return customInstance<StandardResponseAIPaperDocumentGenerationTaskDetailResponse>(
-      {url: `/api/v1/ai/paper-document-generation-tasks/${taskId}`, method: 'GET'
+      {url: `/ai/paper-document-generation-tasks/${taskId}`, method: 'GET'
+    },
+      );
+    }
+  /**
+ * @summary 删除 AI 文档生成试卷任务
+ */
+export const deletePaperDocumentGenerationTaskApiV1AiPaperDocumentGenerationTasksTaskIdDelete = (
+    taskId: number,
+ ) => {
+      return customInstance<StandardResponse>(
+      {url: `/ai/paper-document-generation-tasks/${taskId}`, method: 'DELETE'
     },
       );
     }
@@ -268,7 +303,7 @@ export const updatePaperDocumentGenerationTaskApiV1AiPaperDocumentGenerationTask
     aIPaperTaskUpdateRequest: AIPaperTaskUpdateRequest,
  ) => {
       return customInstance<StandardResponseAIPaperDocumentGenerationTaskDetailResponse>(
-      {url: `/api/v1/ai/paper-document-generation-tasks/${taskId}/result`, method: 'PUT',
+      {url: `/ai/paper-document-generation-tasks/${taskId}/result`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: aIPaperTaskUpdateRequest
     },
@@ -281,7 +316,7 @@ export const confirmPaperDocumentGenerationTaskApiV1AiPaperDocumentGenerationTas
     taskId: number,
  ) => {
       return customInstance<StandardResponseAIPaperDocumentGenerationTaskDetailResponse>(
-      {url: `/api/v1/ai/paper-document-generation-tasks/${taskId}/confirm`, method: 'POST'
+      {url: `/ai/paper-document-generation-tasks/${taskId}/confirm`, method: 'POST'
     },
       );
     }
@@ -292,7 +327,7 @@ export const listTeachingResourceGenerationTasksApiV1AiResourceGenerationTasksGe
     params?: ListTeachingResourceGenerationTasksApiV1AiResourceGenerationTasksGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseAITaskSummaryResponse>(
-      {url: `/api/v1/ai/resource-generation-tasks`, method: 'GET',
+      {url: `/ai/resource-generation-tasks`, method: 'GET',
         params
     },
       );
@@ -304,7 +339,7 @@ export const createTeachingResourceGenerationTaskApiV1AiResourceGenerationTasksP
     teachingResourceGenerationTaskCreateRequest: TeachingResourceGenerationTaskCreateRequest,
  ) => {
       return customInstance<StandardResponseTeachingResourceGenerationTaskDetailResponse>(
-      {url: `/api/v1/ai/resource-generation-tasks`, method: 'POST',
+      {url: `/ai/resource-generation-tasks`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: teachingResourceGenerationTaskCreateRequest
     },
@@ -317,7 +352,7 @@ export const listTeachingResourceGenerationTasksApiV1AiTeachingResourceGeneratio
     params?: ListTeachingResourceGenerationTasksApiV1AiTeachingResourceGenerationTasksGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseAITaskSummaryResponse>(
-      {url: `/api/v1/ai/teaching-resource-generation-tasks`, method: 'GET',
+      {url: `/ai/teaching-resource-generation-tasks`, method: 'GET',
         params
     },
       );
@@ -329,7 +364,7 @@ export const createTeachingResourceGenerationTaskApiV1AiTeachingResourceGenerati
     teachingResourceGenerationTaskCreateRequest: TeachingResourceGenerationTaskCreateRequest,
  ) => {
       return customInstance<StandardResponseTeachingResourceGenerationTaskDetailResponse>(
-      {url: `/api/v1/ai/teaching-resource-generation-tasks`, method: 'POST',
+      {url: `/ai/teaching-resource-generation-tasks`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: teachingResourceGenerationTaskCreateRequest
     },
@@ -342,7 +377,7 @@ export const getTeachingResourceGenerationTaskDetailApiV1AiResourceGenerationTas
     taskId: number,
  ) => {
       return customInstance<StandardResponseTeachingResourceGenerationTaskDetailResponse>(
-      {url: `/api/v1/ai/resource-generation-tasks/${taskId}`, method: 'GET'
+      {url: `/ai/resource-generation-tasks/${taskId}`, method: 'GET'
     },
       );
     }
@@ -353,7 +388,7 @@ export const getTeachingResourceGenerationTaskDetailApiV1AiTeachingResourceGener
     taskId: number,
  ) => {
       return customInstance<StandardResponseTeachingResourceGenerationTaskDetailResponse>(
-      {url: `/api/v1/ai/teaching-resource-generation-tasks/${taskId}`, method: 'GET'
+      {url: `/ai/teaching-resource-generation-tasks/${taskId}`, method: 'GET'
     },
       );
     }
@@ -364,7 +399,7 @@ export const confirmTeachingResourceGenerationTaskApiV1AiResourceGenerationTasks
     taskId: number,
  ) => {
       return customInstance<StandardResponseTeachingResourceGenerationTaskDetailResponse>(
-      {url: `/api/v1/ai/resource-generation-tasks/${taskId}/confirm`, method: 'POST'
+      {url: `/ai/resource-generation-tasks/${taskId}/confirm`, method: 'POST'
     },
       );
     }
@@ -375,7 +410,7 @@ export const confirmTeachingResourceGenerationTaskApiV1AiTeachingResourceGenerat
     taskId: number,
  ) => {
       return customInstance<StandardResponseTeachingResourceGenerationTaskDetailResponse>(
-      {url: `/api/v1/ai/teaching-resource-generation-tasks/${taskId}/confirm`, method: 'POST'
+      {url: `/ai/teaching-resource-generation-tasks/${taskId}/confirm`, method: 'POST'
     },
       );
     }
@@ -387,7 +422,7 @@ export const updateTeachingResourceGenerationTaskMetaApiV1AiResourceGenerationTa
     teachingResourceGenerationMetaUpdateRequest: TeachingResourceGenerationMetaUpdateRequest,
  ) => {
       return customInstance<StandardResponseTeachingResourceGenerationTaskDetailResponse>(
-      {url: `/api/v1/ai/resource-generation-tasks/${taskId}/resource-meta`, method: 'PUT',
+      {url: `/ai/resource-generation-tasks/${taskId}/resource-meta`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: teachingResourceGenerationMetaUpdateRequest
     },
@@ -401,7 +436,7 @@ export const updateTeachingResourceGenerationTaskMetaApiV1AiTeachingResourceGene
     teachingResourceGenerationMetaUpdateRequest: TeachingResourceGenerationMetaUpdateRequest,
  ) => {
       return customInstance<StandardResponseTeachingResourceGenerationTaskDetailResponse>(
-      {url: `/api/v1/ai/teaching-resource-generation-tasks/${taskId}/resource-meta`, method: 'PUT',
+      {url: `/ai/teaching-resource-generation-tasks/${taskId}/resource-meta`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: teachingResourceGenerationMetaUpdateRequest
     },
@@ -414,7 +449,7 @@ export const listScheduleTasksApiV1AiScheduleTasksGet = (
     params?: ListScheduleTasksApiV1AiScheduleTasksGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseAITaskSummaryResponse>(
-      {url: `/api/v1/ai/schedule-tasks`, method: 'GET',
+      {url: `/ai/schedule-tasks`, method: 'GET',
         params
     },
       );
@@ -426,7 +461,7 @@ export const createScheduleTaskApiV1AiScheduleTasksPost = (
     aIScheduleTaskCreateRequestInput: AIScheduleTaskCreateRequestInput,
  ) => {
       return customInstance<StandardResponseAIScheduleTaskDetailResponse>(
-      {url: `/api/v1/ai/schedule-tasks`, method: 'POST',
+      {url: `/ai/schedule-tasks`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: aIScheduleTaskCreateRequestInput
     },
@@ -439,7 +474,7 @@ export const previewScheduleTaskApiV1AiScheduleTasksPreviewPost = (
     aIScheduleTaskCreateRequestInput: AIScheduleTaskCreateRequestInput,
  ) => {
       return customInstance<StandardResponseAIScheduleParsePreviewResponse>(
-      {url: `/api/v1/ai/schedule-tasks/preview`, method: 'POST',
+      {url: `/ai/schedule-tasks/preview`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: aIScheduleTaskCreateRequestInput
     },
@@ -452,7 +487,7 @@ export const getScheduleTaskDetailApiV1AiScheduleTasksTaskIdGet = (
     taskId: number,
  ) => {
       return customInstance<StandardResponseAIScheduleTaskDetailResponse>(
-      {url: `/api/v1/ai/schedule-tasks/${taskId}`, method: 'GET'
+      {url: `/ai/schedule-tasks/${taskId}`, method: 'GET'
     },
       );
     }
@@ -463,7 +498,7 @@ export const deleteScheduleTaskApiV1AiScheduleTasksTaskIdDelete = (
     taskId: number,
  ) => {
       return customInstance<StandardResponseDict>(
-      {url: `/api/v1/ai/schedule-tasks/${taskId}`, method: 'DELETE'
+      {url: `/ai/schedule-tasks/${taskId}`, method: 'DELETE'
     },
       );
     }
@@ -475,7 +510,7 @@ export const updateScheduleTaskApiV1AiScheduleTasksTaskIdResultPut = (
     aIScheduleTaskUpdateRequest: AIScheduleTaskUpdateRequest,
  ) => {
       return customInstance<StandardResponseAIScheduleTaskDetailResponse>(
-      {url: `/api/v1/ai/schedule-tasks/${taskId}/result`, method: 'PUT',
+      {url: `/ai/schedule-tasks/${taskId}/result`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: aIScheduleTaskUpdateRequest
     },
@@ -489,7 +524,7 @@ export const confirmScheduleTaskRulesApiV1AiScheduleTasksTaskIdConfirmRulesPost 
     aIScheduleTaskCreateRequestInput: AIScheduleTaskCreateRequestInput,
  ) => {
       return customInstance<StandardResponseAIScheduleTaskDetailResponse>(
-      {url: `/api/v1/ai/schedule-tasks/${taskId}/confirm-rules`, method: 'POST',
+      {url: `/ai/schedule-tasks/${taskId}/confirm-rules`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: aIScheduleTaskCreateRequestInput
     },
@@ -502,7 +537,7 @@ export const confirmScheduleTaskApiV1AiScheduleTasksTaskIdConfirmPost = (
     taskId: number,
  ) => {
       return customInstance<StandardResponseAIScheduleTaskDetailResponse>(
-      {url: `/api/v1/ai/schedule-tasks/${taskId}/confirm`, method: 'POST'
+      {url: `/ai/schedule-tasks/${taskId}/confirm`, method: 'POST'
     },
       );
     }
@@ -513,7 +548,7 @@ export const listPersonalTrainingTasksApiV1AiPersonalTrainingTasksGet = (
     params?: ListPersonalTrainingTasksApiV1AiPersonalTrainingTasksGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseAITaskSummaryResponse>(
-      {url: `/api/v1/ai/personal-training-tasks`, method: 'GET',
+      {url: `/ai/personal-training-tasks`, method: 'GET',
         params
     },
       );
@@ -525,7 +560,7 @@ export const createPersonalTrainingTaskApiV1AiPersonalTrainingTasksPost = (
     aIPersonalTrainingTaskCreateRequest: AIPersonalTrainingTaskCreateRequest,
  ) => {
       return customInstance<StandardResponseAIPersonalTrainingTaskDetailResponse>(
-      {url: `/api/v1/ai/personal-training-tasks`, method: 'POST',
+      {url: `/ai/personal-training-tasks`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: aIPersonalTrainingTaskCreateRequest
     },
@@ -538,7 +573,7 @@ export const getPersonalTrainingTaskDetailApiV1AiPersonalTrainingTasksTaskIdGet 
     taskId: number,
  ) => {
       return customInstance<StandardResponseAIPersonalTrainingTaskDetailResponse>(
-      {url: `/api/v1/ai/personal-training-tasks/${taskId}`, method: 'GET'
+      {url: `/ai/personal-training-tasks/${taskId}`, method: 'GET'
     },
       );
     }
@@ -550,7 +585,7 @@ export const updatePersonalTrainingTaskApiV1AiPersonalTrainingTasksTaskIdResultP
     aIPersonalTrainingTaskUpdateRequest: AIPersonalTrainingTaskUpdateRequest,
  ) => {
       return customInstance<StandardResponseAIPersonalTrainingTaskDetailResponse>(
-      {url: `/api/v1/ai/personal-training-tasks/${taskId}/result`, method: 'PUT',
+      {url: `/ai/personal-training-tasks/${taskId}/result`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: aIPersonalTrainingTaskUpdateRequest
     },
@@ -563,7 +598,21 @@ export const confirmPersonalTrainingTaskApiV1AiPersonalTrainingTasksTaskIdConfir
     taskId: number,
  ) => {
       return customInstance<StandardResponseAIPersonalTrainingTaskDetailResponse>(
-      {url: `/api/v1/ai/personal-training-tasks/${taskId}/confirm`, method: 'POST'
+      {url: `/ai/personal-training-tasks/${taskId}/confirm`, method: 'POST'
+    },
+      );
+    }
+  /**
+ * @summary 解析文档提取文本（PDF/DOCX/XLSX/CSV/TXT）
+ */
+export const parseDocumentFileApiV1AiFilesParsePost = (
+    bodyParseDocumentFileApiV1AiFilesParsePost: BodyParseDocumentFileApiV1AiFilesParsePost,
+ ) => {const formData = new FormData();
+formData.append(`file`, bodyParseDocumentFileApiV1AiFilesParsePost.file);
+
+      return customInstance<StandardResponse>(
+      {url: `/ai/files/parse`, method: 'POST',
+       data: formData
     },
       );
     }
@@ -575,16 +624,19 @@ export type ConfirmQuestionTaskApiV1AiQuestionTasksTaskIdConfirmPostResult = Non
 export type ListPaperAssemblyTasksApiV1AiPaperAssemblyTasksGetResult = NonNullable<Awaited<ReturnType<typeof listPaperAssemblyTasksApiV1AiPaperAssemblyTasksGet>>>
 export type CreatePaperAssemblyTaskApiV1AiPaperAssemblyTasksPostResult = NonNullable<Awaited<ReturnType<typeof createPaperAssemblyTaskApiV1AiPaperAssemblyTasksPost>>>
 export type GetPaperAssemblyTaskDetailApiV1AiPaperAssemblyTasksTaskIdGetResult = NonNullable<Awaited<ReturnType<typeof getPaperAssemblyTaskDetailApiV1AiPaperAssemblyTasksTaskIdGet>>>
+export type DeletePaperAssemblyTaskApiV1AiPaperAssemblyTasksTaskIdDeleteResult = NonNullable<Awaited<ReturnType<typeof deletePaperAssemblyTaskApiV1AiPaperAssemblyTasksTaskIdDelete>>>
 export type UpdatePaperAssemblyTaskApiV1AiPaperAssemblyTasksTaskIdResultPutResult = NonNullable<Awaited<ReturnType<typeof updatePaperAssemblyTaskApiV1AiPaperAssemblyTasksTaskIdResultPut>>>
 export type ConfirmPaperAssemblyTaskApiV1AiPaperAssemblyTasksTaskIdConfirmPostResult = NonNullable<Awaited<ReturnType<typeof confirmPaperAssemblyTaskApiV1AiPaperAssemblyTasksTaskIdConfirmPost>>>
 export type ListPaperGenerationTasksApiV1AiPaperGenerationTasksGetResult = NonNullable<Awaited<ReturnType<typeof listPaperGenerationTasksApiV1AiPaperGenerationTasksGet>>>
 export type CreatePaperGenerationTaskApiV1AiPaperGenerationTasksPostResult = NonNullable<Awaited<ReturnType<typeof createPaperGenerationTaskApiV1AiPaperGenerationTasksPost>>>
 export type GetPaperGenerationTaskDetailApiV1AiPaperGenerationTasksTaskIdGetResult = NonNullable<Awaited<ReturnType<typeof getPaperGenerationTaskDetailApiV1AiPaperGenerationTasksTaskIdGet>>>
+export type DeletePaperGenerationTaskApiV1AiPaperGenerationTasksTaskIdDeleteResult = NonNullable<Awaited<ReturnType<typeof deletePaperGenerationTaskApiV1AiPaperGenerationTasksTaskIdDelete>>>
 export type UpdatePaperGenerationTaskApiV1AiPaperGenerationTasksTaskIdResultPutResult = NonNullable<Awaited<ReturnType<typeof updatePaperGenerationTaskApiV1AiPaperGenerationTasksTaskIdResultPut>>>
 export type ConfirmPaperGenerationTaskApiV1AiPaperGenerationTasksTaskIdConfirmPostResult = NonNullable<Awaited<ReturnType<typeof confirmPaperGenerationTaskApiV1AiPaperGenerationTasksTaskIdConfirmPost>>>
 export type ListPaperDocumentGenerationTasksApiV1AiPaperDocumentGenerationTasksGetResult = NonNullable<Awaited<ReturnType<typeof listPaperDocumentGenerationTasksApiV1AiPaperDocumentGenerationTasksGet>>>
 export type CreatePaperDocumentGenerationTaskApiV1AiPaperDocumentGenerationTasksPostResult = NonNullable<Awaited<ReturnType<typeof createPaperDocumentGenerationTaskApiV1AiPaperDocumentGenerationTasksPost>>>
 export type GetPaperDocumentGenerationTaskDetailApiV1AiPaperDocumentGenerationTasksTaskIdGetResult = NonNullable<Awaited<ReturnType<typeof getPaperDocumentGenerationTaskDetailApiV1AiPaperDocumentGenerationTasksTaskIdGet>>>
+export type DeletePaperDocumentGenerationTaskApiV1AiPaperDocumentGenerationTasksTaskIdDeleteResult = NonNullable<Awaited<ReturnType<typeof deletePaperDocumentGenerationTaskApiV1AiPaperDocumentGenerationTasksTaskIdDelete>>>
 export type UpdatePaperDocumentGenerationTaskApiV1AiPaperDocumentGenerationTasksTaskIdResultPutResult = NonNullable<Awaited<ReturnType<typeof updatePaperDocumentGenerationTaskApiV1AiPaperDocumentGenerationTasksTaskIdResultPut>>>
 export type ConfirmPaperDocumentGenerationTaskApiV1AiPaperDocumentGenerationTasksTaskIdConfirmPostResult = NonNullable<Awaited<ReturnType<typeof confirmPaperDocumentGenerationTaskApiV1AiPaperDocumentGenerationTasksTaskIdConfirmPost>>>
 export type ListTeachingResourceGenerationTasksApiV1AiResourceGenerationTasksGetResult = NonNullable<Awaited<ReturnType<typeof listTeachingResourceGenerationTasksApiV1AiResourceGenerationTasksGet>>>
@@ -610,3 +662,4 @@ export type CreatePersonalTrainingTaskApiV1AiPersonalTrainingTasksPostResult = N
 export type GetPersonalTrainingTaskDetailApiV1AiPersonalTrainingTasksTaskIdGetResult = NonNullable<Awaited<ReturnType<typeof getPersonalTrainingTaskDetailApiV1AiPersonalTrainingTasksTaskIdGet>>>
 export type UpdatePersonalTrainingTaskApiV1AiPersonalTrainingTasksTaskIdResultPutResult = NonNullable<Awaited<ReturnType<typeof updatePersonalTrainingTaskApiV1AiPersonalTrainingTasksTaskIdResultPut>>>
 export type ConfirmPersonalTrainingTaskApiV1AiPersonalTrainingTasksTaskIdConfirmPostResult = NonNullable<Awaited<ReturnType<typeof confirmPersonalTrainingTaskApiV1AiPersonalTrainingTasksTaskIdConfirmPost>>>
+export type ParseDocumentFileApiV1AiFilesParsePostResult = NonNullable<Awaited<ReturnType<typeof parseDocumentFileApiV1AiFilesParsePost>>>

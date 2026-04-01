@@ -31,7 +31,7 @@ export const getQuestionsApiV1QuestionsGet = (
     params?: GetQuestionsApiV1QuestionsGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseQuestionResponse>(
-      {url: `/api/v1/questions`, method: 'GET',
+      {url: `/questions`, method: 'GET',
         params
     },
       );
@@ -44,7 +44,7 @@ export const createQuestionApiV1QuestionsPost = (
     questionCreate: QuestionCreate,
  ) => {
       return customInstance<StandardResponseQuestionResponse>(
-      {url: `/api/v1/questions`, method: 'POST',
+      {url: `/questions`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: questionCreate
     },
@@ -59,7 +59,7 @@ export const updateQuestionApiV1QuestionsQuestionIdPut = (
     questionUpdate: QuestionUpdate,
  ) => {
       return customInstance<StandardResponseQuestionResponse>(
-      {url: `/api/v1/questions/${questionId}`, method: 'PUT',
+      {url: `/questions/${questionId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: questionUpdate
     },
@@ -73,7 +73,7 @@ export const deleteQuestionApiV1QuestionsQuestionIdDelete = (
     questionId: number,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/questions/${questionId}`, method: 'DELETE'
+      {url: `/questions/${questionId}`, method: 'DELETE'
     },
       );
     }
@@ -85,7 +85,7 @@ export const batchCreateApiV1QuestionsBatchPost = (
     questionBatchCreate: QuestionBatchCreate,
  ) => {
       return customInstance<StandardResponseListQuestionResponse>(
-      {url: `/api/v1/questions/batch`, method: 'POST',
+      {url: `/questions/batch`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: questionBatchCreate
     },
@@ -99,7 +99,7 @@ export const getQuestionFoldersApiV1QuestionsFoldersGet = (
 
  ) => {
       return customInstance<StandardResponseList>(
-      {url: `/api/v1/questions/folders`, method: 'GET'
+      {url: `/questions/folders`, method: 'GET'
     },
       );
     }
@@ -111,7 +111,7 @@ export const createQuestionFolderApiV1QuestionsFoldersPost = (
     questionFolderCreate: QuestionFolderCreate,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/questions/folders`, method: 'POST',
+      {url: `/questions/folders`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: questionFolderCreate
     },
@@ -126,7 +126,7 @@ export const updateQuestionFolderApiV1QuestionsFoldersFolderIdPut = (
     questionFolderUpdate: QuestionFolderUpdate,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/questions/folders/${folderId}`, method: 'PUT',
+      {url: `/questions/folders/${folderId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: questionFolderUpdate
     },
@@ -140,7 +140,7 @@ export const deleteQuestionFolderApiV1QuestionsFoldersFolderIdDelete = (
     folderId: number,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/questions/folders/${folderId}`, method: 'DELETE'
+      {url: `/questions/folders/${folderId}`, method: 'DELETE'
     },
       );
     }
@@ -153,7 +153,7 @@ export const moveQuestionToFolderApiV1QuestionsQuestionIdFolderPatch = (
     questionMoveRequest: QuestionMoveRequest,
  ) => {
       return customInstance<StandardResponseQuestionResponse>(
-      {url: `/api/v1/questions/${questionId}/folder`, method: 'PATCH',
+      {url: `/questions/${questionId}/folder`, method: 'PATCH',
       headers: {'Content-Type': 'application/json', },
       data: questionMoveRequest
     },

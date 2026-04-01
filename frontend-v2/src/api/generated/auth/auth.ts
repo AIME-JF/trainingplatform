@@ -24,7 +24,7 @@ export const loginApiV1AuthLoginPost = (
     userLogin: UserLogin,
  ) => {
       return customInstance<StandardResponseLoginResponse>(
-      {url: `/api/v1/auth/login`, method: 'POST',
+      {url: `/auth/login`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: userLogin
     },
@@ -38,7 +38,7 @@ export const loginPhoneApiV1AuthLoginPhonePost = (
     params: LoginPhoneApiV1AuthLoginPhonePostParams,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/auth/login/phone`, method: 'POST',
+      {url: `/auth/login/phone`, method: 'POST',
         params
     },
       );
@@ -51,7 +51,7 @@ export const getMeApiV1AuthMeGet = (
 
  ) => {
       return customInstance<StandardResponseUserResponse>(
-      {url: `/api/v1/auth/me`, method: 'GET'
+      {url: `/auth/me`, method: 'GET'
     },
       );
     }

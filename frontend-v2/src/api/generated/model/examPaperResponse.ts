@@ -26,6 +26,10 @@ export interface ExamPaperResponse {
   linked_admission_exam_count?: number;
   /** 知识点名称列表 */
   knowledge_point_names?: string[];
+  police_type_id?: number | null;
+  police_type_name?: string | null;
+  course_id?: number | null;
+  course_name?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
 }

@@ -1,0 +1,526 @@
+<template>
+  <a-modal
+    :open="visible"
+    title="签到管理"
+    :footer="null"
+    width="640px"
+    :class="{ 'checkin-mgr-modal-mobile': isMobile }"
+    :style="isMobile ? { top: 0, maxWidth: '100vw', margin: 0, paddingBottom: 0 } : {}"
+    :bodyStyle="isMobile ? { height: 'calc(100vh - 55px)', overflow: 'auto' } : {}"
+    @update:open="(val: boolean) => emit('update:visible', val)"
+  >
+    <!-- 上部：签到配置区 -->
+    <div class="checkin-config">
+      <div class="config-row">
+        <span class="config-label">签到途径</span>
+        <a-radio-group
+          :value="checkinMode"
+          :disabled="isCheckinOngoing"
+          @change="(e: any) => { checkinMode = e.target.value }"
+        >
+          <a-radio value="direct">直接签到</a-radio>
+          <a-radio value="qr">扫码签到</a-radio>
+        </a-radio-group>
+      </div>
+      <div class="config-row">
+        <span class="config-label">签到限时</span>
+        <a-select
+          :value="checkinDuration"
+          style="width: 120px"
+          :disabled="isCheckinOngoing"
+          @change="(val: number) => { checkinDuration = val }"
+        >
+          <a-select-option :value="5">5 分钟</a-select-option>
+          <a-select-option :value="10">10 分钟</a-select-option>
+          <a-select-option :value="15">15 分钟</a-select-option>
+          <a-select-option :value="30">30 分钟</a-select-option>
+        </a-select>
+      </div>
+      <div v-if="checkinMode === 'qr' && checkinQrUrl && isCheckinOngoing" class="qr-display">
+        <QrcodeVue :value="checkinQrUrl" :size="200" level="M" />
+        <span class="qr-hint">学员扫描此二维码完成签到</span>
+      </div>
+    </div>
+
+    <!-- 中部：签到统计 -->
+    <div class="checkin-stats">
+      <div class="stat-progress">
+        <span>已签到 {{ checkedInList.length }} / {{ totalStudents }} 人</span>
+        <a-progress :percent="checkinPercent" size="small" :show-info="false" />
+      </div>
+      <div v-if="countdownText" class="stat-countdown">
+        剩余 {{ countdownText }}
+      </div>
+    </div>
+
+    <!-- 下部：签到名单 -->
+    <a-tabs v-model:activeKey="checkinTab" size="small" style="margin-top: 8px">
+      <a-tab-pane key="checked" :tab="`已签到 (${checkedInList.length})`">
+        <a-empty v-if="!checkedInList.length" description="暂无签到记录" />
+        <div v-else class="checkin-list">
+          <div v-for="r in checkedInList" :key="r.user_id" class="checkin-row">
+            <a-avatar :size="28" class="checkin-avatar">{{ (r.user_nickname || r.user_name || '').slice(0, 1) }}</a-avatar>
+            <div class="checkin-info">
+              <span class="checkin-name">{{ r.user_nickname || r.user_name }}</span>
+              <span class="checkin-time">{{ r.time || '' }} {{ r.status === 'late' ? '(迟到)' : '' }}</span>
+            </div>
+            <a-button
+              v-if="canManageCheckin"
+              size="small"
+              danger
+              @click="toggleCheckin(r.user_id, 'absent')"
+              :loading="checkinToggleLoading === r.user_id"
+            >
+              标记未签到
+            </a-button>
+          </div>
+        </div>
+      </a-tab-pane>
+      <a-tab-pane key="unchecked" :tab="`未签到 (${uncheckedList.length})`">
+        <a-empty v-if="!uncheckedList.length" description="全部已签到" />
+        <div v-else class="checkin-list">
+          <div v-for="s in uncheckedList" :key="s.user_id" class="checkin-row">
+            <a-avatar :size="28" class="checkin-avatar absent">{{ (s.user_nickname || s.user_name || '').slice(0, 1) }}</a-avatar>
+            <div class="checkin-info">
+              <span class="checkin-name">{{ s.user_nickname || s.user_name }}</span>
+              <span class="checkin-absent-label">未签到</span>
+            </div>
+            <a-button
+              v-if="canManageCheckin"
+              size="small"
+              type="primary"
+              @click="toggleCheckin(s.user_id, 'checkin')"
+              :loading="checkinToggleLoading === s.user_id"
+            >
+              标记已签到
+            </a-button>
+          </div>
+        </div>
+      </a-tab-pane>
+    </a-tabs>
+
+    <!-- 底部按钮区 -->
+    <div class="checkin-mgr-footer">
+      <a-button
+        v-if="session?.action_permissions?.can_start_checkin"
+        type="primary"
+        :loading="sessionActionLoading"
+        @click="doStartCheckin"
+      >
+        开始签到
+      </a-button>
+      <a-button
+        v-if="session?.action_permissions?.can_end_checkin"
+        danger
+        :loading="sessionActionLoading"
+        @click="doEndCheckin"
+      >
+        结束签到
+      </a-button>
+      <a-button v-if="isCheckinEnded" @click="emit('update:visible', false)">
+        关闭
+      </a-button>
+    </div>
+  </a-modal>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, watch, onUnmounted } from 'vue'
+import { message } from 'ant-design-vue'
+import QrcodeVue from 'qrcode.vue'
+import dayjs from 'dayjs'
+import { useAuthStore } from '@/stores/auth'
+import {
+  getCheckinQrApiV1TrainingsTrainingIdCheckinQrGet,
+  getCheckinRecordsApiV1TrainingsTrainingIdCheckinRecordsGet,
+  startSessionCheckinApiV1TrainingsTrainingIdSessionsSessionKeyCheckinStartPost,
+  endSessionCheckinApiV1TrainingsTrainingIdSessionsSessionKeyCheckinEndPost,
+  checkinApiV1TrainingsTrainingIdCheckinPost,
+} from '@/api/generated/training-management/training-management'
+import type { CheckinResponse } from '@/api/generated/model'
+import type { CurrentSession, StudentItem } from './types'
+
+const props = defineProps<{
+  visible: boolean
+  trainingId: number | string
+  session: CurrentSession | null
+  students: StudentItem[]
+}>()
+
+const emit = defineEmits<{
+  (e: 'update:visible', val: boolean): void
+  (e: 'refresh'): void
+}>()
+
+const authStore = useAuthStore()
+
+const sessionActionLoading = ref(false)
+const checkinTab = ref('checked')
+const checkinRecords = ref<CheckinResponse[]>([])
+const checkinToggleLoading = ref<number | null>(null)
+const checkinMode = ref<'direct' | 'qr'>('direct')
+const checkinDuration = ref(10)
+const countdownText = ref('')
+const countdownTimer = ref<ReturnType<typeof setInterval> | null>(null)
+const isMobile = ref(window.innerWidth <= 768)
+const checkinQrUrl = ref('')
+
+function handleResize() {
+  isMobile.value = window.innerWidth <= 768
+}
+window.addEventListener('resize', handleResize)
+onUnmounted(() => {
+  window.removeEventListener('resize', handleResize)
+  stopCountdown()
+})
+
+const isCheckinOngoing = computed(() => props.session?.status === 'checkin_open')
+
+const isCheckinEnded = computed(() => {
+  const s = props.session?.status
+  return s === 'checkin_closed' || s === 'checkout_open' || s === 'completed'
+})
+
+const canManageCheckin = computed(() => {
+  return authStore.isInstructor && props.session?.action_permissions != null
+})
+
+const checkedInList = computed(() =>
+  checkinRecords.value.filter((r) => r.status === 'on_time' || r.status === 'late'),
+)
+
+const uncheckedList = computed(() => {
+  const checkedIds = new Set(checkedInList.value.map((r) => r.user_id))
+  return props.students
+    .filter((s) => !checkedIds.has(s.user_id))
+    .map((s) => ({ user_id: s.user_id, user_name: s.user_name, user_nickname: s.user_nickname, status: 'absent', time: '' }))
+})
+
+const totalStudents = computed(() => props.students.length || 0)
+
+const checkinPercent = computed(() => {
+  if (!totalStudents.value) return 0
+  return Math.round((checkedInList.value.length / totalStudents.value) * 100)
+})
+
+// When modal opens, sync config from session and fetch records
+watch(() => props.visible, async (visible) => {
+  if (!visible) {
+    stopCountdown()
+    return
+  }
+  const sess = props.session
+  if (!sess) return
+  if (sess.checkin_mode === 'direct' || sess.checkin_mode === 'qr') {
+    checkinMode.value = sess.checkin_mode
+  }
+  if (sess.checkin_duration_minutes) {
+    checkinDuration.value = sess.checkin_duration_minutes
+  }
+  checkinTab.value = 'checked'
+  // 如果已是 qr 模式且签到进行中，恢复二维码
+  if (checkinMode.value === 'qr' && sess.status === 'checkin_open') {
+    await refreshQrToken()
+  } else {
+    checkinQrUrl.value = ''
+  }
+  await fetchCheckinRecords()
+  startCountdown()
+})
+
+async function refreshQrToken() {
+  const sess = props.session
+  if (!sess) return
+  try {
+    const data = await getCheckinQrApiV1TrainingsTrainingIdCheckinQrGet(
+      Number(props.trainingId),
+      { session_key: sess.session_id, action: 'checkin' },
+    )
+    if (data.token) {
+      checkinQrUrl.value = `${window.location.origin}/attendance/${data.token}/${sess.session_id}`
+    }
+  } catch {
+    checkinQrUrl.value = ''
+  }
+}
+
+async function fetchCheckinRecords() {
+  const sess = props.session
+  if (!sess) return
+  try {
+    const data = await getCheckinRecordsApiV1TrainingsTrainingIdCheckinRecordsGet(
+      Number(props.trainingId),
+      { session_key: sess.session_id },
+    )
+    checkinRecords.value = data || []
+  } catch {
+    checkinRecords.value = []
+  }
+}
+
+async function fetchQrToken() {
+  const sess = props.session
+  if (!sess) return
+  try {
+    const data = await getCheckinQrApiV1TrainingsTrainingIdCheckinQrGet(
+      Number(props.trainingId),
+      { session_key: sess.session_id, action: 'checkin' },
+    )
+    if (data.token) {
+      checkinQrUrl.value = `${window.location.origin}/attendance/${data.token}/${sess.session_id}`
+    }
+  } catch {
+    checkinQrUrl.value = ''
+  }
+}
+
+async function doStartCheckin() {
+  const sess = props.session
+  if (!sess) return
+  sessionActionLoading.value = true
+  try {
+    await startSessionCheckinApiV1TrainingsTrainingIdSessionsSessionKeyCheckinStartPost(
+      Number(props.trainingId),
+      sess.session_id,
+      { checkin_mode: checkinMode.value, checkin_duration_minutes: checkinDuration.value },
+    )
+    message.success('签到已开始')
+    if (checkinMode.value === 'qr') {
+      await fetchQrToken()
+    }
+    emit('refresh')
+    await fetchCheckinRecords()
+    startCountdown()
+  } catch (err: unknown) {
+    message.error(err instanceof Error ? err.message : '操作失败')
+  } finally {
+    sessionActionLoading.value = false
+  }
+}
+
+async function doEndCheckin() {
+  const sess = props.session
+  if (!sess) return
+  sessionActionLoading.value = true
+  try {
+    await endSessionCheckinApiV1TrainingsTrainingIdSessionsSessionKeyCheckinEndPost(
+      Number(props.trainingId),
+      sess.session_id,
+    )
+    message.success('操作成功')
+    emit('refresh')
+  } catch (err: unknown) {
+    message.error(err instanceof Error ? err.message : '操作失败')
+  } finally {
+    sessionActionLoading.value = false
+  }
+}
+
+async function toggleCheckin(userId: number, action: 'checkin' | 'absent') {
+  const sess = props.session
+  if (!sess) return
+  checkinToggleLoading.value = userId
+  try {
+    if (action === 'checkin') {
+      await checkinApiV1TrainingsTrainingIdCheckinPost(
+        Number(props.trainingId),
+        { user_id: userId, session_key: sess.session_id },
+      )
+    } else {
+      await checkinApiV1TrainingsTrainingIdCheckinPost(
+        Number(props.trainingId),
+        { user_id: userId, session_key: sess.session_id, status: 'absent' },
+      )
+    }
+    await fetchCheckinRecords()
+  } catch (err: unknown) {
+    message.error(err instanceof Error ? err.message : '操作失败')
+  } finally {
+    checkinToggleLoading.value = null
+  }
+}
+
+// Countdown
+function startCountdown() {
+  stopCountdown()
+  updateCountdown()
+  countdownTimer.value = setInterval(updateCountdown, 1000)
+}
+
+function stopCountdown() {
+  if (countdownTimer.value) {
+    clearInterval(countdownTimer.value)
+    countdownTimer.value = null
+  }
+  countdownText.value = ''
+}
+
+function updateCountdown() {
+  const deadline = props.session?.checkin_deadline
+  if (!deadline) {
+    countdownText.value = ''
+    return
+  }
+  const remaining = dayjs(deadline).diff(dayjs(), 'second')
+  if (remaining <= 0) {
+    countdownText.value = '已截止'
+    stopCountdown()
+    return
+  }
+  const mins = Math.floor(remaining / 60)
+  const secs = remaining % 60
+  countdownText.value = `${mins}:${String(secs).padStart(2, '0')}`
+}
+</script>
+
+<style scoped>
+.checkin-config {
+  padding: 16px;
+  background: var(--v2-bg);
+  border-radius: var(--v2-radius-sm);
+  margin-bottom: 16px;
+}
+
+.config-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.config-row:last-child { margin-bottom: 0; }
+
+.config-label {
+  font-size: 14px;
+  color: var(--v2-text-secondary);
+  min-width: 70px;
+  flex-shrink: 0;
+}
+
+.qr-display {
+  margin-top: 16px;
+  padding: 24px;
+  background: #fff;
+  border: 1px solid var(--v2-border-light);
+  border-radius: var(--v2-radius);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.qr-hint {
+  font-size: 13px;
+  color: var(--v2-text-muted);
+}
+
+.checkin-stats {
+  padding: 12px 16px;
+  background: var(--v2-bg);
+  border-radius: var(--v2-radius-sm);
+  margin-bottom: 12px;
+}
+
+.stat-progress {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--v2-text-primary);
+}
+
+.stat-progress span { white-space: nowrap; flex-shrink: 0; }
+.stat-progress .ant-progress { flex: 1; }
+
+.stat-countdown {
+  margin-top: 8px;
+  font-size: 13px;
+  color: var(--v2-warning);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.checkin-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.checkin-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 4px;
+  border-bottom: 1px solid var(--v2-border-light);
+}
+
+.checkin-row:last-child { border-bottom: none; }
+
+.checkin-avatar {
+  background: var(--v2-success);
+  color: #fff;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.checkin-avatar.absent {
+  background: var(--v2-text-muted);
+}
+
+.checkin-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.checkin-name {
+  font-size: 14px;
+  color: var(--v2-text-primary);
+}
+
+.checkin-time {
+  font-size: 12px;
+  color: var(--v2-text-muted);
+}
+
+.checkin-absent-label {
+  font-size: 12px;
+  color: var(--v2-danger);
+}
+
+.checkin-mgr-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--v2-border-light);
+}
+
+@media (max-width: 768px) {
+  .checkin-config {
+    padding: 12px;
+  }
+
+  .config-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .checkin-list .checkin-row {
+    padding: 8px 2px;
+    gap: 8px;
+  }
+
+  .checkin-mgr-footer {
+    flex-direction: column;
+  }
+
+  .checkin-mgr-footer .ant-btn {
+    min-height: 44px;
+    width: 100%;
+  }
+}
+</style>

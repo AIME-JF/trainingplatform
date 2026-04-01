@@ -31,7 +31,7 @@ export const getResourcesApiV1ResourcesGet = (
     params?: GetResourcesApiV1ResourcesGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseResourceListItemResponse>(
-      {url: `/api/v1/resources`, method: 'GET',
+      {url: `/resources`, method: 'GET',
         params
     },
       );
@@ -43,7 +43,7 @@ export const createResourceApiV1ResourcesPost = (
     resourceCreate: ResourceCreate,
  ) => {
       return customInstance<StandardResponseResourceDetailResponse>(
-      {url: `/api/v1/resources`, method: 'POST',
+      {url: `/resources`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: resourceCreate
     },
@@ -56,7 +56,7 @@ export const getResourceTagsApiV1ResourcesTagsGet = (
     params?: GetResourceTagsApiV1ResourcesTagsGetParams,
  ) => {
       return customInstance<StandardResponseListResourceTagResponse>(
-      {url: `/api/v1/resources/tags`, method: 'GET',
+      {url: `/resources/tags`, method: 'GET',
         params
     },
       );
@@ -68,7 +68,7 @@ export const createResourceTagApiV1ResourcesTagsPost = (
     resourceTagCreate: ResourceTagCreate,
  ) => {
       return customInstance<StandardResponseResourceTagResponse>(
-      {url: `/api/v1/resources/tags`, method: 'POST',
+      {url: `/resources/tags`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: resourceTagCreate
     },
@@ -81,7 +81,7 @@ export const getResourceCommentsApiV1ResourcesResourceIdCommentsGet = (
     resourceId: number,
  ) => {
       return customInstance<StandardResponseListResourceCommentResponse>(
-      {url: `/api/v1/resources/${resourceId}/comments`, method: 'GET'
+      {url: `/resources/${resourceId}/comments`, method: 'GET'
     },
       );
     }
@@ -93,7 +93,7 @@ export const createResourceCommentApiV1ResourcesResourceIdCommentsPost = (
     resourceCommentCreate: ResourceCommentCreate,
  ) => {
       return customInstance<StandardResponseResourceCommentResponse>(
-      {url: `/api/v1/resources/${resourceId}/comments`, method: 'POST',
+      {url: `/resources/${resourceId}/comments`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: resourceCommentCreate
     },
@@ -107,7 +107,7 @@ export const deleteResourceCommentApiV1ResourcesResourceIdCommentsCommentIdDelet
     commentId: number,
  ) => {
       return customInstance<StandardResponseDict>(
-      {url: `/api/v1/resources/${resourceId}/comments/${commentId}`, method: 'DELETE'
+      {url: `/resources/${resourceId}/comments/${commentId}`, method: 'DELETE'
     },
       );
     }
@@ -118,7 +118,7 @@ export const getResourceApiV1ResourcesResourceIdGet = (
     resourceId: number,
  ) => {
       return customInstance<StandardResponseResourceDetailResponse>(
-      {url: `/api/v1/resources/${resourceId}`, method: 'GET'
+      {url: `/resources/${resourceId}`, method: 'GET'
     },
       );
     }
@@ -130,7 +130,7 @@ export const updateResourceApiV1ResourcesResourceIdPut = (
     resourceUpdate: ResourceUpdate,
  ) => {
       return customInstance<StandardResponseResourceDetailResponse>(
-      {url: `/api/v1/resources/${resourceId}`, method: 'PUT',
+      {url: `/resources/${resourceId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: resourceUpdate
     },
@@ -143,7 +143,7 @@ export const deleteResourceApiV1ResourcesResourceIdDelete = (
     resourceId: number,
  ) => {
       return customInstance<StandardResponseDict>(
-      {url: `/api/v1/resources/${resourceId}`, method: 'DELETE'
+      {url: `/resources/${resourceId}`, method: 'DELETE'
     },
       );
     }
@@ -154,7 +154,7 @@ export const publishResourceApiV1ResourcesResourceIdPublishPost = (
     resourceId: number,
  ) => {
       return customInstance<StandardResponseResourceDetailResponse>(
-      {url: `/api/v1/resources/${resourceId}/publish`, method: 'POST'
+      {url: `/resources/${resourceId}/publish`, method: 'POST'
     },
       );
     }
@@ -165,7 +165,7 @@ export const offlineResourceApiV1ResourcesResourceIdOfflinePost = (
     resourceId: number,
  ) => {
       return customInstance<StandardResponseResourceDetailResponse>(
-      {url: `/api/v1/resources/${resourceId}/offline`, method: 'POST'
+      {url: `/resources/${resourceId}/offline`, method: 'POST'
     },
       );
     }

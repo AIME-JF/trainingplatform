@@ -28,7 +28,7 @@ if(bodyUploadFileApiV1MediaUploadPost.duration_seconds !== undefined && bodyUplo
  }
 
       return customInstance<StandardResponseMediaFileResponse>(
-      {url: `/api/v1/media/upload`, method: 'POST',
+      {url: `/media/upload`, method: 'POST',
        data: formData
     },
       );
@@ -42,7 +42,7 @@ export const getFileApiV1MediaFilesFileIdGet = (
     fileId: number,
  ) => {
       return customInstance<unknown>(
-      {url: `/api/v1/media/files/${fileId}`, method: 'GET'
+      {url: `/media/files/${fileId}`, method: 'GET'
     },
       );
     }

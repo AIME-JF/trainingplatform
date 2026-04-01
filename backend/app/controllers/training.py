@@ -230,9 +230,10 @@ class TrainingController:
         session_key: str = "start",
         date_filter: Optional[date] = None,
         user_id: Optional[int] = None,
+        action: str = "checkin",
     ) -> TrainingCheckinQrResponse:
         try:
-            return self.service.generate_checkin_qr(training_id, session_key, date_filter, user_id)
+            return self.service.generate_checkin_qr(training_id, session_key, date_filter, user_id, action=action)
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
@@ -240,7 +241,7 @@ class TrainingController:
         try:
             result = self.service.get_checkin_qr_payload(token)
             if not result:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="签到二维码不存在或已失效")
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="二维码不存在或已失效")
             return result
         except HTTPException:
             raise
@@ -250,6 +251,12 @@ class TrainingController:
     def checkin_by_qr(self, token: str, user_id: int):
         try:
             return self.service.checkin_by_qr(token, user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+    def attendance_by_qr(self, token: str, user_id: int):
+        try:
+            return self.service.attendance_by_qr(token, user_id)
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
@@ -274,9 +281,9 @@ class TrainingController:
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
-    def start_session_checkout(self, training_id: int, session_key: str, user_id: int):
+    def start_session_checkout(self, training_id: int, session_key: str, user_id: int, checkout_mode: str = "direct", checkout_duration_minutes: int = 15):
         try:
-            return self.service.start_session_checkout(training_id, session_key, user_id)
+            return self.service.start_session_checkout(training_id, session_key, user_id, checkout_mode, checkout_duration_minutes)
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 

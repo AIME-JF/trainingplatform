@@ -26,7 +26,7 @@ export const submitResourceApiV1ResourcesResourceIdSubmitPost = (
     resourceId: number,
  ) => {
       return customInstance<StandardResponseReviewWorkflowResponse>(
-      {url: `/api/v1/resources/${resourceId}/submit`, method: 'POST'
+      {url: `/resources/${resourceId}/submit`, method: 'POST'
     },
       );
     }
@@ -37,7 +37,7 @@ export const getReviewTasksApiV1ReviewsTasksGet = (
     params?: GetReviewTasksApiV1ReviewsTasksGetParams,
  ) => {
       return customInstance<StandardResponseListReviewTaskResponse>(
-      {url: `/api/v1/reviews/tasks`, method: 'GET',
+      {url: `/reviews/tasks`, method: 'GET',
         params
     },
       );
@@ -50,7 +50,7 @@ export const approveTaskApiV1ReviewsTasksTaskIdApprovePost = (
     reviewTaskActionRequest: ReviewTaskActionRequest,
  ) => {
       return customInstance<StandardResponseReviewWorkflowResponse>(
-      {url: `/api/v1/reviews/tasks/${taskId}/approve`, method: 'POST',
+      {url: `/reviews/tasks/${taskId}/approve`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: reviewTaskActionRequest
     },
@@ -64,7 +64,7 @@ export const rejectTaskApiV1ReviewsTasksTaskIdRejectPost = (
     reviewTaskActionRequest: ReviewTaskActionRequest,
  ) => {
       return customInstance<StandardResponseReviewWorkflowResponse>(
-      {url: `/api/v1/reviews/tasks/${taskId}/reject`, method: 'POST',
+      {url: `/reviews/tasks/${taskId}/reject`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: reviewTaskActionRequest
     },
@@ -77,7 +77,7 @@ export const getWorkflowApiV1ReviewsWorkflowsResourceIdGet = (
     resourceId: number,
  ) => {
       return customInstance<StandardResponseReviewWorkflowResponse>(
-      {url: `/api/v1/reviews/workflows/${resourceId}`, method: 'GET'
+      {url: `/reviews/workflows/${resourceId}`, method: 'GET'
     },
       );
     }
@@ -88,7 +88,7 @@ export const getPoliciesApiV1ReviewPoliciesGet = (
 
  ) => {
       return customInstance<StandardResponseListReviewPolicyResponse>(
-      {url: `/api/v1/review-policies`, method: 'GET'
+      {url: `/review-policies`, method: 'GET'
     },
       );
     }
@@ -99,7 +99,7 @@ export const createPolicyApiV1ReviewPoliciesPost = (
     reviewPolicyCreate: ReviewPolicyCreate,
  ) => {
       return customInstance<StandardResponseReviewPolicyResponse>(
-      {url: `/api/v1/review-policies`, method: 'POST',
+      {url: `/review-policies`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: reviewPolicyCreate
     },
@@ -113,7 +113,7 @@ export const updatePolicyApiV1ReviewPoliciesPolicyIdPut = (
     reviewPolicyUpdate: ReviewPolicyUpdate,
  ) => {
       return customInstance<StandardResponseReviewPolicyResponse>(
-      {url: `/api/v1/review-policies/${policyId}`, method: 'PUT',
+      {url: `/review-policies/${policyId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: reviewPolicyUpdate
     },

@@ -25,7 +25,7 @@ export const getTrainingTypesApiV1TrainingTypesGet = (
     params?: GetTrainingTypesApiV1TrainingTypesGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseTrainingTypeResponse>(
-      {url: `/api/v1/training-types`, method: 'GET',
+      {url: `/training-types`, method: 'GET',
         params
     },
       );
@@ -38,7 +38,7 @@ export const createTrainingTypeApiV1TrainingTypesPost = (
     trainingTypeCreate: TrainingTypeCreate,
  ) => {
       return customInstance<StandardResponseTrainingTypeResponse>(
-      {url: `/api/v1/training-types`, method: 'POST',
+      {url: `/training-types`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: trainingTypeCreate
     },
@@ -52,7 +52,7 @@ export const getTrainingTypeApiV1TrainingTypesTrainingTypeIdGet = (
     trainingTypeId: number,
  ) => {
       return customInstance<StandardResponseTrainingTypeResponse>(
-      {url: `/api/v1/training-types/${trainingTypeId}`, method: 'GET'
+      {url: `/training-types/${trainingTypeId}`, method: 'GET'
     },
       );
     }
@@ -65,7 +65,7 @@ export const updateTrainingTypeApiV1TrainingTypesTrainingTypeIdPut = (
     trainingTypeUpdate: TrainingTypeUpdate,
  ) => {
       return customInstance<StandardResponseTrainingTypeResponse>(
-      {url: `/api/v1/training-types/${trainingTypeId}`, method: 'PUT',
+      {url: `/training-types/${trainingTypeId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: trainingTypeUpdate
     },
@@ -79,7 +79,7 @@ export const deleteTrainingTypeApiV1TrainingTypesTrainingTypeIdDelete = (
     trainingTypeId: number,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/training-types/${trainingTypeId}`, method: 'DELETE'
+      {url: `/training-types/${trainingTypeId}`, method: 'DELETE'
     },
       );
     }

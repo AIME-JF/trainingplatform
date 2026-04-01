@@ -24,7 +24,7 @@ export const getKnowledgePointsApiV1KnowledgePointsGet = (
     params?: GetKnowledgePointsApiV1KnowledgePointsGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseKnowledgePointResponse>(
-      {url: `/api/v1/knowledge-points`, method: 'GET',
+      {url: `/knowledge-points`, method: 'GET',
         params
     },
       );
@@ -36,7 +36,7 @@ export const createKnowledgePointApiV1KnowledgePointsPost = (
     knowledgePointCreate: KnowledgePointCreate,
  ) => {
       return customInstance<StandardResponseKnowledgePointResponse>(
-      {url: `/api/v1/knowledge-points`, method: 'POST',
+      {url: `/knowledge-points`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: knowledgePointCreate
     },
@@ -50,7 +50,7 @@ export const updateKnowledgePointApiV1KnowledgePointsKnowledgePointIdPut = (
     knowledgePointUpdate: KnowledgePointUpdate,
  ) => {
       return customInstance<StandardResponseKnowledgePointResponse>(
-      {url: `/api/v1/knowledge-points/${knowledgePointId}`, method: 'PUT',
+      {url: `/knowledge-points/${knowledgePointId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: knowledgePointUpdate
     },
@@ -63,7 +63,7 @@ export const deleteKnowledgePointApiV1KnowledgePointsKnowledgePointIdDelete = (
     knowledgePointId: number,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/knowledge-points/${knowledgePointId}`, method: 'DELETE'
+      {url: `/knowledge-points/${knowledgePointId}`, method: 'DELETE'
     },
       );
     }

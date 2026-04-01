@@ -18,4 +18,6 @@ export interface TrainingCheckinQrResponse {
   url: string;
   expire_at: string;
   expires_in_seconds: number;
+  /** 出勤动作: checkin/checkout */
+  action?: string;
 }
