@@ -259,7 +259,30 @@ class AIService:
             current_user_id,
         )
         try:
-            paper_draft = self._simulate_paper_document_generation_result(normalized_data)
+            # 从文档内容中提取主题
+            source_preview = (normalized_data.source_text or "")[:50].replace("\n", " ").strip()
+            topic = source_preview if source_preview else "文档内容相关"
+
+            # 构建 AI 生成请求
+            gen_request = AIPaperGenerationTaskCreateRequest(
+                task_name=normalized_data.task_name,
+                paper_title=normalized_data.paper_title,
+                paper_type=normalized_data.paper_type,
+                description=normalized_data.description,
+                duration=normalized_data.duration,
+                passing_score=normalized_data.passing_score,
+                topic=topic,
+                source_text=normalized_data.source_text,
+                knowledge_points=[],
+                difficulty=normalized_data.difficulty,
+                police_type_id=normalized_data.police_type_id,
+                type_configs=normalized_data.type_configs,
+                requirements=normalized_data.requirements,
+            )
+
+            # 使用 AI 试卷生成器生成真实试卷
+            paper_generator = AIPaperGenerator()
+            paper_draft = paper_generator.generate_paper(gen_request)
             task.result_payload = {"paper_draft": paper_draft.model_dump(mode="python")}
             self._mark_task_completed(task)
         except Exception as exc:
@@ -739,44 +762,6 @@ class AIService:
         payload["type_configs"] = [item.model_dump(mode="python") for item in type_configs]
         return AIPaperDocumentGenerationTaskCreateRequest.model_validate(payload)
 
-    def _simulate_paper_document_generation_result(
-        self,
-        data: AIPaperDocumentGenerationTaskCreateRequest,
-    ) -> AITaskPaperDraft:
-        """根据文档生成试卷草稿"""
-        type_configs = data.type_configs or list(self.DEFAULT_TYPE_CONFIGS)
-        # 从文档内容中提取前50个字符作为主题描述
-        source_preview = (data.source_text or "")[:50].replace("\n", " ").strip()
-        topic = source_preview if source_preview else "文档内容相关"
-        knowledge_points = [topic]
-        drafts: List[AITaskQuestionDraft] = []
-
-        for config in type_configs:
-            for _ in range(config.count):
-                knowledge_point = knowledge_points[len(drafts) % len(knowledge_points)]
-                drafts.append(
-                    self._build_generated_question_draft(
-                        index=len(drafts),
-                        question_type=config.type,
-                        topic=topic,
-                        knowledge_points=[knowledge_point],
-                        difficulty=config.difficulty or data.difficulty,
-                        police_type_id=data.police_type_id,
-                        score=config.score,
-                        source_text=data.source_text,
-                        requirements=data.requirements,
-                    )
-                )
-
-        return self._build_paper_draft(
-            title=data.paper_title,
-            description=data.description,
-            paper_type=data.paper_type,
-            duration=data.duration,
-            passing_score=data.passing_score,
-            questions=drafts,
-        )
-
     def _normalize_task_type_configs(
         self,
         raw_type_configs,
@@ -1074,37 +1059,6 @@ class AIService:
             parts.append("知识点关键词")
         return " + ".join(parts) if len(parts) > 1 else "仅按题型"
 
-    def _simulate_paper_generation_result(self, data: AIPaperGenerationTaskCreateRequest) -> AITaskPaperDraft:
-        type_configs = data.type_configs or list(self.DEFAULT_TYPE_CONFIGS)
-        knowledge_points = data.knowledge_points or [data.topic]
-        drafts: List[AITaskQuestionDraft] = []
-
-        for config in type_configs:
-            for _ in range(config.count):
-                knowledge_point = knowledge_points[len(drafts) % len(knowledge_points)]
-                drafts.append(
-                    self._build_generated_question_draft(
-                        index=len(drafts),
-                        question_type=config.type,
-                        topic=data.topic,
-                        knowledge_points=[knowledge_point],
-                        difficulty=config.difficulty or data.difficulty,
-                        police_type_id=data.police_type_id,
-                        score=config.score,
-                        source_text=data.source_text,
-                        requirements=data.requirements,
-                    )
-                )
-
-        return self._build_paper_draft(
-            title=data.paper_title,
-            description=data.description,
-            paper_type=data.paper_type,
-            duration=data.duration,
-            passing_score=data.passing_score,
-            questions=drafts,
-        )
-
     def _build_paper_draft(
         self,
         title: str,
@@ -1357,58 +1311,6 @@ class AIService:
             logger.info("AI 补题校验跳过 %d 道题目", skipped_count)
 
         return valid_drafts
-
-    def _build_generated_question_draft(
-        self,
-        index: int,
-        question_type: str,
-        topic: str,
-        knowledge_points: List[str],
-        difficulty: int,
-        police_type_id: Optional[int],
-        score: int,
-        source_text: Optional[str],
-        requirements: Optional[str],
-    ) -> AITaskQuestionDraft:
-        question_no = index + 1
-        normalized_points = self._normalize_knowledge_points(knowledge_points) or [topic]
-        primary_knowledge_point = normalized_points[0]
-        prompt_tail = source_text[:18] if source_text else topic
-        if question_type == "judge":
-            options = [
-                {"key": "A", "text": "正确"},
-                {"key": "B", "text": "错误"},
-            ]
-            answer = "A"
-        else:
-            options = [
-                {"key": "A", "text": f"{topic}要点一"},
-                {"key": "B", "text": f"{primary_knowledge_point}常见误区"},
-                {"key": "C", "text": f"{prompt_tail}处置要求"},
-                {"key": "D", "text": "以上说法均不准确"},
-            ]
-            answer = "A" if question_type == "single" else ["A", "C"]
-
-        content = f"{question_no}. 围绕“{topic}”的{primary_knowledge_point}要求，下列说法哪项最符合实战规范？"
-        if question_type == "judge":
-            content = f"{question_no}. 关于“{topic}”中的{primary_knowledge_point}要求，下列说法是否正确？"
-
-        explanation = f"该题依据“{primary_knowledge_point}”抽取生成。{requirements or '请结合业务规范理解。'}"
-        return self._sanitize_question_draft(
-            AITaskQuestionDraft(
-                temp_id=f"draft-{question_no}",
-                origin="generated",
-                type=question_type,
-                content=content,
-                options=options,
-                answer=answer,
-                explanation=explanation,
-                difficulty=difficulty,
-                knowledge_points=normalized_points,
-                police_type_id=police_type_id,
-                score=score,
-            )
-        )
 
     def _sanitize_paper_draft(self, draft: AITaskPaperDraft) -> AITaskPaperDraft:
         questions = self._sort_question_drafts([self._sanitize_question_draft(item) for item in draft.questions])

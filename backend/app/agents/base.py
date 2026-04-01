@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+import httpx
 from openai import OpenAI
 
 from app.services.system import get_config_value
@@ -45,10 +46,14 @@ class BaseAIAgent:
         return self._call_openai(config, messages)
 
     def _call_openai(self, config: AIRuntimeConfig, messages: list[dict[str, str]]) -> str:
+        from logger import logger as _base_logger
+        _base_logger.debug(f"[BaseAIAgent] timeout=%s, max_tokens=%s, temperature=%s", config.timeout, config.max_tokens, config.temperature)
+        # 使用 httpx.Timeout 显式设置所有超时类别，避免个别操作超时
+        httpx_timeout = httpx.Timeout(config.timeout or 120, connect=30)
         client = OpenAI(
             api_key=config.api_key,
             base_url=config.base_url,
-            timeout=config.timeout,
+            timeout=httpx_timeout,
             max_retries=0,
         )
 
@@ -61,7 +66,6 @@ class BaseAIAgent:
         if config.temperature is not None:
             request_kwargs["temperature"] = config.temperature
 
-        from logger import logger as _base_logger
         _base_logger.debug(f"[BaseAIAgent] calling {config.base_url} model={config.model} messages_count={len(messages)}")
         response = client.chat.completions.create(**request_kwargs)
         choices_count = len(response.choices) if response.choices else 0
@@ -133,6 +137,7 @@ class BaseAIAgent:
         return float(value)
 
     def _load_runtime_config(self) -> AIRuntimeConfig:
+        from logger import logger as _base_logger
         provider = str(get_config_value("ai", "llm_type", "openai") or "openai").strip().lower()
         if provider not in {"openai", "ollama"}:
             raise ValueError(f"未支持的 AI 提供商类型: {provider}")
@@ -145,7 +150,11 @@ class BaseAIAgent:
         api_key = str(get_config_value("ai", "api_key", "") or "").strip() or None
         max_tokens = self._to_int(get_config_value("ai", "max_tokens"))
         temperature = self._to_float(get_config_value("ai", "temperature"))
-        timeout = self._to_int(get_config_value("ai", "timeout")) or 600
+        timeout_raw = get_config_value("ai", "timeout")
+        timeout = self._to_int(timeout_raw) if timeout_raw is not None else None
+        _base_logger.debug(f"[BaseAIAgent] config loaded: timeout_raw=%r, timeout=%r, max_tokens=%r", timeout_raw, timeout, max_tokens)
+        if timeout is None or timeout <= 0:
+            timeout = 600
 
         if provider == "openai" and not api_key:
             raise ValueError("OpenAI 模式下请先配置 API 密钥")
