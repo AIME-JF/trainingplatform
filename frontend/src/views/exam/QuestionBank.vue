@@ -53,11 +53,54 @@
               </div>
               <div class="stat-divider"></div>
               <div class="stat-legend">
-                <span class="legend-item"><i class="w-2 h-2 rounded-full bg-blue-500"></i> 单选 {{ statsState.single }}</span>
-                <span class="legend-item"><i class="w-2 h-2 rounded-full bg-purple-500"></i> 多选 {{ statsState.multi }}</span>
-                <span class="legend-item"><i class="w-2 h-2 rounded-full bg-amber-500"></i> 判断 {{ statsState.judge }}</span>
+                <span class="legend-item"><i class="w-2 h-2 rounded-full bg-blue-500"></i><span class="legend-num">{{ statsState.single }}</span>单选</span>
+                <span class="legend-item"><i class="w-2 h-2 rounded-full bg-purple-500"></i><span class="legend-num">{{ statsState.multi }}</span>多选</span>
+                <span class="legend-item"><i class="w-2 h-2 rounded-full bg-amber-500"></i><span class="legend-num">{{ statsState.judge }}</span>判断</span>
               </div>
             </div>
+          </div>
+
+          <!-- Tab 切换栏 -->
+          <div class="view-tabs">
+            <div :class="['tab-item', { active: currentView === 'folder' }]" @click="switchView('folder')">
+              <FolderOutlined /> 文件夹视角
+            </div>
+            <div :class="['tab-item', { active: currentView === 'course' }]" @click="switchView('course')">
+              <BookOutlined /> 课程视角
+            </div>
+            <div :class="['tab-item', { active: currentView === 'knowledgePoint' }]" @click="switchView('knowledgePoint')">
+              <AimOutlined /> 知识点视角
+            </div>
+          </div>
+
+          <!-- 课程筛选 -->
+          <div v-if="currentView === 'course'" class="view-filter">
+            <a-select
+              v-model="selectedCourseIds"
+              mode="multiple"
+              placeholder="请选择课程"
+              :loading="courseLoading"
+              :options="courseSelectOptions"
+              show-search
+              :filter-option="false"
+              @search="handleCourseSearch"
+              @change="handleCourseChange"
+              style="width: 400px"
+            />
+          </div>
+
+          <!-- 知识点筛选 -->
+          <div v-if="currentView === 'knowledgePoint'" class="view-filter">
+            <a-select
+              v-model="selectedKpIds"
+              mode="multiple"
+              placeholder="请选择知识点"
+              :loading="kpLoading"
+              :options="kpSelectOptions"
+              show-search
+              :filter-option="false"
+              style="width: 500px"
+            />
           </div>
 
           <!-- 列表标题栏 -->
@@ -73,7 +116,7 @@
           <!-- 文件夹分组区域 -->
           <div class="folder-list">
             <div
-              v-for="folder in displayedFolders"
+              v-for="folder in displayedGroups"
               :key="folder.id"
               :class="['folder-group', { 'folder-collapsed': !folder.expanded }]"
             >
@@ -247,7 +290,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { message, Modal } from 'ant-design-vue'
-import { PlusOutlined, DeleteOutlined, LeftOutlined, RightOutlined, FolderOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, DeleteOutlined, LeftOutlined, RightOutlined, FolderOutlined, BookOutlined, AimOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import {
   createQuestion,
@@ -261,6 +304,8 @@ import {
   updateQuestionFolder,
 } from '@/api/question'
 import { getPoliceTypes } from '@/api/user'
+import { getCourses } from '@/api/course'
+import { getKnowledgePoints } from '@/api/knowledgePoint'
 import QuestionFormModal from './components/QuestionFormModal.vue'
 
 const authStore = useAuthStore()
@@ -297,6 +342,23 @@ const batchMoveModalVisible = ref(false)
 const batchMoveTargetFolderId = ref(null)
 const currentBatchMoveFolderId = ref(null)
 
+// 视角切换
+const currentView = ref('folder') // 'folder' | 'course' | 'knowledgePoint'
+
+// 课程相关
+const courseList = ref([])
+const courseSelectOptions = ref([])
+const selectedCourseIds = ref([])
+const courseLoading = ref(false)
+const courseMap = ref(new Map())
+
+// 知识点相关
+const kpSelectOptions = ref([])
+const selectedKpIds = ref([])
+const kpLoading = ref(false)
+const courseKpMap = ref({})
+let kpSearchTimer = null
+
 // 每页显示的展开文件夹列表
 const expandedFolderList = ref([])
 
@@ -306,6 +368,20 @@ const displayedFolders = computed(() => {
     ...folder,
     expanded: expandedFolders.value.has(folder.id),
   }))
+})
+
+// 多维度视图 - 当前展示的分组
+const displayedGroups = computed(() => {
+  if (currentView.value === 'folder') {
+    return displayedFolders.value
+  }
+  if (currentView.value === 'course') {
+    return groupByCourse()
+  }
+  if (currentView.value === 'knowledgePoint') {
+    return groupByKnowledgePoint()
+  }
+  return displayedFolders.value
 })
 
 const flatFolderList = computed(() => {
@@ -433,9 +509,13 @@ async function loadQuestions() {
       knowledgePointNames: item.knowledgePointNames
         || item.knowledgePoints?.map((point) => (typeof point === 'string' ? point : point?.name)).filter(Boolean)
         || [],
+      knowledgePointIds: item.knowledgePointIds
+        || item.knowledgePoints?.map((point) => (typeof point === 'string' ? point : point?.id)).filter(Boolean)
+        || [],
     }))
     // 按文件夹分组
     groupQuestionsByFolder(questions)
+    refreshExpandedState()
     pagination.total = result.total || 0
   } catch (error) {
     message.error(error.message || '加载试题失败')
@@ -444,17 +524,30 @@ async function loadQuestions() {
   }
 }
 
+function refreshExpandedState() {
+  // 确保之前展开的文件夹在新的 expandedFolderList 中仍然是展开状态
+  const currentExpanded = new Set(expandedFolders.value)
+  expandedFolderList.value.forEach(folder => {
+    if (currentExpanded.has(folder.id)) {
+      expandedFolders.value.add(folder.id)
+    }
+  })
+  expandedFolders.value = new Set(expandedFolders.value)
+}
+
 function groupQuestionsByFolder(questions) {
   // 构建文件夹Map（扁平结构）
   const folderMap = new Map()
   flatFolderList.value.forEach(folder => {
-    folderMap.set(folder.id, { ...folder, questions: [] })
+    folderMap.set(folder.id, { ...folder, questions: [], questionCount: 0 })
   })
 
   // 将题目分配到文件夹
   questions.forEach(q => {
     if (q.folderId && folderMap.has(q.folderId)) {
-      folderMap.get(q.folderId).questions.push(q)
+      const folderData = folderMap.get(q.folderId)
+      folderData.questions.push(q)
+      folderData.questionCount = folderData.questions.length
     }
   })
 
@@ -668,11 +761,179 @@ function formatAnswer(answer) {
   return Array.isArray(answer) ? answer.join('、') : answer
 }
 
+// ==================== 多维度视图相关 ====================
+
+function switchView(view) {
+  currentView.value = view
+  // 切换视角时重置筛选
+  if (view === 'course') {
+    selectedCourseIds.value = []
+    kpSelectOptions.value = []
+    selectedKpIds.value = []
+  } else if (view === 'knowledgePoint') {
+    selectedKpIds.value = []
+  }
+}
+
+async function loadCourses(search = '') {
+  courseLoading.value = true
+  try {
+    const result = await getCourses({ search, size: 100 })
+    const items = result.items || result || []
+    courseList.value = items
+    courseSelectOptions.value = items.map(c => ({ label: c.name, value: c.id }))
+    // 构建 courseMap
+    courseMap.value = new Map(items.map(c => [c.id, c]))
+  } catch {
+    courseSelectOptions.value = []
+  } finally {
+    courseLoading.value = false
+  }
+}
+
+let courseSearchTimer = null
+function handleCourseSearch(search) {
+  clearTimeout(courseSearchTimer)
+  courseSearchTimer = setTimeout(() => {
+    loadCourses(search)
+  }, 250)
+}
+
+function handleCourseChange(ids) {
+  // 清空知识点选择，重新加载该课程下的知识点
+  selectedKpIds.value = []
+  if (ids.length > 0) {
+    loadKnowledgePointsByCourses(ids)
+  } else {
+    kpSelectOptions.value = []
+  }
+}
+
+async function loadKnowledgePointsByCourses(courseIds) {
+  kpLoading.value = true
+  try {
+    const result = await getKnowledgePoints({ course_ids: courseIds.join(','), size: 500 })
+    const items = result.items || result || []
+    // 按课程分组存储知识点
+    courseKpMap.value = {}
+    items.forEach(kp => {
+      if (!courseKpMap.value[kp.courseId]) {
+        courseKpMap.value[kp.courseId] = []
+      }
+      courseKpMap.value[kp.courseId].push(kp)
+    })
+    // 更新下拉选项
+    kpSelectOptions.value = items.map(kp => ({
+      label: kp.name,
+      value: kp.id,
+    }))
+  } catch {
+    kpSelectOptions.value = []
+  } finally {
+    kpLoading.value = false
+  }
+}
+
+function groupByCourse() {
+  // 构建课程分组
+  const courseGroups = new Map()
+
+  questionList.value.forEach(q => {
+    const kpIds = q.knowledgePointIds || []
+    const courseIds = new Set()
+
+    kpIds.forEach(kpId => {
+      // 查找该知识点对应的课程
+      for (const [courseId, kps] of Object.entries(courseKpMap.value)) {
+        if (kps.some(kp => kp.id === kpId)) {
+          courseIds.add(courseId)
+        }
+      }
+    })
+
+    // 如果没有关联课程，归入"未分类"
+    if (courseIds.size === 0) {
+      if (!courseGroups.has('uncategorized')) {
+        courseGroups.set('uncategorized', { id: 'uncategorized', name: '未分类', questionCount: 0, questions: [], children: [], parentId: null, sortOrder: 999, expanded: true })
+      }
+      courseGroups.get('uncategorized').questions.push(q)
+      courseGroups.get('uncategorized').questionCount++
+    } else {
+      courseIds.forEach(courseId => {
+        if (!courseGroups.has(courseId)) {
+          const course = courseMap.value.get(courseId)
+          courseGroups.set(courseId, {
+            id: courseId,
+            name: course?.name || `课程${courseId}`,
+            questionCount: 0,
+            questions: [],
+            children: [],
+            parentId: null,
+            sortOrder: course?.sortOrder || 0,
+            expanded: true,
+          })
+        }
+        courseGroups.get(courseId).questions.push(q)
+        courseGroups.get(courseId).questionCount++
+      })
+    }
+  })
+
+  return Array.from(courseGroups.values()).sort((a, b) => a.sortOrder - b.sortOrder)
+}
+
+function groupByKnowledgePoint() {
+  // 构建知识点分组
+  const kpGroups = new Map()
+
+  questionList.value.forEach(q => {
+    const kpIds = q.knowledgePointIds || []
+
+    // 如果没有关联知识点，归入"未分类"
+    if (!kpIds || kpIds.length === 0) {
+      if (!kpGroups.has('uncategorized')) {
+        kpGroups.set('uncategorized', { id: 'uncategorized', name: '未分类', questionCount: 0, questions: [], children: [], parentId: null, sortOrder: 999, expanded: true })
+      }
+      kpGroups.get('uncategorized').questions.push(q)
+      kpGroups.get('uncategorized').questionCount++
+    } else {
+      kpIds.forEach(kpId => {
+        if (!kpGroups.has(kpId)) {
+          // 尝试找到知识点名称
+          let kpName = `知识点${kpId}`
+          for (const kps of Object.values(courseKpMap.value)) {
+            const found = kps.find(kp => kp.id === kpId)
+            if (found) {
+              kpName = found.name
+              break
+            }
+          }
+          kpGroups.set(kpId, {
+            id: kpId,
+            name: kpName,
+            questionCount: 0,
+            questions: [],
+            children: [],
+            parentId: null,
+            sortOrder: 0,
+            expanded: true,
+          })
+        }
+        kpGroups.get(kpId).questions.push(q)
+        kpGroups.get(kpId).questionCount++
+      })
+    }
+  })
+
+  return Array.from(kpGroups.values()).sort((a, b) => a.sortOrder - b.sortOrder)
+}
+
 onMounted(async () => {
   await loadFolders()
   await loadQuestions()
   loadStats()
   loadPoliceTypeOptions()
+  loadCourses()
   updateCurrentTime()
 })
 </script>
@@ -834,15 +1095,24 @@ onMounted(async () => {
 
 .stat-legend {
   display: flex;
-  gap: 24px;
+  gap: 32px;
 }
 
 .legend-item {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 8px;
-  font-size: 12px;
+  gap: 4px;
+  font-size: 14px;
   color: #64748B;
+  font-weight: 600;
+}
+
+.legend-num {
+  font-size: 24px;
+  font-weight: 700;
+  color: #1E293B;
+  line-height: 1;
 }
 
 /* 列表标题栏 */
@@ -1119,5 +1389,45 @@ onMounted(async () => {
 .folder-manager-item-actions {
   display: flex;
   gap: 8px;
+}
+
+/* 多维度视图 Tab */
+.view-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: white;
+  border-radius: 8px;
+}
+
+.tab-item {
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: #64748B;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tab-item:hover {
+  background: #F1F5F9;
+}
+
+.tab-item.active {
+  background: #2563EB;
+  color: white;
+}
+
+.view-filter {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: #F8FAFC;
+  border-radius: 8px;
 }
 </style>
