@@ -44,6 +44,44 @@
             </template>
           </a-table>
         </a-tab-pane>
+        <a-tab-pane key="trainingType" tab="培训班类型">
+          <div class="tab-toolbar">
+            <a-input-search
+              v-model:value="ttSearch"
+              placeholder="搜索培训班类型名称"
+              style="width: 240px"
+              allow-clear
+              @search="fetchTrainingTypes"
+            />
+            <a-button type="primary" @click="openTtModal()">
+              <template #icon><PlusOutlined /></template>
+              新增培训班类型
+            </a-button>
+          </div>
+
+          <a-table
+            :data-source="ttList"
+            :columns="ttColumns"
+            :loading="ttLoading"
+            row-key="id"
+            :pagination="{ current: ttPage, pageSize: ttSize, total: ttTotal, showSizeChanger: true, showTotal: (t) => `共 ${t} 条` }"
+            @change="handleTtTableChange"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'isActive'">
+                <a-tag :color="record.isActive ? 'green' : 'default'">{{ record.isActive ? '启用' : '停用' }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'action'">
+                <a-space>
+                  <a-button type="link" size="small" @click="openTtModal(record)">编辑</a-button>
+                  <a-popconfirm title="确定删除该培训班类型吗？" @confirm="handleDeleteTt(record.id)">
+                    <a-button type="link" size="small" danger>删除</a-button>
+                  </a-popconfirm>
+                </a-space>
+              </template>
+            </template>
+          </a-table>
+        </a-tab-pane>
       </a-tabs>
     </a-card>
 
@@ -70,6 +108,33 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 培训班类型 新增/编辑弹窗 -->
+    <a-modal
+      v-model:open="ttModalVisible"
+      :title="ttEditingId ? '编辑培训班类型' : '新增培训班类型'"
+      :confirm-loading="ttSaving"
+      ok-text="保存"
+      @ok="handleSaveTt"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="类型名称" required>
+          <a-input v-model:value="ttForm.name" placeholder="请输入类型名称" :maxlength="100" />
+        </a-form-item>
+        <a-form-item v-if="!ttEditingId" label="类型编码" required>
+          <a-input v-model:value="ttForm.code" placeholder="请输入唯一编码" :maxlength="50" />
+        </a-form-item>
+        <a-form-item label="描述">
+          <a-textarea v-model:value="ttForm.description" :rows="3" :maxlength="500" placeholder="选填" />
+        </a-form-item>
+        <a-form-item label="排序">
+          <a-input-number v-model:value="ttForm.sortOrder" :min="0" :max="9999" placeholder="数字越小越靠前" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="状态">
+          <a-switch v-model:checked="ttForm.isActive" checked-children="启用" un-checked-children="停用" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -83,6 +148,12 @@ import {
   updatePoliceType,
   deletePoliceType,
 } from '@/api/policeType'
+import {
+  getTrainingTypes,
+  createTrainingType,
+  updateTrainingType,
+  deleteTrainingType,
+} from '@/api/trainingType'
 
 const activeTab = ref('policeType')
 
@@ -198,8 +269,128 @@ async function handleDeletePt(id) {
   }
 }
 
+// ===== 培训班类型 =====
+const ttSearch = ref('')
+const ttLoading = ref(false)
+const ttList = ref([])
+const ttPage = ref(1)
+const ttSize = ref(10)
+const ttTotal = ref(0)
+const ttModalVisible = ref(false)
+const ttSaving = ref(false)
+const ttEditingId = ref(null)
+const ttForm = reactive({
+  name: '',
+  code: '',
+  description: '',
+  sortOrder: 0,
+  isActive: true,
+})
+
+const ttColumns = [
+  { title: '序号', key: 'index', width: 70, customRender: ({ index }) => (ttPage.value - 1) * ttSize.value + index + 1 },
+  { title: '类型名称', dataIndex: 'name', key: 'name' },
+  { title: '编码', dataIndex: 'code', key: 'code', width: 140 },
+  { title: '排序', dataIndex: 'sortOrder', key: 'sortOrder', width: 80 },
+  { title: '状态', key: 'isActive', width: 80 },
+  { title: '描述', dataIndex: 'description', key: 'description', ellipsis: true },
+  { title: '操作', key: 'action', width: 140 },
+]
+
+async function fetchTrainingTypes() {
+  ttLoading.value = true
+  try {
+    const result = await getTrainingTypes({
+      page: ttPage.value,
+      size: ttSize.value,
+      name: ttSearch.value || undefined,
+    })
+    ttList.value = result.items || []
+    ttTotal.value = result.total || 0
+  } catch (error) {
+    message.error(error.message || '加载培训班类型失败')
+  } finally {
+    ttLoading.value = false
+  }
+}
+
+function handleTtTableChange(pagination) {
+  ttPage.value = pagination.current
+  ttSize.value = pagination.pageSize
+  fetchTrainingTypes()
+}
+
+function openTtModal(record) {
+  if (record) {
+    ttEditingId.value = record.id
+    ttForm.name = record.name || ''
+    ttForm.code = record.code || ''
+    ttForm.description = record.description || ''
+    ttForm.sortOrder = record.sortOrder ?? 0
+    ttForm.isActive = record.isActive !== false
+  } else {
+    ttEditingId.value = null
+    ttForm.name = ''
+    ttForm.code = ''
+    ttForm.description = ''
+    ttForm.sortOrder = 0
+    ttForm.isActive = true
+  }
+  ttModalVisible.value = true
+}
+
+async function handleSaveTt() {
+  if (!ttForm.name.trim()) {
+    message.warning('请输入类型名称')
+    return
+  }
+  ttSaving.value = true
+  try {
+    if (ttEditingId.value) {
+      await updateTrainingType(ttEditingId.value, {
+        name: ttForm.name.trim(),
+        description: ttForm.description?.trim() || '',
+        sortOrder: ttForm.sortOrder,
+        isActive: ttForm.isActive,
+      })
+      message.success('更新成功')
+    } else {
+      if (!ttForm.code.trim()) {
+        message.warning('请输入类型编码')
+        ttSaving.value = false
+        return
+      }
+      await createTrainingType({
+        name: ttForm.name.trim(),
+        code: ttForm.code.trim(),
+        description: ttForm.description?.trim() || '',
+        sortOrder: ttForm.sortOrder,
+        isActive: ttForm.isActive,
+      })
+      message.success('创建成功')
+    }
+    ttModalVisible.value = false
+    fetchTrainingTypes()
+  } catch (error) {
+    message.error(error.message || '保存失败')
+  } finally {
+    ttSaving.value = false
+  }
+}
+
+async function handleDeleteTt(id) {
+  try {
+    await deleteTrainingType(id)
+    message.success('删除成功')
+    fetchTrainingTypes()
+  } catch (error) {
+    message.error(error.message || '删除失败')
+  }
+}
+
 onMounted(() => {
   fetchPoliceTypes()
+  fetchTrainingTypes()
 })
 </script>
 
