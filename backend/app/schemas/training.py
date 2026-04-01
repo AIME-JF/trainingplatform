@@ -360,6 +360,8 @@ class TrainingResponse(BaseModel):
     visibility_department_names: Optional[List[str]] = None
     police_type_id: Optional[int] = None
     police_type_name: Optional[str] = None
+    training_type_id: Optional[int] = None
+    training_type_name: Optional[str] = None
     training_base_id: Optional[int] = None
     training_base_name: Optional[str] = None
     created_by: Optional[int] = None
@@ -424,6 +426,8 @@ class TrainingListResponse(BaseModel):
     visibility_department_names: Optional[List[str]] = None
     police_type_id: Optional[int] = None
     police_type_name: Optional[str] = None
+    training_type_id: Optional[int] = None
+    training_type_name: Optional[str] = None
     training_base_id: Optional[int] = None
     training_base_name: Optional[str] = None
     created_by: Optional[int] = None

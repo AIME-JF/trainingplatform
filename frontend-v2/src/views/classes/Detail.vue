@@ -198,12 +198,26 @@
 
           <!-- 学员名单（仅教官可见） -->
           <div v-if="activeTab === 'students'" class="tab-panel">
+            <div v-if="detail.students?.length" class="student-toolbar">
+              <a-input-search
+                v-model:value="studentSearch"
+                placeholder="搜索学员姓名"
+                style="width: 220px"
+                allow-clear
+              />
+              <span class="student-count">共 {{ filteredStudents.length }} 人</span>
+            </div>
             <a-empty v-if="!detail.students?.length" description="暂无学员" />
             <div v-else class="student-list">
-              <div v-for="s in detail.students" :key="s.user_id" class="student-row">
-                <a-avatar :size="28" class="student-avatar">{{ (s.user_name || '').slice(0, 1) }}</a-avatar>
-                <span class="student-name">{{ s.user_name || s.user_id }}</span>
-                <a-tag v-if="s.status" size="small">{{ enrollStatusLabel(s.status) }}</a-tag>
+              <div v-for="s in filteredStudents" :key="s.user_id" class="student-row">
+                <a-avatar :size="32" class="student-avatar">{{ studentDisplayName(s).slice(0, 1) }}</a-avatar>
+                <div class="student-info">
+                  <span class="student-name">{{ studentDisplayName(s) }}</span>
+                  <span v-if="s.departments?.length" class="student-dept">{{ s.departments.join(' / ') }}</span>
+                </div>
+                <a-tag v-if="s.status && s.status !== 'approved'" size="small" :color="s.status === 'pending' ? 'orange' : 'red'">
+                  {{ enrollStatusLabel(s.status) }}
+                </a-tag>
               </div>
             </div>
           </div>
@@ -266,6 +280,8 @@ interface ExamItem {
 interface StudentItem {
   user_id: number
   user_name?: string
+  user_nickname?: string
+  departments?: string[]
   status?: string
 }
 
@@ -305,6 +321,21 @@ interface ClassDetail {
 }
 
 const detail = ref<ClassDetail | null>(null)
+const studentSearch = ref('')
+
+const filteredStudents = computed(() => {
+  const list = detail.value?.students || []
+  const kw = studentSearch.value.trim().toLowerCase()
+  if (!kw) return list
+  return list.filter((s) => {
+    const name = (s.user_nickname || s.user_name || '').toLowerCase()
+    return name.includes(kw)
+  })
+})
+
+function studentDisplayName(s: StudentItem): string {
+  return s.user_nickname || s.user_name || String(s.user_id)
+}
 
 const statusLabels: Record<string, string> = {
   upcoming: '未开始',
@@ -713,34 +744,65 @@ onMounted(fetchDetail)
 .exam-info { display: flex; flex-direction: column; }
 
 /* -- 学员名单 -- */
+/* -- 学员名单 -- */
+.student-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 12px;
+}
+
+.student-count {
+  font-size: 13px;
+  color: var(--v2-text-muted);
+  white-space: nowrap;
+}
+
 .student-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
 }
 
 .student-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border-radius: var(--v2-radius-sm);
+  gap: 12px;
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--v2-border-light);
   transition: background 0.15s;
 }
 
+.student-row:last-child { border-bottom: none; }
 .student-row:hover { background: var(--v2-bg); }
 
 .student-avatar {
   background: var(--v2-primary);
   color: #fff;
-  font-size: 12px;
+  font-size: 13px;
   flex-shrink: 0;
+}
+
+.student-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .student-name {
   font-size: 14px;
+  font-weight: 500;
   color: var(--v2-text-primary);
-  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.student-dept {
+  font-size: 12px;
+  color: var(--v2-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -20,6 +20,9 @@ from .department import (
 from .police_type import (
     PoliceTypeCreate, PoliceTypeUpdate, PoliceTypeResponse, PoliceTypeSimpleResponse
 )
+from .training_type import (
+    TrainingTypeCreate, TrainingTypeUpdate, TrainingTypeResponse
+)
 from .knowledge_point import (
     KnowledgePointCreate, KnowledgePointUpdate, KnowledgePointResponse, KnowledgePointSimpleResponse
 )
@@ -148,6 +151,8 @@ __all__ = [
     "DepartmentSimpleResponse", "DepartmentPermissionUpdate",
     # 警种相关
     "PoliceTypeCreate", "PoliceTypeUpdate", "PoliceTypeResponse", "PoliceTypeSimpleResponse",
+    # 培训班类型相关
+    "TrainingTypeCreate", "TrainingTypeUpdate", "TrainingTypeResponse",
     "KnowledgePointCreate", "KnowledgePointUpdate", "KnowledgePointResponse", "KnowledgePointSimpleResponse",
     # 系统配置相关
     "ConfigCreate", "ConfigUpdate", "ConfigResponse",
