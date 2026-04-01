@@ -17,10 +17,23 @@
       </div>
       <div class="header-right">
         <a-button @click="openManageFolderModal">管理目录</a-button>
-        <a-button type="primary" @click="openAddModal">
-          <template #icon><PlusOutlined /></template>
-          新增试题
-        </a-button>
+        <a-dropdown>
+          <a-button type="primary">
+            <template #icon><PlusOutlined /></template>
+            出题
+            <DownOutlined />
+          </a-button>
+          <template #overlay>
+            <a-menu @click="handleQuestionMenuClick">
+              <a-menu-item key="manual">
+                <PlusOutlined /> 手动新增试题
+              </a-menu-item>
+              <a-menu-item key="ai">
+                <ThunderboltOutlined /> AI智能出题
+              </a-menu-item>
+            </a-menu>
+          </template>
+        </a-dropdown>
       </div>
     </header>
 
@@ -289,8 +302,9 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
-import { PlusOutlined, DeleteOutlined, LeftOutlined, RightOutlined, FolderOutlined, BookOutlined, AimOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, DeleteOutlined, LeftOutlined, RightOutlined, FolderOutlined, BookOutlined, AimOutlined, DownOutlined, ThunderboltOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import {
   createQuestion,
@@ -309,6 +323,7 @@ import { getKnowledgePoints } from '@/api/knowledgePoint'
 import QuestionFormModal from './components/QuestionFormModal.vue'
 
 const authStore = useAuthStore()
+const router = useRouter()
 
 const loading = ref(false)
 const modalOpen = ref(false)
@@ -615,6 +630,14 @@ function handleSearch() {
 function openAddModal() {
   editingQuestion.value = null
   modalOpen.value = true
+}
+
+function handleQuestionMenuClick({ key }) {
+  if (key === 'manual') {
+    openAddModal()
+  } else if (key === 'ai') {
+    router.push('/question/ai')
+  }
 }
 
 function openEditModal(record) {
