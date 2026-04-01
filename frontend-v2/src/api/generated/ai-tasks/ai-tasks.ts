@@ -6,6 +6,7 @@
  */
 import type {
   AIPaperAssemblyTaskCreateRequest,
+  AIPaperDocumentGenerationTaskCreateRequest,
   AIPaperGenerationTaskCreateRequest,
   AIPaperTaskUpdateRequest,
   AIPersonalTrainingTaskCreateRequest,
@@ -15,6 +16,7 @@ import type {
   AIScheduleTaskCreateRequestInput,
   AIScheduleTaskUpdateRequest,
   ListPaperAssemblyTasksApiV1AiPaperAssemblyTasksGetParams,
+  ListPaperDocumentGenerationTasksApiV1AiPaperDocumentGenerationTasksGetParams,
   ListPaperGenerationTasksApiV1AiPaperGenerationTasksGetParams,
   ListPersonalTrainingTasksApiV1AiPersonalTrainingTasksGetParams,
   ListQuestionTasksApiV1AiQuestionTasksGetParams,
@@ -22,6 +24,7 @@ import type {
   ListTeachingResourceGenerationTasksApiV1AiResourceGenerationTasksGetParams,
   ListTeachingResourceGenerationTasksApiV1AiTeachingResourceGenerationTasksGetParams,
   StandardResponseAIPaperAssemblyTaskDetailResponse,
+  StandardResponseAIPaperDocumentGenerationTaskDetailResponse,
   StandardResponseAIPaperGenerationTaskDetailResponse,
   StandardResponseAIPersonalTrainingTaskDetailResponse,
   StandardResponseAIQuestionTaskDetailResponse,
@@ -218,6 +221,67 @@ export const confirmPaperGenerationTaskApiV1AiPaperGenerationTasksTaskIdConfirmP
  ) => {
       return customInstance<StandardResponseAIPaperGenerationTaskDetailResponse>(
       {url: `/api/v1/ai/paper-generation-tasks/${taskId}/confirm`, method: 'POST'
+    },
+      );
+    }
+  /**
+ * @summary AI 文档生成试卷任务列表
+ */
+export const listPaperDocumentGenerationTasksApiV1AiPaperDocumentGenerationTasksGet = (
+    params?: ListPaperDocumentGenerationTasksApiV1AiPaperDocumentGenerationTasksGetParams,
+ ) => {
+      return customInstance<StandardResponsePaginatedResponseAITaskSummaryResponse>(
+      {url: `/api/v1/ai/paper-document-generation-tasks`, method: 'GET',
+        params
+    },
+      );
+    }
+  /**
+ * @summary 创建 AI 文档生成试卷任务
+ */
+export const createPaperDocumentGenerationTaskApiV1AiPaperDocumentGenerationTasksPost = (
+    aIPaperDocumentGenerationTaskCreateRequest: AIPaperDocumentGenerationTaskCreateRequest,
+ ) => {
+      return customInstance<StandardResponseAIPaperDocumentGenerationTaskDetailResponse>(
+      {url: `/api/v1/ai/paper-document-generation-tasks`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: aIPaperDocumentGenerationTaskCreateRequest
+    },
+      );
+    }
+  /**
+ * @summary AI 文档生成试卷任务详情
+ */
+export const getPaperDocumentGenerationTaskDetailApiV1AiPaperDocumentGenerationTasksTaskIdGet = (
+    taskId: number,
+ ) => {
+      return customInstance<StandardResponseAIPaperDocumentGenerationTaskDetailResponse>(
+      {url: `/api/v1/ai/paper-document-generation-tasks/${taskId}`, method: 'GET'
+    },
+      );
+    }
+  /**
+ * @summary 更新 AI 文档生成试卷任务结果
+ */
+export const updatePaperDocumentGenerationTaskApiV1AiPaperDocumentGenerationTasksTaskIdResultPut = (
+    taskId: number,
+    aIPaperTaskUpdateRequest: AIPaperTaskUpdateRequest,
+ ) => {
+      return customInstance<StandardResponseAIPaperDocumentGenerationTaskDetailResponse>(
+      {url: `/api/v1/ai/paper-document-generation-tasks/${taskId}/result`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: aIPaperTaskUpdateRequest
+    },
+      );
+    }
+  /**
+ * @summary 确认 AI 文档生成试卷任务
+ */
+export const confirmPaperDocumentGenerationTaskApiV1AiPaperDocumentGenerationTasksTaskIdConfirmPost = (
+    taskId: number,
+ ) => {
+      return customInstance<StandardResponseAIPaperDocumentGenerationTaskDetailResponse>(
+      {url: `/api/v1/ai/paper-document-generation-tasks/${taskId}/confirm`, method: 'POST'
     },
       );
     }
@@ -518,6 +582,11 @@ export type CreatePaperGenerationTaskApiV1AiPaperGenerationTasksPostResult = Non
 export type GetPaperGenerationTaskDetailApiV1AiPaperGenerationTasksTaskIdGetResult = NonNullable<Awaited<ReturnType<typeof getPaperGenerationTaskDetailApiV1AiPaperGenerationTasksTaskIdGet>>>
 export type UpdatePaperGenerationTaskApiV1AiPaperGenerationTasksTaskIdResultPutResult = NonNullable<Awaited<ReturnType<typeof updatePaperGenerationTaskApiV1AiPaperGenerationTasksTaskIdResultPut>>>
 export type ConfirmPaperGenerationTaskApiV1AiPaperGenerationTasksTaskIdConfirmPostResult = NonNullable<Awaited<ReturnType<typeof confirmPaperGenerationTaskApiV1AiPaperGenerationTasksTaskIdConfirmPost>>>
+export type ListPaperDocumentGenerationTasksApiV1AiPaperDocumentGenerationTasksGetResult = NonNullable<Awaited<ReturnType<typeof listPaperDocumentGenerationTasksApiV1AiPaperDocumentGenerationTasksGet>>>
+export type CreatePaperDocumentGenerationTaskApiV1AiPaperDocumentGenerationTasksPostResult = NonNullable<Awaited<ReturnType<typeof createPaperDocumentGenerationTaskApiV1AiPaperDocumentGenerationTasksPost>>>
+export type GetPaperDocumentGenerationTaskDetailApiV1AiPaperDocumentGenerationTasksTaskIdGetResult = NonNullable<Awaited<ReturnType<typeof getPaperDocumentGenerationTaskDetailApiV1AiPaperDocumentGenerationTasksTaskIdGet>>>
+export type UpdatePaperDocumentGenerationTaskApiV1AiPaperDocumentGenerationTasksTaskIdResultPutResult = NonNullable<Awaited<ReturnType<typeof updatePaperDocumentGenerationTaskApiV1AiPaperDocumentGenerationTasksTaskIdResultPut>>>
+export type ConfirmPaperDocumentGenerationTaskApiV1AiPaperDocumentGenerationTasksTaskIdConfirmPostResult = NonNullable<Awaited<ReturnType<typeof confirmPaperDocumentGenerationTaskApiV1AiPaperDocumentGenerationTasksTaskIdConfirmPost>>>
 export type ListTeachingResourceGenerationTasksApiV1AiResourceGenerationTasksGetResult = NonNullable<Awaited<ReturnType<typeof listTeachingResourceGenerationTasksApiV1AiResourceGenerationTasksGet>>>
 export type CreateTeachingResourceGenerationTaskApiV1AiResourceGenerationTasksPostResult = NonNullable<Awaited<ReturnType<typeof createTeachingResourceGenerationTaskApiV1AiResourceGenerationTasksPost>>>
 export type ListTeachingResourceGenerationTasksApiV1AiTeachingResourceGenerationTasksGetResult = NonNullable<Awaited<ReturnType<typeof listTeachingResourceGenerationTasksApiV1AiTeachingResourceGenerationTasksGet>>>

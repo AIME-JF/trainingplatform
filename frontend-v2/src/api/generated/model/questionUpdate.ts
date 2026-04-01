@@ -19,5 +19,6 @@ export interface QuestionUpdate {
   /** 知识点名称列表 */
   knowledge_point_names?: string[] | null;
   police_type_id?: number | null;
+  folder_id?: number | null;
   score?: number | null;
 }

@@ -9,7 +9,7 @@
         <a-tag color="blue">{{ getResourceContentTypeLabel(resource.content_type) }}</a-tag>
       </div>
 
-      <div class="viewer-stage" @click="$emit('click')">
+      <div class="viewer-stage" @click="$emit('click')" @touchstart="onMediaTouchStart" @touchend="onMediaTouchEnd">
         <template v-if="currentMedia && currentMediaKind === 'video'">
           <video
             :src="currentMedia.file_url || undefined"
@@ -28,7 +28,7 @@
         />
         <div v-else-if="currentMedia && currentMediaKind === 'document'" class="media-document">
           <iframe :src="currentMedia.file_url || undefined" class="doc-frame" title="资源文档预览" />
-          <a-button type="link" :href="currentMedia.file_url || undefined" target="_blank">打开文档</a-button>
+          <a-button type="link" @click.stop="openCurrentMedia">打开文档</a-button>
         </div>
         <a-empty v-else description="暂无可预览文件" />
       </div>
@@ -46,7 +46,7 @@
     </a-card>
 
     <div v-else class="recommend-shell" @click="$emit('click')">
-      <div class="recommend-stage">
+      <div class="recommend-stage" @touchstart="onMediaTouchStart" @touchend="onMediaTouchEnd">
         <template v-if="currentMedia && currentMediaKind === 'video'">
           <video
             :src="currentMedia.file_url || undefined"
@@ -79,6 +79,10 @@
           <h3>{{ resource.title }}</h3>
           <p>{{ resource.summary || '暂无摘要' }}</p>
           <span>上传者：{{ resource.uploader_name || '-' }}</span>
+          <p v-if="resource.tags?.length" class="recommend-tags"># {{ resource.tags.join(' # ') }}</p>
+          <div v-if="currentMediaKind === 'document' && currentMedia?.file_url" class="recommend-actions">
+            <a-button size="small" @click.stop="openCurrentMedia">打开文档</a-button>
+          </div>
         </div>
 
         <div v-if="mediaList.length > 1" class="recommend-nav">
@@ -110,6 +114,7 @@ defineEmits<{
 }>()
 
 const mediaIndex = ref(0)
+const mediaTouch = ref({ startX: 0, startY: 0 })
 
 const mediaList = computed(() => props.resource?.media_links || [])
 const currentMedia = computed(() => mediaList.value[mediaIndex.value] || null)
@@ -131,6 +136,43 @@ function nextMedia() {
     return
   }
   mediaIndex.value = (mediaIndex.value + 1) % mediaList.value.length
+}
+
+function openCurrentMedia() {
+  if (!currentMedia.value?.file_url) {
+    return
+  }
+  window.open(currentMedia.value.file_url, '_blank', 'noopener,noreferrer')
+}
+
+function onMediaTouchStart(event: TouchEvent) {
+  const touch = event.touches?.[0]
+  if (!touch) {
+    return
+  }
+  mediaTouch.value = {
+    startX: touch.clientX,
+    startY: touch.clientY,
+  }
+}
+
+function onMediaTouchEnd(event: TouchEvent) {
+  const touch = event.changedTouches?.[0]
+  if (!touch) {
+    return
+  }
+
+  const deltaX = touch.clientX - mediaTouch.value.startX
+  const deltaY = touch.clientY - mediaTouch.value.startY
+  if (Math.abs(deltaX) < 60 || Math.abs(deltaX) <= Math.abs(deltaY)) {
+    return
+  }
+
+  if (deltaX < 0) {
+    nextMedia()
+    return
+  }
+  prevMedia()
 }
 </script>
 
@@ -240,6 +282,15 @@ function nextMedia() {
   margin-bottom: 8px;
   color: rgba(255, 255, 255, 0.85);
   line-height: 1.6;
+}
+
+.recommend-tags {
+  margin: 10px 0 0;
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.recommend-actions {
+  margin-top: 12px;
 }
 
 .recommend-nav {

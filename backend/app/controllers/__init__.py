@@ -6,6 +6,7 @@ from .role import RoleController
 from .permission import PermissionController
 from .department import DepartmentController
 from .police_type import PoliceTypeController
+from .training_type import TrainingTypeController
 from .knowledge_point import KnowledgePointController
 from .system import SystemConfigController
 from .course import CourseController
@@ -30,6 +31,7 @@ __all__ = [
     "PermissionController",
     "DepartmentController",
     "PoliceTypeController",
+    "TrainingTypeController",
     "KnowledgePointController",
     "SystemConfigController",
     "CourseController",

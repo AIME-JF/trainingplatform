@@ -30,6 +30,8 @@ export interface QuestionCreate {
   knowledge_point_names?: string[];
   /** 警种ID */
   police_type_id?: number | null;
+  /** 所属文件夹ID */
+  folder_id?: number | null;
   /** 分值 */
   score?: number;
 }

@@ -81,7 +81,7 @@
           </span>
           <!-- 类型标签 -->
           <span v-if="item.type" class="type-tag">
-            {{ typeLabels[item.type] || item.type }}
+            {{ item.training_type_name || typeLabels[item.type] || item.type }}
           </span>
         </div>
 
@@ -126,7 +126,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   TeamOutlined,
@@ -151,6 +151,7 @@ interface ClassItem {
   id: number
   name: string
   type: string
+  training_type_name: string | null
   status: string
   start_date: string
   end_date: string
@@ -168,12 +169,17 @@ const statusOptions = [
   { value: 'ended', label: '已结束' },
 ]
 
-const typeOptions = [
-  { value: 'basic', label: '基础训练' },
-  { value: 'special', label: '专项训练' },
-  { value: 'promotion', label: '晋升培训' },
-  { value: 'online', label: '线上培训' },
-]
+interface TrainingTypeItem {
+  id: number
+  name: string
+  code: string
+}
+
+const trainingTypeList = ref<TrainingTypeItem[]>([])
+
+const typeOptions = computed(() =>
+  trainingTypeList.value.map((t) => ({ value: t.code, label: t.name })),
+)
 
 const statusLabels: Record<string, string> = {
   upcoming: '未开始',
@@ -181,12 +187,13 @@ const statusLabels: Record<string, string> = {
   ended: '已结束',
 }
 
-const typeLabels: Record<string, string> = {
-  basic: '基础训练',
-  special: '专项训练',
-  promotion: '晋升培训',
-  online: '线上培训',
-}
+const typeLabels = computed<Record<string, string>>(() => {
+  const map: Record<string, string> = {}
+  for (const t of trainingTypeList.value) {
+    map[t.code] = t.name
+  }
+  return map
+})
 
 const coverColors = [
   'var(--v2-cover-blue)',
@@ -247,7 +254,20 @@ function formatDate(val: string | null | undefined): string {
   return val.slice(0, 10)
 }
 
-onMounted(fetchList)
+async function fetchTrainingTypes() {
+  try {
+    const res = await axiosInstance.get('/training-types', { params: { size: -1, is_active: true } })
+    const data = res.data as { items: TrainingTypeItem[] }
+    trainingTypeList.value = data.items || []
+  } catch {
+    trainingTypeList.value = []
+  }
+}
+
+onMounted(() => {
+  fetchTrainingTypes()
+  fetchList()
+})
 </script>
 
 <style scoped>

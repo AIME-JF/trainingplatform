@@ -8,8 +8,12 @@ import type {
   GetQuestionsApiV1QuestionsGetParams,
   QuestionBatchCreate,
   QuestionCreate,
+  QuestionFolderCreate,
+  QuestionFolderUpdate,
+  QuestionMoveRequest,
   QuestionUpdate,
   StandardResponse,
+  StandardResponseList,
   StandardResponseListQuestionResponse,
   StandardResponsePaginatedResponseQuestionResponse,
   StandardResponseQuestionResponse
@@ -87,8 +91,81 @@ export const batchCreateApiV1QuestionsBatchPost = (
     },
       );
     }
+  /**
+ * 获取试题文件夹树
+ * @summary 获取试题文件夹树
+ */
+export const getQuestionFoldersApiV1QuestionsFoldersGet = (
+
+ ) => {
+      return customInstance<StandardResponseList>(
+      {url: `/api/v1/questions/folders`, method: 'GET'
+    },
+      );
+    }
+  /**
+ * 创建试题文件夹
+ * @summary 创建试题文件夹
+ */
+export const createQuestionFolderApiV1QuestionsFoldersPost = (
+    questionFolderCreate: QuestionFolderCreate,
+ ) => {
+      return customInstance<StandardResponse>(
+      {url: `/api/v1/questions/folders`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: questionFolderCreate
+    },
+      );
+    }
+  /**
+ * 更新试题文件夹
+ * @summary 更新试题文件夹
+ */
+export const updateQuestionFolderApiV1QuestionsFoldersFolderIdPut = (
+    folderId: number,
+    questionFolderUpdate: QuestionFolderUpdate,
+ ) => {
+      return customInstance<StandardResponse>(
+      {url: `/api/v1/questions/folders/${folderId}`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: questionFolderUpdate
+    },
+      );
+    }
+  /**
+ * 删除试题文件夹
+ * @summary 删除试题文件夹
+ */
+export const deleteQuestionFolderApiV1QuestionsFoldersFolderIdDelete = (
+    folderId: number,
+ ) => {
+      return customInstance<StandardResponse>(
+      {url: `/api/v1/questions/folders/${folderId}`, method: 'DELETE'
+    },
+      );
+    }
+  /**
+ * 移动试题到文件夹
+ * @summary 移动试题到文件夹
+ */
+export const moveQuestionToFolderApiV1QuestionsQuestionIdFolderPatch = (
+    questionId: number,
+    questionMoveRequest: QuestionMoveRequest,
+ ) => {
+      return customInstance<StandardResponseQuestionResponse>(
+      {url: `/api/v1/questions/${questionId}/folder`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: questionMoveRequest
+    },
+      );
+    }
   export type GetQuestionsApiV1QuestionsGetResult = NonNullable<Awaited<ReturnType<typeof getQuestionsApiV1QuestionsGet>>>
 export type CreateQuestionApiV1QuestionsPostResult = NonNullable<Awaited<ReturnType<typeof createQuestionApiV1QuestionsPost>>>
 export type UpdateQuestionApiV1QuestionsQuestionIdPutResult = NonNullable<Awaited<ReturnType<typeof updateQuestionApiV1QuestionsQuestionIdPut>>>
 export type DeleteQuestionApiV1QuestionsQuestionIdDeleteResult = NonNullable<Awaited<ReturnType<typeof deleteQuestionApiV1QuestionsQuestionIdDelete>>>
 export type BatchCreateApiV1QuestionsBatchPostResult = NonNullable<Awaited<ReturnType<typeof batchCreateApiV1QuestionsBatchPost>>>
+export type GetQuestionFoldersApiV1QuestionsFoldersGetResult = NonNullable<Awaited<ReturnType<typeof getQuestionFoldersApiV1QuestionsFoldersGet>>>
+export type CreateQuestionFolderApiV1QuestionsFoldersPostResult = NonNullable<Awaited<ReturnType<typeof createQuestionFolderApiV1QuestionsFoldersPost>>>
+export type UpdateQuestionFolderApiV1QuestionsFoldersFolderIdPutResult = NonNullable<Awaited<ReturnType<typeof updateQuestionFolderApiV1QuestionsFoldersFolderIdPut>>>
+export type DeleteQuestionFolderApiV1QuestionsFoldersFolderIdDeleteResult = NonNullable<Awaited<ReturnType<typeof deleteQuestionFolderApiV1QuestionsFoldersFolderIdDelete>>>
+export type MoveQuestionToFolderApiV1QuestionsQuestionIdFolderPatchResult = NonNullable<Awaited<ReturnType<typeof moveQuestionToFolderApiV1QuestionsQuestionIdFolderPatch>>>

@@ -32,7 +32,7 @@
                 <span class="info-card-label">班级状态</span>
                 <span class="info-card-badge" :class="'badge-' + detail.status">{{ statusLabels[detail.status] || detail.status }}</span>
               </div>
-              <div class="info-card-num">{{ typeLabels[detail.type] || detail.type || '-' }}</div>
+              <div class="info-card-num">{{ detail.training_type_name || detail.type || '-' }}</div>
               <div class="info-card-extra">
                 <span>{{ detail.enrolled_count ?? 0 }}{{ detail.capacity ? '/' + detail.capacity : '' }} 人已报名</span>
                 <span v-if="detail.is_locked">· 名单已锁定</span>
@@ -295,6 +295,7 @@ interface ClassDetail {
   id: number
   name: string
   type: string
+  training_type_name: string | null
   status: string
   publish_status: string
   description: string
@@ -343,12 +344,6 @@ const statusLabels: Record<string, string> = {
   ended: '已结束',
 }
 
-const typeLabels: Record<string, string> = {
-  basic: '基础训练',
-  special: '专项训练',
-  promotion: '晋升培训',
-  online: '线上培训',
-}
 
 // 是否已报名通过
 const isEnrolled = computed(() => detail.value?.current_enrollment_status === 'approved')

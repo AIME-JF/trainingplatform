@@ -5,7 +5,6 @@ import {
   TRAINING_SCHEDULE_PERMISSIONS,
   EXAM_LIST_PERMISSIONS,
   COURSE_PERMISSIONS,
-  RESOURCE_LIBRARY_PERMISSIONS,
   MY_RESOURCE_PERMISSIONS,
   TEACHING_RESOURCE_GENERATION_PERMISSIONS,
 } from '@/constants/permissions'
@@ -115,13 +114,17 @@ export const routes: RouteRecordRaw[] = [
         path: 'resource/library',
         name: 'ResourceLibrary',
         component: () => import('@/views/resource/Library.vue'),
-        meta: { title: '资源库', anyPermissions: RESOURCE_LIBRARY_PERMISSIONS },
+        meta: { title: '资源库' },
+      },
+      {
+        path: 'resource/community',
+        name: 'ResourceCommunity',
+        component: () => import('@/views/resource/Recommend.vue'),
+        meta: { title: '资源社区' },
       },
       {
         path: 'resource/recommend',
-        name: 'ResourceRecommend',
-        component: () => import('@/views/resource/Recommend.vue'),
-        meta: { title: '资源推荐' },
+        redirect: { name: 'ResourceCommunity' },
       },
       {
         path: 'resource/detail/:id',

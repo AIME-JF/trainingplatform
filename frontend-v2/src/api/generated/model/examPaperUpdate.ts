@@ -15,5 +15,6 @@ export interface ExamPaperUpdate {
   total_score?: number | null;
   passing_score?: number | null;
   type?: string | null;
+  folder_id?: number | null;
   question_ids?: number[] | null;
 }

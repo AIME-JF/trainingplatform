@@ -17,4 +17,5 @@ size?: number;
 status?: string | null;
 type?: string | null;
 search?: string | null;
+folder_id?: number | null;
 };

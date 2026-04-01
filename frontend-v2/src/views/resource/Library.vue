@@ -5,9 +5,10 @@
     <div class="page-header">
       <div>
         <h1 class="page-title">资源库</h1>
-        <p class="page-subtitle">浏览平台内已发布的学习资源。</p>
+        <p class="page-subtitle">浏览平台内已发布的学习资源，也可以进入资源社区按推荐流沉浸式浏览。</p>
       </div>
       <a-space>
+        <a-button @click="router.push('/resource/community')">资源社区</a-button>
         <a-button @click="router.push('/resource/my')">我的资源</a-button>
         <PermissionsTooltip :allowed="canUploadResource" tips="需要 CREATE_RESOURCE 或 VIEW_RESOURCE_ALL 权限">
           <template #default="{ disabled }">
@@ -56,7 +57,7 @@
             <a-tag v-for="tag in (item.tags || []).slice(0, 4)" :key="tag">{{ tag }}</a-tag>
           </div>
           <div class="resource-actions">
-            <a-button size="small" @click="router.push(`/resource/detail/${item.id}`)">查看</a-button>
+            <a-button size="small" @click="router.push({ path: `/resource/detail/${item.id}`, query: { from: 'library' } })">查看</a-button>
             <PermissionsTooltip
               v-if="item.status === 'published'"
               :allowed="canManage(item)"
