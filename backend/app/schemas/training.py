@@ -194,6 +194,7 @@ class TrainingCreate(BaseModel):
 
     name: str = Field(..., max_length=200, description="培训名称")
     type: str = Field(..., description="培训类型: basic/special/promotion/online")
+    training_type_id: Optional[int] = Field(None, description="培训班类型ID，不传时根据 type 自动匹配")
     status: str = Field("upcoming", description="状态")
     publish_status: str = Field("draft", description="发布状态")
     start_date: Optional[DateType] = None
