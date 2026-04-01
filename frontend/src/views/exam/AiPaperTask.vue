@@ -35,16 +35,50 @@
                   <a-select-option value="topic">AI提示词生成</a-select-option>
                   <a-select-option value="document">文档AI生成</a-select-option>
                 </a-select>
-                <a-button type="link" size="small" @click="loadTasks">刷新</a-button>
+                <a-space>
+                  <a-button type="link" size="small" @click="loadTasks">刷新</a-button>
+                  <a-button
+                    type="primary"
+                    size="small"
+                    :disabled="!hasSelectedConfirmable"
+                    :loading="batchConfirming"
+                    @click="handleBatchConfirm"
+                  >
+                    <template #icon><svg style="width: 10px; height: 10px;" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg></template>
+                    批量确认
+                  </a-button>
+                  <a-button
+                    danger
+                    size="small"
+                    :disabled="selectedTaskIds.length === 0"
+                    :loading="batchDeleting"
+                    @click="handleBatchDelete"
+                  >
+                    <template #icon><svg style="width: 10px; height: 10px;" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></template>
+                    批量删除
+                  </a-button>
+                </a-space>
+              </div>
+
+              <!-- 选中计数提示 -->
+              <div v-if="selectedTaskIds.length > 0" class="selection-hint">
+                已选择 {{ selectedTaskIds.length }} 项
+                <a-button type="link" size="small" @click="selectedTaskIds = []">取消选择</a-button>
               </div>
 
               <a-list :data-source="taskList" :loading="taskLoading" class="task-list">
                 <template #renderItem="{ item }">
                   <a-list-item
                     class="task-item"
-                    :class="{ active: activeTask?.id === item.id }"
+                    :class="{ active: activeTask?.id === item.id, selected: selectedTaskIds.includes(item.id) }"
                     @click="selectTask(item)"
                   >
+                    <a-checkbox
+                      class="task-checkbox"
+                      :checked="selectedTaskIds.includes(item.id)"
+                      @click.stop
+                      @change="toggleSelect(item.id, $event)"
+                    />
                     <a-list-item-meta>
                       <template #title>
                         <span>{{ item.taskName }}</span>
@@ -58,6 +92,20 @@
                     </a-list-item-meta>
                     <template #actions>
                       <a-tag :color="statusColors[item.status]">{{ statusLabels[item.status] }}</a-tag>
+                      <a-space>
+                        <a-button
+                          v-if="item.status === 'completed'"
+                          type="link"
+                          size="small"
+                          @click.stop="handleConfirmSingleTask(item)"
+                        >确认</a-button>
+                        <a-button
+                          danger
+                          type="link"
+                          size="small"
+                          @click.stop="handleDeleteSingleTask(item)"
+                        >删除</a-button>
+                      </a-space>
                     </template>
                   </a-list-item>
                 </template>
@@ -226,6 +274,8 @@
                       v-model:value="formData.sourceText"
                       class="input-minimal textarea-minimal"
                       :rows="6"
+                      :maxlength="8000"
+                      show-count
                       placeholder="请在此粘贴相关的法律条文、行动指南或教材段落..."
                     />
                   </div>
@@ -234,6 +284,7 @@
                     <a-input
                       v-model:value="formData.topic"
                       class="input-minimal"
+                      :maxlength="200"
                       placeholder="例：电信网络诈骗案件侦办规范"
                     />
                   </div>
@@ -263,7 +314,7 @@
                         <input
                           ref="fileInputRef"
                           type="file"
-                          accept=".txt,.doc,.docx,.pdf"
+                          accept=".txt,.doc,.docx,.pdf,.xlsx,.xls,.csv"
                           multiple
                           style="display: none"
                           @change="handleFileChange"
@@ -275,7 +326,7 @@
                         </div>
                         <div class="upload-text">
                           <span class="upload-title">点击上传文件，或将文件拖拽到此处</span>
-                          <span class="upload-hint">支持多文件上传 PDF、DOCX、TXT 格式，单个文件不超过 50MB</span>
+                          <span class="upload-hint">支持多文件上传 PDF、DOCX、XLSX、CSV、TXT 格式，单个文件不超过 50MB</span>
                         </div>
                       </div>
                       <div v-for="(name, index) in documentFileNames" :key="index" class="file-info">
@@ -570,16 +621,19 @@ import {
   getAiPaperAssemblyTaskDetail,
   getAiPaperAssemblyTasks,
   updateAiPaperAssemblyTaskResult,
+  deleteAiPaperAssemblyTask,
   confirmAiPaperGenerationTask,
   createAiPaperGenerationTask,
   getAiPaperGenerationTaskDetail,
   getAiPaperGenerationTasks,
   updateAiPaperGenerationTaskResult,
+  deleteAiPaperGenerationTask,
   getAiPaperDocumentGenerationTasks,
   createAiPaperDocumentGenerationTask,
   getAiPaperDocumentGenerationTaskDetail,
   updateAiPaperDocumentGenerationTaskResult,
   confirmAiPaperDocumentGenerationTask,
+  deleteAiPaperDocumentGenerationTask,
 } from '@/api/ai'
 import { getPoliceTypes } from '@/api/user'
 import AiTaskTimeline from './components/AiTaskTimeline.vue'
@@ -609,6 +663,9 @@ const editingQuestionIndex = ref(-1)
 const documentFileNames = ref([])
 const documentFiles = ref([])
 const fileInputRef = ref(null)
+const selectedTaskIds = ref([])
+const batchDeleting = ref(false)
+const batchConfirming = ref(false)
 
 const policeTypeOptions = ref([])
 const {
@@ -675,6 +732,10 @@ const canConfirmTaskPermission = computed(() => {
   return authStore.hasPermission('CONFIRM_AI_PAPER_GENERATION_TASK')
 })
 const canEditTask = computed(() => activeTask.value?.status === 'completed' && canUpdateTaskPermission.value)
+
+const hasSelectedConfirmable = computed(() => {
+  return taskList.value.some(t => selectedTaskIds.value.includes(t.id) && t.status === 'completed')
+})
 
 // 任务类型相关
 function getTaskTypeLabel(taskType) {
@@ -877,29 +938,55 @@ async function handleCreateTask() {
   }
 }
 
+const fileParsing = ref(false)
+
 // 文件上传
 function triggerUpload() {
   fileInputRef.value?.click()
 }
 
-function handleFileChange(e) {
+async function handleFileChange(e) {
   const files = Array.from(e.target.files || [])
   if (!files.length) return
 
-  files.forEach(file => {
-    documentFileNames.value.push(file.name)
-    documentFiles.value.push(file)
+  fileParsing.value = true
+  try {
+    for (const file of files) {
+      documentFileNames.value.push(file.name)
+      documentFiles.value.push(file)
 
-    const reader = new FileReader()
-    reader.onload = (ev) => {
-      const text = ev.target?.result || ''
-      formData.sourceText = formData.sourceText ? formData.sourceText + '\n\n' + text : text
+      const ext = file.name.split('.').pop().toLowerCase()
+      if (['txt', 'md'].includes(ext)) {
+        const reader = new FileReader()
+        const text = await new Promise((resolve) => {
+          reader.onload = (ev) => resolve(ev.target?.result || '')
+          reader.readAsText(file)
+        })
+        formData.sourceText = formData.sourceText ? formData.sourceText + '\n\n' + text : text
+      } else {
+        const fd = new FormData()
+        fd.append('file', file)
+        const resp = await fetch('/api/v1/ai/files/parse', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${authStore.token}` },
+          body: fd,
+        })
+        const json = await resp.json()
+        if (json.code === 200 && json.data?.text) {
+          formData.sourceText = formData.sourceText
+            ? formData.sourceText + '\n\n' + json.data.text
+            : json.data.text
+        } else {
+          message.error(json.message || `${file.name} 解析失败`)
+        }
+      }
     }
-    reader.readAsText(file)
-  })
-
-  // Reset input so same file can be selected again
-  e.target.value = ''
+  } catch (err) {
+    message.error(err.message || '文件解析失败')
+  } finally {
+    fileParsing.value = false
+    e.target.value = ''
+  }
 }
 
 function removeFile(index) {
@@ -964,6 +1051,144 @@ async function handleConfirmTask() {
   } finally {
     confirming.value = false
   }
+}
+
+// 选择/取消选择任务
+function toggleSelect(taskId, event) {
+  const checked = event.target.checked
+  if (checked) {
+    if (!selectedTaskIds.value.includes(taskId)) {
+      selectedTaskIds.value.push(taskId)
+    }
+  } else {
+    selectedTaskIds.value = selectedTaskIds.value.filter(id => id !== taskId)
+  }
+}
+
+// 批量删除
+async function handleBatchDelete() {
+  if (!selectedTaskIds.value.length) return
+  try {
+    await new Promise((resolve, reject) => {
+      window.$message?.warning?.('确定要删除选中的任务吗？此操作不可恢复。')
+      resolve()
+    })
+  } catch {}
+  
+  batchDeleting.value = true
+  let successCount = 0
+  let failCount = 0
+  
+  for (const taskId of selectedTaskIds.value) {
+    const task = taskList.value.find(t => t.id === taskId)
+    if (!task) continue
+    try {
+      if (task.taskType === 'paper_assembly') {
+        await deleteAiPaperAssemblyTask(taskId)
+      } else if (task.taskType === 'paper_generation') {
+        await deleteAiPaperGenerationTask(taskId)
+      } else {
+        await deleteAiPaperDocumentGenerationTask(taskId)
+      }
+      successCount++
+    } catch {
+      failCount++
+    }
+  }
+  
+  selectedTaskIds.value = []
+  await loadTasks()
+  
+  if (failCount === 0) {
+    message.success(`成功删除 ${successCount} 个任务`)
+  } else {
+    message.warning(`成功删除 ${successCount} 个，${failCount} 个失败`)
+  }
+  batchDeleting.value = false
+}
+
+// 批量确认
+async function handleBatchConfirm() {
+  const confirmableIds = taskList.value
+    .filter(t => selectedTaskIds.value.includes(t.id) && t.status === 'completed')
+    .map(t => t.id)
+  
+  if (!confirmableIds.length) {
+    message.warning('没有可确认的任务')
+    return
+  }
+  
+  batchConfirming.value = true
+  let successCount = 0
+  let failCount = 0
+  
+  for (const taskId of confirmableIds) {
+    const task = taskList.value.find(t => t.id === taskId)
+    if (!task) continue
+    try {
+      if (task.taskType === 'paper_assembly') {
+        await confirmAiPaperAssemblyTask(taskId)
+      } else {
+        await confirmAiPaperDocumentGenerationTask(taskId)
+      }
+      successCount++
+    } catch (error) {
+      failCount++
+    }
+  }
+  
+  selectedTaskIds.value = []
+  await loadTasks()
+  
+  if (failCount === 0) {
+    message.success(`成功确认 ${successCount} 个任务`)
+  } else {
+    message.warning(`成功确认 ${successCount} 个，${failCount} 个失败`)
+  }
+  batchConfirming.value = false
+}
+
+// 单个删除
+async function handleDeleteSingleTask(task) {
+  try {
+    await new Promise((resolve, reject) => {
+      const modal = window.$antdModal || message
+      message.warning({ content: `确定删除任务"${task.taskName}"吗？`, duration: 0 })
+      setTimeout(resolve, 0)
+    })
+  } catch {}
+  
+  try {
+    if (task.taskType === 'paper_assembly') {
+      await deleteAiPaperAssemblyTask(task.id)
+    } else if (task.taskType === 'paper_generation') {
+      await deleteAiPaperGenerationTask(task.id)
+    } else {
+      await deleteAiPaperDocumentGenerationTask(task.id)
+    }
+    message.success('已删除')
+    if (activeTask.value?.id === task.id) {
+      activeTask.value = null
+      detailDrawerVisible.value = false
+    }
+    await loadTasks()
+  } catch (error) {
+    message.error(error.message || '删除失败')
+  }
+}
+
+// 单个确认
+async function handleConfirmSingleTask(task) {
+  try {
+    await selectTaskDirect(task)
+    await handleConfirmTask()
+  } catch (error) {
+    message.error(error.message || '确认失败')
+  }
+}
+
+async function selectTaskDirect(task) {
+  await loadTaskDetail(task.id, task.taskType)
 }
 
 // 题目编辑
@@ -1727,6 +1952,31 @@ onMounted(() => {
 .task-item.active {
   background: #eff6ff;
   border-color: #93c5fd;
+}
+
+.task-item.selected {
+  background: #f0f9ff;
+  border-color: #38bdf8;
+}
+
+.task-checkbox {
+  flex-shrink: 0;
+  margin-right: 12px;
+}
+
+/* 选中计数提示 */
+.selection-hint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: #2563eb;
+  font-weight: 500;
 }
 
 /* ================= 详情区 ================= */

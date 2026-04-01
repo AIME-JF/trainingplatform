@@ -1,6 +1,7 @@
 """
 AI 任务服务
 """
+import json
 from datetime import datetime
 from typing import Iterable, List, Optional
 
@@ -29,6 +30,7 @@ from app.schemas import (
     QuestionCreate,
 )
 from app.agents.paper_assembly_parser import AIPaperAssemblyParser
+from app.agents.paper_generator import AIPaperGenerator
 from app.services.exam import ExamService
 from app.services.question import QuestionService, deduplicate_questions
 from app.utils.authz import can_view_question_with_context
@@ -233,7 +235,9 @@ class AIService:
             current_user_id,
         )
         try:
-            paper_draft = self._simulate_paper_generation_result(normalized_data)
+            # 使用 AI 试卷生成器生成真实试卷
+            paper_generator = AIPaperGenerator()
+            paper_draft = paper_generator.generate_paper(normalized_data)
             task.result_payload = {"paper_draft": paper_draft.model_dump(mode="python")}
             self._mark_task_completed(task)
         except Exception as exc:
@@ -392,6 +396,23 @@ class AIService:
         task.confirmed_at = datetime.now()
         self.db.commit()
         return self.get_paper_document_generation_task_detail(task_id, current_user_id)
+
+    def _delete_task(self, task_id: int, task_type: str, current_user_id: int) -> dict:
+        task = self._get_task_or_raise(task_id, task_type, current_user_id)
+        if task.status == "confirmed":
+            raise ValueError("已确认的任务不能删除")
+        self.db.delete(task)
+        self.db.commit()
+        return {"message": "任务已删除"}
+
+    def delete_paper_assembly_task(self, task_id: int, current_user_id: int) -> dict:
+        return self._delete_task(task_id, self.PAPER_ASSEMBLY_TASK_TYPE, current_user_id)
+
+    def delete_paper_generation_task(self, task_id: int, current_user_id: int) -> dict:
+        return self._delete_task(task_id, self.PAPER_GENERATION_TASK_TYPE, current_user_id)
+
+    def delete_paper_document_generation_task(self, task_id: int, current_user_id: int) -> dict:
+        return self._delete_task(task_id, self.PAPER_DOCUMENT_GENERATION_TASK_TYPE, current_user_id)
 
     def _confirm_paper_task(self, task: AITask, current_user_id: int) -> tuple[int, List[int]]:
         paper_payload = (task.result_payload or {}).get("paper_draft")
@@ -861,8 +882,35 @@ class AIService:
                     )
                 )
 
+            # 题库不足时，调用 LLM 补充缺失题目
+            current_type_count = len([q for q in drafts if q.type == config.type and q.origin == "existing"])
+            missing_count = config.count - current_type_count
+            if missing_count > 0:
+                try:
+                    existing_contents = [q.content for q in drafts if q.origin == "existing"]
+                    generated_drafts = self._generate_missing_questions_for_assembly(
+                        question_type=config.type,
+                        count=missing_count,
+                        difficulty=config.difficulty or 3,
+                        knowledge_points=config.knowledge_points or parsed_request.knowledge_points,
+                        police_type_id=config.police_type_id or parsed_request.police_type_id,
+                        score=config.score,
+                        requirements=data.requirements,
+                        paper_title=data.paper_title,
+                        existing_contents=existing_contents,
+                    )
+                    drafts.extend(generated_drafts)
+                    selection_notes.append(
+                        f"{self._type_label(config.type)}题库不足，已通过 AI 生成补充 {len(generated_drafts)} 道题目。"
+                    )
+                except Exception as exc:
+                    logger.warning("AI 补充题目失败（%s 缺 %d 道）: %s", self._type_label(config.type), missing_count, exc)
+                    selection_notes.append(
+                        f"{self._type_label(config.type)}目标 {config.count} 道，题库仅选到 {current_type_count} 道，AI 补题失败（{exc}），仍缺 {missing_count} 道。"
+                    )
+
         if not drafts:
-            raise ValueError("未能根据当前条件从题库筛出任何题目")
+            raise ValueError("未能根据当前条件从题库筛出任何题目，且 AI 补题也未成功")
 
         return self._build_paper_draft(
             title=data.paper_title,
@@ -1203,6 +1251,112 @@ class AIService:
                 score=score or int(question.score or 1),
             )
         )
+
+    def _generate_missing_questions_for_assembly(
+        self,
+        *,
+        question_type: str,
+        count: int,
+        difficulty: int,
+        knowledge_points: List[str],
+        police_type_id: Optional[int],
+        score: int,
+        requirements: Optional[str],
+        paper_title: str,
+        existing_contents: Optional[List[str]] = None,
+    ) -> List[AITaskQuestionDraft]:
+        from app.agents.question_generator import AIQuestionGenerator
+        from app.agents.question_validator import AIQuestionValidator
+        from app.models import PoliceType
+
+        topic = "、".join(knowledge_points[:3]) or paper_title
+
+        police_type_name = None
+        if police_type_id:
+            pt = self.db.query(PoliceType).filter(PoliceType.id == police_type_id).first()
+            if pt and pt.name:
+                police_type_name = str(pt.name)
+
+        dedup_hint = ""
+        if existing_contents:
+            dedup_hint = (
+                f"以下 {len(existing_contents)} 道题的题干已从题库选出，请避免生成语义相近的重复题目：\n"
+                + "\n".join(f"- {c}" for c in existing_contents[:8])
+            )
+
+        gen_request = AIQuestionTaskCreateRequest(
+            task_name=f"组卷补题-{paper_title}",
+            topic=topic,
+            knowledge_points=knowledge_points or [topic],
+            question_types=[question_type],
+            question_count=count,
+            difficulty=difficulty,
+            score=score,
+            police_type_id=police_type_id,
+            requirements=(requirements or "") + (f"\n警种背景：{police_type_name}" if police_type_name else "") + (f"\n{dedup_hint}" if dedup_hint else ""),
+        )
+
+        generator = AIQuestionGenerator()
+        drafts = generator.generate_questions(gen_request)
+
+        if not drafts:
+            return []
+
+        questions_payload = [
+            {
+                "index": i + 1,
+                "type": d.type,
+                "content": d.content,
+                "options": d.options,
+                "answer": d.answer,
+                "explanation": d.explanation,
+                "difficulty": d.difficulty,
+                "knowledge_points": d.knowledge_points,
+            }
+            for i, d in enumerate(drafts)
+        ]
+
+        validator = AIQuestionValidator()
+        validation = validator.validate_and_tag_questions(
+            json.dumps(questions_payload, ensure_ascii=False),
+            expected_type=question_type,
+            expected_difficulty=difficulty,
+            expected_knowledge_points=knowledge_points or [topic],
+            police_type_name=police_type_name,
+        )
+
+        valid_drafts = []
+        skipped_count = 0
+        for draft, result in zip(drafts, validation.results):
+            if not result.passed:
+                logger.warning(
+                    "AI 补题校验未通过（第 %d 题，质量分 %.0f）: %s | 题干: %s",
+                    draft.temp_id, result.quality_score, "; ".join(result.issues), draft.content[:60],
+                )
+                skipped_count += 1
+                continue
+
+            draft.origin = "ai_generated"
+            draft.temp_id = f"ai-gen-{draft.temp_id}"
+
+            if result.suggested_knowledge_points:
+                draft.knowledge_points = result.suggested_knowledge_points[:3]
+
+            if result.suggested_difficulty is not None:
+                draft.difficulty = result.suggested_difficulty
+
+            if result.suggested_police_type_hint and police_type_name and result.suggested_police_type_hint != police_type_name:
+                logger.info(
+                    "AI 补题警种建议不一致: 期望=%s, 建议=%s | 题干: %s",
+                    police_type_name, result.suggested_police_type_hint, draft.content[:40],
+                )
+
+            valid_drafts.append(draft)
+
+        if skipped_count:
+            logger.info("AI 补题校验跳过 %d 道题目", skipped_count)
+
+        return valid_drafts
 
     def _build_generated_question_draft(
         self,

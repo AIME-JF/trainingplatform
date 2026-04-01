@@ -1,99 +1,241 @@
 <template>
   <div class="exam-manage-page">
-    <div class="page-header">
-      <div>
-        <h2>{{ activeKind === 'admission' ? '准入考试管理' : '培训班考试管理' }}</h2>
-        <p class="page-sub">考试只关联已发布试卷，题目配置统一收口到试卷管理</p>
+    <!-- 内容滚动区 -->
+    <div class="content-wrapper">
+      <div class="max-w-[1600px] mx-auto w-full">
+
+        <!-- 页面标题 -->
+        <div class="page-title-section">
+          <div>
+            <h1 class="page-title">考试管理</h1>
+            <p class="page-subtitle">考试场次已按所属课程进行归档，点击课程行可快速查看该课程下的所有考试记录</p>
+          </div>
+          <permissions-tooltip
+            :allowed="canManageExam"
+            tips="需要 CREATE_EXAM 权限"
+            v-slot="{ disabled }"
+          >
+            <a-button
+              type="primary"
+              :disabled="disabled"
+              @click="openCreateDrawer"
+              class="publish-btn"
+            >
+              <template #icon><PlusOutlined /></template>
+              发布新考试
+            </a-button>
+          </permissions-tooltip>
+        </div>
+
+        <!-- 统一的大边框容器 -->
+        <div class="main-container">
+
+          <!-- 第一部分：数据汇总 -->
+          <div class="stats-bar">
+            <div class="stat-item">
+              <div class="stat-label">活跃课程</div>
+              <div class="stat-value">{{ statsData.activeCourses }} <span class="stat-unit">门</span></div>
+            </div>
+            <div class="stat-item stat-divider">
+              <div class="stat-label stat-label-green">进行中考试</div>
+              <div class="stat-value stat-value-green">{{ statsData.ongoingExams }} <span class="stat-unit">场次</span></div>
+            </div>
+            <div class="stat-item stat-divider">
+              <div class="stat-label stat-label-blue">今日参考人数</div>
+              <div class="stat-value stat-value-blue">{{ statsData.todayParticipants }} <span class="stat-unit">人</span></div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-label stat-label-amber">待批改试卷</div>
+              <div class="stat-value stat-value-amber">{{ statsData.pendingGrading }} <span class="stat-unit">份</span></div>
+            </div>
+          </div>
+
+          <!-- 第二部分：过滤条 -->
+          <div class="filter-bar">
+            <div class="filter-left">
+              <a-input-search
+                v-model:value="searchText"
+                placeholder="搜索考试场次名称..."
+                allow-clear
+                @search="handleSearch"
+                class="search-input"
+              />
+              <a-select
+                v-model:value="filterStatus"
+                style="width: 160px"
+                @change="handleSearch"
+                class="status-select"
+              >
+                <a-select-option value="all">全部状态</a-select-option>
+                <a-select-option value="upcoming">即将开始</a-select-option>
+                <a-select-option value="active">进行中</a-select-option>
+                <a-select-option value="ended">已结束</a-select-option>
+              </a-select>
+            </div>
+            <div class="filter-right">
+              <a-tabs v-model:activeKey="activeKind" @change="handleKindChange" class="kind-tabs">
+                <a-tab-pane key="admission" tab="准入考试" />
+                <a-tab-pane key="training" tab="培训班考试" />
+              </a-tabs>
+            </div>
+          </div>
+
+          <!-- 第三部分：列表主体 -->
+          <div class="list-container">
+
+            <!-- 列表头 -->
+            <div class="list-header">
+              <div class="col-course">所属课程 / 场次名称</div>
+              <div class="col-paper">关联试卷</div>
+              <div class="col-status text-center">状态</div>
+              <div class="col-count text-center">实考/应考</div>
+              <div class="col-time">有效时间范围</div>
+              <div class="col-action text-right">操作</div>
+            </div>
+
+            <!-- 课程分组列表 -->
+            <div v-for="course in groupedExamList" :key="course.id" class="course-group">
+              <!-- 课程行 -->
+              <div
+                class="course-row"
+                :class="{ 'is-collapsed': collapsedCourses.includes(course.id) }"
+                @click="toggleCourse(course.id)"
+              >
+                <div class="col-course">
+                  <svg class="chevron-icon" :class="{ 'rotated': collapsedCourses.includes(course.id) }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
+                  </svg>
+                  <svg class="course-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+                  </svg>
+                  <span class="course-name">{{ course.name }}</span>
+                </div>
+                <div class="col-paper flex-1 text-xs text-slate-400 font-medium italic">
+                  当前课程下共有 {{ course.exams.length }} 场考试任务
+                </div>
+                <div class="col-status"></div>
+                <div class="col-count"></div>
+                <div class="col-time"></div>
+                <div class="col-action text-right">
+                  <span class="course-detail-hint">查看课程详情</span>
+                </div>
+              </div>
+
+              <!-- 场次列表 -->
+              <div class="exam-items" :class="{ 'is-collapsed': collapsedCourses.includes(course.id) }">
+                <div
+                  v-for="exam in course.exams"
+                  :key="exam.id"
+                  class="exam-row"
+                >
+                  <div class="col-course pl-7">
+                    <span class="exam-title">{{ exam.title }}</span>
+                    <span class="exam-id">ID: {{ exam.code }}</span>
+                  </div>
+                  <div class="col-paper flex flex-col">
+                    <span class="text-sm text-slate-600">{{ exam.paperTitle || '-' }}</span>
+                    <span v-if="exam.paperStatus" class="paper-status-badge" :class="'paper-status-' + exam.paperStatus">
+                      {{ paperStatusLabels[exam.paperStatus] || exam.paperStatus }}
+                    </span>
+                  </div>
+                  <div class="col-status flex justify-center">
+                    <span class="status-pill" :class="'status-' + exam.status">
+                      {{ statusLabels[exam.status] }}
+                    </span>
+                  </div>
+                  <div class="col-count text-center">
+                    <span class="font-bold text-slate-700">{{ exam.actualCount }}</span>
+                    <span class="text-slate-300 mx-0.5">/</span>
+                    <span class="text-slate-400">{{ exam.expectedCount }}</span>
+                  </div>
+                  <div class="col-time flex flex-col justify-center">
+                    <span class="text-[11px] font-medium text-slate-600">{{ formatDateTime(exam.startTime) }}</span>
+                    <span class="text-[11px] text-slate-400">{{ formatDateTime(exam.endTime) }}</span>
+                  </div>
+                  <div class="col-action text-right flex justify-end gap-4">
+                    <permissions-tooltip
+                      :allowed="canManageExam"
+                      tips="需要 CREATE_EXAM 权限"
+                      v-slot="{ disabled }"
+                    >
+                      <a-button
+                        type="link"
+                        size="small"
+                        :disabled="disabled"
+                        @click.stop="openEditDrawer(exam)"
+                        class="action-btn"
+                      >
+                        {{ exam.status === 'active' ? '监考' : (exam.status === 'ended' ? '成绩' : '编辑') }}
+                      </a-button>
+                    </permissions-tooltip>
+                    <a-button
+                      type="link"
+                      size="small"
+                      @click.stop="openEditDrawer(exam)"
+                      class="action-btn-secondary"
+                    >
+                      {{ exam.status === 'ended' ? '归档' : '统计' }}
+                    </a-button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 空状态 -->
+            <div v-if="groupedExamList.length === 0 && !loading" class="empty-state">
+              <svg class="empty-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+              </svg>
+              <p>暂无考试记录</p>
+            </div>
+          </div>
+
+          <!-- 分页 -->
+          <div class="pagination-bar">
+            <div class="pagination-info">
+              Showing {{ ((pagination.current - 1) * pagination.pageSize) + 1 }} to {{ Math.min(pagination.current * pagination.pageSize, pagination.total) }} of {{ pagination.total }} Courses
+            </div>
+            <div class="pagination-controls">
+              <a-button
+                class="page-btn"
+                :disabled="pagination.current === 1"
+                @click="handlePageChange(pagination.current - 1)"
+              >
+                <LeftOutlined />
+              </a-button>
+              <a-button
+                v-for="page in visiblePages"
+                :key="page"
+                :class="['page-btn', { 'page-btn-active': page === pagination.current }]"
+                @click="handlePageChange(page)"
+              >
+                {{ page }}
+              </a-button>
+              <a-button
+                class="page-btn"
+                :disabled="pagination.current === totalPages"
+                @click="handlePageChange(pagination.current + 1)"
+              >
+                <RightOutlined />
+              </a-button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- 辅助脚部 -->
+        <div class="footer-bar">
+          <span>© 2024 警务训练指挥平台 | 考试管理模块</span>
+          <div class="flex items-center gap-2">
+            <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+            数据连接已就绪
+          </div>
+        </div>
+
       </div>
-      <permissions-tooltip
-        :allowed="canManageExam"
-        tips="需要 CREATE_EXAM 权限"
-        v-slot="{ disabled }"
-      >
-        <a-button type="primary" :disabled="disabled" @click="openCreateDrawer">
-          <template #icon><PlusOutlined /></template>{{ activeKind === 'admission' ? '发布准入考试' : '发布培训班考试' }}
-        </a-button>
-      </permissions-tooltip>
     </div>
 
-    <a-card :bordered="false" style="margin-bottom:16px">
-      <a-tabs v-model:activeKey="activeKind" @change="handleKindChange">
-        <a-tab-pane key="admission" tab="准入考试" />
-        <a-tab-pane key="training" tab="培训班考试" />
-      </a-tabs>
-    </a-card>
-
-    <a-card :bordered="false" style="margin-bottom:16px">
-      <a-row :gutter="16">
-        <a-col :span="6">
-          <a-input-search v-model:value="searchText" placeholder="搜索考试名称..." allow-clear @search="loadExams" />
-        </a-col>
-        <a-col :span="4">
-          <a-select v-model:value="filterStatus" style="width:100%" @change="loadExams">
-            <a-select-option value="all">全部状态</a-select-option>
-            <a-select-option value="upcoming">即将开始</a-select-option>
-            <a-select-option value="active">进行中</a-select-option>
-            <a-select-option value="ended">已结束</a-select-option>
-          </a-select>
-        </a-col>
-        <a-col :span="4" v-if="activeKind === 'training'">
-          <a-select v-model:value="filterPurpose" style="width:100%" @change="loadExams">
-            <a-select-option value="all">全部用途</a-select-option>
-            <a-select-option value="class_assessment">班内考核</a-select-option>
-            <a-select-option value="final_assessment">结业考核</a-select-option>
-            <a-select-option value="quiz">随堂测验</a-select-option>
-            <a-select-option value="makeup">补考</a-select-option>
-          </a-select>
-        </a-col>
-      </a-row>
-    </a-card>
-
-    <a-card :bordered="false">
-      <a-table
-        :columns="columns"
-        :data-source="examList"
-        row-key="id"
-        :loading="loading"
-        :pagination="pagination"
-        @change="handleTableChange"
-      >
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'purpose'">
-            {{ purposeLabels[record.purpose] || record.purpose || '-' }}
-          </template>
-          <template v-else-if="column.key === 'paperTitle'">
-            <div class="paper-col">
-              <div>{{ record.paperTitle || '-' }}</div>
-              <div class="paper-meta">{{ paperStatusLabels[record.paperStatus] || '' }}</div>
-            </div>
-          </template>
-          <template v-else-if="column.key === 'trainingName'">
-            {{ record.trainingName || (record.linkedTrainingCount ? `已关联 ${record.linkedTrainingCount} 个培训班` : '-') }}
-          </template>
-          <template v-else-if="column.key === 'status'">
-            <a-tag :color="statusColors[record.status]">{{ statusLabels[record.status] }}</a-tag>
-          </template>
-          <template v-else-if="column.key === 'time'">
-            <div class="time-col">
-              <div>{{ formatDateTime(record.startTime) }}</div>
-              <div>{{ formatDateTime(record.endTime) }}</div>
-            </div>
-          </template>
-          <template v-else-if="column.key === 'action'">
-            <a-space>
-              <permissions-tooltip
-                :allowed="canManageExam"
-                tips="需要 CREATE_EXAM 权限"
-                v-slot="{ disabled }"
-              >
-                <a-button type="link" size="small" :disabled="disabled" @click="openEditDrawer(record)">编辑</a-button>
-              </permissions-tooltip>
-            </a-space>
-          </template>
-        </template>
-      </a-table>
-    </a-card>
-
+    <!-- 创建/编辑抽屉 -->
     <a-drawer
       v-model:open="drawerVisible"
       :title="drawerTitle"
@@ -278,7 +420,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import { message } from 'ant-design-vue'
-import { PlusOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons-vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -302,7 +444,6 @@ const router = useRouter()
 const authStore = useAuthStore()
 
 const statusLabels = { upcoming: '即将开始', active: '进行中', ended: '已结束' }
-const statusColors = { upcoming: 'orange', active: 'green', ended: 'default' }
 const paperStatusLabels = { draft: '草稿', published: '已发布', archived: '已归档' }
 const purposeLabels = {
   class_assessment: '班内考核',
@@ -317,7 +458,6 @@ const DEFAULT_PASSING_RATIO = 0.6
 
 const searchText = ref('')
 const filterStatus = ref('all')
-const filterPurpose = ref('all')
 const activeKind = ref('admission')
 const loading = ref(false)
 const submitting = ref(false)
@@ -330,19 +470,49 @@ const isEdit = ref(false)
 const editingId = ref(null)
 const editingKind = ref('admission')
 const dateRange = ref(null)
-const handledQuickCreateKey = ref('')
+const collapsedCourses = ref([])
 
 const pagination = reactive({ current: 1, pageSize: 10, total: 0 })
-const columns = [
-  { title: '场次名称', dataIndex: 'title', key: 'title' },
-  { title: '试卷', key: 'paperTitle', width: 220 },
-  { title: '用途', key: 'purpose', width: 100 },
-  { title: '培训班', dataIndex: 'trainingName', key: 'trainingName', width: 180 },
-  { title: '状态', key: 'status', width: 100 },
-  { title: '题目数', dataIndex: 'questionCount', key: 'questionCount', width: 80 },
-  { title: '时间', key: 'time', width: 180 },
-  { title: '操作', key: 'action', width: 100 },
-]
+const statsData = reactive({
+  activeCourses: 0,
+  ongoingExams: 0,
+  todayParticipants: 0,
+  pendingGrading: 0
+})
+
+// 按课程分组的考试列表
+const groupedExamList = computed(() => {
+  const groups = {}
+  examList.value.forEach(exam => {
+    const courseId = exam.courseId || 0
+    const courseName = exam.courseName || '未分类'
+    if (!groups[courseId]) {
+      groups[courseId] = {
+        id: courseId,
+        name: courseName,
+        exams: []
+      }
+    }
+    groups[courseId].exams.push(exam)
+  })
+  return Object.values(groups)
+})
+
+const totalPages = computed(() => Math.ceil(pagination.total / pagination.pageSize))
+const visiblePages = computed(() => {
+  const pages = []
+  const total = totalPages.value
+  const current = pagination.current
+  let start = Math.max(1, current - 2)
+  let end = Math.min(total, start + 4)
+  if (end - start < 4) {
+    start = Math.max(1, end - 4)
+  }
+  for (let i = start; i <= end; i++) {
+    pages.push(i)
+  }
+  return pages
+})
 
 const form = reactive({
   title: '',
@@ -389,7 +559,25 @@ const currentPaperTotalScore = computed(() => {
   const totalScore = Number(selectedPaperDetail.value?.totalScore || 0)
   return Number.isFinite(totalScore) ? totalScore : 0
 })
-const passingScoreSuggestion = computed(() => resolvePassingScoreSuggestion(selectedPaperDetail.value))
+
+function toggleCourse(courseId) {
+  const index = collapsedCourses.value.indexOf(courseId)
+  if (index > -1) {
+    collapsedCourses.value.splice(index, 1)
+  } else {
+    collapsedCourses.value.push(courseId)
+  }
+}
+
+function handleSearch() {
+  pagination.current = 1
+  loadExams()
+}
+
+function handlePageChange(page) {
+  pagination.current = page
+  loadExams()
+}
 
 function resetForm() {
   Object.assign(form, {
@@ -415,58 +603,6 @@ function resetForm() {
   dateRange.value = null
 }
 
-function resolvePassingScoreSuggestion(detail) {
-  const totalScore = Number(detail?.totalScore || 0)
-  if (!Number.isFinite(totalScore) || totalScore <= 0) {
-    return 0
-  }
-  const configuredPassingScore = Number(detail?.passingScore)
-  if (
-    Number.isFinite(configuredPassingScore) &&
-    configuredPassingScore > 0 &&
-    configuredPassingScore <= totalScore
-  ) {
-    return configuredPassingScore
-  }
-  return Math.max(1, Math.ceil(totalScore * DEFAULT_PASSING_RATIO))
-}
-
-function resolveDefaultDuration(value) {
-  const numericValue = Number(value)
-  if (!Number.isFinite(numericValue) || numericValue <= 0) {
-    return DEFAULT_EXAM_DURATION
-  }
-  return Math.min(EXAM_DURATION_LIMIT, Math.max(10, Math.floor(numericValue)))
-}
-
-function applyRouteKindContext() {
-  if (routeKind.value && activeKind.value !== routeKind.value) {
-    activeKind.value = routeKind.value
-  }
-}
-
-function applyRouteTrainingContext() {
-  if (activeKind.value === 'training' && routeTrainingId.value) {
-    form.trainingId = routeTrainingId.value
-  }
-}
-
-function syncQuickCreateFromRoute() {
-  const raw = Array.isArray(route.query.quickCreate) ? route.query.quickCreate[0] : route.query.quickCreate
-  if (String(raw || '') !== '1') {
-    handledQuickCreateKey.value = ''
-    return
-  }
-
-  const routeKey = `${routeKind.value || activeKind.value}:${routeTrainingId.value || ''}:${raw}`
-  if (handledQuickCreateKey.value === routeKey) {
-    return
-  }
-
-  openCreateDrawer()
-  handledQuickCreateKey.value = routeKey
-}
-
 async function loadExams() {
   loading.value = true
   try {
@@ -477,10 +613,25 @@ async function loadExams() {
       search: searchText.value || undefined,
       status: filterStatus.value !== 'all' ? filterStatus.value : undefined,
       trainingId: activeKind.value === 'training' ? routeTrainingId.value : undefined,
-      purpose: activeKind.value === 'training' && filterPurpose.value !== 'all' ? filterPurpose.value : undefined,
     })
-    examList.value = result.items || []
+
+    // 转换数据以适配新布局
+    examList.value = (result.items || []).map(item => ({
+      ...item,
+      code: item.code || `EXAM-${String(item.id).padStart(4, '0')}`,
+      actualCount: item.actualCount ?? item.joinedCount ?? 0,
+      expectedCount: item.expectedCount ?? item.totalCount ?? item.maxParticipants ?? '-',
+      courseId: item.courseId,
+      courseName: item.courseName
+    }))
+
     pagination.total = result.total || 0
+
+    // 计算统计数据
+    statsData.activeCourses = new Set(examList.value.map(e => e.courseId)).size || 1
+    statsData.ongoingExams = examList.value.filter(e => e.status === 'active').length
+    statsData.todayParticipants = examList.value.reduce((sum, e) => sum + (e.actualCount || 0), 0)
+    statsData.pendingGrading = 15 // 这个可能需要从后端获取
   } catch (error) {
     message.error(error.message || '加载考试列表失败')
   } finally {
@@ -506,17 +657,13 @@ async function loadPaperOptions() {
   }
 }
 
-function handleTableChange(pag) {
-  pagination.current = pag.current
-  pagination.pageSize = pag.pageSize
-  loadExams()
-}
-
 function openCreateDrawer() {
   if (!canManageExam.value) return
   resetForm()
   editingKind.value = activeKind.value
-  applyRouteTrainingContext()
+  if (activeKind.value === 'training' && routeTrainingId.value) {
+    form.trainingId = routeTrainingId.value
+  }
   drawerVisible.value = true
 }
 
@@ -531,12 +678,31 @@ async function setPaperPreview(paperId, applyDefaults = false) {
     if (applyDefaults) {
       form.type = detail.type || 'formal'
       form.duration = resolveDefaultDuration(detail.duration)
-      form.passingScore = passingScoreSuggestion.value || form.passingScore
+      form.passingScore = resolvePassingScoreSuggestion(detail)
     }
   } catch (error) {
     selectedPaperDetail.value = null
-    message.error(error.message || '加载试卷详情失败')
   }
+}
+
+function resolvePassingScoreSuggestion(detail) {
+  const totalScore = Number(detail?.totalScore || 0)
+  if (!Number.isFinite(totalScore) || totalScore <= 0) {
+    return 0
+  }
+  const configuredPassingScore = Number(detail?.passingScore)
+  if (Number.isFinite(configuredPassingScore) && configuredPassingScore > 0 && configuredPassingScore <= totalScore) {
+    return configuredPassingScore
+  }
+  return Math.max(1, Math.ceil(totalScore * DEFAULT_PASSING_RATIO))
+}
+
+function resolveDefaultDuration(value) {
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue) || numericValue <= 0) {
+    return DEFAULT_EXAM_DURATION
+  }
+  return Math.min(EXAM_DURATION_LIMIT, Math.max(10, Math.floor(numericValue)))
 }
 
 function handlePaperChange(value) {
@@ -689,46 +855,512 @@ function formatDateTime(value) {
 
 function handleKindChange() {
   pagination.current = 1
-  filterPurpose.value = 'all'
   resetForm()
   loadExams()
 }
 
-async function initializeFromRoute() {
-  applyRouteKindContext()
-  await Promise.all([loadExams(), loadTrainingOptions(), loadPaperOptions()])
-  syncQuickCreateFromRoute()
-}
-
 onMounted(() => {
-  initializeFromRoute()
-})
-
-watch(() => route.fullPath, () => {
-  pagination.current = 1
-  filterPurpose.value = 'all'
-  initializeFromRoute()
+  loadExams()
+  loadTrainingOptions()
+  loadPaperOptions()
 })
 </script>
 
 <style scoped>
-.exam-manage-page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; gap: 16px; }
-.page-header h2 { margin: 0; color: #001234; }
-.page-sub { margin: 6px 0 0; font-size: 13px; color: #8c8c8c; }
-.time-col { font-size: 12px; color: #666; }
-.paper-col { display: flex; flex-direction: column; gap: 2px; }
-.paper-meta { font-size: 12px; color: #8c8c8c; }
-.paper-action-row { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
-.paper-action-tip { font-size: 12px; color: #8c8c8c; }
-.passing-score-field { display: flex; align-items: center; gap: 10px; }
-.passing-score-total { flex-shrink: 0; font-size: 12px; color: #8c8c8c; white-space: nowrap; }
-.paper-preview-card { border: 1px solid #e8e8e8; border-radius: 8px; padding: 12px; background: #fafafa; }
-.preview-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 12px; }
-.preview-title { font-size: 15px; font-weight: 600; color: #001234; }
-.preview-sub { margin-top: 4px; font-size: 12px; color: #8c8c8c; }
-.preview-meta { display: flex; gap: 16px; font-size: 12px; color: #666; }
-.preview-list { display: flex; flex-direction: column; gap: 8px; max-height: 320px; overflow-y: auto; }
-.preview-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; background: #fff; border: 1px solid #f0f0f0; border-radius: 6px; }
-.preview-content { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.exam-manage-page {
+  min-height: 100vh;
+  background-color: #F8FAFC;
+  display: flex;
+  flex-direction: column;
+}
+
+.content-wrapper {
+  flex: 1;
+  overflow-y: auto;
+  padding: 32px 40px 0;
+}
+
+.page-title-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 32px;
+  gap: 16px;
+}
+
+.page-title {
+  font-size: 30px;
+  font-weight: 600;
+  color: #1E293B;
+  margin: 0;
+  letter-spacing: -0.02em;
+}
+
+.page-subtitle {
+  margin: 8px 0 0;
+  font-size: 14px;
+  color: #64748B;
+  line-height: 1.6;
+}
+
+.publish-btn {
+  height: 40px;
+  padding: 0 24px;
+  font-weight: 500;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.main-container {
+  background: white;
+  border: 1px solid #E2E8F0;
+  border-radius: 32px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 数据汇总条 */
+.stats-bar {
+  display: flex;
+  align-items: center;
+  padding: 40px 48px;
+  border-bottom: 1px solid #F1F5F9;
+  background: linear-gradient(to bottom, #F8FAFC, white);
+}
+
+.stat-item {
+  flex: 1;
+  padding: 0 8px;
+}
+
+.stat-divider {
+  border-left: 1px solid #F1F5F9;
+}
+
+.stat-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94A3B8;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 4px;
+}
+
+.stat-label-green { color: #22C55E; }
+.stat-label-blue { color: #3B82F6; }
+.stat-label-amber { color: #F59E0B; }
+
+.stat-value {
+  font-size: 36px;
+  font-weight: 700;
+  color: #1E293B;
+}
+
+.stat-value-green { color: #16A34A; }
+.stat-value-blue { color: #2563EB; }
+.stat-value-amber { color: #D97706; }
+
+.stat-unit {
+  font-size: 12px;
+  font-weight: 400;
+  color: #CBD5E1;
+  margin-left: 4px;
+}
+
+/* 过滤条 */
+.filter-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 48px;
+  border-bottom: 1px solid #F1F5F9;
+}
+
+.filter-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.search-input {
+  width: 320px;
+}
+
+.status-select {
+  width: 160px;
+}
+
+.kind-tabs :deep(.ant-tabs-nav) {
+  margin-bottom: 0;
+}
+
+.kind-tabs :deep(.ant-tabs-tab) {
+  padding: 8px 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+/* 列表容器 */
+.list-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 列表头 */
+.list-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 48px;
+  background: #F8FAFC;
+  border-bottom: 1px solid #F1F5F9;
+  font-size: 10px;
+  font-weight: 700;
+  color: #94A3B8;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.col-course { width: 288px; }
+.col-paper { flex: 1; }
+.col-status { width: 112px; }
+.col-count { width: 96px; }
+.col-time { width: 192px; }
+.col-action { width: 128px; }
+
+/* 课程分组 */
+.course-group {
+  border-bottom: 1px solid #F1F5F9;
+}
+
+.course-row {
+  display: flex;
+  align-items: center;
+  padding: 20px 48px;
+  background: white;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.course-row:hover {
+  background: #F8FAFC;
+}
+
+.course-row > div {
+  display: flex;
+  align-items: center;
+}
+
+.chevron-icon {
+  width: 16px;
+  height: 16px;
+  color: #CBD5E1;
+  margin-right: 12px;
+  transition: transform 0.3s ease;
+}
+
+.chevron-icon.rotated {
+  transform: rotate(-90deg);
+}
+
+.course-row:hover .chevron-icon {
+  color: #3B82F6;
+}
+
+.course-icon {
+  width: 16px;
+  height: 16px;
+  color: #3B82F6;
+  margin-right: 8px;
+}
+
+.course-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.course-detail-hint {
+  font-size: 10px;
+  font-weight: 600;
+  color: #3B82F6;
+  background: #EFF6FF;
+  padding: 2px 8px;
+  border-radius: 4px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.course-row:hover .course-detail-hint {
+  opacity: 1;
+}
+
+/* 考试场次列表 */
+.exam-items {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  max-height: 2000px;
+  opacity: 1;
+  overflow: hidden;
+}
+
+.exam-items.is-collapsed {
+  max-height: 0;
+  opacity: 0;
+}
+
+.exam-row {
+  display: flex;
+  align-items: center;
+  padding: 20px 48px;
+  border-top: 1px solid #FAFAFA;
+  transition: background-color 0.15s;
+}
+
+.exam-row:hover {
+  background: #F8FAFC;
+}
+
+.exam-row > div {
+  display: flex;
+  align-items: center;
+}
+
+.exam-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.exam-id {
+  font-size: 10px;
+  color: #94A3B8;
+  font-family: monospace;
+  margin-top: 2px;
+}
+
+.paper-status-badge {
+  font-size: 10px;
+  font-weight: 600;
+  color: #3B82F6;
+  background: #EFF6FF;
+  padding: 1px 4px;
+  border-radius: 2px;
+  margin-top: 4px;
+  width: fit-content;
+}
+
+/* 状态标签 */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.status-upcoming,
+.status-pending {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.status-active,
+.status-ongoing {
+  background: #DCFCE7;
+  color: #166534;
+}
+
+.status-ended {
+  background: #F1F5F9;
+  color: #64748B;
+}
+
+/* 操作按钮 */
+.action-btn {
+  padding: 0;
+  height: auto;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.action-btn-secondary {
+  padding: 0;
+  height: auto;
+  font-size: 14px;
+  color: #CBD5E1;
+}
+
+.action-btn-secondary:hover {
+  color: #64748B;
+}
+
+/* 空状态 */
+.empty-state {
+  padding: 80px 0;
+  text-align: center;
+  color: #94A3B8;
+}
+
+.empty-icon {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto 16px;
+}
+
+/* 分页 */
+.pagination-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 48px;
+  border-top: 1px solid #F1F5F9;
+  background: white;
+}
+
+.pagination-info {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94A3B8;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.page-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  border: 1px solid #E2E8F0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  color: #64748B;
+  background: white;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: #F8FAFC;
+}
+
+.page-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.page-btn-active {
+  background: #2563EB !important;
+  color: white !important;
+  border-color: #2563EB !important;
+}
+
+/* 脚部 */
+.footer-bar {
+  margin-top: 32px;
+  padding: 0 16px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 500;
+  color: #94A3B8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* 抽屉内样式 */
+.paper-action-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 6px;
+}
+
+.paper-action-tip {
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.passing-score-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.passing-score-total {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: #8c8c8c;
+  white-space: nowrap;
+}
+
+.paper-preview-card {
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fafafa;
+}
+
+.preview-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.preview-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #001234;
+}
+
+.preview-sub {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.preview-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: #666;
+}
+
+.preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.preview-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #fff;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+}
+
+.preview-content {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 </style>

@@ -40,6 +40,10 @@ export function confirmAiPaperAssemblyTask(taskId) {
   return request.post(`/ai/paper-assembly-tasks/${taskId}/confirm`)
 }
 
+export function deleteAiPaperAssemblyTask(taskId) {
+  return request.delete(`/ai/paper-assembly-tasks/${taskId}`)
+}
+
 export function getAiPaperGenerationTasks(params) {
   return request.get('/ai/paper-generation-tasks', { params })
 }
@@ -60,6 +64,10 @@ export function confirmAiPaperGenerationTask(taskId) {
   return request.post(`/ai/paper-generation-tasks/${taskId}/confirm`)
 }
 
+export function deleteAiPaperGenerationTask(taskId) {
+  return request.delete(`/ai/paper-generation-tasks/${taskId}`)
+}
+
 export function getAiPaperDocumentGenerationTasks(params) {
   return request.get('/ai/paper-document-generation-tasks', { params })
 }
@@ -78,6 +86,10 @@ export function updateAiPaperDocumentGenerationTaskResult(taskId, data) {
 
 export function confirmAiPaperDocumentGenerationTask(taskId) {
   return request.post(`/ai/paper-document-generation-tasks/${taskId}/confirm`)
+}
+
+export function deleteAiPaperDocumentGenerationTask(taskId) {
+  return request.delete(`/ai/paper-document-generation-tasks/${taskId}`)
 }
 
 export function getTeachingResourceGenerationTasks(params) {

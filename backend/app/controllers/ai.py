@@ -198,6 +198,33 @@ class AIController:
             logger.error("确认 AI 文档生成试卷任务异常: %s", exc)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="确认任务失败")
 
+    def delete_paper_assembly_task(self, task_id: int, current_user_id: int):
+        try:
+            return self.service.delete_paper_assembly_task(task_id, current_user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("删除 AI 自动组卷任务异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="删除任务失败")
+
+    def delete_paper_generation_task(self, task_id: int, current_user_id: int):
+        try:
+            return self.service.delete_paper_generation_task(task_id, current_user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("删除 AI 自动生成试卷任务异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="删除任务失败")
+
+    def delete_paper_document_generation_task(self, task_id: int, current_user_id: int):
+        try:
+            return self.service.delete_paper_document_generation_task(task_id, current_user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("删除 AI 文档生成试卷任务异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="删除任务失败")
+
     def list_teaching_resource_generation_tasks(self, page: int, size: int, status_value: str | None, current_user_id: int):
         try:
             return self.teaching_resource_generation_service.list_tasks(page, size, status_value, current_user_id)

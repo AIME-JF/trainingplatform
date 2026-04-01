@@ -114,11 +114,6 @@ export const appMenuConfig = [
         anyPermissions: EXAM_MANAGE_PAGE_PERMISSIONS,
       },
       {
-        key: '/question/repository',
-        label: '试题仓库',
-        anyPermissions: QUESTION_BANK_PAGE_PERMISSIONS,
-      },
-      {
         key: '/paper/repository',
         label: '试卷仓库',
         anyPermissions: PAPER_PAGE_PERMISSIONS,
@@ -129,9 +124,9 @@ export const appMenuConfig = [
         anyPermissions: KNOWLEDGE_POINT_PAGE_PERMISSIONS,
       },
       {
-        key: '/question/ai',
-        label: '智能出题',
-        anyPermissions: AI_QUESTION_PAGE_PERMISSIONS,
+        key: '/question/repository',
+        label: '智能题库',
+        anyPermissions: [...QUESTION_BANK_PAGE_PERMISSIONS, ...AI_QUESTION_PAGE_PERMISSIONS],
       },
       {
         key: '/paper/ai-assemble',

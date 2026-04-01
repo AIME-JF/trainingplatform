@@ -353,6 +353,10 @@ watch(
 )
 
 function handleMenuClick({ key }) {
+  // 跳过父菜单（如"智能题库"），它们没有 '/' 前缀
+  if (!key.startsWith('/')) {
+    return
+  }
   router.push(key)
 }
 
