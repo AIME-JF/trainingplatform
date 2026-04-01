@@ -15,6 +15,7 @@ import type {
   CheckoutCreate,
   EnrollmentCreate,
   GetAttendanceSummaryApiV1TrainingsTrainingIdAttendanceSummaryGetParams,
+  GetCalendarEventsApiV1TrainingsCalendarGetParams,
   GetCheckinQrApiV1TrainingsTrainingIdCheckinQrGetParams,
   GetCheckinRecordsApiV1TrainingsTrainingIdCheckinRecordsGetParams,
   GetEnrollmentsApiV1TrainingsTrainingIdEnrollmentsGetParams,
@@ -24,6 +25,7 @@ import type {
   StandardResponse,
   StandardResponseCheckinResponse,
   StandardResponseEnrollmentResponse,
+  StandardResponseListCalendarEventResponse,
   StandardResponseListCheckinResponse,
   StandardResponseListEnrollmentResponse,
   StandardResponseListResourceListItemResponse,
@@ -95,6 +97,18 @@ export const getTrainingStatsApiV1TrainingsStatsGet = (
  ) => {
       return customInstance<StandardResponseTrainingStatsResponse>(
       {url: `/api/v1/trainings/stats`, method: 'GET'
+    },
+      );
+    }
+  /**
+ * @summary 聚合日历
+ */
+export const getCalendarEventsApiV1TrainingsCalendarGet = (
+    params?: GetCalendarEventsApiV1TrainingsCalendarGetParams,
+ ) => {
+      return customInstance<StandardResponseListCalendarEventResponse>(
+      {url: `/api/v1/trainings/calendar`, method: 'GET',
+        params
     },
       );
     }
@@ -681,6 +695,7 @@ export const aiCreateTrainingApiV1TrainingsAiCreatePost = (
 export type GetTrainingsApiV1TrainingsGetResult = NonNullable<Awaited<ReturnType<typeof getTrainingsApiV1TrainingsGet>>>
 export type CreateTrainingApiV1TrainingsPostResult = NonNullable<Awaited<ReturnType<typeof createTrainingApiV1TrainingsPost>>>
 export type GetTrainingStatsApiV1TrainingsStatsGetResult = NonNullable<Awaited<ReturnType<typeof getTrainingStatsApiV1TrainingsStatsGet>>>
+export type GetCalendarEventsApiV1TrainingsCalendarGetResult = NonNullable<Awaited<ReturnType<typeof getCalendarEventsApiV1TrainingsCalendarGet>>>
 export type GetCheckinQrPayloadApiV1TrainingsCheckinQrTokenGetResult = NonNullable<Awaited<ReturnType<typeof getCheckinQrPayloadApiV1TrainingsCheckinQrTokenGet>>>
 export type CheckinByQrApiV1TrainingsCheckinQrTokenPostResult = NonNullable<Awaited<ReturnType<typeof checkinByQrApiV1TrainingsCheckinQrTokenPost>>>
 export type GetTrainingApiV1TrainingsTrainingIdGetResult = NonNullable<Awaited<ReturnType<typeof getTrainingApiV1TrainingsTrainingIdGet>>>

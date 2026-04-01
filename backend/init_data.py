@@ -5,6 +5,7 @@ from datetime import datetime, date
 from sqlalchemy.orm import Session
 from app.database import engine, init_db
 from app.models import User, Role, Permission, Department, PoliceType
+from app.models.training_type import TrainingType
 from app.models.system import SystemMeta
 from app.services.auth import auth_service
 from app.services.system import SystemConfigService
@@ -512,6 +513,40 @@ def init_dashboard_modules():
         logger.info(f"看板模块配置初始化完成")
 
 
+def init_training_types():
+    """初始化培训班类型数据（在 is_db_initialized 之前执行，确保表有数据）"""
+    try:
+        with Session(engine) as db:
+            existing_count = db.query(TrainingType).count()
+            if existing_count > 0:
+                logger.info("培训班类型数据已存在，跳过初始化")
+                return
+
+            training_types_data = [
+                {"name": "基础训练", "code": "basic", "description": "基础警务技能训练", "sort_order": 1},
+                {"name": "专项训练", "code": "special", "description": "针对特定领域的专项训练", "sort_order": 2},
+                {"name": "晋升培训", "code": "promotion", "description": "晋升晋级所需的培训", "sort_order": 3},
+                {"name": "线上培训", "code": "online", "description": "在线远程培训", "sort_order": 4},
+            ]
+
+            for tt_data in training_types_data:
+                tt = TrainingType(
+                    name=tt_data["name"],
+                    code=tt_data["code"],
+                    description=tt_data["description"],
+                    sort_order=tt_data["sort_order"],
+                    is_active=True,
+                )
+                db.add(tt)
+
+            db.commit()
+            logger.info(f"培训班类型数据初始化完成，共创建 {len(training_types_data)} 个类型")
+
+    except Exception as e:
+        logger.error(f"初始化培训班类型数据失败: {e}")
+        raise
+
+
 def main():
     """主函数"""
     try:
@@ -519,6 +554,7 @@ def main():
 
         init_db()
         init_system_configs()
+        init_training_types()
 
         if is_db_initialized():
             logger.info("数据库已初始化，跳过种子数据初始化")

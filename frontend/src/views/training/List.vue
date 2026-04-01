@@ -45,10 +45,7 @@
         </a-select>
         <a-select v-model:value="filterType" style="width:120px">
           <a-select-option value="all">全部类型</a-select-option>
-          <a-select-option value="basic">基础训练</a-select-option>
-          <a-select-option value="special">专项训练</a-select-option>
-          <a-select-option value="promotion">晋升培训</a-select-option>
-          <a-select-option value="online">线上培训</a-select-option>
+          <a-select-option v-for="t in trainingTypeList" :key="t.code" :value="t.code">{{ t.name }}</a-select-option>
         </a-select>
         <a-input-search v-model:value="searchText" placeholder="搜索培训班..." style="width:240px" allow-clear />
       </a-space>
@@ -239,10 +236,7 @@
               <a-col :span="8">
                 <a-form-item label="培训类型" required>
                   <a-select v-model:value="trainingForm.type">
-                    <a-select-option value="basic">基础训练</a-select-option>
-                    <a-select-option value="special">专项训练</a-select-option>
-                    <a-select-option value="promotion">晋升培训</a-select-option>
-                    <a-select-option value="online">线上培训</a-select-option>
+                    <a-select-option v-for="t in trainingTypeList" :key="t.code" :value="t.code">{{ t.name }}</a-select-option>
                   </a-select>
                 </a-form-item>
               </a-col>
@@ -495,6 +489,7 @@ import {
 import { getDepartmentList } from '@/api/department'
 import { getUsers, getPoliceTypes } from '@/api/user'
 import { getAdmissionExams } from '@/api/exam'
+import { getTrainingTypes } from '@/api/trainingType'
 import { downloadBlob } from '@/utils/download'
 
 const router = useRouter()
@@ -516,7 +511,14 @@ const workflowStepColors = {
   running: 'processing',
   completed: 'green',
 }
-const typeLabels = { basic: '基础训练', special: '专项训练', promotion: '晋升培训', online: '线上培训' }
+const trainingTypeList = ref([])
+const typeLabels = computed(() => {
+  const map = {}
+  for (const t of trainingTypeList.value) {
+    map[t.code] = t.name
+  }
+  return map
+})
 
 function buildEmptyTrainingStats() {
   return {
@@ -1010,8 +1012,15 @@ async function fetchTrainingStats() {
   }
 }
 
+async function fetchTrainingTypeList() {
+  try {
+    const result = await getTrainingTypes({ size: -1, is_active: true })
+    trainingTypeList.value = result.items || []
+  } catch { trainingTypeList.value = [] }
+}
+
 async function refreshTrainingData() {
-  await Promise.all([fetchTrainings(), fetchTrainingStats()])
+  await Promise.all([fetchTrainings(), fetchTrainingStats(), fetchTrainingTypeList()])
 }
 
 async function ensureInstructorOptionsLoaded(force = false) {

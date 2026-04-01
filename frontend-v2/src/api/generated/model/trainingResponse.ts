@@ -34,6 +34,8 @@ export interface TrainingResponse {
   visibility_department_names?: string[] | null;
   police_type_id?: number | null;
   police_type_name?: string | null;
+  training_type_id?: number | null;
+  training_type_name?: string | null;
   training_base_id?: number | null;
   training_base_name?: string | null;
   created_by?: number | null;

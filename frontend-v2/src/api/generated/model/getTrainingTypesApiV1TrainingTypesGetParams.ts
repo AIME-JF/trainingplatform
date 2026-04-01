@@ -5,7 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type GetExamPapersApiV1ExamsPapersGetParams = {
+export type GetTrainingTypesApiV1TrainingTypesGetParams = {
 /**
  * @minimum 1
  */
@@ -14,8 +14,6 @@ page?: number;
  * @minimum -1
  */
 size?: number;
-status?: string | null;
-type?: string | null;
-search?: string | null;
-folder_id?: number | null;
+name?: string | null;
+is_active?: boolean | null;
 };

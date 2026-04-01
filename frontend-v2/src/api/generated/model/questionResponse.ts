@@ -22,6 +22,8 @@ export interface QuestionResponse {
   knowledge_point_names?: string[];
   police_type_id?: number | null;
   police_type_name?: string | null;
+  folder_id?: number | null;
+  folder_name?: string | null;
   score?: number;
   created_by?: number | null;
   created_at?: string | null;

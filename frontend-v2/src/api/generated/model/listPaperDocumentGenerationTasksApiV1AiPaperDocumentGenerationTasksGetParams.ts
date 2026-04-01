@@ -5,7 +5,7 @@
  * OpenAPI spec version: 1.0.0
  */
 
-export type GetExamPapersApiV1ExamsPapersGetParams = {
+export type ListPaperDocumentGenerationTasksApiV1AiPaperDocumentGenerationTasksGetParams = {
 /**
  * @minimum 1
  */
@@ -15,7 +15,4 @@ page?: number;
  */
 size?: number;
 status?: string | null;
-type?: string | null;
-search?: string | null;
-folder_id?: number | null;
 };

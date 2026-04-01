@@ -17,6 +17,9 @@ import type {
   GetExamPapersApiV1ExamsPapersGetParams,
   GetExamScoresApiV1ExamsExamIdScoresGetParams,
   GetExamsApiV1ExamsGetParams,
+  PaperFolderCreate,
+  PaperFolderUpdate,
+  PaperMoveRequest,
   StandardResponseAdmissionExamDetailResponse,
   StandardResponseAdmissionExamRecordResponse,
   StandardResponseAdmissionExamResponse,
@@ -25,11 +28,13 @@ import type {
   StandardResponseExamPaperDetailResponse,
   StandardResponseExamRecordResponse,
   StandardResponseExamResponse,
+  StandardResponseListPaperFolderResponse,
   StandardResponsePaginatedResponseAdmissionExamRecordResponse,
   StandardResponsePaginatedResponseAdmissionExamResponse,
   StandardResponsePaginatedResponseExamPaperResponse,
   StandardResponsePaginatedResponseExamRecordResponse,
-  StandardResponsePaginatedResponseExamResponse
+  StandardResponsePaginatedResponseExamResponse,
+  StandardResponsePaperFolderResponse
 } from '../model';
 
 import { customInstance } from '../../custom-instance';
@@ -116,6 +121,69 @@ export const archiveExamPaperApiV1ExamsPapersPaperIdArchivePost = (
  ) => {
       return customInstance<StandardResponseExamPaperDetailResponse>(
       {url: `/api/v1/exams/papers/${paperId}/archive`, method: 'POST'
+    },
+      );
+    }
+  /**
+ * @summary 获取文件夹树
+ */
+export const getPaperFoldersApiV1ExamsPaperFoldersGet = (
+
+ ) => {
+      return customInstance<StandardResponseListPaperFolderResponse>(
+      {url: `/api/v1/exams/paper-folders`, method: 'GET'
+    },
+      );
+    }
+  /**
+ * @summary 创建文件夹
+ */
+export const createPaperFolderApiV1ExamsPaperFoldersPost = (
+    paperFolderCreate: PaperFolderCreate,
+ ) => {
+      return customInstance<StandardResponsePaperFolderResponse>(
+      {url: `/api/v1/exams/paper-folders`, method: 'POST',
+      headers: {'Content-Type': 'application/json', },
+      data: paperFolderCreate
+    },
+      );
+    }
+  /**
+ * @summary 更新文件夹
+ */
+export const updatePaperFolderApiV1ExamsPaperFoldersFolderIdPut = (
+    folderId: number,
+    paperFolderUpdate: PaperFolderUpdate,
+ ) => {
+      return customInstance<StandardResponsePaperFolderResponse>(
+      {url: `/api/v1/exams/paper-folders/${folderId}`, method: 'PUT',
+      headers: {'Content-Type': 'application/json', },
+      data: paperFolderUpdate
+    },
+      );
+    }
+  /**
+ * @summary 删除文件夹
+ */
+export const deletePaperFolderApiV1ExamsPaperFoldersFolderIdDelete = (
+    folderId: number,
+ ) => {
+      return customInstance<StandardResponseDict>(
+      {url: `/api/v1/exams/paper-folders/${folderId}`, method: 'DELETE'
+    },
+      );
+    }
+  /**
+ * @summary 移动试卷到文件夹
+ */
+export const movePaperToFolderApiV1ExamsPapersPaperIdFolderPatch = (
+    paperId: number,
+    paperMoveRequest: PaperMoveRequest,
+ ) => {
+      return customInstance<StandardResponseExamPaperDetailResponse>(
+      {url: `/api/v1/exams/papers/${paperId}/folder`, method: 'PATCH',
+      headers: {'Content-Type': 'application/json', },
+      data: paperMoveRequest
     },
       );
     }
@@ -324,6 +392,11 @@ export type UpdateExamPaperApiV1ExamsPapersPaperIdPutResult = NonNullable<Awaite
 export type DeleteExamPaperApiV1ExamsPapersPaperIdDeleteResult = NonNullable<Awaited<ReturnType<typeof deleteExamPaperApiV1ExamsPapersPaperIdDelete>>>
 export type PublishExamPaperApiV1ExamsPapersPaperIdPublishPostResult = NonNullable<Awaited<ReturnType<typeof publishExamPaperApiV1ExamsPapersPaperIdPublishPost>>>
 export type ArchiveExamPaperApiV1ExamsPapersPaperIdArchivePostResult = NonNullable<Awaited<ReturnType<typeof archiveExamPaperApiV1ExamsPapersPaperIdArchivePost>>>
+export type GetPaperFoldersApiV1ExamsPaperFoldersGetResult = NonNullable<Awaited<ReturnType<typeof getPaperFoldersApiV1ExamsPaperFoldersGet>>>
+export type CreatePaperFolderApiV1ExamsPaperFoldersPostResult = NonNullable<Awaited<ReturnType<typeof createPaperFolderApiV1ExamsPaperFoldersPost>>>
+export type UpdatePaperFolderApiV1ExamsPaperFoldersFolderIdPutResult = NonNullable<Awaited<ReturnType<typeof updatePaperFolderApiV1ExamsPaperFoldersFolderIdPut>>>
+export type DeletePaperFolderApiV1ExamsPaperFoldersFolderIdDeleteResult = NonNullable<Awaited<ReturnType<typeof deletePaperFolderApiV1ExamsPaperFoldersFolderIdDelete>>>
+export type MovePaperToFolderApiV1ExamsPapersPaperIdFolderPatchResult = NonNullable<Awaited<ReturnType<typeof movePaperToFolderApiV1ExamsPapersPaperIdFolderPatch>>>
 export type GetAdmissionExamsApiV1ExamsAdmissionGetResult = NonNullable<Awaited<ReturnType<typeof getAdmissionExamsApiV1ExamsAdmissionGet>>>
 export type CreateAdmissionExamApiV1ExamsAdmissionPostResult = NonNullable<Awaited<ReturnType<typeof createAdmissionExamApiV1ExamsAdmissionPost>>>
 export type UpdateAdmissionExamApiV1ExamsAdmissionExamIdPutResult = NonNullable<Awaited<ReturnType<typeof updateAdmissionExamApiV1ExamsAdmissionExamIdPut>>>

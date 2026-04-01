@@ -23,6 +23,8 @@ export interface ExamPaperCreate {
   passing_score?: number | null;
   /** 试卷类型: formal/quiz */
   type?: string;
+  /** 所属文件夹ID */
+  folder_id?: number | null;
   /** 题目ID列表 */
   question_ids?: number[];
 }

@@ -431,6 +431,26 @@ docker compose --env-file .env -f docker-compose.yaml up -d --build
 | `backend/logger.py` | Loguru 日志配置（控制台 + 按天轮转文件） |
 | `docker/.env` | Docker Compose 部署配置 |
 
+## 后端接口变更与 frontend-v2 API 同步
+
+`frontend-v2/` 使用 Orval 从后端 OpenAPI 规范自动生成 TypeScript API 客户端。**当修改了后端接口或数据模型时，必须重新生成**：
+
+```bash
+cd frontend-v2
+pnpm api:generate
+```
+
+执行前提：后端服务正在运行（Orval 需要访问 `http://127.0.0.1:8001/api/v1/openapi.json`）。
+
+| 需要执行 | 不需要执行 |
+| --- | --- |
+| 新增 / 修改 / 删除 `backend/app/views/` 下的 API 端点 | 仅修改 service / controller 内部逻辑 |
+| 修改 `backend/app/schemas/` 下的请求 / 响应模型 | 仅修改前端代码 |
+| 修改 `backend/app/models/` 导致 Schema 字段变化 | 修改数据库迁移文件 |
+| 新增路由模块并在 `views/__init__.py` 注册 | |
+
+生成的文件位于 `frontend-v2/src/api/generated/`，按后端 tag 拆分，提交到仓库。
+
 ## 文档索引
 
 | 文档 | 用途 |

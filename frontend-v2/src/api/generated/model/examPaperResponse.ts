@@ -17,6 +17,7 @@ export interface ExamPaperResponse {
   passing_score?: number;
   type?: string;
   status?: string;
+  folder_id?: number | null;
   published_at?: string | null;
   created_by?: number | null;
   question_count?: number;
