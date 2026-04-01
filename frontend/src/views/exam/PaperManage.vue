@@ -155,19 +155,26 @@
               <!-- 文件夹标题行 -->
               <div
                 class="folder-title"
-                :class="{ 'folder-drag-over': dragOverFolderId === group.id }"
+                :class="{ 'folder-drag-over': currentView === 'folder' && dragOverFolderId === group.id }"
                 @click="toggleFolder(group.id)"
-                @dragover="handleDragOver($event, group)"
-                @dragleave="handleDragLeave($event, group)"
-                @drop="handleDropToFolder($event, group)"
+                @dragover="currentView === 'folder' && handleDragOver($event, group)"
+                @dragleave="currentView === 'folder' && handleDragLeave($event, group)"
+                @drop="currentView === 'folder' && handleDropToFolder($event, group)"
               >
                 <div class="folder-title-left">
                   <svg :class="['chevron-icon', { 'rotated': group.expanded }]" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
-                  <svg class="folder-icon" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2z"/></svg>
+                  <!-- 文件夹视角图标 -->
+                  <svg v-if="currentView === 'folder'" class="folder-icon" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2z"/></svg>
+                  <!-- 警种视角图标 -->
+                  <svg v-else-if="currentView === 'policeType'" class="folder-icon" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                  <!-- 课程视角图标 -->
+                  <svg v-else-if="currentView === 'course'" class="folder-icon" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+                  <!-- 知识点视角图标 -->
+                  <svg v-else-if="currentView === 'knowledgePoint'" class="folder-icon" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
                   <span class="folder-name">{{ group.name }}</span>
                 </div>
                 <div class="folder-title-desc">包含 {{ group.name }} 等 {{ group.paperCount }} 份试卷</div>
-                <div class="folder-title-actions">
+                <div class="folder-title-actions" v-if="currentView === 'folder'">
                   <a-button type="link" size="small" class="batch-move-btn" @click.stop="openBatchMoveModal(group)">批量移动</a-button>
                 </div>
               </div>
@@ -175,17 +182,17 @@
               <!-- 试卷内容区 -->
               <div
                 class="folder-content"
-                :class="{ 'folder-drag-over': dragOverFolderId === group.id }"
-                @dragover="handleDragOver($event, group)"
-                @dragleave="handleDragLeave($event, group)"
-                @drop="handleDropToFolder($event, group)"
+                :class="{ 'folder-drag-over': currentView === 'folder' && dragOverFolderId === group.id }"
+                @dragover="currentView === 'folder' && handleDragOver($event, group)"
+                @dragleave="currentView === 'folder' && handleDragLeave($event, group)"
+                @drop="currentView === 'folder' && handleDropToFolder($event, group)"
               >
                 <div
                   v-for="(record, index) in group.papers"
                   :key="record.id"
                   class="paper-row"
-                  draggable="true"
-                  @dragstart="handlePaperDragStart($event, record, group)"
+                  :draggable="currentView === 'folder'"
+                  @dragstart="currentView === 'folder' && handlePaperDragStart($event, record, group)"
                   @dragend="handleDragEnd"
                 >
                   <div class="col-folder text-xs text-slate-400">{{ group.name }}</div>
@@ -239,7 +246,7 @@
                   </div>
                 </div>
                 <div v-if="!group.papers || group.papers.length === 0" class="empty-folder">
-                  该文件夹下暂无试卷
+                  该{{ currentView === 'folder' ? '文件夹' : '分组' }}下暂无试卷
                 </div>
               </div>
             </div>
@@ -248,7 +255,7 @@
           <!-- 底部 Footer -->
           <div class="list-footer">
             <div class="footer-info">
-              <span>当前展开 {{ expandedFolders.size }} 个目录</span>
+              <span>当前展开 {{ expandedFolders.size }} 个{{ viewLabel }}分组</span>
               <span class="text-slate-200">|</span>
               <span>列表更新于 {{ currentTime }}</span>
             </div>
@@ -387,7 +394,7 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
-import { PlusOutlined, DeleteOutlined, LeftOutlined, RightOutlined, FolderOutlined, BookOutlined, AimOutlined, DownOutlined, RobotOutlined, SwapOutlined } from '@ant-design/icons-vue'
+import { PlusOutlined, DeleteOutlined, LeftOutlined, RightOutlined, FolderOutlined, BookOutlined, AimOutlined, DownOutlined, RobotOutlined, SwapOutlined, TeamOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import {
   archiveExamPaper,
@@ -446,6 +453,7 @@ const folderForm = reactive({ name: '', parentId: null })
 const batchMoveModalVisible = ref(false)
 const batchMoveTargetFolderId = ref(null)
 const currentBatchMoveFolderId = ref(null)
+const folderModalMode = ref('create')
 
 // 视角切换
 const currentView = ref('folder') // 'folder' | 'policeType' | 'course' | 'knowledgePoint'
@@ -518,6 +526,16 @@ const folderTreeData = computed(() => {
 const folderCount = computed(() => folderList.value.length)
 
 const totalPages = computed(() => Math.ceil(statsState.total / pagination.pageSize) || 1)
+
+const viewLabel = computed(() => {
+  const labels = {
+    folder: '目录',
+    policeType: '警种',
+    course: '课程',
+    knowledgePoint: '知识点'
+  }
+  return labels[currentView.value] || '目录'
+})
 
 const canManagePaper = computed(() => authStore.hasPermission('CREATE_EXAM'))
 const canOpenAiAssembleTask = computed(() => authStore.hasAnyPermission(['GET_AI_PAPER_ASSEMBLY_TASKS', 'CREATE_AI_PAPER_ASSEMBLY_TASK']))
@@ -645,13 +663,23 @@ function handleDragEnd() {
 async function loadPapers() {
   loading.value = true
   try {
-    const result = await getExamPapers({
+    // 构建基础请求参数
+    const params = {
       page: 1,
       size: 1000,
-      status: undefined,
-      type: undefined,
       search: searchText.value || undefined,
-    })
+    }
+
+    // 如果有筛选条件则传给后端
+    if (currentView.value === 'policeType' && selectedPoliceTypeIds.value.length > 0) {
+      params.policeTypeIds = selectedPoliceTypeIds.value.join(',')
+    } else if (currentView.value === 'course' && selectedCourseIds.value.length > 0) {
+      params.courseIds = selectedCourseIds.value.join(',')
+    } else if (currentView.value === 'knowledgePoint' && selectedKpIds.value.length > 0) {
+      params.knowledgePointIds = selectedKpIds.value.join(',')
+    }
+
+    const result = await getExamPapers(params)
     const papers = result.items || []
 
     // 扩展试卷属性
@@ -660,8 +688,17 @@ async function loadPapers() {
       knowledgePointNames: paper.knowledgePointNames || [],
     }))
 
-    // 按文件夹分组
-    groupPapersByFolder(paperList.value)
+    // 根据当前视角分组显示（前端分组）
+    if (currentView.value === 'folder') {
+      groupPapersByFolder(paperList.value)
+    } else if (currentView.value === 'policeType') {
+      groupPapersByPoliceType(paperList.value)
+    } else if (currentView.value === 'course') {
+      groupPapersByCourse(paperList.value)
+    } else if (currentView.value === 'knowledgePoint') {
+      groupPapersByKnowledgePoint(paperList.value)
+    }
+
     refreshExpandedState()
     pagination.total = result.total || 0
   } catch (error) {
@@ -688,23 +725,165 @@ function groupPapersByFolder(papers) {
     folderMap.set(folder.id, { ...folder, papers: [], paperCount: 0 })
   })
 
-  // 将试卷分配到文件夹
+  // 将试卷分配到文件夹，同时支持 snake_case 和 camelCase
   papers.forEach(paper => {
-    if (paper.folderId && folderMap.has(paper.folderId)) {
-      const folderData = folderMap.get(paper.folderId)
+    const folderId = paper.folderId || paper.folder_id
+    if (folderId && folderMap.has(folderId)) {
+      const folderData = folderMap.get(folderId)
       folderData.papers.push(paper)
       folderData.paperCount = folderData.papers.length
     }
   })
 
   // 未分类的试卷放入"未分类"文件夹
-  const uncategorizedPapers = papers.filter(p => !p.folderId || !folderMap.has(p.folderId))
+  const uncategorizedPapers = papers.filter(p => {
+    const folderId = p.folderId || p.folder_id
+    return !folderId || !folderMap.has(folderId)
+  })
   if (uncategorizedPapers.length > 0) {
     folderMap.set(0, { id: 0, name: '未分类', paperCount: uncategorizedPapers.length, papers: uncategorizedPapers, children: [], parentId: null, sortOrder: 999 })
   }
 
   // 更新文件夹列表
   expandedFolderList.value = Array.from(folderMap.values())
+
+  // 调试：输出分组信息
+  console.log('[文件夹分组] 共', folderMap.size, '个文件夹', Array.from(folderMap.values()).map(g => ({ name: g.name, count: g.paperCount })))
+}
+
+// 按警种分组
+function groupPapersByPoliceType(papers) {
+  const groupMap = new Map()
+
+  papers.forEach(paper => {
+    // 试卷没有直接的警种字段，从知识点间接获取或标记为未分类
+    const policeTypeName = paper.policeTypeName || paper.police_type_name || '未分类'
+    const policeTypeId = paper.policeTypeId || paper.police_type_id || 0
+
+    if (!groupMap.has(policeTypeId)) {
+      groupMap.set(policeTypeId, {
+        id: policeTypeId,
+        name: policeTypeName,
+        papers: [],
+        paperCount: 0,
+        children: [],
+        parentId: null,
+        sortOrder: policeTypeId,
+      })
+    }
+    groupMap.get(policeTypeId).papers.push(paper)
+    groupMap.get(policeTypeId).paperCount++
+  })
+
+  // 排序
+  const sortedGroups = Array.from(groupMap.values()).sort((a, b) => {
+    if (a.name === '未分类') return 1
+    if (b.name === '未分类') return -1
+    return a.name.localeCompare(b.name)
+  })
+
+  // 默认展开前两个
+  expandedFolderList.value = sortedGroups
+  if (sortedGroups.length > 0 && expandedFolders.value.size === 0) {
+    sortedGroups.slice(0, 2).forEach(g => expandedFolders.value.add(g.id))
+    expandedFolders.value = new Set(expandedFolders.value)
+  }
+}
+
+// 按课程分组
+function groupPapersByCourse(papers) {
+  const groupMap = new Map()
+
+  papers.forEach(paper => {
+    // 试卷没有直接的课程字段，标记为未分类
+    const courseName = paper.courseName || paper.course_name || '未分类'
+    const courseId = paper.courseId || paper.course_id || 0
+
+    if (!groupMap.has(courseId)) {
+      groupMap.set(courseId, {
+        id: courseId,
+        name: courseName,
+        papers: [],
+        paperCount: 0,
+        children: [],
+        parentId: null,
+        sortOrder: courseId,
+      })
+    }
+    groupMap.get(courseId).papers.push(paper)
+    groupMap.get(courseId).paperCount++
+  })
+
+  const sortedGroups = Array.from(groupMap.values()).sort((a, b) => {
+    if (a.name === '未分类') return 1
+    if (b.name === '未分类') return -1
+    return a.name.localeCompare(b.name)
+  })
+
+  expandedFolderList.value = sortedGroups
+  if (sortedGroups.length > 0 && expandedFolders.value.size === 0) {
+    sortedGroups.slice(0, 2).forEach(g => expandedFolders.value.add(g.id))
+    expandedFolders.value = new Set(expandedFolders.value)
+  }
+}
+
+// 按知识点分组
+function groupPapersByKnowledgePoint(papers) {
+  const groupMap = new Map()
+
+  papers.forEach(paper => {
+    // 一张试卷可能有多个知识点，同时支持 snake_case 和 camelCase
+    const kpNames = paper.knowledgePointNames || paper.knowledge_point_names || []
+    if (kpNames.length === 0) {
+      // 没有知识点的试卷归入"未分类"
+      const kpId = 0
+      if (!groupMap.has(kpId)) {
+        groupMap.set(kpId, {
+          id: kpId,
+          name: '未分类',
+          papers: [],
+          paperCount: 0,
+          children: [],
+          parentId: null,
+          sortOrder: 999,
+        })
+      }
+      groupMap.get(kpId).papers.push(paper)
+      groupMap.get(kpId).paperCount++
+    } else {
+      kpNames.forEach(kpName => {
+        // 使用知识点名称作为key
+        if (!groupMap.has(kpName)) {
+          groupMap.set(kpName, {
+            id: kpName,
+            name: kpName,
+            papers: [],
+            paperCount: 0,
+            children: [],
+            parentId: null,
+            sortOrder: 0,
+          })
+        }
+        groupMap.get(kpName).papers.push(paper)
+        groupMap.get(kpName).paperCount++
+      })
+    }
+  })
+
+  const sortedGroups = Array.from(groupMap.values()).sort((a, b) => {
+    if (a.name === '未分类') return 1
+    if (b.name === '未分类') return -1
+    return a.name.localeCompare(b.name)
+  })
+
+  expandedFolderList.value = sortedGroups
+  if (sortedGroups.length > 0 && expandedFolders.value.size === 0) {
+    sortedGroups.slice(0, 2).forEach(g => expandedFolders.value.add(g.id))
+    expandedFolders.value = new Set(expandedFolders.value)
+  }
+
+  // 调试：输出分组信息
+  console.log('[知识点分组] 共', sortedGroups.length, '个分组', sortedGroups.map(g => ({ name: g.name, count: g.paperCount })))
 }
 
 async function loadFolders() {
@@ -763,8 +942,12 @@ function handleNextPage() {
 
 function switchView(view) {
   currentView.value = view
-  // 切换视角时重置筛选
+  // 切换视角时重置筛选和展开状态
+  expandedFolders.value = new Set()
   if (view === 'folder') {
+    selectedPoliceTypeIds.value = []
+    selectedCourseIds.value = []
+    selectedKpIds.value = []
     loadPapers()
   } else if (view === 'policeType') {
     selectedPoliceTypeIds.value = []

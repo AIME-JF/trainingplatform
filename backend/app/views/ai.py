@@ -3,7 +3,7 @@ AI 任务路由
 """
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, status, UploadFile
 from sqlalchemy.orm import Session
 
 from app.controllers import AIController
@@ -241,6 +241,22 @@ def confirm_paper_assembly_task(
     return StandardResponse(data=result)
 
 
+@router.delete(
+    "/paper-assembly-tasks/{task_id}",
+    response_model=StandardResponse,
+    summary="删除 AI 自动组卷任务",
+)
+def delete_paper_assembly_task(
+    task_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = AIController(db)
+    result = controller.delete_paper_assembly_task(task_id, current_user.user_id)
+    return StandardResponse(data=result)
+
+
 @router.get(
     "/paper-generation-tasks",
     response_model=StandardResponse[PaginatedResponse[AITaskSummaryResponse]],
@@ -324,6 +340,22 @@ def confirm_paper_generation_task(
     return StandardResponse(data=result)
 
 
+@router.delete(
+    "/paper-generation-tasks/{task_id}",
+    response_model=StandardResponse,
+    summary="删除 AI 自动生成试卷任务",
+)
+def delete_paper_generation_task(
+    task_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = AIController(db)
+    result = controller.delete_paper_generation_task(task_id, current_user.user_id)
+    return StandardResponse(data=result)
+
+
 @router.get(
     "/paper-document-generation-tasks",
     response_model=StandardResponse[PaginatedResponse[AITaskSummaryResponse]],
@@ -404,6 +436,22 @@ def confirm_paper_document_generation_task(
     _require_admin_or_instructor(db, current_user.user_id)
     controller = AIController(db)
     result = controller.confirm_paper_document_generation_task(task_id, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.delete(
+    "/paper-document-generation-tasks/{task_id}",
+    response_model=StandardResponse,
+    summary="删除 AI 文档生成试卷任务",
+)
+def delete_paper_document_generation_task(
+    task_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = AIController(db)
+    result = controller.delete_paper_document_generation_task(task_id, current_user.user_id)
     return StandardResponse(data=result)
 
 
@@ -723,3 +771,19 @@ def confirm_personal_training_task(
     controller = AIController(db)
     result = controller.confirm_personal_training_task(task_id, current_user.user_id)
     return StandardResponse(data=result)
+
+
+@router.post(
+    "/files/parse",
+    response_model=StandardResponse,
+    summary="解析文档提取文本（PDF/DOCX/XLSX/CSV/TXT）",
+)
+async def parse_document_file(
+    file: UploadFile = File(...),
+    current_user: TokenData = Depends(get_current_user),
+):
+    from app.services.document_parser import DocumentParserService
+    service = DocumentParserService()
+    content = await file.read()
+    text = service.parse(content, file.filename or "")
+    return StandardResponse(data={"text": text, "filename": file.filename})

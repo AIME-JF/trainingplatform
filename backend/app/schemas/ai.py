@@ -19,6 +19,7 @@ AITaskType = Literal[
     "question_generation",
     "paper_assembly",
     "paper_generation",
+    "paper_document_generation",
     "resource_generation",
     "schedule_generation",
     "personal_training_plan_generation",
@@ -47,7 +48,7 @@ class AITaskQuestionDraft(BaseModel):
 
     temp_id: str = Field(..., description="任务内临时题目 ID")
     source_question_id: Optional[int] = Field(None, description="来源题目 ID，编辑原题时用于复用")
-    origin: str = Field("generated", description="题目来源: generated/existing/manual")
+    origin: str = Field("generated", description="题目来源: generated/existing/manual/ai_generated")
     type: str = Field(..., description="题目类型: single/multi/judge")
     content: str = Field(..., description="题干")
     options: Optional[List[dict]] = Field(default=None, description="选项 [{key, text}]")
@@ -108,7 +109,7 @@ class AIQuestionTaskCreateRequest(BaseModel):
 
     task_name: str = Field(..., max_length=200, description="任务名称")
     topic: str = Field(..., max_length=200, description="出题主题")
-    source_text: Optional[str] = Field(None, max_length=4000, description="参考文本")
+    source_text: Optional[str] = Field(None, max_length=8000, description="参考文本")
     knowledge_points: List[str] = Field(default_factory=list, description="知识点列表")
     question_count: int = Field(10, ge=1, le=50, description="题目数量（当前 AI 智能出题最多 20 题）")
     question_types: List[str] = Field(default_factory=list, description="题型列表（当前 AI 智能出题每次只能选择一种题型）")
@@ -245,7 +246,7 @@ class AIPaperGenerationTaskCreateRequest(BaseModel):
     duration: int = Field(60, ge=10, le=300, description="考试时长")
     passing_score: int = Field(60, ge=1, description="及格分")
     topic: str = Field(..., max_length=200, description="生成主题")
-    source_text: Optional[str] = Field(None, max_length=4000, description="参考文本")
+    source_text: Optional[str] = Field(None, max_length=8000, description="参考文本")
     knowledge_points: List[str] = Field(default_factory=list, description="知识点列表")
     difficulty: int = Field(3, ge=1, le=5, description="整体难度")
     police_type_id: Optional[int] = Field(None, description="警种 ID")

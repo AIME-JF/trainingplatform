@@ -278,6 +278,10 @@ class ExamPaperResponse(BaseModel):
     linked_exam_count: int = 0
     linked_admission_exam_count: int = 0
     knowledge_point_names: List[str] = Field(default_factory=list, description="知识点名称列表")
+    police_type_id: Optional[int] = None
+    police_type_name: Optional[str] = None
+    course_id: Optional[int] = None
+    course_name: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 

@@ -16,6 +16,7 @@ from app.models import (
     ExamPaper,
     ExamPaperQuestion,
     ExamRecord,
+    KnowledgePoint,
     PaperFolder,
     Question,
     Role,
@@ -823,7 +824,10 @@ class ExamService:
         return (
             selectinload(ExamPaper.paper_questions).joinedload(
                 ExamPaperQuestion.question
-            ).selectinload(Question.knowledge_points),
+            ).options(
+                joinedload(Question.police_type),
+                selectinload(Question.knowledge_points).joinedload(KnowledgePoint.course),
+            ),
             selectinload(ExamPaper.training_exams),
             selectinload(ExamPaper.admission_exams),
         )
@@ -1213,12 +1217,54 @@ class ExamService:
         # 从试卷题目快照中提取知识点名称
         knowledge_point_names: List[str] = []
         seen_kp_names = set()
+
+        # 收集警种信息
+        police_type_ids = set()
+        police_type_names = set()
+
+        # 收集课程信息
+        course_ids = set()
+        course_names = set()
+
         for pq in (paper.paper_questions or []):
+            # 提取知识点名称
             if pq.knowledge_points:
                 for kp_name in pq.knowledge_points:
                     if kp_name and kp_name not in seen_kp_names:
                         seen_kp_names.add(kp_name)
                         knowledge_point_names.append(kp_name)
+
+            # 提取警种信息
+            if pq.question and pq.question.police_type:
+                police_type_ids.add(pq.question.police_type_id)
+                police_type_names.add(pq.question.police_type.name)
+
+            # 提取课程信息（通过知识点的course关联）
+            if pq.question and pq.question.knowledge_points:
+                for kp in pq.question.knowledge_points:
+                    if kp.course_id and kp.course:
+                        course_ids.add(kp.course_id)
+                        course_names.add(kp.course.title)
+
+        # 警种：如果只有一个警种就用它，否则标记为综合类
+        police_type_id = None
+        police_type_name = None
+        if len(police_type_ids) == 1:
+            police_type_id = next(iter(police_type_ids))
+            police_type_name = next(iter(police_type_names))
+        elif len(police_type_ids) > 1:
+            police_type_id = 0
+            police_type_name = "综合类"
+
+        # 课程：如果只有一个课程就用它
+        course_id = None
+        course_name = None
+        if len(course_ids) == 1:
+            course_id = next(iter(course_ids))
+            course_name = next(iter(course_names))
+        elif len(course_ids) > 1:
+            course_id = 0
+            course_name = "综合类"
 
         return ExamPaperResponse(
             id=paper.id,
@@ -1237,6 +1283,10 @@ class ExamService:
             linked_exam_count=linked_exam_count,
             linked_admission_exam_count=linked_admission_exam_count,
             knowledge_point_names=knowledge_point_names,
+            police_type_id=police_type_id,
+            police_type_name=police_type_name,
+            course_id=course_id,
+            course_name=course_name,
             created_at=paper.created_at,
             updated_at=paper.updated_at,
         )

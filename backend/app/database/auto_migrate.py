@@ -192,6 +192,9 @@ class AutoMigrate:
 
     def __init__(self):
         self.project_root = Path(__file__).parent.parent.parent
+        backend_dir = self.project_root / "backend"
+        if (backend_dir / "alembic").exists():
+            self.project_root = backend_dir
         self.alembic_cfg_path = self.project_root / "alembic.ini"
 
         if not self.alembic_cfg_path.exists():
