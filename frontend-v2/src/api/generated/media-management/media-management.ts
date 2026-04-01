@@ -23,6 +23,9 @@ export const uploadFileApiV1MediaUploadPost = (
     bodyUploadFileApiV1MediaUploadPost: BodyUploadFileApiV1MediaUploadPost,
  ) => {const formData = new FormData();
 formData.append(`file`, bodyUploadFileApiV1MediaUploadPost.file);
+if(bodyUploadFileApiV1MediaUploadPost.duration_seconds !== undefined && bodyUploadFileApiV1MediaUploadPost.duration_seconds !== null) {
+ formData.append(`duration_seconds`, bodyUploadFileApiV1MediaUploadPost.duration_seconds.toString())
+ }
 
       return customInstance<StandardResponseMediaFileResponse>(
       {url: `/api/v1/media/upload`, method: 'POST',

@@ -9,10 +9,20 @@
             <a-button ghost danger>删除课程</a-button>
           </a-popconfirm>
         </div>
+
         <h1 class="header-title">{{ course?.title || '课程详情' }}</h1>
+
         <div class="header-meta">
           <span class="meta-badge">{{ getCourseCategoryLabel(course?.category) }}</span>
           <span class="meta-badge">{{ getCourseFileTypeLabel(course?.file_type) }}</span>
+          <span class="meta-badge">{{ formatCourseDuration(course?.duration_seconds, course?.duration) }}</span>
+          <span
+            v-if="authStore.isStudent && course"
+            class="meta-badge meta-badge-status"
+            :style="{ color: getCourseLearningStatusColor(course.learning_status) }"
+          >
+            {{ getCourseLearningStatusLabel(course.learning_status) }}
+          </span>
           <span class="meta-item">主讲教官：{{ course?.instructor_name || '-' }}</span>
           <span class="meta-item">章节数：{{ course?.chapter_count || 0 }}</span>
         </div>
@@ -26,15 +36,30 @@
       <a-empty v-else-if="!course" description="课程不存在或无权限查看" class="loading-block" />
 
       <template v-else>
-        <a-row :gutter="[16, 16]">
+        <a-row :gutter="[18, 18]">
           <a-col :xs="24" :xl="16">
             <a-card :bordered="false" class="viewer-card">
+              <div class="viewer-head">
+                <div>
+                  <h2>{{ currentChapter?.title || '请选择章节' }}</h2>
+                  <p>{{ currentChapter?.resource_title || '当前章节使用课程绑定资源进行预览' }}</p>
+                </div>
+                <div v-if="currentChapter" class="viewer-meta">
+                  <span class="viewer-meta-item">{{ formatDurationClock(currentChapter.duration_seconds, currentChapter.duration) }}</span>
+                  <span class="viewer-meta-item">{{ currentChapter.progress || 0 }}%</span>
+                </div>
+              </div>
+
               <template v-if="currentChapter?.content_type === 'video' && currentChapter.file_url">
                 <video
+                  ref="videoElement"
                   :src="currentChapter.file_url"
                   class="course-video"
                   controls
                   preload="metadata"
+                  @loadedmetadata="handleVideoLoadedMetadata"
+                  @timeupdate="handleVideoTimeUpdate"
+                  @pause="flushVideoProgress"
                   @ended="markChapterCompleted"
                 />
               </template>
@@ -47,6 +72,14 @@
                 <iframe :src="currentChapter.file_url" class="doc-frame" title="课程文档预览" />
               </template>
               <a-empty v-else description="当前章节暂无可预览内容" />
+
+              <div v-if="authStore.isStudent && currentChapter" class="viewer-actions">
+                <div class="viewer-progress-summary">
+                  <span class="viewer-summary-label">当前章节进度</span>
+                  <strong>{{ currentChapter.progress || 0 }}%</strong>
+                </div>
+                <a-button type="primary" @click="markChapterCompleted">标记本章已完成</a-button>
+              </div>
             </a-card>
 
             <a-card :bordered="false" class="section-card">
@@ -56,9 +89,26 @@
                   <a-descriptions :column="{ xs: 1, md: 2 }" size="small">
                     <a-descriptions-item label="创建者">{{ course.created_by_name || '-' }}</a-descriptions-item>
                     <a-descriptions-item label="主讲教官">{{ course.instructor_name || '-' }}</a-descriptions-item>
-                    <a-descriptions-item label="章节数量">{{ course.chapters?.length || 0 }} 章</a-descriptions-item>
+                    <a-descriptions-item label="课程时长">{{ formatCourseDuration(course.duration_seconds, course.duration) }}</a-descriptions-item>
                     <a-descriptions-item label="课程标签">{{ formatTagList(course.tags || null) }}</a-descriptions-item>
                   </a-descriptions>
+                </a-tab-pane>
+
+                <a-tab-pane v-if="authStore.isStudent" key="notes" tab="学习笔记">
+                  <div class="notes-panel">
+                    <div class="notes-meta">
+                      <span>支持边学边记，内容仅自己可见。</span>
+                      <span>{{ course.note?.updated_at ? `最近保存：${formatDateTime(course.note.updated_at)}` : '尚未保存笔记' }}</span>
+                    </div>
+                    <a-textarea
+                      v-model:value="noteContent"
+                      :rows="10"
+                      placeholder="记录重点、疑问、案例要点或后续复习计划"
+                    />
+                    <div class="notes-actions">
+                      <a-button type="primary" :loading="noteSaving" @click="handleSaveNote">保存笔记</a-button>
+                    </div>
+                  </div>
                 </a-tab-pane>
 
                 <a-tab-pane v-if="course.can_view_learning_status" key="learning" tab="学习情况">
@@ -141,26 +191,44 @@
           </a-col>
 
           <a-col :xs="24" :xl="8">
-            <a-card title="课程章节" :bordered="false" class="section-card">
+            <a-card title="课程章节" :bordered="false" class="section-card chapter-card">
+              <div class="chapter-summary">
+                <span>共 {{ course.chapter_count || 0 }} 章</span>
+                <span v-if="authStore.isStudent">已完成 {{ course.completed_chapter_count || 0 }} 章</span>
+              </div>
+
               <div class="chapter-list">
                 <div
                   v-for="(chapter, index) in course.chapters || []"
                   :key="chapter.id || index"
                   class="chapter-item"
-                  :class="{ active: currentChapterIndex === index }"
+                  :class="{
+                    active: currentChapterIndex === index,
+                    completed: (chapter.progress || 0) >= 100,
+                    studying: (chapter.progress || 0) > 0 && (chapter.progress || 0) < 100,
+                  }"
                   @click="selectChapter(index)"
                 >
-                  <div class="chapter-index">{{ index + 1 }}</div>
+                  <div class="chapter-index">
+                    <CheckCircleFilled v-if="(chapter.progress || 0) >= 100" />
+                    <span v-else>{{ index + 1 }}</span>
+                  </div>
+
                   <div class="chapter-content">
-                    <h4>{{ chapter.title }}</h4>
+                    <div class="chapter-top">
+                      <h4>{{ chapter.title }}</h4>
+                      <span class="chapter-duration">{{ formatDurationClock(chapter.duration_seconds, chapter.duration) }}</span>
+                    </div>
                     <p>{{ chapter.resource_title || '未绑定资源' }}</p>
+                    <div class="chapter-status-row">
+                      <span class="chapter-status-text">
+                        {{ (chapter.progress || 0) >= 100 ? '已学完' : (chapter.progress || 0) > 0 ? '学习中' : '未开始' }}
+                      </span>
+                      <span>{{ chapter.progress || 0 }}%</span>
+                    </div>
                     <a-progress :percent="chapter.progress || 0" size="small" />
                   </div>
                 </div>
-              </div>
-
-              <div v-if="authStore.isStudent && currentChapter" class="chapter-actions">
-                <a-button type="primary" block @click="markChapterCompleted">标记本章已完成</a-button>
               </div>
             </a-card>
           </a-col>
@@ -171,7 +239,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { CheckCircleFilled } from '@ant-design/icons-vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import type { CourseLearningStatusResponse, CourseQAResponse, CourseResponse, ResourceListItemResponse } from '@/api/learning-resource'
@@ -181,19 +250,22 @@ import {
   deleteCourse,
   getCourseDetail,
   getCourseLearningStatus,
-  listCourseQa,
   listResources,
-  listCourseResources,
   unbindCourseResource,
   updateCourseChapterProgress,
+  updateCourseNote,
 } from '@/api/learning-resource'
 import { useAuthStore } from '@/stores/auth'
 import CourseEditorModal from '@/components/resource/CourseEditorModal.vue'
 import {
+  formatCourseDuration,
   formatDateTime,
+  formatDurationClock,
   formatTagList,
   getCourseCategoryLabel,
   getCourseFileTypeLabel,
+  getCourseLearningStatusColor,
+  getCourseLearningStatusLabel,
 } from '@/utils/learning-resource'
 
 const route = useRoute()
@@ -202,6 +274,7 @@ const authStore = useAuthStore()
 
 const loading = ref(false)
 const learningLoading = ref(false)
+const noteSaving = ref(false)
 const course = ref<CourseResponse | null>(null)
 const learningStatus = ref<CourseLearningStatusResponse[]>([])
 const qaList = ref<CourseQAResponse[]>([])
@@ -213,6 +286,12 @@ const editorVisible = ref(false)
 const selectedResourceId = ref<number | undefined>()
 const resourceOptions = ref<Array<{ value: number; label: string }>>([])
 const courseResources = ref<ResourceListItemResponse[]>([])
+const noteContent = ref('')
+const videoElement = ref<HTMLVideoElement | null>(null)
+const progressTimer = ref<number | null>(null)
+const progressSaving = ref(false)
+const lastSavedSignature = ref('')
+const restoringPlayback = ref(false)
 
 const learningColumns = [
   { title: '学员', dataIndex: 'user_name', key: 'user_name', width: 140 },
@@ -236,6 +315,16 @@ onMounted(() => {
   void Promise.all([fetchCourse(), loadBindResources()])
 })
 
+onBeforeUnmount(() => {
+  clearProgressTimer()
+  void flushVideoProgress()
+})
+
+watch(() => route.params.id, () => {
+  clearProgressTimer()
+  void Promise.all([fetchCourse(), loadBindResources()])
+})
+
 async function fetchCourse() {
   const courseId = Number(route.params.id)
   if (!courseId) {
@@ -243,18 +332,38 @@ async function fetchCourse() {
   }
   loading.value = true
   try {
-    course.value = await getCourseDetail(courseId)
-    qaList.value = await listCourseQa(courseId)
-    courseResources.value = await listCourseResources(courseId)
-    if (course.value.can_view_learning_status) {
+    const detail = await getCourseDetail(courseId)
+    course.value = detail
+    qaList.value = [...(detail.qa_list || [])]
+    courseResources.value = [...(detail.resources || [])]
+    noteContent.value = detail.note?.content || ''
+    currentChapterIndex.value = resolveInitialChapterIndex(detail)
+    lastSavedSignature.value = ''
+    if (detail.can_view_learning_status) {
       await fetchLearningStatus(courseId)
+    } else {
+      learningStatus.value = []
     }
-    currentChapterIndex.value = 0
   } catch (error) {
     message.error(error instanceof Error ? error.message : '加载课程详情失败')
   } finally {
     loading.value = false
   }
+}
+
+function resolveInitialChapterIndex(detail: CourseResponse) {
+  if (detail.last_studied_chapter_id) {
+    const index = (detail.chapters || []).findIndex((item) => item.id === detail.last_studied_chapter_id)
+    if (index >= 0) {
+      return index
+    }
+  }
+  const inProgressIndex = (detail.chapters || []).findIndex((item) => (item.progress || 0) > 0 && (item.progress || 0) < 100)
+  if (inProgressIndex >= 0) {
+    return inProgressIndex
+  }
+  const notStartedIndex = (detail.chapters || []).findIndex((item) => (item.progress || 0) <= 0)
+  return notStartedIndex >= 0 ? notStartedIndex : 0
 }
 
 async function fetchLearningStatus(courseId: number) {
@@ -278,22 +387,154 @@ async function loadBindResources() {
   }
 }
 
-function selectChapter(index: number) {
+function clearProgressTimer() {
+  if (progressTimer.value !== null) {
+    window.clearTimeout(progressTimer.value)
+    progressTimer.value = null
+  }
+}
+
+function handleVideoLoadedMetadata() {
+  if (!videoElement.value || !currentChapter.value?.playback_seconds) {
+    return
+  }
+  const duration = Number(videoElement.value.duration || 0)
+  if (!Number.isFinite(duration) || duration <= 1) {
+    return
+  }
+  restoringPlayback.value = true
+  videoElement.value.currentTime = Math.min(currentChapter.value.playback_seconds, Math.max(duration - 1, 0))
+  window.setTimeout(() => {
+    restoringPlayback.value = false
+  }, 200)
+}
+
+function handleVideoTimeUpdate() {
+  if (!authStore.isStudent || restoringPlayback.value) {
+    return
+  }
+  clearProgressTimer()
+  progressTimer.value = window.setTimeout(() => {
+    void persistCurrentVideoProgress()
+  }, 1500)
+}
+
+async function persistCurrentVideoProgress(forceComplete = false, silent = true) {
+  if (!authStore.isStudent || !course.value?.id || !currentChapter.value?.id || currentChapter.value.content_type !== 'video' || !videoElement.value) {
+    return
+  }
+
+  const duration = Number(videoElement.value.duration || 0)
+  if (!Number.isFinite(duration) || duration <= 0) {
+    return
+  }
+
+  const playbackSeconds = Math.max(Math.floor(videoElement.value.currentTime || 0), 0)
+  const computedProgress = Math.round((playbackSeconds / duration) * 100)
+  const progress = forceComplete
+    ? 100
+    : Math.min(99, Math.max(computedProgress, currentChapter.value.progress || 0, playbackSeconds > 0 ? 1 : 0))
+
+  await submitChapterProgress(progress, playbackSeconds, silent)
+}
+
+async function flushVideoProgress() {
+  clearProgressTimer()
+  await persistCurrentVideoProgress(false, true)
+}
+
+async function submitChapterProgress(progress: number, playbackSeconds: number, silent = true) {
+  if (!course.value?.id || !currentChapter.value?.id || progressSaving.value) {
+    return
+  }
+
+  const signature = `${course.value.id}:${currentChapter.value.id}:${progress}:${playbackSeconds}`
+  if (signature === lastSavedSignature.value) {
+    return
+  }
+
+  progressSaving.value = true
+  try {
+    await updateCourseChapterProgress(course.value.id, currentChapter.value.id, {
+      progress,
+      playback_seconds: playbackSeconds,
+    })
+    lastSavedSignature.value = signature
+    syncLocalProgress(currentChapter.value.id, progress, playbackSeconds)
+    if (!silent) {
+      message.success(progress >= 100 ? '本章已标记完成' : '学习进度已保存')
+    }
+  } catch (error) {
+    if (!silent) {
+      message.error(error instanceof Error ? error.message : '更新学习进度失败')
+    }
+  } finally {
+    progressSaving.value = false
+  }
+}
+
+function syncLocalProgress(chapterId: number, progress: number, playbackSeconds: number) {
+  if (!course.value) {
+    return
+  }
+
+  const chapter = (course.value.chapters || []).find((item) => item.id === chapterId)
+  if (!chapter) {
+    return
+  }
+
+  chapter.progress = Math.max(chapter.progress || 0, progress)
+  chapter.playback_seconds = playbackSeconds
+  chapter.last_studied_at = new Date().toISOString()
+
+  const chapters = course.value.chapters || []
+  const completedCount = chapters.filter((item) => (item.progress || 0) >= 100).length
+  const progressPercent = chapters.length
+    ? Math.round(chapters.reduce((sum, item) => sum + Math.min(Math.max(item.progress || 0, 0), 100), 0) / chapters.length)
+    : 0
+
+  course.value.progress_percent = progressPercent
+  course.value.completed_chapter_count = completedCount
+  course.value.chapter_count = chapters.length
+  course.value.last_studied_at = new Date().toISOString()
+  course.value.last_studied_chapter_id = chapter.id
+  course.value.last_studied_chapter_title = chapter.title
+  course.value.last_playback_seconds = playbackSeconds
+  course.value.learning_status = progressPercent >= 100 ? 'completed' : (progressPercent > 0 || playbackSeconds > 0 ? 'in_progress' : 'not_started')
+}
+
+async function selectChapter(index: number) {
+  if (index === currentChapterIndex.value) {
+    return
+  }
+  await flushVideoProgress()
   currentChapterIndex.value = index
+  lastSavedSignature.value = ''
 }
 
 async function markChapterCompleted() {
-  const courseId = course.value?.id
-  const chapterId = currentChapter.value?.id
-  if (!courseId || !chapterId) {
+  if (!currentChapter.value) {
     return
   }
+  const playbackSeconds = currentChapter.value.content_type === 'video' && videoElement.value
+    ? Math.max(Math.floor(videoElement.value.currentTime || 0), 0)
+    : Math.max(currentChapter.value.playback_seconds || 0, 0)
+  await submitChapterProgress(100, playbackSeconds, false)
+}
+
+async function handleSaveNote() {
+  if (!course.value?.id) {
+    return
+  }
+  noteSaving.value = true
   try {
-    await updateCourseChapterProgress(courseId, chapterId, { progress: 100 })
-    message.success('本章进度已更新')
-    await fetchCourse()
+    const note = await updateCourseNote(course.value.id, { content: noteContent.value })
+    course.value.note = note
+    message.success('笔记已保存')
   } catch (error) {
-    message.error(error instanceof Error ? error.message : '更新学习进度失败')
+    message.error(error instanceof Error ? error.message : '笔记保存失败')
+  } finally {
+    noteSaving.value = false
   }
 }
 
@@ -363,8 +604,8 @@ async function handleDeleteCourse() {
 
 <style scoped>
 .detail-header {
-  background: var(--v2-bg-header);
-  padding: 28px 32px;
+  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 42%, #0f3460 100%);
+  padding: 30px 32px;
 }
 
 .header-actions {
@@ -374,9 +615,9 @@ async function handleDeleteCourse() {
 }
 
 .header-title {
-  font-size: 28px;
+  margin: 0 0 12px;
+  font-size: 30px;
   color: var(--v2-text-white);
-  margin-bottom: 12px;
 }
 
 .header-meta {
@@ -387,13 +628,19 @@ async function handleDeleteCourse() {
 
 .meta-badge,
 .meta-item {
-  color: rgba(255, 255, 255, 0.86);
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .meta-badge {
-  padding: 4px 12px;
-  border-radius: var(--v2-radius-full);
-  background: rgba(255, 255, 255, 0.16);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(10px);
+}
+
+.meta-badge-status {
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.94);
 }
 
 .loading-block {
@@ -404,11 +651,49 @@ async function handleDeleteCourse() {
 
 .viewer-card,
 .section-card {
-  border-radius: var(--v2-radius-lg);
+  border-radius: 20px;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, 0.06);
 }
 
 .viewer-card {
   overflow: hidden;
+}
+
+.viewer-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 22px 0;
+}
+
+.viewer-head h2 {
+  margin: 0 0 6px;
+  font-size: 22px;
+  color: var(--v2-text-primary);
+}
+
+.viewer-head p {
+  margin: 0;
+  color: var(--v2-text-secondary);
+}
+
+.viewer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.viewer-meta-item {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--v2-primary-light);
+  color: var(--v2-primary);
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .course-video,
@@ -419,7 +704,14 @@ async function handleDeleteCourse() {
   max-height: 70vh;
   border: 0;
   display: block;
-  background: #000;
+  background: #0b1220;
+}
+
+.course-video,
+.course-image,
+.doc-frame,
+.image-stage {
+  margin-top: 18px;
 }
 
 .course-image {
@@ -427,7 +719,31 @@ async function handleDeleteCourse() {
 }
 
 .image-stage {
-  background: #000;
+  background: #0b1220;
+}
+
+.viewer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 22px 22px;
+}
+
+.viewer-progress-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.viewer-summary-label {
+  color: var(--v2-text-secondary);
+  font-size: 13px;
+}
+
+.viewer-progress-summary strong {
+  font-size: 24px;
+  color: var(--v2-text-primary);
 }
 
 .section-card {
@@ -438,6 +754,26 @@ async function handleDeleteCourse() {
   color: var(--v2-text-secondary);
   line-height: 1.8;
   margin-bottom: 16px;
+}
+
+.notes-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.notes-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--v2-text-secondary);
+  font-size: 13px;
+}
+
+.notes-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .progress-cell {
@@ -465,7 +801,7 @@ async function handleDeleteCourse() {
 .qa-item {
   padding: 14px;
   border: 1px solid var(--v2-border);
-  border-radius: var(--v2-radius);
+  border-radius: 16px;
 }
 
 .qa-question {
@@ -488,6 +824,19 @@ async function handleDeleteCourse() {
   margin-top: 14px;
 }
 
+.chapter-card {
+  position: sticky;
+  top: 16px;
+}
+
+.chapter-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 16px;
+  color: var(--v2-text-secondary);
+}
+
 .chapter-list {
   display: flex;
   flex-direction: column;
@@ -498,45 +847,95 @@ async function handleDeleteCourse() {
   display: flex;
   gap: 12px;
   padding: 14px;
-  border: 1px solid var(--v2-border);
-  border-radius: var(--v2-radius);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 18px;
+  background: #fff;
   cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.chapter-item:hover {
+  transform: translateY(-1px);
+  border-color: rgba(75, 110, 245, 0.24);
+  box-shadow: 0 12px 24px rgba(75, 110, 245, 0.08);
 }
 
 .chapter-item.active {
-  border-color: var(--v2-primary);
-  background: var(--v2-primary-light);
+  border-color: rgba(75, 110, 245, 0.35);
+  background: linear-gradient(180deg, rgba(238, 242, 255, 0.94), rgba(255, 255, 255, 0.98));
+}
+
+.chapter-item.completed {
+  border-color: rgba(34, 197, 94, 0.24);
+}
+
+.chapter-item.studying {
+  border-color: rgba(37, 99, 235, 0.2);
 }
 
 .chapter-index {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  border-radius: 999px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--v2-primary);
   color: #fff;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
+}
+
+.chapter-item.completed .chapter-index {
+  background: #16a34a;
 }
 
 .chapter-content {
   flex: 1;
+  min-width: 0;
 }
 
-.chapter-content h4 {
-  margin-bottom: 8px;
+.chapter-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.chapter-top h4 {
+  margin: 0;
+  color: var(--v2-text-primary);
+}
+
+.chapter-duration {
+  color: var(--v2-text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .chapter-content p {
+  margin: 0 0 10px;
   color: var(--v2-text-secondary);
   font-size: 13px;
-  margin-bottom: 10px;
 }
 
-.chapter-actions {
-  margin-top: 16px;
+.chapter-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+  color: var(--v2-text-secondary);
+  font-size: 12px;
+}
+
+.chapter-status-text {
+  font-weight: 600;
 }
 
 @media (max-width: 768px) {
@@ -545,9 +944,22 @@ async function handleDeleteCourse() {
   }
 
   .header-actions,
-  .resource-bind-toolbar {
+  .resource-bind-toolbar,
+  .viewer-head,
+  .viewer-actions,
+  .notes-meta {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .chapter-card {
+    position: static;
+  }
+
+  .course-video,
+  .course-image,
+  .doc-frame {
+    min-height: 280px;
   }
 }
 </style>

@@ -1,7 +1,7 @@
 """
 文件管理路由
 """
-from fastapi import APIRouter, Depends, UploadFile, File
+from fastapi import APIRouter, Depends, UploadFile, File, Form
 from fastapi.responses import FileResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
@@ -18,6 +18,7 @@ router = APIRouter(prefix="/media", tags=["media_management"])
 @router.post("/upload", response_model=StandardResponse[MediaFileResponse], summary="上传文件")
 async def upload_file(
     file: UploadFile = File(...),
+    duration_seconds: int | None = Form(None),
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -27,7 +28,7 @@ async def upload_file(
     相同文件自动秒传。
     """
     controller = MediaController(db)
-    result = await controller.upload_file(file, current_user.user_id)
+    result = await controller.upload_file(file, current_user.user_id, duration_seconds=duration_seconds)
     return StandardResponse(data=result)
 
 

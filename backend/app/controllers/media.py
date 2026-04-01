@@ -20,7 +20,12 @@ class MediaController:
         self.db = db
         self.service = MediaService(db)
 
-    async def upload_file(self, file: UploadFile, uploader_id: int) -> MediaFileResponse:
+    async def upload_file(
+        self,
+        file: UploadFile,
+        uploader_id: int,
+        duration_seconds: int | None = None,
+    ) -> MediaFileResponse:
         """上传文件"""
         # 校验文件名
         if not file.filename:
@@ -36,7 +41,7 @@ class MediaController:
             )
 
         try:
-            return await self.service.upload_file(file, uploader_id)
+            return await self.service.upload_file(file, uploader_id, duration_seconds=duration_seconds)
         except Exception as e:
             logger.error(f"文件上传异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="文件上传失败")

@@ -13,6 +13,7 @@ export interface MediaFileResponse {
   filename: string;
   mime_type?: string | null;
   size?: number;
+  duration_seconds?: number;
   url?: string;
   created_at?: string | null;
 }

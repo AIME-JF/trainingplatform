@@ -4,6 +4,8 @@
 import hashlib
 import io
 import json
+import shutil
+import subprocess
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -80,7 +82,12 @@ class MediaService:
             MediaService._bucket_policy_ready = True
             logger.info(f"MinIO桶策略已设置为公共只读: {bucket}")
 
-    async def upload_file(self, file: UploadFile, uploader_id: int) -> MediaFileResponse:
+    async def upload_file(
+        self,
+        file: UploadFile,
+        uploader_id: int,
+        duration_seconds: Optional[int] = None,
+    ) -> MediaFileResponse:
         """
         上传文件到 MinIO，写入数据库记录，返回文件信息。
         流式读取，支持大文件；相同 hash 文件自动秒传。
@@ -114,8 +121,19 @@ class MediaService:
             # 秒传检查：如果相同 hash 文件已存在直接复用
             existing = self.db.query(MediaFile).filter(MediaFile.hash == file_hash).first()
             if existing:
+                normalized_duration = self._normalize_duration_seconds(duration_seconds)
+                if normalized_duration and not int(existing.duration_seconds or 0):
+                    existing.duration_seconds = normalized_duration
+                    self.db.commit()
+                    self.db.refresh(existing)
                 logger.info(f"秒传命中: {file.filename} -> id={existing.id}")
                 return self._to_response(existing)
+
+            resolved_duration_seconds = self._resolve_duration_seconds(
+                tmp_path=tmp_path,
+                mime_type=file.content_type,
+                fallback_duration_seconds=duration_seconds,
+            )
 
             # 上传到 MinIO（线程池执行，避免阻塞 FastAPI 事件循环）
             with open(tmp_path, "rb") as f:
@@ -134,6 +152,7 @@ class MediaService:
                 storage_path=object_key,
                 mime_type=file.content_type,
                 size=file_size,
+                duration_seconds=resolved_duration_seconds,
                 hash=file_hash,
                 uploader_id=uploader_id,
             )
@@ -224,3 +243,67 @@ class MediaService:
             url=self.build_url(media),
             created_at=media.created_at,
         )
+
+    def _resolve_duration_seconds(
+        self,
+        *,
+        tmp_path: Path,
+        mime_type: Optional[str],
+        fallback_duration_seconds: Optional[int] = None,
+    ) -> int:
+        normalized_fallback = self._normalize_duration_seconds(fallback_duration_seconds)
+        probed_duration = self._probe_duration_seconds(tmp_path, mime_type=mime_type)
+        if probed_duration:
+            return probed_duration
+        return normalized_fallback
+
+    def _normalize_duration_seconds(self, value: Optional[int]) -> int:
+        try:
+            normalized = int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+        return max(normalized, 0)
+
+    def _probe_duration_seconds(self, tmp_path: Path, *, mime_type: Optional[str] = None) -> int:
+        mime = str(mime_type or "").lower()
+        if "video" not in mime and "audio" not in mime:
+            return 0
+
+        ffprobe_path = shutil.which("ffprobe")
+        if not ffprobe_path:
+            return 0
+
+        try:
+            result = subprocess.run(
+                [
+                    ffprobe_path,
+                    "-v",
+                    "error",
+                    "-show_entries",
+                    "format=duration",
+                    "-of",
+                    "default=noprint_wrappers=1:nokey=1",
+                    str(tmp_path),
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="ignore",
+                timeout=15,
+                check=False,
+            )
+            if result.returncode != 0:
+                logger.warning("ffprobe 解析媒体时长失败: %s", result.stderr.strip())
+                return 0
+
+            duration_text = str(result.stdout or "").strip()
+            if not duration_text:
+                return 0
+
+            duration_value = float(duration_text)
+            if duration_value <= 0:
+                return 0
+            return max(int(round(duration_value)), 0)
+        except Exception as exc:
+            logger.warning(f"自动解析媒体时长失败: {exc}")
+            return 0

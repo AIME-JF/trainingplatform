@@ -24,6 +24,8 @@ export interface ExamPaperResponse {
   usage_count?: number;
   linked_exam_count?: number;
   linked_admission_exam_count?: number;
+  /** 知识点名称列表 */
+  knowledge_point_names?: string[];
   created_at?: string | null;
   updated_at?: string | null;
 }

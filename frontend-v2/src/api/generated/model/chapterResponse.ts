@@ -14,6 +14,7 @@ export interface ChapterResponse {
   title: string;
   sort_order?: number;
   duration?: number;
+  duration_seconds?: number;
   video_url?: string | null;
   doc_url?: string | null;
   file_id?: number | null;

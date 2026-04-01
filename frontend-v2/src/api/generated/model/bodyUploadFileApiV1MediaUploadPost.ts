@@ -7,4 +7,5 @@
 
 export interface BodyUploadFileApiV1MediaUploadPost {
   file: Blob;
+  duration_seconds?: number | null;
 }

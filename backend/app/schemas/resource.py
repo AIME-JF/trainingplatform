@@ -140,6 +140,7 @@ class ResourceMediaLinkResponse(BaseModel):
     file_name: Optional[str] = None
     display_label: Optional[str] = None
     content_type: Optional[str] = None
+    duration_seconds: int = 0
     file_url: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)

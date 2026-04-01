@@ -15,6 +15,7 @@ class MediaFile(Base):
     storage_path = Column(String(1000), nullable=False, comment='存储路径(相对)')
     mime_type = Column(String(100), nullable=True, comment='MIME类型')
     size = Column(BigInteger, default=0, comment='文件大小(字节)')
+    duration_seconds = Column(Integer, default=0, comment='媒体时长(秒)')
     hash = Column(String(64), nullable=True, index=True, comment='SHA256哈希(秒传)')
     uploader_id = Column(Integer, ForeignKey('users.id'), nullable=True, comment='上传者ID')
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment='上传时间')

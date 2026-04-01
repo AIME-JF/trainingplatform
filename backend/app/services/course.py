@@ -72,13 +72,21 @@ class CourseService:
         category: Optional[str] = None,
         sort: Optional[str] = None,
         instructor_id: Optional[int] = None,
+        is_required: Optional[bool] = None,
+        learning_status: Optional[str] = None,
+        file_type: Optional[str] = None,
+        created_from: Optional[datetime] = None,
+        created_to: Optional[datetime] = None,
         user_id: Optional[int] = None,
     ) -> PaginatedResponse[CourseListResponse]:
         """获取课程列表"""
         query = self.db.query(Course).options(
             joinedload(Course.creator),
             joinedload(Course.instructor),
-            selectinload(Course.chapters),
+            selectinload(Course.chapters).joinedload(Chapter.file),
+            selectinload(Course.chapters).joinedload(Chapter.resource)
+            .selectinload(Resource.media_links)
+            .joinedload(ResourceMediaLink.media_file),
             selectinload(Course.tag_relations).joinedload(CourseTagRelation.tag),
         )
 
@@ -98,13 +106,15 @@ class CourseService:
             query = query.filter(Course.category == category)
         if instructor_id is not None:
             query = query.filter(Course.instructor_id == instructor_id)
-
-        if sort == "rating":
-            query = query.order_by(Course.rating.desc())
-        elif sort == "students":
-            query = query.order_by(Course.student_count.desc())
-        else:
-            query = query.order_by(Course.created_at.desc())
+        if is_required is not None:
+            query = query.filter(Course.is_required == is_required)
+        if file_type:
+            query = query.filter(Course.file_type == file_type)
+        if created_from:
+            query = query.filter(Course.created_at >= created_from)
+        if created_to:
+            query = query.filter(Course.created_at <= created_to)
+        query = query.order_by(Course.created_at.desc(), Course.id.desc())
 
         current_user = self._get_scope_user(user_id) if user_id else None
         if user_id and not current_user:
@@ -115,16 +125,28 @@ class CourseService:
         if current_user and not can_manage_all:
             courses = [course for course in courses if self._can_view_course(course, current_user, scope_context)]
 
-        total = len(courses)
-        if size != -1:
-            skip = (page - 1) * size
-            courses = courses[skip: skip + size]
-
         progress_map = self.progress_service.get_user_course_summaries(user_id, courses) if user_id and courses else {}
+        resolved_sort = str(sort or "").strip()
+        if not resolved_sort:
+            resolved_sort = "learning_priority" if self._has_role(current_user, "student") else "latest"
 
         items = []
         for course in courses:
             summary = progress_map.get(course.id)
+            resolved_progress_percent = summary.progress_percent if summary else 0
+            resolved_chapter_count = summary.chapter_count if summary else len(course.chapters or [])
+            resolved_completed_chapter_count = summary.completed_chapter_count if summary else 0
+            resolved_duration_seconds = self._resolve_course_duration_seconds(course)
+            has_learning_activity = bool(
+                summary and (
+                    summary.last_studied_at
+                    or summary.last_playback_seconds > 0
+                    or any(
+                        (record.progress or 0) > 0 or (record.playback_seconds or 0) > 0
+                        for record in summary.chapter_records.values()
+                    )
+                )
+            )
             items.append(
                 CourseListResponse(
                     id=course.id,
@@ -135,7 +157,8 @@ class CourseService:
                     created_by=course.created_by,
                     instructor_id=course.instructor_id,
                     instructor_name=course.instructor.nickname if course.instructor else None,
-                    duration=course.duration,
+                    duration=self._minutes_from_seconds(resolved_duration_seconds, fallback_minutes=course.duration),
+                    duration_seconds=resolved_duration_seconds,
                     student_count=course.student_count,
                     rating=course.rating,
                     difficulty=course.difficulty,
@@ -145,13 +168,29 @@ class CourseService:
                     scope_type=course.scope_type or ADMISSION_SCOPE_ALL,
                     scope_target_ids=self._normalize_scope_target_ids(course.scope_target_ids),
                     tags=self._course_tags(course),
-                    progress_percent=summary.progress_percent if summary else 0,
-                    chapter_count=summary.chapter_count if summary else len(course.chapters or []),
-                    completed_chapter_count=summary.completed_chapter_count if summary else 0,
+                    progress_percent=resolved_progress_percent,
+                    learning_status=self._resolve_learning_status(
+                        resolved_progress_percent,
+                        resolved_chapter_count,
+                        resolved_completed_chapter_count,
+                        has_learning_activity,
+                    ),
+                    chapter_count=resolved_chapter_count,
+                    completed_chapter_count=resolved_completed_chapter_count,
                     last_studied_at=summary.last_studied_at if summary else None,
                     created_at=course.created_at,
                 )
             )
+
+        if learning_status:
+            items = [item for item in items if item.learning_status == learning_status]
+
+        items.sort(key=lambda item: self._build_course_sort_key(item, resolved_sort))
+
+        total = len(items)
+        if size != -1:
+            skip = (page - 1) * size
+            items = items[skip: skip + size]
 
         return PaginatedResponse(
             page=page,
@@ -258,8 +297,6 @@ class CourseService:
             self._sync_course_tags(course, tags)
         if chapters_data is not None:
             self._upsert_course_chapters(course, chapters_data, actor_user_id=actor_user_id)
-
-        course.duration = 0
 
         self.db.commit()
         course = self._get_course_entity(course_id)
@@ -787,7 +824,7 @@ class CourseService:
     ) -> None:
         existing_by_id = {chapter.id: chapter for chapter in (course.chapters or []) if chapter.id is not None}
         keep_ids = set()
-        active_chapters = []
+        total_duration_seconds = 0
 
         for idx, raw in enumerate(chapters_data):
             chapter_data = raw.model_dump(exclude_unset=True) if hasattr(raw, "model_dump") else dict(raw)
@@ -806,8 +843,7 @@ class CourseService:
 
             chapter.title = str(chapter_title).strip()
             chapter.sort_order = chapter_data.get("sort_order", idx)
-            chapter.duration = 0
-            next_resource_id, next_file_id, next_content_type = self._resolve_chapter_binding(
+            next_resource_id, next_file_id, next_content_type, next_duration_seconds = self._resolve_chapter_binding(
                 chapter=chapter,
                 chapter_data=chapter_data,
                 chapter_index=idx,
@@ -815,6 +851,11 @@ class CourseService:
             )
             chapter.resource_id = next_resource_id
             chapter.file_id = next_file_id
+            chapter.duration = self._minutes_from_seconds(
+                next_duration_seconds,
+                fallback_minutes=chapter_data.get("duration", chapter.duration),
+            )
+            total_duration_seconds += next_duration_seconds
 
             if next_resource_id:
                 chapter.video_url = None
@@ -829,7 +870,6 @@ class CourseService:
 
             if chapter.id is not None:
                 keep_ids.add(chapter.id)
-            active_chapters.append(chapter)
 
         for chapter_id, chapter in existing_by_id.items():
             if chapter_id in keep_ids:
@@ -841,7 +881,7 @@ class CourseService:
             self.db.delete(chapter)
 
         self.db.flush()
-        course.duration = 0
+        course.duration = self._minutes_from_seconds(total_duration_seconds, fallback_minutes=course.duration)
         self._refresh_student_count(course.id)
 
     def _resolve_chapter_binding(
@@ -850,7 +890,7 @@ class CourseService:
         chapter_data: dict,
         chapter_index: int,
         actor_user_id: Optional[int] = None,
-    ) -> tuple[Optional[int], Optional[int], Optional[str]]:
+    ) -> tuple[Optional[int], Optional[int], Optional[str], int]:
         requested_resource_id = chapter_data.get("resource_id", chapter.resource_id)
         requested_file_id = chapter_data.get("file_id", chapter.file_id)
 
@@ -899,15 +939,186 @@ class CourseService:
                 getattr(media, "filename", None),
                 getattr(media, "mime_type", None),
             ) or self._normalize_course_resource_content_type(resource.content_type)
-            return requested_resource_id, selected_link.media_file_id, content_type
+            duration_seconds = self._resolve_media_duration_seconds(
+                media,
+                fallback_minutes=chapter_data.get("duration", chapter.duration),
+            )
+            return requested_resource_id, selected_link.media_file_id, content_type, duration_seconds
 
         if chapter.id and chapter.file_id:
             content_type = self._guess_content_type(chapter.video_url) or self._guess_content_type(chapter.doc_url)
             if not content_type and getattr(chapter, "file", None):
                 content_type = self._guess_content_type(chapter.file.filename, chapter.file.mime_type)
-            return None, chapter.file_id, content_type
+            duration_seconds = self._resolve_media_duration_seconds(
+                getattr(chapter, "file", None),
+                fallback_minutes=chapter_data.get("duration", chapter.duration),
+            )
+            return None, chapter.file_id, content_type, duration_seconds
 
         raise ValueError(f"第{chapter_index + 1}章请从资源库选择当前用户已发布的资源")
+
+    def _normalize_duration_seconds(self, value: Any) -> int:
+        try:
+            normalized = int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+        return max(normalized, 0)
+
+    def _minutes_to_seconds(self, value: Any) -> int:
+        try:
+            minutes = int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+        return max(minutes, 0) * 60
+
+    def _minutes_from_seconds(self, duration_seconds: Any, fallback_minutes: Any = 0) -> int:
+        normalized_seconds = self._normalize_duration_seconds(duration_seconds)
+        if normalized_seconds > 0:
+            return max(1, (normalized_seconds + 59) // 60)
+        try:
+            fallback = int(fallback_minutes or 0)
+        except (TypeError, ValueError):
+            return 0
+        return max(fallback, 0)
+
+    def _resolve_media_duration_seconds(
+        self,
+        media: Optional[MediaFile],
+        fallback_minutes: Any = 0,
+    ) -> int:
+        if media:
+            resolved = self._normalize_duration_seconds(getattr(media, "duration_seconds", 0))
+            if resolved > 0:
+                return resolved
+        return self._minutes_to_seconds(fallback_minutes)
+
+    def _resolve_course_duration_seconds(self, course: Optional[Course]) -> int:
+        if not course:
+            return 0
+        total_duration_seconds = sum(
+            self._resolve_chapter_duration_seconds(chapter)
+            for chapter in (course.chapters or [])
+        )
+        if total_duration_seconds > 0:
+            return total_duration_seconds
+        return self._minutes_to_seconds(course.duration)
+
+    def _resolve_chapter_duration_seconds(self, chapter: Optional[Chapter]) -> int:
+        if not chapter:
+            return 0
+        return self._resolve_chapter_media_context(chapter)["duration_seconds"]
+
+    def _resolve_chapter_media_context(self, chapter: Chapter) -> dict[str, Any]:
+        file_url = None
+        content_type = None
+        resource_title = None
+        resource_file_name = None
+        resource_file_label = None
+        duration_seconds = self._minutes_to_seconds(chapter.duration)
+
+        if getattr(chapter, "resource_id", None):
+            resource = getattr(chapter, "resource", None)
+            if resource and resource.status == "published":
+                links = sorted((resource.media_links or []), key=lambda item: (item.sort_order, item.id))
+                media_by_id = {
+                    int(link.media_file_id): link
+                    for link in links
+                    if link.media_file_id is not None
+                }
+                selected_link = media_by_id.get(int(chapter.file_id)) if chapter.file_id is not None else None
+                if not selected_link:
+                    selected_link = next((item for item in links if item.media_role == "main"), None) or (links[0] if links else None)
+                media = selected_link.media_file if selected_link else None
+                if media:
+                    file_url = self._resolve_file_url(media.id, media.storage_path)
+                    content_type = self._guess_content_type(media.filename, media.mime_type) or self._normalize_course_resource_content_type(resource.content_type)
+                    resource_title = resource.title
+                    resource_file_name = media.filename
+                    resource_file_label = self._build_resource_file_label(links, selected_link)
+                    duration_seconds = self._resolve_media_duration_seconds(media, fallback_minutes=chapter.duration)
+
+        if not file_url and chapter.file_id:
+            media = getattr(chapter, "file", None)
+            if not media:
+                media = self.db.query(MediaFile).filter(MediaFile.id == chapter.file_id).first()
+            if media:
+                file_url = self._resolve_file_url(media.id, media.storage_path)
+                content_type = self._guess_content_type(media.filename, media.mime_type)
+                duration_seconds = self._resolve_media_duration_seconds(media, fallback_minutes=chapter.duration)
+            else:
+                file_url = f"{settings.API_V1_STR}/media/files/{chapter.file_id}"
+
+        if not content_type:
+            content_type = (
+                self._guess_content_type(chapter.video_url)
+                or self._guess_content_type(chapter.doc_url)
+                or "video"
+            )
+
+        return {
+            "file_url": file_url,
+            "content_type": content_type,
+            "resource_title": resource_title,
+            "resource_file_name": resource_file_name,
+            "resource_file_label": resource_file_label,
+            "duration_seconds": duration_seconds,
+        }
+
+    def _resolve_learning_status(
+        self,
+        progress_percent: int,
+        chapter_count: int,
+        completed_chapter_count: int = 0,
+        has_activity: bool = False,
+    ) -> str:
+        normalized_progress = min(max(int(progress_percent or 0), 0), 100)
+        normalized_chapter_count = max(int(chapter_count or 0), 0)
+        normalized_completed_count = max(int(completed_chapter_count or 0), 0)
+        if normalized_chapter_count > 0 and normalized_completed_count >= normalized_chapter_count:
+            return "completed"
+        if normalized_progress >= 100:
+            return "completed"
+        if normalized_progress > 0 or has_activity:
+            return "in_progress"
+        return "not_started"
+
+    def _build_course_sort_key(self, item: CourseListResponse, sort: Optional[str]) -> tuple[Any, ...]:
+        resolved_sort = str(sort or "latest").strip() or "latest"
+        created_rank = -self._to_timestamp(item.created_at)
+        last_studied_rank = -self._to_timestamp(item.last_studied_at)
+        rating_rank = -float(item.rating or 0)
+        student_rank = -int(item.student_count or 0)
+        progress_rank = -int(item.progress_percent or 0)
+        duration_rank = self._normalize_duration_seconds(item.duration_seconds) or self._minutes_to_seconds(item.duration)
+        required_rank = 0 if item.is_required else 1
+        learning_rank = self._learning_status_sort_rank(item.learning_status)
+
+        if resolved_sort == "rating":
+            return (rating_rank, student_rank, created_rank, -item.id)
+        if resolved_sort == "students":
+            return (student_rank, rating_rank, created_rank, -item.id)
+        if resolved_sort == "required_first":
+            return (required_rank, learning_rank, last_studied_rank, created_rank, -item.id)
+        if resolved_sort == "learning_priority":
+            return (learning_rank, required_rank, progress_rank, last_studied_rank, created_rank, -item.id)
+        if resolved_sort == "duration_asc":
+            return (duration_rank or 10 ** 12, required_rank, created_rank, -item.id)
+        return (created_rank, required_rank, -item.id)
+
+    def _learning_status_sort_rank(self, learning_status: Optional[str]) -> int:
+        status = str(learning_status or "").strip()
+        if status == "in_progress":
+            return 0
+        if status == "not_started":
+            return 1
+        if status == "completed":
+            return 2
+        return 3
+
+    def _to_timestamp(self, value: Optional[datetime]) -> float:
+        if not value:
+            return 0.0
+        return value.timestamp()
 
     def _refresh_student_count(self, course_id: int) -> None:
         real_count = (
@@ -982,47 +1193,7 @@ class CourseService:
         progress_summary=None,
     ) -> ChapterResponse:
         """转换章节为响应，填充 file_url、类型和用户进度"""
-        file_url = None
-        content_type = None
-        resource_title = None
-        resource_file_name = None
-        resource_file_label = None
-
-        if getattr(chapter, "resource_id", None):
-            resource = getattr(chapter, "resource", None)
-            if resource and resource.status == "published":
-                links = sorted((resource.media_links or []), key=lambda item: (item.sort_order, item.id))
-                media_by_id = {
-                    int(link.media_file_id): link
-                    for link in links
-                    if link.media_file_id is not None
-                }
-                selected_link = media_by_id.get(int(chapter.file_id)) if chapter.file_id is not None else None
-                if not selected_link:
-                    selected_link = next((item for item in links if item.media_role == "main"), None) or (links[0] if links else None)
-                media = selected_link.media_file if selected_link else None
-                if media:
-                    file_url = self._resolve_file_url(media.id, media.storage_path)
-                    content_type = self._guess_content_type(media.filename, media.mime_type) or self._normalize_course_resource_content_type(resource.content_type)
-                    resource_title = resource.title
-                    resource_file_name = media.filename
-                    resource_file_label = self._build_resource_file_label(links, selected_link)
-
-        if not file_url and chapter.file_id:
-            media = getattr(chapter, "file", None) or self.db.query(MediaFile).filter(MediaFile.id == chapter.file_id).first()
-            if media:
-                file_url = self._resolve_file_url(media.id, media.storage_path)
-                content_type = self._guess_content_type(media.filename, media.mime_type)
-            else:
-                file_url = f"{settings.API_V1_STR}/media/files/{chapter.file_id}"
-
-        if not content_type:
-            content_type = (
-                self._guess_content_type(chapter.video_url)
-                or self._guess_content_type(chapter.doc_url)
-                or "video"
-            )
-
+        media_context = self._resolve_chapter_media_context(chapter)
         progress_record = None
         if progress_summary:
             progress_record = progress_summary.chapter_records.get(chapter.id)
@@ -1032,16 +1203,17 @@ class CourseService:
             course_id=chapter.course_id,
             title=chapter.title,
             sort_order=chapter.sort_order,
-            duration=chapter.duration,
+            duration=self._minutes_from_seconds(media_context["duration_seconds"], fallback_minutes=chapter.duration),
+            duration_seconds=media_context["duration_seconds"],
             video_url=chapter.video_url,
             doc_url=chapter.doc_url,
             file_id=chapter.file_id,
             resource_id=getattr(chapter, "resource_id", None),
-            resource_title=resource_title,
-            resource_file_name=resource_file_name,
-            resource_file_label=resource_file_label,
-            file_url=file_url,
-            content_type=content_type,
+            resource_title=media_context["resource_title"],
+            resource_file_name=media_context["resource_file_name"],
+            resource_file_label=media_context["resource_file_label"],
+            file_url=media_context["file_url"],
+            content_type=media_context["content_type"],
             progress=progress_record.progress if progress_record else 0,
             playback_seconds=int(progress_record.playback_seconds or 0) if progress_record else 0,
             last_studied_at=progress_record.last_studied_at if progress_record else None,
@@ -1064,6 +1236,20 @@ class CourseService:
         note = self.get_course_note(course.id, user_id) if user_id else None
         qa_list = self.get_course_qa(course.id)
         resources = self.list_course_resources(course.id)
+        resolved_duration_seconds = self._resolve_course_duration_seconds(course)
+        resolved_chapter_count = progress_summary.chapter_count if progress_summary else len(sorted_chapters)
+        resolved_completed_chapter_count = progress_summary.completed_chapter_count if progress_summary else 0
+        resolved_progress_percent = progress_summary.progress_percent if progress_summary else 0
+        has_learning_activity = bool(
+            progress_summary and (
+                progress_summary.last_studied_at
+                or progress_summary.last_playback_seconds > 0
+                or any(
+                    (record.progress or 0) > 0 or (record.playback_seconds or 0) > 0
+                    for record in progress_summary.chapter_records.values()
+                )
+            )
+        )
 
         return CourseResponse(
             id=course.id,
@@ -1075,7 +1261,8 @@ class CourseService:
             created_by_name=course.creator.nickname if course.creator else None,
             instructor_id=course.instructor_id,
             instructor_name=course.instructor.nickname if course.instructor else None,
-            duration=course.duration,
+            duration=self._minutes_from_seconds(resolved_duration_seconds, fallback_minutes=course.duration),
+            duration_seconds=resolved_duration_seconds,
             student_count=course.student_count,
             rating=course.rating,
             difficulty=course.difficulty,
@@ -1085,9 +1272,15 @@ class CourseService:
             scope_type=course.scope_type or ADMISSION_SCOPE_ALL,
             scope_target_ids=self._normalize_scope_target_ids(course.scope_target_ids),
             tags=self._course_tags(course),
-            progress_percent=progress_summary.progress_percent if progress_summary else 0,
-            chapter_count=progress_summary.chapter_count if progress_summary else len(sorted_chapters),
-            completed_chapter_count=progress_summary.completed_chapter_count if progress_summary else 0,
+            progress_percent=resolved_progress_percent,
+            learning_status=self._resolve_learning_status(
+                resolved_progress_percent,
+                resolved_chapter_count,
+                resolved_completed_chapter_count,
+                has_learning_activity,
+            ),
+            chapter_count=resolved_chapter_count,
+            completed_chapter_count=resolved_completed_chapter_count,
             last_studied_at=progress_summary.last_studied_at if progress_summary else None,
             last_studied_chapter_id=progress_summary.last_studied_chapter_id if progress_summary else None,
             last_studied_chapter_title=progress_summary.last_studied_chapter_title if progress_summary else None,

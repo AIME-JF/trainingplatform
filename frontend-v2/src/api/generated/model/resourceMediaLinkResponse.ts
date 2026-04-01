@@ -13,5 +13,6 @@ export interface ResourceMediaLinkResponse {
   file_name?: string | null;
   display_label?: string | null;
   content_type?: string | null;
+  duration_seconds?: number;
   file_url?: string | null;
 }
