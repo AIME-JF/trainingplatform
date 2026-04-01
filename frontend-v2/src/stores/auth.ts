@@ -54,9 +54,15 @@ export const useAuthStore = defineStore('auth', () => {
 
     // 提取权限
     const permSet = new Set<string>()
-    const directPerms = (user.permissions as Array<Record<string, string>>) || []
+    const directPerms = (user.permissions as Array<Record<string, string> | string>) || []
     for (const p of directPerms) {
-      if (p.code?.trim()) permSet.add(p.code.trim())
+      if (typeof p === 'string' && p.trim()) {
+        permSet.add(p.trim())
+        continue
+      }
+      if (p && typeof p === 'object' && 'code' in p && typeof p.code === 'string' && p.code.trim()) {
+        permSet.add(p.code.trim())
+      }
     }
     for (const r of roles) {
       const rolePerms = (r.permissions as Array<Record<string, string>>) || []
