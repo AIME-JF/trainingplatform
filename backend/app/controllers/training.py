@@ -262,9 +262,9 @@ class TrainingController:
     def get_user_training_histories(self, user_id: int):
         return self.service.get_user_training_histories(user_id)
 
-    def start_session_checkin(self, training_id: int, session_key: str, user_id: int):
+    def start_session_checkin(self, training_id: int, session_key: str, user_id: int, checkin_mode: str = "direct", checkin_duration_minutes: int = 15):
         try:
-            return self.service.start_session_checkin(training_id, session_key, user_id)
+            return self.service.start_session_checkin(training_id, session_key, user_id, checkin_mode, checkin_duration_minutes)
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 

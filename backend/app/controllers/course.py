@@ -2,6 +2,7 @@
 课程管理控制器
 """
 from typing import Optional, List
+from datetime import datetime
 from sqlalchemy.orm import Session
 from fastapi import HTTPException, status
 
@@ -26,9 +27,25 @@ class CourseController:
 
     def get_courses(self, page: int = 1, size: int = 10, search: Optional[str] = None,
                     category: Optional[str] = None, sort: Optional[str] = None,
-                    instructor_id: Optional[int] = None, user_id: Optional[int] = None):
+                    instructor_id: Optional[int] = None, is_required: Optional[bool] = None,
+                    learning_status: Optional[str] = None, file_type: Optional[str] = None,
+                    created_from: Optional[datetime] = None, created_to: Optional[datetime] = None,
+                    user_id: Optional[int] = None):
         try:
-            return self.service.get_courses(page, size, search, category, sort, instructor_id, user_id=user_id)
+            return self.service.get_courses(
+                page,
+                size,
+                search,
+                category,
+                sort,
+                instructor_id,
+                is_required=is_required,
+                learning_status=learning_status,
+                file_type=file_type,
+                created_from=created_from,
+                created_to=created_to,
+                user_id=user_id,
+            )
         except Exception as e:
             logger.error(f"获取课程列表异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取课程列表失败")

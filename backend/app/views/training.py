@@ -24,6 +24,7 @@ from app.schemas import (
     ScheduleItemResponse,
     StandardResponse,
     TokenData,
+    TrainingActivityResponse,
     TrainingAttendanceSummaryResponse,
     TrainingCheckinQrResponse,
     TrainingCreate,
@@ -171,6 +172,19 @@ def get_calendar_events(
 ):
     service = TrainingService(db)
     data = service.get_calendar_events(current_user.user_id, training_id)
+    return StandardResponse(data=data)
+
+
+@router.get("/{training_id}/activities", response_model=StandardResponse[List[TrainingActivityResponse]], summary="培训班动态")
+def get_training_activities(
+    training_id: int,
+    limit: int = Query(20, ge=1, le=100),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_training_viewer(db, training_id, current_user.user_id)
+    service = TrainingService(db)
+    data = service.get_training_activities(training_id, limit)
     return StandardResponse(data=data)
 
 
@@ -611,11 +625,13 @@ def get_attendance_summary(
 def start_session_checkin(
     training_id: int,
     session_key: str,
+    checkin_mode: str = Query("direct", description="签到模式: direct/qr"),
+    checkin_duration_minutes: int = Query(15, ge=1, le=120, description="签到限时（分钟）"),
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     controller = TrainingController(db)
-    result = controller.start_session_checkin(training_id, session_key, current_user.user_id)
+    result = controller.start_session_checkin(training_id, session_key, current_user.user_id, checkin_mode, checkin_duration_minutes)
     return StandardResponse(data=result)
 
 

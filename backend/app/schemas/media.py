@@ -12,6 +12,7 @@ class MediaFileResponse(BaseModel):
     filename: str
     mime_type: Optional[str] = None
     size: int = 0
+    duration_seconds: int = 0
     url: str = ""
     created_at: Optional[datetime] = None
 

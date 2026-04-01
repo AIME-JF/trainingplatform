@@ -942,6 +942,7 @@ class ResourceService:
                 file_name=link.media_file.filename if link.media_file else None,
                 display_label=self._build_media_display_label(ordered_links, link),
                 content_type=self._guess_media_content_type(link.media_file, resource.content_type),
+                duration_seconds=max(int(getattr(link.media_file, "duration_seconds", 0) or 0), 0),
                 file_url=self._build_media_url(link.media_file),
             ))
 

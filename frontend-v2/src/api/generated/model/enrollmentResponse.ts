@@ -25,4 +25,5 @@ export interface EnrollmentResponse {
   approved_at?: string | null;
   reviewed_at?: string | null;
   enroll_time?: string | null;
+  checkin_rate?: number | null;
 }

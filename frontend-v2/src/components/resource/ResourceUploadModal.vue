@@ -113,6 +113,7 @@ import { createResource, createResourceTag, listResourceTags, submitResourceRevi
 import { useCreatableTagSelect } from '@/composables/useCreatableTagSelect'
 import AdmissionScopeSelector from '@/components/common/AdmissionScopeSelector.vue'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
+import { extractMediaDurationSeconds } from '@/utils/learning-resource'
 
 const props = withDefaults(defineProps<{
   open?: boolean
@@ -240,7 +241,8 @@ async function createDraft() {
     if (!(file instanceof File)) {
       continue
     }
-    const uploaded = await uploadMediaFile(file)
+    const durationSeconds = await extractMediaDurationSeconds(file)
+    const uploaded = await uploadMediaFile(file, durationSeconds || undefined)
     uploadedFiles.push(uploaded)
   }
 

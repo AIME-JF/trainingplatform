@@ -46,6 +46,7 @@ class ChapterResponse(BaseModel):
     title: str
     sort_order: int = 0
     duration: int = 0
+    duration_seconds: int = 0
     video_url: Optional[str] = None
     doc_url: Optional[str] = None
     file_id: Optional[int] = None
@@ -160,6 +161,7 @@ class CourseResponse(BaseModel):
     instructor_id: Optional[int] = None
     instructor_name: Optional[str] = None
     duration: int = 0
+    duration_seconds: int = 0
     student_count: int = 0
     rating: float = 0
     difficulty: int = 1
@@ -170,6 +172,7 @@ class CourseResponse(BaseModel):
     scope_target_ids: List[int] = Field(default_factory=list)
     tags: Optional[List[str]] = None
     progress_percent: int = 0
+    learning_status: str = "not_started"
     chapter_count: int = 0
     completed_chapter_count: int = 0
     last_studied_at: Optional[datetime] = None
@@ -198,6 +201,7 @@ class CourseListResponse(BaseModel):
     instructor_id: Optional[int] = None
     instructor_name: Optional[str] = None
     duration: int = 0
+    duration_seconds: int = 0
     student_count: int = 0
     rating: float = 0
     difficulty: int = 1
@@ -208,6 +212,7 @@ class CourseListResponse(BaseModel):
     scope_target_ids: List[int] = Field(default_factory=list)
     tags: Optional[List[str]] = None
     progress_percent: int = 0
+    learning_status: str = "not_started"
     chapter_count: int = 0
     completed_chapter_count: int = 0
     last_studied_at: Optional[datetime] = None

@@ -2,6 +2,7 @@
 课程管理路由
 """
 from typing import Optional, List
+from datetime import datetime
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -50,12 +51,30 @@ def get_courses(
     category: Optional[str] = None,
     sort: Optional[str] = None,
     instructor_id: Optional[int] = None,
+    is_required: Optional[bool] = None,
+    learning_status: Optional[str] = None,
+    file_type: Optional[str] = None,
+    created_from: Optional[datetime] = None,
+    created_to: Optional[datetime] = None,
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """获取课程列表"""
     controller = CourseController(db)
-    data = controller.get_courses(page, size, search, category, sort, instructor_id, user_id=current_user.user_id)
+    data = controller.get_courses(
+        page,
+        size,
+        search,
+        category,
+        sort,
+        instructor_id,
+        is_required=is_required,
+        learning_status=learning_status,
+        file_type=file_type,
+        created_from=created_from,
+        created_to=created_to,
+        user_id=current_user.user_id,
+    )
     return StandardResponse(data=data)
 
 

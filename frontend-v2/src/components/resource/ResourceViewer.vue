@@ -71,17 +71,10 @@
         <a-empty v-else description="暂无可预览文件" />
 
         <div class="recommend-info-card" :class="{ 'is-video': currentMediaKind === 'video' }">
-          <div class="recommend-info-head">
-            <span class="recommend-type">{{ getResourceContentTypeLabel(resource.content_type) }}</span>
-            <span v-if="mediaList.length > 1" class="recommend-media-count">{{ mediaIndex + 1 }} / {{ mediaList.length }}</span>
-          </div>
           <h3 class="recommend-title">{{ resource.title }}</h3>
           <p class="recommend-author">作者：{{ resource.uploader_name || '平台资源' }}</p>
           <p class="recommend-summary">简介：{{ resource.summary || '暂无简介' }}</p>
           <p v-if="resource.tags?.length" class="recommend-tags"># {{ resource.tags.join(' # ') }}</p>
-          <div v-if="currentMediaKind === 'document' && currentMedia?.file_url" class="recommend-actions">
-            <a-button size="small" @click.stop="openCurrentMedia">打开文档</a-button>
-          </div>
         </div>
 
         <div v-if="mediaList.length > 1" class="recommend-nav">
@@ -256,9 +249,9 @@ function onMediaTouchEnd(event: TouchEvent) {
 
 .recommend-info-card {
   position: absolute;
-  left: 20px;
+  left: 18px;
   right: 118px;
-  bottom: 28px;
+  bottom: 18px;
   z-index: 12;
   width: min(620px, calc(100% - 168px));
   padding: 0;
@@ -268,40 +261,8 @@ function onMediaTouchEnd(event: TouchEvent) {
   pointer-events: none;
 }
 
-.recommend-info-card::before {
-  content: '';
-  position: absolute;
-  inset: -20px -22px -18px -22px;
-  z-index: -1;
-  border-radius: 28px;
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0) 0%, rgba(0, 0, 0, 0.12) 32%, rgba(0, 0, 0, 0.38) 100%);
-  pointer-events: none;
-}
-
 .recommend-info-card.is-video {
   bottom: 92px;
-}
-
-.recommend-info-head {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px 16px;
-  margin-bottom: 10px;
-}
-
-.recommend-type,
-.recommend-media-count {
-  display: inline-block;
-  padding: 0;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.88);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
-  text-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.82),
-    0 0 16px rgba(0, 0, 0, 0.34);
 }
 
 .recommend-title {
@@ -332,11 +293,6 @@ function onMediaTouchEnd(event: TouchEvent) {
 .recommend-tags {
   margin-bottom: 0;
   color: rgba(255, 255, 255, 0.84);
-}
-
-.recommend-actions {
-  margin-top: 12px;
-  pointer-events: auto;
 }
 
 .recommend-nav {
@@ -394,20 +350,18 @@ function onMediaTouchEnd(event: TouchEvent) {
   .recommend-info-card {
     left: 14px;
     right: 86px;
-    bottom: 14px;
+    bottom: 10px;
     width: auto;
   }
 
   .recommend-info-card.is-video {
-    bottom: 78px;
+    bottom: 72px;
   }
 
   .recommend-title {
     font-size: 20px;
   }
 
-  .recommend-type,
-  .recommend-media-count,
   .recommend-author,
   .recommend-summary,
   .recommend-tags {

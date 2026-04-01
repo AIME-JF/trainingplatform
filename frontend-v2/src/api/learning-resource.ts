@@ -3,6 +3,8 @@ import type {
   CourseCreate,
   CourseLearningStatusResponse,
   CourseListResponse,
+  CourseNoteResponse,
+  CourseNoteUpdate,
   CourseProgressUpdate,
   CourseQACreate,
   CourseQAResponse,
@@ -63,6 +65,7 @@ import {
   deleteCourseApiV1CoursesCourseIdDelete,
   getCourseApiV1CoursesCourseIdGet,
   getCourseLearningStatusApiV1CoursesCourseIdLearningStatusGet,
+  getCourseNoteApiV1CoursesCourseIdNoteGet,
   getCourseQaApiV1CoursesCourseIdQaGet,
   getCoursesApiV1CoursesGet,
   getCourseTagsApiV1CoursesTagsGet,
@@ -70,6 +73,7 @@ import {
   addCourseResourceApiV1CoursesCourseIdResourcesPost,
   removeCourseResourceApiV1CoursesCourseIdResourcesResourceIdDelete,
   updateChapterProgressApiV1CoursesCourseIdChaptersChapterIdProgressPut,
+  updateCourseNoteApiV1CoursesCourseIdNotePut,
   updateCourseApiV1CoursesCourseIdPut,
 } from '@/api/generated/course-management/course-management'
 import { uploadFileApiV1MediaUploadPost } from '@/api/generated/media-management/media-management'
@@ -114,6 +118,8 @@ export type {
   CourseCreate,
   CourseLearningStatusResponse,
   CourseListResponse,
+  CourseNoteResponse,
+  CourseNoteUpdate,
   CourseProgressUpdate,
   CourseQACreate,
   CourseQAResponse,
@@ -192,8 +198,11 @@ export async function createResourceTag(tag: ResourceTagCreate) {
   return (await createResourceTagApiV1ResourcesTagsPost(tag)) as ResourceTagResponse
 }
 
-export async function uploadMediaFile(file: File) {
-  return (await uploadFileApiV1MediaUploadPost({ file })) as MediaFileResponse
+export async function uploadMediaFile(file: File, durationSeconds?: number) {
+  return (await uploadFileApiV1MediaUploadPost({
+    file,
+    duration_seconds: durationSeconds,
+  })) as MediaFileResponse
 }
 
 export async function submitResourceReview(resourceId: number) {
@@ -289,6 +298,14 @@ export async function unbindCourseResource(courseId: number, resourceId: number)
 
 export async function updateCourseChapterProgress(courseId: number, chapterId: number, payload: CourseProgressUpdate) {
   return updateChapterProgressApiV1CoursesCourseIdChaptersChapterIdProgressPut(courseId, chapterId, payload)
+}
+
+export async function getCourseNote(courseId: number) {
+  return (await getCourseNoteApiV1CoursesCourseIdNoteGet(courseId)) as CourseNoteResponse
+}
+
+export async function updateCourseNote(courseId: number, payload: CourseNoteUpdate) {
+  return (await updateCourseNoteApiV1CoursesCourseIdNotePut(courseId, payload)) as CourseNoteResponse
 }
 
 export async function listCourseQa(courseId: number) {

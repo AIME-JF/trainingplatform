@@ -23,6 +23,7 @@ export interface CourseResponse {
   instructor_id?: number | null;
   instructor_name?: string | null;
   duration?: number;
+  duration_seconds?: number;
   student_count?: number;
   rating?: number;
   difficulty?: number;
@@ -33,6 +34,7 @@ export interface CourseResponse {
   scope_target_ids?: number[];
   tags?: string[] | null;
   progress_percent?: number;
+  learning_status?: string;
   chapter_count?: number;
   completed_chapter_count?: number;
   last_studied_at?: string | null;

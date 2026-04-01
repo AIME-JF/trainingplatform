@@ -83,6 +83,10 @@ class TrainingCurrentSessionResponse(BaseModel):
     primary_instructor_name: Optional[str] = None
     assistant_instructor_ids: List[int] = Field(default_factory=list)
     assistant_instructor_names: List[str] = Field(default_factory=list)
+    checkin_mode: Optional[str] = None  # "direct" or "qr"
+    checkin_duration_minutes: Optional[int] = None
+    checkin_deadline: Optional[str] = None  # ISO datetime
+    checkin_qr_token: Optional[str] = None
     action_permissions: TrainingSessionActionPermissions = Field(default_factory=TrainingSessionActionPermissions)
 
 
@@ -342,6 +346,21 @@ class CheckinResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class TrainingActivityResponse(BaseModel):
+    """培训班动态响应"""
+
+    id: int
+    training_id: int
+    user_id: Optional[int] = None
+    user_name: Optional[str] = None
+    action_type: str
+    content: str
+    extra_json: Optional[dict] = None
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class TrainingResponse(BaseModel):
     """培训班响应"""
 
@@ -394,6 +413,7 @@ class TrainingResponse(BaseModel):
     workflow_steps: List[TrainingWorkflowStepResponse] = Field(default_factory=list)
     current_step_key: str = "draft"
     current_session: Optional[TrainingCurrentSessionResponse] = None
+    recent_activities: List[TrainingActivityResponse] = Field(default_factory=list)
     can_manage_all: bool = False
     can_manage_training: bool = False
     can_edit_training: bool = False
