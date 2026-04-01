@@ -4,19 +4,6 @@
     <main class="main-content">
       <div class="content-wrapper">
 
-        <!-- 1. 二级导航与快捷操作入口 -->
-        <div class="sub-nav-bar">
-          <div class="sub-nav-left">
-            <span :class="['sub-nav-item', { active: currentView === 'policeType' }]" @click="switchView('policeType')">警种视角</span>
-            <span :class="['sub-nav-item', { active: currentView === 'course' }]" @click="switchView('course')">课程视角</span>
-            <span :class="['sub-nav-item', { active: currentView === 'knowledgePoint' }]" @click="switchView('knowledgePoint')">知识点视角</span>
-          </div>
-          <div class="sub-nav-right">
-            <button class="btn-aux" @click="openManageFolderModal">管理目录</button>
-            <button class="btn-aux" @click="$router.push('/paper/ai-assemble')" :disabled="!canOpenAiAssembleTask">智能组卷</button>
-          </div>
-        </div>
-
         <!-- 统一的大边框容器 -->
         <div class="main-container">
 
@@ -77,55 +64,48 @@
               <thead>
                 <tr>
                   <th class="col-index">序号</th>
-                  <th class="col-folder">所属文件夹</th>
-                  <th class="col-content">试卷名称</th>
-                  <th class="col-status text-center">状态</th>
-                  <th class="col-type text-center">类型</th>
-                  <th class="col-count text-center">引用数</th>
+                  <th class="col-paper-name">试卷名称</th>
+                  <th class="col-type text-center">试卷类型</th>
+                  <th class="col-folder text-center">试卷分类</th>
+                  <th class="col-count text-center">题目数量</th>
+                  <th class="col-duration text-center">考试时长</th>
+                  <th class="col-score text-center">总分值</th>
+                  <th class="col-passing text-center">及格分数</th>
+                  <th class="col-count text-center">考试数</th>
+                  <th class="col-time">添加时间</th>
+                  <th class="col-publisher">发布人</th>
                   <th class="col-action text-right">操作</th>
                 </tr>
               </thead>
               <tbody>
-                <template v-for="group in displayedGroups" :key="group.id">
-                  <tr class="group-header-row" @click="toggleFolder(group.id)">
-                    <td colspan="7" class="group-header">
-                      <span class="group-chevron" :class="{ rotated: group.expanded }">▶</span>
-                      <span class="group-name">{{ group.name }}</span>
-                      <span class="group-count">包含 {{ group.paperCount }} 份试卷</span>
-                    </td>
-                  </tr>
-                  <template v-if="group.expanded">
-                    <tr v-for="(record, index) in group.papers" :key="record.id" class="table-row">
-                      <td class="col-index">{{ index + 1 }}</td>
-                      <td class="col-folder text-xs text-slate-400">{{ group.name }}</td>
-                      <td class="col-content">
-                        <span class="name-text">{{ record.title }}</span>
-                        <p class="desc-text">{{ record.description || '暂无描述' }}</p>
-                      </td>
-                      <td class="col-status text-center">
-                        <span :class="['tag-pill', statusTagColors[record.status]]">{{ statusLabels[record.status] }}</span>
-                      </td>
-                      <td class="col-type text-center">
-                        <span :class="['tag-pill', typeTagColors[record.type]]">{{ typeLabels[record.type] }}</span>
-                      </td>
-                      <td class="col-count text-center">{{ record.usageCount || 0 }}</td>
-                      <td class="col-action text-right">
-                        <div class="action-btns">
-                          <button class="btn-link" @click="openViewDrawer(record)">查看</button>
-                          <button v-if="record.status === 'draft'" class="btn-link" @click="openEditDrawer(record)">编辑</button>
-                          <button v-if="record.status === 'draft'" class="btn-link" @click="handlePublish(record)">发布</button>
-                          <button v-if="record.status === 'published'" class="btn-link" @click="handleArchive(record)">归档</button>
-                          <button v-if="record.usageCount === 0" class="btn-link btn-link-danger" @click="handleDelete(record)">删除</button>
-                        </div>
-                      </td>
-                    </tr>
-                    <tr v-if="!group.papers || group.papers.length === 0">
-                      <td colspan="7" class="empty-row">该分组下暂无试卷</td>
-                    </tr>
-                  </template>
-                </template>
-                <tr v-if="displayedGroups.length === 0">
-                  <td colspan="7" class="empty-row">暂无试卷数据</td>
+                <tr v-for="(record, index) in displayedPapers" :key="record.id" class="table-row">
+                  <td class="col-index">{{ index + 1 }}</td>
+                  <td class="col-paper-name">
+                    <span class="name-text">{{ record.title }}</span>
+                    <p class="desc-text">{{ record.description || '暂无描述' }}</p>
+                  </td>
+                  <td class="col-type text-center">
+                    <span :class="['tag-pill', typeTagColors[record.type]]">{{ typeLabels[record.type] }}</span>
+                  </td>
+                  <td class="col-folder text-center text-xs text-slate-500">{{ record.folderName || '-' }}</td>
+                  <td class="col-count text-center">{{ record.questionCount || 0 }}</td>
+                  <td class="col-duration text-center">{{ record.duration || 60 }}分钟</td>
+                  <td class="col-score text-center">{{ record.totalScore || 0 }}</td>
+                  <td class="col-passing text-center">{{ record.passingScore || 60 }}</td>
+                  <td class="col-count text-center">{{ record.usageCount || 0 }}</td>
+                  <td class="col-time">{{ formatDate(record.createdAt) }}</td>
+                  <td class="col-publisher text-xs">{{ record.creatorName || '-' }}</td>
+                  <td class="col-action text-right">
+                    <div class="action-btns">
+                      <button class="btn-link" @click="openViewDrawer(record)">查看</button>
+                      <button v-if="record.status === 'draft'" class="btn-link" @click="openEditDrawer(record)">编辑</button>
+                      <button v-if="record.status === 'draft'" class="btn-link" @click="handlePublish(record)">发布</button>
+                      <button v-if="record.usageCount === 0" class="btn-link btn-link-danger" @click="handleDelete(record)">删除</button>
+                    </div>
+                  </td>
+                </tr>
+                <tr v-if="displayedPapers.length === 0">
+                  <td colspan="12" class="empty-row">暂无试卷数据</td>
                 </tr>
               </tbody>
             </table>
@@ -338,6 +318,9 @@ const statusTagColors = { draft: 'tag-orange', published: 'tag-green', archived:
 const typeLabels = { formal: '正式考核', quiz: '测验' }
 const typeTagColors = { formal: 'tag-blue', quiz: 'tag-purple' }
 
+// 扁平试卷列表（用于表格展示）
+const displayedPapers = computed(() => paperList.value)
+
 const flatFolderList = computed(() => {
   const result = []
   const flatten = (folders) => {
@@ -409,6 +392,13 @@ const displayedGroups = computed(() => {
 function updateCurrentTime() {
   const now = new Date()
   currentTime.value = `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '-'
+  const d = new Date(dateStr)
+  const pad = n => n.toString().padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
 
 function toggleFolder(folderId) {
@@ -534,9 +524,11 @@ async function loadPapers() {
     const papers = result.items || []
 
     // 扩展试卷属性
+    const folderMap = new Map(flatFolderList.value.map(f => [f.id, f.name]))
     paperList.value = papers.map(paper => ({
       ...paper,
-      knowledgePointNames: paper.knowledgePointNames || [],
+      folderName: paper.folder_id ? (folderMap.get(paper.folder_id) || paper.folder_name || '-') : (paper.folder_name || '-'),
+      creatorName: paper.creator_name || '-',
     }))
 
     // 根据当前视角分组显示（前端分组）
@@ -1211,44 +1203,6 @@ watch(() => route.fullPath, () => {
   width: 100%;
 }
 
-/* ============ 二级导航 ============ */
-.sub-nav-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-}
-
-.sub-nav-left {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-}
-
-.sub-nav-item {
-  font-size: 14px;
-  font-weight: 600;
-  color: #94A3B8;
-  padding-bottom: 8px;
-  border-bottom: 2px solid transparent;
-  transition: all 0.2s;
-  cursor: pointer;
-}
-
-.sub-nav-item:hover {
-  color: #64748B;
-}
-
-.sub-nav-item.active {
-  color: #1E293B;
-  border-color: #2563EB;
-}
-
-.sub-nav-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 
 /* ============ 按钮样式 ============ */
 .btn-aux {
@@ -1429,23 +1383,19 @@ watch(() => route.fullPath, () => {
 }
 
 .col-index {
-  width: 60px;
+  width: 50px;
   text-align: center;
 }
 
-.col-folder {
-  width: 160px;
-}
-
-.col-content {
-  width: auto;
-}
-
-.col-status {
-  width: 100px;
+.col-paper-name {
+  width: 200px;
 }
 
 .col-type {
+  width: 100px;
+}
+
+.col-folder {
   width: 100px;
 }
 
@@ -1453,8 +1403,28 @@ watch(() => route.fullPath, () => {
   width: 80px;
 }
 
+.col-duration {
+  width: 80px;
+}
+
+.col-score {
+  width: 80px;
+}
+
+.col-passing {
+  width: 80px;
+}
+
+.col-time {
+  width: 150px;
+}
+
+.col-publisher {
+  width: 80px;
+}
+
 .col-action {
-  width: 180px;
+  width: 120px;
   padding-right: 32px !important;
 }
 
@@ -1476,13 +1446,14 @@ watch(() => route.fullPath, () => {
 }
 
 .group-chevron {
-  font-size: 10px;
-  color: #94A3B8;
-  transition: transform 0.2s;
+  font-size: 14px;
+  color: #CBD5E1;
+  transition: color 0.2s;
+  letter-spacing: -2px;
 }
 
-.group-chevron.rotated {
-  transform: rotate(90deg);
+.group-chevron.expanded {
+  color: #2563EB;
 }
 
 .group-name {

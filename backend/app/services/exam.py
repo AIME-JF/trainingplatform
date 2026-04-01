@@ -830,6 +830,8 @@ class ExamService:
             ),
             selectinload(ExamPaper.training_exams),
             selectinload(ExamPaper.admission_exams),
+            joinedload(ExamPaper.creator),
+            joinedload(ExamPaper.folder),
         )
 
     def _get_scope_context(self, current_user_id: Optional[int]) -> Optional[DataScopeContext]:
@@ -1276,8 +1278,10 @@ class ExamService:
             type=paper.type or "formal",
             status=paper.status or "draft",
             folder_id=paper.folder_id,
+            folder_name=paper.folder.name if paper.folder else None,
             published_at=paper.published_at,
             created_by=paper.created_by,
+            creator_name=paper.creator.nickname if paper.creator else None,
             question_count=len(paper.paper_questions or []),
             usage_count=linked_exam_count + linked_admission_exam_count,
             linked_exam_count=linked_exam_count,

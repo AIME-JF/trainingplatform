@@ -36,6 +36,15 @@ class QuestionService:
         self.db = db
         self.knowledge_point_service = KnowledgePointService(db)
 
+    def _get_descendant_folder_ids(self, parent_id: int) -> List[int]:
+        """递归获取所有子文件夹ID"""
+        result = []
+        children = self.db.query(QuestionFolder.id).filter(QuestionFolder.parent_id == parent_id).all()
+        for child_id, in children:
+            result.append(child_id)
+            result.extend(self._get_descendant_folder_ids(child_id))
+        return result
+
     def get_questions(
         self,
         page: int = 1,
@@ -44,6 +53,8 @@ class QuestionService:
         type: Optional[str] = None,
         difficulty: Optional[int] = None,
         knowledge_point: Optional[str] = None,
+        folder_id: Optional[int] = None,
+        recursive: bool = False,
         current_user_id: Optional[int] = None,
     ) -> PaginatedResponse[QuestionResponse]:
         """获取题目列表"""
@@ -64,6 +75,16 @@ class QuestionService:
             query = query.filter(Question.difficulty == difficulty)
         if knowledge_point:
             query = query.filter(KnowledgePoint.name.contains(knowledge_point))
+
+        # 文件夹筛选，支持递归
+        if folder_id is not None:
+            if recursive:
+                # 递归：获取所有子文件夹ID
+                folder_ids = self._get_descendant_folder_ids(folder_id)
+                folder_ids.append(folder_id)
+                query = query.filter(Question.folder_id.in_(folder_ids))
+            else:
+                query = query.filter(Question.folder_id == folder_id)
 
         query = query.order_by(Question.created_at.desc(), Question.id.desc())
         questions = deduplicate_questions(query.all())
@@ -196,6 +217,25 @@ class QuestionService:
             ).group_by(Question.folder_id).all()
             question_counts = {row[0]: row[1] for row in counts}
 
+        # 预构建文件夹ID到子文件夹ID列表的映射
+        folder_children_map = {}
+        for folder in folders:
+            if folder.parent_id:
+                if folder.parent_id not in folder_children_map:
+                    folder_children_map[folder.parent_id] = []
+                folder_children_map[folder.parent_id].append(folder.id)
+
+        # 递归计算每个文件夹的题目总数（包括子文件夹）
+        def get_recursive_question_count(folder_id):
+            count = question_counts.get(folder_id, 0)
+            children_ids = folder_children_map.get(folder_id, [])
+            for child_id in children_ids:
+                count += get_recursive_question_count(child_id)
+            return count
+
+        # 计算每个文件夹的递归题目总数
+        recursive_question_counts = {fid: get_recursive_question_count(fid) for fid in folder_ids}
+
         paper_counts = {}
         if folder_ids:
             from sqlalchemy import func as sa_func
@@ -212,7 +252,7 @@ class QuestionService:
 
         folder_responses = []
         for folder in folders:
-            q_count = question_counts.get(folder.id, 0)
+            q_count = recursive_question_counts.get(folder.id, 0)
             p_count = paper_counts.get(folder.id, 0)
             creator = creators.get(folder.created_by)
             creator_name = creator.name if creator and creator.name else (creator.username if creator else None)

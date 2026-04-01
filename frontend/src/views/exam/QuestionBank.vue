@@ -8,7 +8,6 @@
         <div class="sub-nav-bar">
           <div class="sub-nav-left">
             <span :class="['sub-nav-item', { active: activeNav === 'bank' }]" @click="activeNav = 'bank'">题库中心</span>
-            <span :class="['sub-nav-item', { active: activeNav === 'category' }]" @click="activeNav = 'category'">题库分类</span>
           </div>
           <div class="sub-nav-right">
             <button class="btn-aux" @click="showDisabled = !showDisabled">已禁用的项目</button>
@@ -21,45 +20,48 @@
 
           <!-- 第一层：操作与搜索过滤 -->
           <div class="toolbar-row">
-            <div class="toolbar-left">
-              <button class="btn-primary" @click="openCreateFolderModal">
+            <template v-if="selectedFolderId">
+              <div class="toolbar-left">
+                <button class="btn-aux" @click="handleBackToFolders">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                  返回题库列表
+                </button>
+                <span class="toolbar-title">{{ selectedFolderName }}（共 {{ questionList.length }} 道题目）</span>
+              </div>
+            </template>
+            <template v-else>
+              <div class="toolbar-left">
+                <button class="btn-primary" @click="openCreateFolderModal">
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
                 添加题库
-              </button>
-              <div class="search-wrapper">
-                <svg class="search-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                <input type="text" class="input-minimal" v-model="searchText" placeholder="请输入关键字搜索..." @input="handleSearch">
+                </button>
+                <div class="search-wrapper">
+                  <svg class="search-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                  <input type="text" class="input-minimal" v-model="searchText" placeholder="请输入关键字搜索..." @input="handleSearch">
+                </div>
               </div>
-            </div>
-
-            <div class="toolbar-right">
-              <select class="input-minimal filter-select" v-model="filterCategory">
-                <option value="">题库分类 (全部)</option>
-                <option value="default">默认分类</option>
-              </select>
-              <select class="input-minimal filter-select-sm" v-model="filterDifficulty">
-                <option value="">难易程度</option>
-                <option value="1">1级</option>
-                <option value="2">2级</option>
-                <option value="3">3级</option>
-                <option value="4">4级</option>
-                <option value="5">5级</option>
-              </select>
-              <div class="divider-v"></div>
-              <label class="checkbox-label">
-                <input type="checkbox" v-model="filterMyOnly" class="custom-checkbox">
-                <span>只看我发布的</span>
-              </label>
-              <button class="btn-aux" @click="handleExport">
-                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                导出数据
-              </button>
-            </div>
+              <div class="toolbar-right">
+                <select class="input-minimal filter-select" v-model="filterCategory">
+                  <option value="">题库分类 (全部)</option>
+                  <option value="default">默认分类</option>
+                </select>
+                <div class="divider-v"></div>
+                <label class="checkbox-label">
+                  <input type="checkbox" v-model="filterMyOnly" class="custom-checkbox">
+                  <span>只看我发布的</span>
+                </label>
+                <button class="btn-aux" @click="handleExport">
+                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                  导出数据
+                </button>
+              </div>
+            </template>
           </div>
 
           <!-- 第二层：表格数据 -->
           <div class="table-wrapper">
-            <table class="data-table">
+            <!-- 文件夹列表视图 -->
+            <table v-if="!selectedFolderId" class="data-table">
               <thead>
                 <tr>
                   <th class="col-check">
@@ -84,14 +86,16 @@
                   </td>
                   <td class="col-index">{{ (pagination.current - 1) * pagination.pageSize + index + 1 }}</td>
                   <td class="col-name">
-                    <span class="name-text" :class="{ 'is-system': item.isSystem }">{{ item.name }}</span>
+                    <span class="name-text" :class="{ 'is-system': item.isSystem }">{{ item.displayName || item.name }}</span>
                     <span v-if="item.isSystem" class="badge-system">System</span>
                   </td>
                   <td class="col-publisher">{{ item.creatorName || '-' }}</td>
                   <td class="col-category text-center">{{ item.category }}</td>
                   <td class="col-paper text-center">{{ item.paperCount }}</td>
                   <td class="col-exercise text-center">{{ item.exerciseCount }}</td>
-                  <td class="col-questions text-center question-count">{{ item.questionCount }}</td>
+                  <td class="col-questions text-center">
+                    <button class="question-count-btn" @click.stop="handleViewQuestions(item)">{{ item.questionCount }} 题</button>
+                  </td>
                   <td class="col-status text-center">
                     <span class="status-text">{{ item.statusText }}</span>
                   </td>
@@ -106,6 +110,57 @@
                 </tr>
                 <tr v-if="displayedList.length === 0">
                   <td colspan="11" class="empty-row">暂无数据</td>
+                </tr>
+              </tbody>
+            </table>
+
+            <!-- 文件夹内题目列表视图 -->
+            <table v-else class="data-table">
+              <thead>
+                <tr>
+                  <th class="col-index">序号</th>
+                  <th class="col-type text-center">题型</th>
+                  <th class="col-content">题干</th>
+                  <th class="col-answer">答案</th>
+                  <th class="col-difficulty text-center">难度</th>
+                  <th class="col-time">添加时间</th>
+                  <th class="col-action text-center">操作</th>
+                </tr>
+              </thead>
+              <tbody v-if="questionLoading">
+                <tr>
+                  <td colspan="7" class="empty-row">加载中...</td>
+                </tr>
+              </tbody>
+              <tbody v-else>
+                <tr v-for="(q, index) in displayedQuestionList" :key="q.id" class="table-row">
+                  <td class="col-index">{{ (questionPagination.current - 1) * questionPagination.pageSize + index + 1 }}</td>
+                  <td class="col-type text-center">
+                    <span :class="['tag-pill', typeTagColors[q.type]]">{{ typeLabels[q.type] }}</span>
+                  </td>
+                  <td class="col-content">
+                    <span class="name-text">{{ q.content }}</span>
+                    <div v-if="q.options && q.options.length > 0" class="options-preview">
+                      <span v-for="opt in q.options.slice(0,4)" :key="opt.key" class="option-tag">{{ opt.key }}. {{ opt.text }}</span>
+                    </div>
+                  </td>
+                  <td class="col-answer">
+                    <span class="answer-text">{{ formatAnswer(q) }}</span>
+                  </td>
+                  <td class="col-difficulty text-center">
+                    <span class="difficulty-badge">{{ q.difficulty || 1 }}</span>
+                  </td>
+                  <td class="col-time">{{ q.createdAt || '-' }}</td>
+                  <td class="col-action text-center">
+                    <div class="action-btns">
+                      <button class="btn-link" @click="handleEditQuestion(q)">编辑</button>
+                      <button class="btn-link" @click="handleMoveQuestion(q)">移动</button>
+                      <button class="btn-link btn-link-danger" @click="handleDeleteQuestion(q)">删除</button>
+                    </div>
+                  </td>
+                </tr>
+                <tr v-if="questionList.length === 0">
+                  <td colspan="7" class="empty-row">该题库暂无题目</td>
                 </tr>
               </tbody>
             </table>
@@ -126,33 +181,70 @@
 
             <!-- 批量操作与分页 -->
             <div class="footer-actions">
-              <div class="footer-left">
-                <label class="checkbox-label">
-                  <input type="checkbox" class="custom-checkbox" :checked="isAllSelected" @change="toggleSelectAll">
-                  <span>全选</span>
-                </label>
-                <div class="divider-v"></div>
-                <div class="batch-ops">
-                  <span class="batch-label">批量操作:</span>
-                  <button class="btn-batch btn-batch-danger" @click="handleBatchDelete">批量删除</button>
-                  <button class="btn-batch" @click="handleBatchMove">批量移动分类</button>
+              <!-- 题库列表视图 -->
+              <template v-if="!selectedFolderId">
+                <div class="footer-left">
+                  <label class="checkbox-label">
+                    <input type="checkbox" class="custom-checkbox" :checked="isAllSelected" @change="toggleSelectAll">
+                    <span>全选</span>
+                  </label>
+                  <div class="divider-v"></div>
+                  <div class="batch-ops">
+                    <span class="batch-label">批量操作:</span>
+                    <button class="btn-batch btn-batch-danger" @click="handleBatchDelete">批量删除</button>
+                    <button class="btn-batch" @click="handleBatchMove">批量移动分类</button>
+                  </div>
                 </div>
-              </div>
 
-              <div class="footer-right">
-                <div class="page-info">
-                  共 {{ pagination.total }} 条记录 <span class="page-sep">|</span> 每页 {{ pagination.pageSize }} 条
+                <div class="footer-right">
+                  <div class="page-size-selector">
+                    <span class="page-size-label">每页显示：</span>
+                    <select class="page-size-select" :value="pagination.pageSize" @change="handlePageSizeChange(Number($event.target.value))">
+                      <option v-for="size in pageSizeOptions" :key="size" :value="size">{{ size }}条</option>
+                    </select>
+                  </div>
+                  <div class="page-info">
+                    共 {{ pagination.total }} 条记录
+                  </div>
+                  <div class="pagination-btns">
+                    <button class="page-btn" :disabled="pagination.current <= 1" @click="changePage(pagination.current - 1)">
+                      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+                    </button>
+                    <button class="page-btn page-btn-active">{{ pagination.current }}</button>
+                    <button class="page-btn" :disabled="pagination.current >= totalPages" @click="changePage(pagination.current + 1)">
+                      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+                    </button>
+                  </div>
                 </div>
-                <div class="pagination-btns">
-                  <button class="page-btn" :disabled="pagination.current <= 1" @click="changePage(pagination.current - 1)">
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
-                  </button>
-                  <button class="page-btn page-btn-active">{{ pagination.current }}</button>
-                  <button class="page-btn" :disabled="pagination.current >= totalPages" @click="changePage(pagination.current + 1)">
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
-                  </button>
+              </template>
+
+              <!-- 题目列表视图 -->
+              <template v-else>
+                <div class="footer-left">
+                  <!-- 空白占位 -->
                 </div>
-              </div>
+
+                <div class="footer-right">
+                  <div class="page-size-selector">
+                    <span class="page-size-label">每页显示：</span>
+                    <select class="page-size-select" :value="questionPagination.pageSize" @change="handleQuestionPageSizeChange(Number($event.target.value))">
+                      <option v-for="size in pageSizeOptions" :key="size" :value="size">{{ size }}条</option>
+                    </select>
+                  </div>
+                  <div class="page-info">
+                    共 {{ questionPagination.total }} 道题目
+                  </div>
+                  <div class="pagination-btns">
+                    <button class="page-btn" :disabled="questionPagination.current <= 1" @click="changeQuestionPage(questionPagination.current - 1)">
+                      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+                    </button>
+                    <button class="page-btn page-btn-active">{{ questionPagination.current }}</button>
+                    <button class="page-btn" :disabled="questionPagination.current >= questionTotalPages" @click="changeQuestionPage(questionPagination.current + 1)">
+                      <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+                    </button>
+                  </div>
+                </div>
+              </template>
             </div>
           </div>
 
@@ -213,7 +305,7 @@
           <div v-for="folder in filteredFolderList" :key="folder.id" class="folder-manager-item">
             <div class="folder-manager-item-left">
               <FolderOutlined />
-              <span>{{ folder.name }}</span>
+              <span>{{ folder.displayName || folder.name }}</span>
               <span class="text-xs text-slate-400">({{ folder.questionCount }}道题)</span>
             </div>
             <div class="folder-manager-item-actions">
@@ -243,6 +335,24 @@
       </a-form>
     </a-modal>
 
+    <!-- 移动单个题目弹窗 -->
+    <a-modal
+      v-model:open="moveQuestionModalVisible"
+      title="移动题目"
+      @ok="handleMoveQuestionConfirm"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="选择目标文件夹">
+          <a-select v-model:value="moveQuestionTargetFolderId" placeholder="请选择目标文件夹">
+            <a-select-option :value="null">根目录（移出文件夹）</a-select-option>
+            <a-select-option v-for="folder in allFolderList" :key="folder.id" :value="folder.id">
+              {{ folder.name }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+      </a-form>
+    </a-modal>
+
     <!-- 新增/编辑题目弹窗 -->
     <question-form-modal
       v-model:open="modalOpen"
@@ -257,7 +367,7 @@
 
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import { PlusOutlined, FolderOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
@@ -276,6 +386,7 @@ import { getPoliceTypes } from '@/api/user'
 import QuestionFormModal from './components/QuestionFormModal.vue'
 
 const authStore = useAuthStore()
+const route = useRoute()
 const router = useRouter()
 
 // ============ 导航 ============
@@ -289,14 +400,25 @@ const filterCategory = ref('')
 const filterDifficulty = ref('')
 const filterMyOnly = ref(false)
 
+const typeLabels = { single: '单选题', multi: '多选题', judge: '判断题', gap: '填空题' }
+const typeTagColors = { single: 'tag-blue', multi: 'tag-purple', judge: 'tag-orange', gap: 'tag-cyan' }
+
 // ============ 题库列表数据 ============
 const loading = ref(false)
 const folderList = ref([])
 const userList = ref(new Map()) // id -> name 映射
 const selectedIds = ref([])
 
+// 文件夹内题目查看模式
+const selectedFolderId = ref(null)
+const selectedFolderName = ref('')
+const questionList = ref([])
+const questionLoading = ref(false)
+
 // ============ 分页 ============
-const pagination = reactive({ current: 1, pageSize: 15, total: 0 })
+const pagination = reactive({ current: 1, pageSize: 20, total: 0 })
+const pageSizeOptions = [10, 20, 50]
+const questionPagination = reactive({ current: 1, pageSize: 20, total: 0 })
 
 // ============ 文件夹管理弹窗 ============
 const folderModalVisible = ref(false)
@@ -306,6 +428,9 @@ const editingFolderId = ref(null)
 const folderForm = reactive({ name: '', category: '', parentId: null })
 const batchMoveModalVisible = ref(false)
 const batchMoveTargetFolderId = ref(null)
+const moveQuestionModalVisible = ref(false)
+const moveQuestionTargetFolderId = ref(null)
+const currentMovingQuestion = ref(null)
 
 // ============ 题目弹窗 ============
 const modalOpen = ref(false)
@@ -393,20 +518,58 @@ function formatDate(dateStr) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
-function buildBankList(folders, users) {
-  return folders.map((folder, index) => {
+function formatAnswer(q) {
+  if (q.answer === null || q.answer === undefined) return '-'
+  // 判断题答案
+  if (q.type === 'judge') {
+    return q.answer === true || q.answer === 'true' || q.answer === 1 ? '正确' : '错误'
+  }
+  // 单选/多选题答案
+  if (Array.isArray(q.answer)) {
+    return q.answer.join('、')
+  }
+  return String(q.answer)
+}
+
+function flattenFolderTree(folders, depth = 0) {
+  let result = []
+  for (const folder of folders || []) {
+    result.push({ folder, depth })
+    if (folder.children && folder.children.length > 0) {
+      result = result.concat(flattenFolderTree(folder.children, depth + 1))
+    }
+  }
+  return result
+}
+
+function buildBankList(folders) {
+  const flattened = flattenFolderTree(folders)
+  return flattened.map(({ folder, depth }) => {
+    const indent = depth > 0 ? `${'　'.repeat(depth)}└ ` : ''
+    const creatorName = folder.created_by_name ?? folder.createdByName
+    const category = folder.category ?? '默认分类'
+    const paperCount = folder.paper_count ?? folder.paperCount ?? 0
+    const exerciseCount = folder.exercise_count ?? folder.exerciseCount ?? 0
+    const questionCount = folder.question_count ?? folder.questionCount ?? 0
+    const status = folder.status ?? folder.statusText ?? '未使用'
+    const createdAt = folder.created_at ?? folder.createdAt
+    const createdBy = folder.created_by ?? folder.createdBy
+    const parentId = folder.parent_id ?? folder.parentId ?? null
+
     return {
       id: folder.id,
       name: folder.name,
+      displayName: `${indent}${folder.name}`,
+      parentId,
       isSystem: folder.name === '综合题库' || folder.is_system,
-      creatorName: folder.created_by_name || '-',
-      category: folder.category || '默认分类',
-      paperCount: folder.paper_count || 0,
-      exerciseCount: folder.exercise_count || 0,
-      questionCount: folder.question_count || 0,
-      statusText: folder.status || '未使用',
-      createdAt: formatDate(folder.created_at),
-      createdBy: folder.created_by,
+      creatorName: creatorName || '-',
+      category,
+      paperCount,
+      exerciseCount,
+      questionCount,
+      statusText: status,
+      createdAt: formatDate(createdAt),
+      createdBy,
     }
   })
 }
@@ -438,7 +601,7 @@ async function loadData() {
   loading.value = true
   try {
     const folders = await getQuestionFolders()
-    const bankList = buildBankList(folders || [], userList.value)
+    const bankList = buildBankList(folders || [])
     folderList.value = bankList.map(b => ({ ...b, children: [] }))
     pagination.total = bankList.length
   } catch (error) {
@@ -456,6 +619,32 @@ function changePage(page) {
   if (page < 1 || page > totalPages.value) return
   pagination.current = page
 }
+
+function changeQuestionPage(page) {
+  const total = Math.ceil(questionPagination.total / questionPagination.pageSize) || 1
+  if (page < 1 || page > total) return
+  questionPagination.current = page
+}
+
+function handlePageSizeChange(size) {
+  pagination.pageSize = size
+  pagination.current = 1
+}
+
+function handleQuestionPageSizeChange(size) {
+  questionPagination.pageSize = size
+  questionPagination.current = 1
+}
+
+// 题目列表分页后的展示列表
+const displayedQuestionList = computed(() => {
+  const start = (questionPagination.current - 1) * questionPagination.pageSize
+  const end = start + questionPagination.pageSize
+  return questionList.value.slice(start, end)
+})
+
+// 题目总页数
+const questionTotalPages = computed(() => Math.ceil(questionPagination.total / questionPagination.pageSize) || 1)
 
 function toggleSelect(id) {
   const idx = selectedIds.value.indexOf(id)
@@ -551,8 +740,32 @@ function handleViewQuestions(item) {
     message.info('系统题库暂无题目')
     return
   }
-  // 跳转到题目管理页，带上文件夹筛选
-  router.push({ path: '/question/manage', query: { folderId: item.id } })
+  selectedFolderId.value = item.id
+  selectedFolderName.value = item.name
+  router.replace({ query: { folderId: item.id } })
+  loadQuestionsForFolder(item.id)
+}
+
+async function loadQuestionsForFolder(folderId) {
+  questionLoading.value = true
+  questionList.value = []
+  questionPagination.current = 1
+  try {
+    const result = await getQuestions({ folder_id: folderId, recursive: true, size: -1 })
+    questionList.value = result.items || result || []
+    questionPagination.total = questionList.value.length
+  } catch (error) {
+    message.error(error.message || '加载题目失败')
+  } finally {
+    questionLoading.value = false
+  }
+}
+
+function handleBackToFolders() {
+  selectedFolderId.value = null
+  selectedFolderName.value = ''
+  questionList.value = []
+  router.replace({ query: {} })
 }
 
 function openActionMenu(item) {
@@ -632,6 +845,51 @@ async function handleBatchMoveConfirm() {
   }
 }
 
+// 单个题目操作
+function handleEditQuestion(q) {
+  editingQuestion.value = q
+  modalOpen.value = true
+}
+
+function handleMoveQuestion(q) {
+  currentMovingQuestion.value = q
+  moveQuestionTargetFolderId.value = null
+  moveQuestionModalVisible.value = true
+}
+
+async function handleMoveQuestionConfirm() {
+  if (moveQuestionTargetFolderId.value === null && moveQuestionTargetFolderId.value !== 0) {
+    message.warning('请选择目标文件夹')
+    return
+  }
+  try {
+    await moveQuestionToFolder(currentMovingQuestion.value.id, moveQuestionTargetFolderId.value)
+    message.success('题目已移动')
+    moveQuestionModalVisible.value = false
+    currentMovingQuestion.value = null
+    await loadQuestionsForFolder(selectedFolderId.value)
+  } catch (error) {
+    message.error(error.message || '移动失败')
+  }
+}
+
+function handleDeleteQuestion(q) {
+  Modal.confirm({
+    title: '确认删除题目',
+    content: `删除后无法恢复，是否删除该题目？`,
+    okType: 'danger',
+    async onOk() {
+      try {
+        await deleteQuestion(q.id)
+        message.success('题目已删除')
+        await loadQuestionsForFolder(selectedFolderId.value)
+      } catch (error) {
+        message.error(error.message || '删除失败')
+      }
+    },
+  })
+}
+
 // 题目相关
 async function handleSubmitQuestion(payload) {
   try {
@@ -662,6 +920,32 @@ async function loadPoliceTypeOptions() {
 onMounted(async () => {
   await loadData()
   await loadPoliceTypeOptions()
+  // 检查 URL 中的 folderId 参数
+  const folderId = route.query.folderId
+  if (folderId) {
+    const folder = folderList.value.find(f => String(f.id) === String(folderId))
+    if (folder) {
+      selectedFolderId.value = folder.id
+      selectedFolderName.value = folder.name
+      loadQuestionsForFolder(folder.id)
+    }
+  }
+})
+
+// 监听路由变化（浏览器前进/后退）
+watch(() => route.query.folderId, (newVal) => {
+  if (newVal) {
+    const folder = folderList.value.find(f => String(f.id) === String(newVal))
+    if (folder) {
+      selectedFolderId.value = folder.id
+      selectedFolderName.value = folder.name
+      loadQuestionsForFolder(folder.id)
+    }
+  } else {
+    selectedFolderId.value = null
+    selectedFolderName.value = ''
+    questionList.value = []
+  }
 })
 
 onUnmounted(() => {
@@ -852,6 +1136,12 @@ onUnmounted(() => {
   gap: 12px;
 }
 
+.toolbar-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #334155;
+}
+
 .filter-select {
   width: 160px;
   appearance: none;
@@ -992,6 +1282,64 @@ onUnmounted(() => {
   padding-left: 16px !important;
 }
 
+.col-type {
+  width: 80px;
+}
+
+.col-content {
+  min-width: 200px;
+}
+
+.col-answer {
+  width: 100px;
+}
+
+.answer-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: #059669;
+}
+
+.ml-2 {
+  margin-left: 8px;
+}
+
+.col-difficulty {
+  width: 60px;
+}
+
+.options-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.option-tag {
+  font-size: 11px;
+  color: #64748B;
+  background: #F1F5F9;
+  padding: 1px 6px;
+  border-radius: 3px;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.difficulty-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #F1F5F9;
+  color: #64748B;
+  font-size: 11px;
+  font-weight: 600;
+}
+
 .table-row {
   transition: background-color 0.2s;
   border-bottom: 1px solid #F8FAFC;
@@ -1037,6 +1385,22 @@ onUnmounted(() => {
 .question-count {
   font-weight: 700;
   color: #2563EB;
+}
+
+.question-count-btn {
+  background: none;
+  border: none;
+  color: #2563EB;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.2s;
+}
+
+.question-count-btn:hover {
+  color: #1D4ED8;
+  text-decoration: underline;
 }
 
 .status-text {
@@ -1245,6 +1609,85 @@ onUnmounted(() => {
   color: white;
   border-color: #1E293B;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+/* ============ 分页大小选择 ============ */
+.page-size-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-size-label {
+  font-size: 11px;
+  color: #94A3B8;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.page-size-select {
+  font-size: 12px;
+  color: #64748B;
+  border: 1px solid #E2E8F0;
+  border-radius: 6px;
+  padding: 4px 24px 4px 8px;
+  background: white;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M5%207l5%205%205-5%22%20stroke%3D%22%2394A3B8%22%20stroke-width%3D%221.5%22%20fill%3D%22none%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
+  background-size: 16px;
+  transition: all 0.2s;
+}
+
+.page-size-select:hover {
+  border-color: #CBD5E1;
+}
+
+.page-size-select:focus {
+  outline: none;
+  border-color: #3B82F6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* ============ 答案展开区域 ============ */
+.answer-section {
+  margin-top: 12px;
+  padding: 12px 16px;
+  background: #F0F9FF;
+  border-radius: 8px;
+  border: 1px solid #E0F2FE;
+}
+
+.answer-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0369A1;
+  margin-bottom: 4px;
+}
+
+.answer-content {
+  font-size: 14px;
+  font-weight: 700;
+  color: #0C4A6E;
+}
+
+.answer-explanation {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed #BAE6FD;
+}
+
+.answer-explanation .answer-label {
+  color: #7C3AED;
+}
+
+.answer-explanation div:last-child {
+  font-size: 13px;
+  color: #4C1D95;
+  line-height: 1.6;
 }
 
 /* ============ 文件夹管理弹窗 ============ */

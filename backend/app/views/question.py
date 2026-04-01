@@ -35,13 +35,15 @@ def get_questions(
     type: Optional[str] = None,
     difficulty: Optional[int] = None,
     knowledge_point: Optional[str] = None,
+    folder_id: Optional[int] = Query(None, description="按文件夹ID筛选"),
+    recursive: bool = Query(False, description="是否递归查询子文件夹的题目"),
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
     """获取题目列表"""
     _require_permission(current_user, "GET_QUESTIONS")
     controller = QuestionController(db)
-    data = controller.get_questions(page, size, search, type, difficulty, knowledge_point, current_user.user_id)
+    data = controller.get_questions(page, size, search, type, difficulty, knowledge_point, folder_id, recursive, current_user.user_id)
     return StandardResponse(data=data)
 
 

@@ -19,9 +19,10 @@ class QuestionController:
 
     def get_questions(self, page: int = 1, size: int = 10, search: Optional[str] = None,
                       type: Optional[str] = None, difficulty: Optional[int] = None,
-                      knowledge_point: Optional[str] = None, current_user_id: Optional[int] = None):
+                      knowledge_point: Optional[str] = None, folder_id: Optional[int] = None,
+                      recursive: bool = False, current_user_id: Optional[int] = None):
         try:
-            return self.service.get_questions(page, size, search, type, difficulty, knowledge_point, current_user_id)
+            return self.service.get_questions(page, size, search, type, difficulty, knowledge_point, folder_id, recursive, current_user_id)
         except Exception as e:
             logger.error(f"获取题目列表异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取题目列表失败")

@@ -281,8 +281,10 @@ class ExamPaperResponse(BaseModel):
     type: str = "formal"
     status: str = "draft"
     folder_id: Optional[int] = None
+    folder_name: Optional[str] = None
     published_at: Optional[datetime] = None
     created_by: Optional[int] = None
+    creator_name: Optional[str] = None
     question_count: int = 0
     usage_count: int = 0
     linked_exam_count: int = 0
