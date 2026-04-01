@@ -190,7 +190,7 @@ const isMobile = ref(window.innerWidth <= 768)
 const isMounted = ref(false)
 
 const isImmersiveRoute = computed(() =>
-  route.path.startsWith('/resource/recommend') || route.path.startsWith('/exam/manage')
+  route.path.startsWith('/resource/recommend')
 )
 const desktopSidebarWidth = computed(() => {
   if (isMobile.value) {

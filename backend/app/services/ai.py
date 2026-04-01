@@ -172,7 +172,6 @@ class AIService:
 
         try:
             from app.tasks.ai_paper_assembly import schedule_paper_assembly_task
-
             schedule_paper_assembly_task(preferred_task_id=task.id, db=self.db)
             self.db.refresh(task)
         except Exception as exc:
@@ -197,30 +196,48 @@ class AIService:
             task.error_message = None
             self.db.commit()
 
-        request_payload = AIPaperAssemblyTaskCreateRequest.model_validate(task.request_payload or {})
-        normalized_request = self._normalize_paper_assembly_task_request(request_payload)
-        task.task_name = normalized_request.task_name
-        task.request_payload = normalized_request.model_dump(mode="python")
+        try:
+            request_payload = AIPaperAssemblyTaskCreateRequest.model_validate(task.request_payload or {})
+            normalized_request = self._normalize_paper_assembly_task_request(request_payload)
+            task.task_name = normalized_request.task_name
+            task.request_payload = normalized_request.model_dump(mode="python")
 
-        parsed_request = self.paper_assembly_parser.parse_request(
-            normalized_request,
-            self.DEFAULT_TYPE_CONFIGS,
-        )
-        task.result_payload = self._build_paper_assembly_result_payload(parsed_request=parsed_request)
-        self.db.commit()
+            parsed_request = self.paper_assembly_parser.parse_request(
+                normalized_request,
+                self.DEFAULT_TYPE_CONFIGS,
+            )
+            task.result_payload = self._build_paper_assembly_result_payload(parsed_request=parsed_request)
+            self.db.commit()
 
-        paper_draft, selection_notes = self._assemble_paper_from_question_bank(
-            normalized_request,
-            parsed_request,
-            task.created_by,
-        )
-        task.result_payload = self._build_paper_assembly_result_payload(
-            paper_draft=paper_draft,
-            parsed_request=parsed_request,
-            selection_notes=selection_notes,
-        )
-        self._mark_task_completed(task)
-        self.db.commit()
+            topic = normalized_request.knowledge_points[0] if normalized_request.knowledge_points else normalized_request.paper_title
+            gen_request = AIPaperGenerationTaskCreateRequest(
+                task_name=normalized_request.task_name,
+                paper_title=normalized_request.paper_title,
+                paper_type=normalized_request.paper_type,
+                description=normalized_request.description,
+                duration=normalized_request.duration,
+                passing_score=normalized_request.passing_score,
+                topic=topic,
+                source_text=normalized_request.requirements,
+                knowledge_points=normalized_request.knowledge_points,
+                difficulty=3,
+                police_type_id=normalized_request.police_type_id,
+                type_configs=normalized_request.type_configs,
+                requirements=normalized_request.requirements,
+            )
+
+            paper_generator = AIPaperGenerator()
+            paper_draft = paper_generator.generate_paper(gen_request)
+            task.result_payload = self._build_paper_assembly_result_payload(
+                paper_draft=paper_draft,
+                parsed_request=parsed_request,
+            )
+            self._mark_task_completed(task)
+            self.db.commit()
+        except Exception as exc:
+            self._mark_task_failed(task, str(exc))
+            self.db.commit()
+            raise
 
     def create_paper_generation_task(
         self,
