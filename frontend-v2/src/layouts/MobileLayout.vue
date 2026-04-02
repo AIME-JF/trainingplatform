@@ -74,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   AppstoreOutlined,
@@ -89,6 +89,7 @@ import {
   BellOutlined,
 } from '@ant-design/icons-vue'
 import { useMobile } from '@/composables/useMobile'
+import { useNoticeUnreadCount } from '@/composables/useNoticeUnreadCount'
 import { useAuthStore } from '@/stores/auth'
 import {
   COURSE_PERMISSIONS,
@@ -103,23 +104,13 @@ const router = useRouter()
 const currentRoute = useRoute()
 const authStore = useAuthStore()
 const { isMobile } = useMobile()
+const { notifyCount, refreshNotifyCount } = useNoticeUnreadCount()
 
 const displayName = computed(() => authStore.currentUser?.name || authStore.currentUser?.username || '用户')
 const avatarText = computed(() => (displayName.value || '').slice(0, 1))
 
-// 未读通知计数
-const notifyCount = ref(0)
-
-async function fetchNotifyCount() {
-  try {
-    const { getUnreadCountApiV1NoticesUnreadCountGet } = await import('@/api/generated/notice-management/notice-management')
-    const data = await getUnreadCountApiV1NoticesUnreadCountGet()
-    notifyCount.value = data?.total ?? 0
-  } catch { /* ignore */ }
-}
-
 onMounted(() => {
-  if (authStore.isLoggedIn) fetchNotifyCount()
+  if (authStore.isLoggedIn) void refreshNotifyCount()
 })
 
 interface NavItem {

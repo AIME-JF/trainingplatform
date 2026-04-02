@@ -14,7 +14,7 @@ export interface ExamQuestionAnswerDetailResponse {
   content: string;
   my_answer?: unknown;
   answer?: unknown;
-  is_correct: boolean;
+  is_correct?: boolean;
   explanation?: string | null;
   score?: number;
 }

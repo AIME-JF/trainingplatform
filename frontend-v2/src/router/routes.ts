@@ -169,7 +169,7 @@ export const routes: RouteRecordRaw[] = [
       {
         path: 'profile',
         name: 'Profile',
-        component: () => import('@/views/dashboard/Index.vue'),
+        component: () => import('@/views/profile/Index.vue'),
         meta: { title: '个人中心' },
       },
     ],

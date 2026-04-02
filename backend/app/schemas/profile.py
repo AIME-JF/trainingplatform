@@ -4,6 +4,7 @@
 from typing import Optional, List
 from datetime import datetime, date
 from pydantic import BaseModel, Field, ConfigDict
+from .notice import NoticeResponse, NoticeUnreadCountResponse
 
 
 class ProfileUpdate(BaseModel):
@@ -61,3 +62,11 @@ class ExamHistoryResponse(BaseModel):
     end_time: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ProfileOverviewResponse(BaseModel):
+    """移动端个人中心概览响应"""
+    profile: ProfileResponse
+    study_stats: StudyStatsResponse
+    notice_unread_count: NoticeUnreadCountResponse
+    recent_notices: List[NoticeResponse] = []

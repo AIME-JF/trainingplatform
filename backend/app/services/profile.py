@@ -7,8 +7,10 @@ from sqlalchemy import func
 
 from app.models import User, CourseProgress, ExamRecord, Certificate, Exam, Course
 from app.services.course_progress import CourseProgressService
+from app.services.notice import NoticeService
 from app.schemas.profile import (
-    ProfileUpdate, ProfileResponse, StudyStatsResponse, ExamHistoryResponse
+    ProfileUpdate, ProfileResponse, StudyStatsResponse,
+    ExamHistoryResponse, ProfileOverviewResponse
 )
 from logger import logger
 
@@ -108,6 +110,20 @@ class ProfileService:
             total_exams=exam_count,
             avg_score=round(float(avg_result), 1),
             certificates_count=cert_count
+        )
+
+    def get_overview(self, user_id: int) -> Optional[ProfileOverviewResponse]:
+        """获取移动端个人中心概览"""
+        profile = self.get_profile(user_id)
+        if not profile:
+            return None
+
+        notice_service = NoticeService(self.db)
+        return ProfileOverviewResponse(
+            profile=profile,
+            study_stats=self.get_study_stats(user_id),
+            notice_unread_count=notice_service.get_unread_count(user_id),
+            recent_notices=notice_service.get_recent_notifications(user_id, limit=3),
         )
 
     def get_exam_history(self, user_id: int) -> List[ExamHistoryResponse]:

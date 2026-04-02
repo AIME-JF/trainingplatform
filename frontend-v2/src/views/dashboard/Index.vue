@@ -291,20 +291,15 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, type Component } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import dayjs from 'dayjs'
 import isoWeek from 'dayjs/plugin/isoWeek'
 import {
   BellOutlined,
-  BookFilled,
-  CalendarFilled,
   CalendarOutlined,
   ClockCircleOutlined,
-  DatabaseOutlined,
   EnvironmentOutlined,
-  ProfileFilled,
-  ReadOutlined,
   RightOutlined,
   UserOutlined,
 } from '@ant-design/icons-vue'
@@ -312,14 +307,10 @@ import axiosInstance from '@/api/custom-instance'
 import type { CalendarEventResponse } from '@/api/generated/model/calendarEventResponse'
 import type { ExamResponse } from '@/api/generated/model/examResponse'
 import { useMobile } from '@/composables/useMobile'
+import { useNoticeUnreadCount } from '@/composables/useNoticeUnreadCount'
 import { useAuthStore } from '@/stores/auth'
-import {
-  COURSE_PERMISSIONS,
-  EXAM_LIST_PERMISSIONS,
-  PROFILE_PERMISSIONS,
-  TRAINING_PERMISSIONS,
-  TRAINING_SCHEDULE_PERMISSIONS,
-} from '@/constants/permissions'
+import { quickActionConfigs } from '@/constants/quickActions'
+import { EXAM_LIST_PERMISSIONS } from '@/constants/permissions'
 
 dayjs.extend(isoWeek)
 
@@ -327,19 +318,6 @@ interface MetricItem {
   label: string
   value: string
   suffix?: string
-}
-
-interface QuickAction {
-  title: string
-  description: string
-  path: string
-  icon: Component
-  background: string
-  mobileBackground?: string
-  mobileIcon?: Component
-  mobileIconColor?: string
-  mobileShadowColor?: string
-  permissions: string[]
 }
 
 interface PreviewPalette {
@@ -388,12 +366,12 @@ const router = useRouter()
 const currentRoute = useRoute()
 const authStore = useAuthStore()
 const { isMobile } = useMobile()
+const { notifyCount, refreshNotifyCount } = useNoticeUnreadCount()
 const calendarLoading = ref(false)
 const calendarError = ref('')
 const calendarEvents = ref<CalendarEventResponse[]>([])
 const examEvents = ref<ExamResponse[]>([])
 const selectedPreviewDate = ref(dayjs().format('YYYY-MM-DD'))
-const notifyCount = ref(0)
 
 const displayName = computed(() => authStore.currentUser?.name || authStore.currentUser?.username || '用户')
 const avatarText = computed(() => (displayName.value || '用').slice(0, 1))
@@ -419,58 +397,9 @@ const overviewStats = computed<MetricItem[]>(() => [
   { label: '考试次数', value: formatMetric(authStore.currentUser?.exam_count), suffix: '次' },
 ])
 
-const quickActionConfigs: QuickAction[] = [
-  {
-    title: '班级列表',
-    description: '查看训练班、时间安排与详情',
-    path: '/classes',
-    icon: ReadOutlined,
-    background: 'var(--v2-cover-blue)',
-    mobileIcon: ProfileFilled,
-    mobileBackground: '#efe6ff',
-    mobileIconColor: '#7e58ef',
-    mobileShadowColor: 'rgba(126, 88, 239, 0.12)',
-    permissions: TRAINING_PERMISSIONS,
-  },
-  {
-    title: '训练日历',
-    description: '进入周训练计划与课程排期',
-    path: '/classes/schedule',
-    icon: CalendarOutlined,
-    background: 'var(--v2-cover-green)',
-    mobileIcon: CalendarFilled,
-    mobileBackground: '#e2f4ff',
-    mobileIconColor: '#3899ff',
-    mobileShadowColor: 'rgba(56, 153, 255, 0.12)',
-    permissions: TRAINING_SCHEDULE_PERMISSIONS,
-  },
-  {
-    title: '学习资源',
-    description: '继续课程学习与资源浏览',
-    path: '/resource/courses',
-    icon: DatabaseOutlined,
-    background: 'var(--v2-cover-purple)',
-    mobileIcon: BookFilled,
-    mobileBackground: '#fff1dc',
-    mobileIconColor: '#ffab47',
-    mobileShadowColor: 'rgba(255, 171, 71, 0.12)',
-    permissions: COURSE_PERMISSIONS,
-  },
-  {
-    title: '个人中心',
-    description: '查看和维护当前登录账号信息',
-    path: '/profile',
-    icon: UserOutlined,
-    background: 'var(--v2-cover-orange)',
-    mobileIcon: UserOutlined,
-    mobileBackground: '#ffe4ef',
-    mobileIconColor: '#ff7ea8',
-    mobileShadowColor: 'rgba(255, 126, 168, 0.12)',
-    permissions: PROFILE_PERMISSIONS,
-  },
-]
-
-const quickActions = computed(() => quickActionConfigs.filter((item) => authStore.hasAnyPermission(item.permissions)))
+const quickActions = computed(() => quickActionConfigs.filter((item) => (
+  item.surfaces.includes('dashboard') && authStore.hasAnyPermission(item.permissions)
+)))
 const mobileQuickActions = computed(() => quickActions.value.slice(0, 4))
 const mobileCalendarPreviewItems = computed(() => calendarPreviewItems.value.slice(0, 4))
 
@@ -642,16 +571,6 @@ function getMobileEventStatus(item: DashboardPreviewItem) {
   return { label: '已结束', tone: 'muted' }
 }
 
-async function fetchNotifyCount() {
-  try {
-    const { getUnreadCountApiV1NoticesUnreadCountGet } = await import('@/api/generated/notice-management/notice-management')
-    const data = await getUnreadCountApiV1NoticesUnreadCountGet()
-    notifyCount.value = data.total ?? 0
-  } catch {
-    notifyCount.value = 0
-  }
-}
-
 async function fetchDashboardCalendar() {
   if (!isDashboardRoute.value) return
 
@@ -715,7 +634,7 @@ watch(
     if (active) {
       void fetchDashboardCalendar()
       if (isMobile.value) {
-        void fetchNotifyCount()
+        void refreshNotifyCount()
       }
     }
   },

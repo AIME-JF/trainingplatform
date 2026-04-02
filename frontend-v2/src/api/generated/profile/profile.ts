@@ -7,6 +7,7 @@
 import type {
   ProfileUpdate,
   StandardResponseListExamHistoryResponse,
+  StandardResponseProfileOverviewResponse,
   StandardResponseProfileResponse,
   StandardResponseStudyStatsResponse
 } from '../model';
@@ -42,6 +43,18 @@ export const updateProfileApiV1ProfilePut = (
       );
     }
   /**
+ * 获取移动端个人中心概览
+ * @summary 个人中心概览
+ */
+export const getProfileOverviewApiV1ProfileOverviewGet = (
+
+ ) => {
+      return customInstance<StandardResponseProfileOverviewResponse>(
+      {url: `/profile/overview`, method: 'GET'
+    },
+      );
+    }
+  /**
  * 获取学习统计
  * @summary 学习统计
  */
@@ -67,5 +80,6 @@ export const getExamHistoryApiV1ProfileExamHistoryGet = (
     }
   export type GetProfileApiV1ProfileGetResult = NonNullable<Awaited<ReturnType<typeof getProfileApiV1ProfileGet>>>
 export type UpdateProfileApiV1ProfilePutResult = NonNullable<Awaited<ReturnType<typeof updateProfileApiV1ProfilePut>>>
+export type GetProfileOverviewApiV1ProfileOverviewGetResult = NonNullable<Awaited<ReturnType<typeof getProfileOverviewApiV1ProfileOverviewGet>>>
 export type GetStudyStatsApiV1ProfileStudyStatsGetResult = NonNullable<Awaited<ReturnType<typeof getStudyStatsApiV1ProfileStudyStatsGet>>>
 export type GetExamHistoryApiV1ProfileExamHistoryGetResult = NonNullable<Awaited<ReturnType<typeof getExamHistoryApiV1ProfileExamHistoryGet>>>

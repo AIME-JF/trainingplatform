@@ -1,38 +1,18 @@
 """
 公告管理路由
 """
-from typing import Optional, List
+from typing import Optional
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.schemas import StandardResponse, PaginatedResponse, TokenData
 from app.schemas.notice import NoticeCreate, NoticeUpdate, NoticeResponse, NoticeUnreadCountResponse
-from app.models import Notice, NoticeRead
+from app.models import Notice
+from app.services.notice import NoticeService
 
 router = APIRouter(prefix="/notices", tags=["notice_management"])
-
-
-def _to_response(notice: Notice, user_id: Optional[int] = None) -> NoticeResponse:
-    is_read = False
-    if user_id and hasattr(notice, 'reads'):
-        is_read = any(r.user_id == user_id for r in (notice.reads or []))
-    return NoticeResponse(
-        id=notice.id,
-        title=notice.title,
-        content=notice.content,
-        type=notice.type,
-        training_id=notice.training_id,
-        author_id=notice.author_id,
-        author_name=notice.author.nickname if notice.author else None,
-        target_user_id=notice.target_user_id,
-        reminder_type=notice.reminder_type,
-        is_read=is_read,
-        created_at=notice.created_at,
-        updated_at=notice.updated_at,
-    )
 
 
 @router.get("/my", response_model=StandardResponse[PaginatedResponse[NoticeResponse]], summary="我的通知")
@@ -44,36 +24,8 @@ def get_my_notifications(
     db: Session = Depends(get_db),
 ):
     """获取当前用户的通知列表（系统公告 + 定向提醒）"""
-    query = db.query(Notice).options(joinedload(Notice.author), joinedload(Notice.reads))
-
-    if tab == "reminder":
-        query = query.filter(
-            Notice.type == "reminder",
-            Notice.target_user_id == current_user.user_id,
-        )
-    elif tab == "system":
-        query = query.filter(
-            Notice.type == "system",
-            Notice.target_user_id.is_(None),
-        )
-    else:
-        # 全部：系统公告（无 target）+ 发给我的提醒
-        query = query.filter(
-            or_(
-                (Notice.type == "system") & Notice.target_user_id.is_(None),
-                (Notice.type == "reminder") & (Notice.target_user_id == current_user.user_id),
-            )
-        )
-
-    total = query.count()
-    skip = (page - 1) * size
-    records = query.order_by(Notice.created_at.desc()).offset(skip).limit(size).all()
-
-    items = [_to_response(n, current_user.user_id) for n in records]
-
-    return StandardResponse(data=PaginatedResponse(
-        page=page, size=size, total=total, items=items,
-    ))
+    service = NoticeService(db)
+    return StandardResponse(data=service.get_my_notifications(current_user.user_id, page, size, tab))
 
 
 @router.get("/unread-count", response_model=StandardResponse[NoticeUnreadCountResponse], summary="未读通知计数")
@@ -82,30 +34,8 @@ def get_unread_count(
     db: Session = Depends(get_db),
 ):
     """获取当前用户的未读通知计数"""
-    read_ids = {
-        r.notice_id
-        for r in db.query(NoticeRead.notice_id).filter(NoticeRead.user_id == current_user.user_id).all()
-    }
-
-    # System notices (no target)
-    system_notices = db.query(Notice.id).filter(
-        Notice.type == "system",
-        Notice.target_user_id.is_(None),
-    ).all()
-    system_unread = sum(1 for (nid,) in system_notices if nid not in read_ids)
-
-    # Reminders for me
-    reminder_notices = db.query(Notice.id).filter(
-        Notice.type == "reminder",
-        Notice.target_user_id == current_user.user_id,
-    ).all()
-    reminder_unread = sum(1 for (nid,) in reminder_notices if nid not in read_ids)
-
-    return StandardResponse(data=NoticeUnreadCountResponse(
-        total=system_unread + reminder_unread,
-        reminder=reminder_unread,
-        system=system_unread,
-    ))
+    service = NoticeService(db)
+    return StandardResponse(data=service.get_unread_count(current_user.user_id))
 
 
 @router.post("/{notice_id}/read", response_model=StandardResponse, summary="标记通知为已读")
@@ -115,13 +45,8 @@ def mark_as_read(
     db: Session = Depends(get_db),
 ):
     """标记单条通知为已读"""
-    existing = db.query(NoticeRead).filter(
-        NoticeRead.notice_id == notice_id,
-        NoticeRead.user_id == current_user.user_id,
-    ).first()
-    if not existing:
-        db.add(NoticeRead(notice_id=notice_id, user_id=current_user.user_id))
-        db.commit()
+    service = NoticeService(db)
+    service.mark_as_read(current_user.user_id, notice_id)
     return StandardResponse(message="已读")
 
 
@@ -132,29 +57,8 @@ def mark_all_as_read(
     db: Session = Depends(get_db),
 ):
     """将当前用户的通知全部标记为已读"""
-    read_ids = {
-        r.notice_id
-        for r in db.query(NoticeRead.notice_id).filter(NoticeRead.user_id == current_user.user_id).all()
-    }
-
-    query = db.query(Notice.id)
-    if tab == "reminder":
-        query = query.filter(Notice.type == "reminder", Notice.target_user_id == current_user.user_id)
-    elif tab == "system":
-        query = query.filter(Notice.type == "system", Notice.target_user_id.is_(None))
-    else:
-        query = query.filter(
-            or_(
-                (Notice.type == "system") & Notice.target_user_id.is_(None),
-                (Notice.type == "reminder") & (Notice.target_user_id == current_user.user_id),
-            )
-        )
-
-    unread_ids = [nid for (nid,) in query.all() if nid not in read_ids]
-    if unread_ids:
-        db.bulk_save_objects([NoticeRead(notice_id=nid, user_id=current_user.user_id) for nid in unread_ids])
-        db.commit()
-
+    service = NoticeService(db)
+    service.mark_all_as_read(current_user.user_id, tab)
     return StandardResponse(message="已全部标记为已读")
 
 
@@ -184,7 +88,8 @@ def get_notices(
         skip = (page - 1) * size
         records = query.offset(skip).limit(size).all()
 
-    items = [_to_response(n) for n in records]
+    service = NoticeService(db)
+    items = [service.to_response(n) for n in records]
 
     return StandardResponse(data=PaginatedResponse(
         page=page,
@@ -213,7 +118,8 @@ def create_notice(
     db.add(notice)
     db.commit()
     db.refresh(notice)
-    return StandardResponse(data=_to_response(notice))
+    service = NoticeService(db)
+    return StandardResponse(data=service.to_response(notice))
 
 
 @router.put("/{notice_id}", response_model=StandardResponse[NoticeResponse], summary="更新公告")
@@ -234,7 +140,8 @@ def update_notice(
 
     db.commit()
     db.refresh(notice)
-    return StandardResponse(data=_to_response(notice))
+    service = NoticeService(db)
+    return StandardResponse(data=service.to_response(notice))
 
 
 @router.delete("/{notice_id}", response_model=StandardResponse, summary="删除公告")

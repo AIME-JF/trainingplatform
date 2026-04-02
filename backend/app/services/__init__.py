@@ -27,6 +27,7 @@ from .training_portrait_aggregator import TrainingPortraitAggregator
 from .training_ai import TrainingAIService
 from .talent import TalentService
 from .media import MediaService
+from .notice import NoticeService
 from .resource import ResourceService
 from .review import ReviewService
 from .recommendation import RecommendationService
@@ -39,6 +40,6 @@ __all__ = [
     "CertificateService", "ProfileService",
     "DashboardService", "ReportService", "AIService", "TeachingResourceGenerationService",
     "TrainingPortraitAggregator", "TrainingAIService", "TalentService",
-    "MediaService",
+    "MediaService", "NoticeService",
     "ResourceService", "ReviewService", "RecommendationService",
 ]

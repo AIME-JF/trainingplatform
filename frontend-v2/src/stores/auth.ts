@@ -7,10 +7,13 @@ export interface UserInfo {
   username: string
   nickname?: string
   name?: string
+  gender?: string
+  email?: string
   role: string
   role_codes: string[]
   permissions: string[]
   phone?: string
+  avatar?: string
   police_id?: string
   id_card_number?: string
   unit?: string
@@ -76,10 +79,13 @@ export const useAuthStore = defineStore('auth', () => {
       username: (user.username as string) || '',
       nickname: (user.nickname as string) || undefined,
       name: (user.nickname || user.name || user.username) as string,
+      gender: (user.gender as string) || undefined,
+      email: (user.email as string) || undefined,
       role: (primaryRole.code as string) || (user.role as string) || '',
       role_codes: roles.map((r) => r.code as string).filter(Boolean),
       permissions: [...permSet].sort(),
       phone: (user.phone as string) || undefined,
+      avatar: (user.avatar as string) || undefined,
       police_id: (user.police_id as string) || undefined,
       id_card_number: (user.id_card_number as string) || undefined,
       unit: ((user.departments as Array<Record<string, string>>)?.[0]?.name || user.unit) as string || undefined,

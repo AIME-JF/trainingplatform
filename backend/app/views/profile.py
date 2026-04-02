@@ -9,7 +9,8 @@ from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.schemas import (
     StandardResponse, TokenData,
-    ProfileUpdate, ProfileResponse, StudyStatsResponse, ExamHistoryResponse
+    ProfileUpdate, ProfileResponse, StudyStatsResponse,
+    ExamHistoryResponse, ProfileOverviewResponse
 )
 from app.controllers import ProfileController
 
@@ -37,6 +38,17 @@ def update_profile(
     controller = ProfileController(db)
     result = controller.update_profile(current_user.user_id, data)
     return StandardResponse(data=result)
+
+
+@router.get("/overview", response_model=StandardResponse[ProfileOverviewResponse], summary="个人中心概览")
+def get_profile_overview(
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """获取移动端个人中心概览"""
+    controller = ProfileController(db)
+    data = controller.get_overview(current_user.user_id)
+    return StandardResponse(data=data)
 
 
 @router.get("/study-stats", response_model=StandardResponse[StudyStatsResponse], summary="学习统计")

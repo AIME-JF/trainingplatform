@@ -574,6 +574,7 @@ Authorization: Bearer <access_token>
 | --- | --- | --- | --- |
 | `GET` | `/api/v1/profile` | 获取个人信息 | 无 |
 | `PUT` | `/api/v1/profile` | 更新个人信息 | JSON：`nickname` `gender` `email` `phone` `avatar` |
+| `GET` | `/api/v1/profile/overview` | 个人中心概览 | 返回资料、学习统计、未读通知数、最近通知 |
 | `GET` | `/api/v1/profile/study-stats` | 学习统计 | 无 |
 | `GET` | `/api/v1/profile/exam-history` | 考试历史 | 无 |
 

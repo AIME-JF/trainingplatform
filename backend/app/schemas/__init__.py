@@ -77,7 +77,10 @@ from .exam import (
 # 证书相关
 from .certificate import CertificateCreate, CertificateResponse
 # 个人中心
-from .profile import ProfileUpdate, ProfileResponse, StudyStatsResponse, ExamHistoryResponse
+from .profile import (
+    ProfileUpdate, ProfileResponse, StudyStatsResponse,
+    ExamHistoryResponse, ProfileOverviewResponse
+)
 # 工作台
 from .dashboard import DashboardResponse
 # 数据看板
@@ -196,7 +199,7 @@ __all__ = [
     # 证书相关
     "CertificateCreate", "CertificateResponse",
     # 个人中心
-    "ProfileUpdate", "ProfileResponse", "StudyStatsResponse", "ExamHistoryResponse",
+    "ProfileUpdate", "ProfileResponse", "StudyStatsResponse", "ExamHistoryResponse", "ProfileOverviewResponse",
     # 工作台
     "DashboardResponse",
     # 数据看板

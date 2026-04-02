@@ -41,10 +41,10 @@
             <div class="notification-item-body">
               <div class="notification-item-header">
                 <span class="notification-item-title">{{ item.title }}</span>
-                <a-tag v-if="item.reminder_type" size="small" color="blue">{{ reminderTypeLabel(item.reminder_type) }}</a-tag>
+                <a-tag v-if="item.reminder_type" size="small" color="blue">{{ getReminderTypeLabel(item.reminder_type) }}</a-tag>
               </div>
               <div class="notification-item-content">{{ item.content }}</div>
-              <div class="notification-item-time">{{ formatTime(item.created_at) }}</div>
+              <div class="notification-item-time">{{ formatNoticeTime(item.created_at) }}</div>
             </div>
           </div>
         </div>
@@ -59,7 +59,6 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import dayjs from 'dayjs'
 import {
   getMyNotificationsApiV1NoticesMyGet,
   getUnreadCountApiV1NoticesUnreadCountGet,
@@ -67,6 +66,7 @@ import {
   markAllAsReadApiV1NoticesReadAllPost,
 } from '@/api/generated/notice-management/notice-management'
 import type { NoticeResponse, NoticeUnreadCountResponse } from '@/api/generated/model'
+import { formatNoticeTime, getReminderTypeLabel } from '@/utils/notice'
 
 const activeTab = ref('reminder')
 const loading = ref(false)
@@ -76,28 +76,6 @@ const page = ref(1)
 const unreadCount = ref<NoticeUnreadCountResponse>({ total: 0, reminder: 0, system: 0 })
 
 const hasUnread = ref(false)
-
-const reminderTypeMap: Record<string, string> = {
-  exam_reminder: '考试提醒',
-  review_approved: '审核通过',
-  review_rejected: '审核驳回',
-  enrollment_approved: '报名通过',
-  enrollment_rejected: '报名驳回',
-  training_notice: '培训通知',
-}
-
-function reminderTypeLabel(type: string): string {
-  return reminderTypeMap[type] || type
-}
-
-function formatTime(time: string | null | undefined): string {
-  if (!time) return ''
-  const diff = Date.now() - new Date(time).getTime()
-  if (diff < 60000) return '刚刚'
-  if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`
-  return dayjs(time).format('YYYY-MM-DD HH:mm')
-}
 
 async function fetchList(reset = false) {
   if (reset) {
@@ -111,12 +89,13 @@ async function fetchList(reset = false) {
       size: 20,
       tab: activeTab.value,
     })
+    const payload = data || { page: 1, size: 20, total: 0, items: [] }
     if (reset) {
-      list.value = data.items
+      list.value = payload.items
     } else {
-      list.value.push(...data.items)
+      list.value.push(...payload.items)
     }
-    total.value = data.total
+    total.value = payload.total
   } catch { /* ignore */ } finally {
     loading.value = false
   }
@@ -124,7 +103,7 @@ async function fetchList(reset = false) {
 
 async function fetchUnreadCount() {
   try {
-    unreadCount.value = await getUnreadCountApiV1NoticesUnreadCountGet()
+    unreadCount.value = await getUnreadCountApiV1NoticesUnreadCountGet() || { total: 0, reminder: 0, system: 0 }
     hasUnread.value = (unreadCount.value.total ?? 0) > 0
   } catch { /* ignore */ }
 }

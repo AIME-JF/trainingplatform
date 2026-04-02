@@ -37,5 +37,11 @@ class ProfileController:
     def get_study_stats(self, user_id: int):
         return self.service.get_study_stats(user_id)
 
+    def get_overview(self, user_id: int):
+        result = self.service.get_overview(user_id)
+        if not result:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="用户不存在")
+        return result
+
     def get_exam_history(self, user_id: int):
         return self.service.get_exam_history(user_id)
