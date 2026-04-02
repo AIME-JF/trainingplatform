@@ -213,20 +213,20 @@
             message=”计划课时用于智能排课任务的「按课时排」模式；如果选择排满或排满工作日，则不会按这里的课时限制生成。”
             style=”margin-bottom:16px”
           />
-          <a-form-item label=”课程来源”>
-            <a-radio-group v-model:value=”courseForm.sourceMode” @change=”onCourseSourceChange”>
-              <a-radio value=”resource”>选择课程资源</a-radio>
-              <a-radio value=”custom”>自定义课程</a-radio>
+          <a-form-item label="课程来源">
+            <a-radio-group v-model:value="courseForm.sourceMode" @change="onCourseSourceChange">
+              <a-radio value="resource">选择课程资源</a-radio>
+              <a-radio value="custom">自定义课程</a-radio>
             </a-radio-group>
           </a-form-item>
-          <a-form-item v-if=”courseForm.sourceMode === 'resource'” label=”课程资源” required>
-            <div style=”display:flex;gap:8px;align-items:center”>
-              <a-input :value=”courseForm.name” disabled placeholder=”点击右侧按钮选择课程资源” style=”flex:1” />
-              <a-button @click=”showCourseResourcePicker = true”>选择</a-button>
+          <a-form-item v-if="courseForm.sourceMode === 'resource'" label="课程资源" required>
+            <div style="display:flex;gap:8px;align-items:center">
+              <a-input :value="courseForm.name" disabled placeholder="点击右侧按钮选择课程资源" style="flex:1" />
+              <a-button @click="showCourseResourcePicker = true">选择</a-button>
             </div>
           </a-form-item>
-          <a-form-item v-else label=”课程名称” required>
-            <a-input v-model:value=”courseForm.name” placeholder=”例：刑事诉讼法实务操作” />
+          <a-form-item v-else label="课程名称" required>
+            <a-input v-model:value="courseForm.name" placeholder="例：刑事诉讼法实务操作" />
           </a-form-item>
           <a-form-item label="课程地点">
             <a-input v-model:value="courseForm.location" placeholder="请输入课程地点" />
