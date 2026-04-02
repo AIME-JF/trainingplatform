@@ -79,26 +79,12 @@
 
       <div class="modal-actions">
         <a-button :disabled="submitting" @click="handleCancel">取消</a-button>
-        <PermissionsTooltip
-          :allowed="canSaveDraft"
-          tips="需要 CREATE_RESOURCE 或 VIEW_RESOURCE_ALL 权限"
-        >
-          <template #default="{ disabled }">
-            <a-button type="primary" ghost :loading="submitting" :disabled="disabled" @click="submitDraft">
-              保存草稿
-            </a-button>
-          </template>
-        </PermissionsTooltip>
-        <PermissionsTooltip
-          :allowed="canSubmitReview"
-          tips="需要同时具备 CREATE_RESOURCE 和 SUBMIT_RESOURCE_REVIEW 权限"
-        >
-          <template #default="{ disabled }">
-            <a-button type="primary" :loading="submitting" :disabled="disabled" @click="submitAndSubmitReview">
-              提交审核
-            </a-button>
-          </template>
-        </PermissionsTooltip>
+        <a-button type="primary" ghost :loading="submitting" @click="submitDraft">
+          保存草稿
+        </a-button>
+        <a-button type="primary" :loading="submitting" @click="submitAndSubmitReview">
+          提交审核
+        </a-button>
       </div>
     </a-form>
   </a-modal>
@@ -108,11 +94,9 @@
 import { computed, reactive, ref, toRef, watch } from 'vue'
 import { message, Upload } from 'ant-design-vue'
 import type { UploadFile } from 'ant-design-vue'
-import { useAuthStore } from '@/stores/auth'
 import { createResource, createResourceTag, listResourceTags, submitResourceReview, uploadMediaFile } from '@/api/learning-resource'
 import { useCreatableTagSelect } from '@/composables/useCreatableTagSelect'
 import AdmissionScopeSelector from '@/components/common/AdmissionScopeSelector.vue'
-import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 import { extractMediaDurationSeconds } from '@/utils/learning-resource'
 
 const props = withDefaults(defineProps<{
@@ -126,7 +110,6 @@ const emit = defineEmits<{
   success: []
 }>()
 
-const authStore = useAuthStore()
 const submitting = ref(false)
 const fileList = ref<UploadFile[]>([])
 
@@ -157,8 +140,6 @@ const {
   createTag: createResourceTag,
 })
 
-const canSaveDraft = computed(() => authStore.hasAnyPermission(['CREATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
-const canSubmitReview = computed(() => authStore.hasAllPermissions(['CREATE_RESOURCE', 'SUBMIT_RESOURCE_REVIEW']))
 const currentAccept = computed(() => (ALLOWED_EXTENSIONS[form.content_type] || []).map((ext) => `.${ext}`).join(','))
 
 watch(() => props.open, (open) => {
@@ -263,9 +244,6 @@ async function createDraft() {
 }
 
 async function submitDraft() {
-  if (!canSaveDraft.value) {
-    return
-  }
   submitting.value = true
   try {
     const resource = await createDraft()
@@ -283,9 +261,6 @@ async function submitDraft() {
 }
 
 async function submitAndSubmitReview() {
-  if (!canSubmitReview.value) {
-    return
-  }
   submitting.value = true
   try {
     const resource = await createDraft()

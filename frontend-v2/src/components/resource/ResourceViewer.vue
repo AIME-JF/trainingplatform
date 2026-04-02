@@ -1,5 +1,13 @@
 <template>
-  <div v-if="resource" class="resource-viewer" :class="`mode-${mode}`">
+  <div
+    v-if="resource"
+    class="resource-viewer"
+    :class="[
+      `mode-${mode}`,
+      `theme-${theme}`,
+      { compact },
+    ]"
+  >
     <a-card v-if="mode !== 'recommend'" :bordered="false" class="viewer-card">
       <div class="viewer-head">
         <div>
@@ -15,6 +23,9 @@
             :src="currentMedia.file_url || undefined"
             class="media-video"
             controls
+            :autoplay="autoplay"
+            :muted="autoplay"
+            playsinline
             preload="metadata"
             @play="$emit('play')"
             @ended="$emit('complete')"
@@ -33,6 +44,10 @@
         <a-empty v-else description="暂无可预览文件" />
       </div>
 
+      <div v-if="$slots.actions" class="viewer-actions-slot">
+        <slot name="actions" />
+      </div>
+
       <div v-if="mediaList.length > 1" class="viewer-nav">
         <a-button size="small" @click="prevMedia">上一个文件</a-button>
         <span>{{ mediaIndex + 1 }} / {{ mediaList.length }}</span>
@@ -49,6 +64,7 @@
       <div class="recommend-stage" @touchstart="onMediaTouchStart" @touchend="onMediaTouchEnd">
         <template v-if="currentMedia && currentMediaKind === 'video'">
           <video
+            ref="recommendVideoRef"
             :src="currentMedia.file_url || undefined"
             class="media-video"
             controls
@@ -57,6 +73,13 @@
             playsinline
             @play="$emit('play')"
             @ended="$emit('complete')"
+          />
+          <button
+            v-if="isMobile"
+            type="button"
+            class="recommend-playback-toggle"
+            aria-label="切换视频播放状态"
+            @click.stop="toggleRecommendPlayback"
           />
         </template>
         <img
@@ -90,14 +113,21 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { ResourceDetailResponse } from '@/api/learning-resource'
+import { useMobile } from '@/composables/useMobile'
 import { detectMediaKind, formatTagList, getResourceContentTypeLabel } from '@/utils/learning-resource'
 
 const props = withDefaults(defineProps<{
   resource: ResourceDetailResponse | null
   mode?: 'detail' | 'recommend'
+  autoplay?: boolean
+  compact?: boolean
+  theme?: 'default' | 'dark'
 }>(), {
   resource: null,
   mode: 'detail',
+  autoplay: false,
+  compact: false,
+  theme: 'default',
 })
 
 defineEmits<{
@@ -108,6 +138,8 @@ defineEmits<{
 
 const mediaIndex = ref(0)
 const mediaTouch = ref({ startX: 0, startY: 0 })
+const recommendVideoRef = ref<HTMLVideoElement | null>(null)
+const { isMobile } = useMobile()
 
 const mediaList = computed(() => props.resource?.media_links || [])
 const currentMedia = computed(() => mediaList.value[mediaIndex.value] || null)
@@ -126,6 +158,7 @@ const recommendPreviewTip = computed(() => {
 
 watch(() => props.resource?.id, () => {
   mediaIndex.value = 0
+  recommendVideoRef.value = null
 })
 
 function prevMedia() {
@@ -147,6 +180,24 @@ function openCurrentMedia() {
     return
   }
   window.open(currentMedia.value.file_url, '_blank', 'noopener,noreferrer')
+}
+
+async function toggleRecommendPlayback() {
+  const video = recommendVideoRef.value
+  if (!video) {
+    return
+  }
+
+  if (video.paused) {
+    try {
+      await video.play()
+    } catch {
+      // ignore autoplay/play interruption
+    }
+    return
+  }
+
+  video.pause()
 }
 
 function onMediaTouchStart(event: TouchEvent) {
@@ -194,6 +245,10 @@ function onMediaTouchEnd(event: TouchEvent) {
   border-radius: var(--v2-radius-lg);
 }
 
+.resource-viewer.compact .viewer-card :deep(.ant-card-body) {
+  padding: 18px !important;
+}
+
 .viewer-head {
   display: flex;
   justify-content: space-between;
@@ -212,6 +267,20 @@ function onMediaTouchEnd(event: TouchEvent) {
   line-height: 1.7;
 }
 
+.resource-viewer.compact .viewer-head {
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.resource-viewer.compact .viewer-title {
+  margin-bottom: 4px;
+  font-size: 20px;
+}
+
+.resource-viewer.compact .viewer-summary {
+  line-height: 1.6;
+}
+
 .viewer-stage,
 .recommend-stage {
   position: relative;
@@ -224,6 +293,18 @@ function onMediaTouchEnd(event: TouchEvent) {
   min-height: 320px;
 }
 
+.resource-viewer.compact .viewer-stage {
+  min-height: 240px;
+}
+
+.viewer-actions-slot {
+  margin-top: 12px;
+}
+
+.resource-viewer.compact .viewer-actions-slot {
+  margin-top: 10px;
+}
+
 .media-video,
 .media-image {
   width: 100%;
@@ -233,9 +314,18 @@ function onMediaTouchEnd(event: TouchEvent) {
   background: transparent;
 }
 
+.resource-viewer.compact .media-video,
+.resource-viewer.compact .media-image {
+  max-height: min(54vh, 460px);
+}
+
 .media-document {
   background: #fff;
   padding: 12px;
+}
+
+.resource-viewer.compact .media-document {
+  padding: 0;
 }
 
 .media-document.full {
@@ -258,6 +348,50 @@ function onMediaTouchEnd(event: TouchEvent) {
   margin-top: 14px;
   color: var(--v2-text-secondary);
   font-size: 13px;
+}
+
+.resource-viewer.compact .viewer-nav,
+.resource-viewer.compact .viewer-meta {
+  margin-top: 10px;
+}
+
+.resource-viewer.theme-dark .viewer-card {
+  background: linear-gradient(180deg, rgba(18, 18, 20, 0.96) 0%, rgba(10, 10, 11, 0.94) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 42px rgba(0, 0, 0, 0.32);
+}
+
+.resource-viewer.theme-dark .viewer-title {
+  color: #fff;
+}
+
+.resource-viewer.theme-dark .viewer-summary,
+.resource-viewer.theme-dark .viewer-meta,
+.resource-viewer.theme-dark .viewer-nav {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.resource-viewer.theme-dark .viewer-stage {
+  background: #000;
+}
+
+.resource-viewer.theme-dark .media-video,
+.resource-viewer.theme-dark .media-image {
+  background: #000;
+}
+
+.resource-viewer.theme-dark .media-document {
+  background: #0b0b0c;
+}
+
+.resource-viewer.theme-dark .doc-frame {
+  background: #fff;
+}
+
+.resource-viewer.theme-dark .viewer-card :deep(.ant-tag) {
+  color: rgba(255, 255, 255, 0.92);
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .recommend-shell {
@@ -352,6 +486,20 @@ function onMediaTouchEnd(event: TouchEvent) {
   justify-content: space-between;
   transform: translateY(-50%);
   pointer-events: none;
+}
+
+.recommend-playback-toggle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 8;
+  width: min(44vw, 220px);
+  height: min(44vw, 220px);
+  transform: translate(-50%, -50%);
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
 }
 
 .nav-btn {
@@ -451,10 +599,36 @@ function onMediaTouchEnd(event: TouchEvent) {
     font-size: 20px;
   }
 
+  .recommend-playback-toggle {
+    width: min(48vw, 180px);
+    height: min(48vw, 180px);
+  }
+
   .recommend-author,
   .recommend-summary,
   .recommend-tags {
     font-size: 13px;
+  }
+
+  .resource-viewer.compact .viewer-card :deep(.ant-card-body) {
+    padding: 14px !important;
+  }
+
+  .resource-viewer.compact .viewer-title {
+    font-size: 18px;
+  }
+
+  .resource-viewer.compact .viewer-stage {
+    min-height: 210px;
+  }
+
+  .viewer-actions-slot {
+    margin-top: 10px;
+  }
+
+  .resource-viewer.compact .media-video,
+  .resource-viewer.compact .media-image {
+    max-height: 38vh;
   }
 }
 </style>

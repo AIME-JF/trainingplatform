@@ -93,9 +93,7 @@ import { useAuthStore } from '@/stores/auth'
 import {
   COURSE_PERMISSIONS,
   DASHBOARD_PERMISSIONS,
-  MY_RESOURCE_PERMISSIONS,
   PROFILE_PERMISSIONS,
-  RESOURCE_LIBRARY_PERMISSIONS,
   TEACHING_RESOURCE_GENERATION_PERMISSIONS,
   TRAINING_PERMISSIONS,
   TRAINING_SCHEDULE_PERMISSIONS,
@@ -116,7 +114,7 @@ async function fetchNotifyCount() {
   try {
     const { getUnreadCountApiV1NoticesUnreadCountGet } = await import('@/api/generated/notice-management/notice-management')
     const data = await getUnreadCountApiV1NoticesUnreadCountGet()
-    notifyCount.value = data.total ?? 0
+    notifyCount.value = data?.total ?? 0
   } catch { /* ignore */ }
 }
 
@@ -135,8 +133,6 @@ interface NavItem {
 const resourceNavPermissions = [
   ...new Set([
     ...COURSE_PERMISSIONS,
-    ...RESOURCE_LIBRARY_PERMISSIONS,
-    ...MY_RESOURCE_PERMISSIONS,
     ...TEACHING_RESOURCE_GENERATION_PERMISSIONS,
   ]),
 ]
@@ -152,8 +148,6 @@ const sidebarNavConfig: NavItem[] = [
     permissions: resourceNavPermissions,
     matchPaths: [
       '/resource/courses',
-      '/resource/library',
-      '/resource/my',
       '/resource/teaching-generate',
       '/resource/ai-generate',
     ],
@@ -162,7 +156,7 @@ const sidebarNavConfig: NavItem[] = [
     path: '/resource/community',
     label: '资源社区',
     icon: AppstoreOutlined,
-    matchPaths: ['/resource/community', '/resource/recommend'],
+    matchPaths: ['/resource/community', '/resource/recommend', '/resource/library', '/resource/my'],
   },
   {
     path: '/exam/list',
@@ -179,7 +173,7 @@ const bottomNavConfig: NavItem[] = [
     path: '/resource/community',
     label: '社区',
     icon: AppstoreOutlined,
-    matchPaths: ['/resource/community', '/resource/recommend'],
+    matchPaths: ['/resource/community', '/resource/recommend', '/resource/library', '/resource/my'],
   },
   { path: '/profile', label: '我的', icon: UserOutlined, permissions: PROFILE_PERMISSIONS },
 ]
@@ -189,7 +183,9 @@ const bottomTabs = computed(() => bottomNavConfig.filter((item) => authStore.has
 
 const activeNavPath = computed(() => {
   if (currentRoute.path.startsWith('/resource/detail/')) {
-    return currentRoute.query.from === 'community' ? '/resource/community' : '/resource/courses'
+    return ['community', 'featured', 'library', 'my'].includes(String(currentRoute.query.from || ''))
+      ? '/resource/community'
+      : '/resource/courses'
   }
 
   const mergedItems = [...sidebarItems.value, ...bottomTabs.value.filter((item) => !sidebarItems.value.some((side) => side.path === item.path))]

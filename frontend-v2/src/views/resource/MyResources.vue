@@ -1,114 +1,149 @@
 <template>
-  <div class="page-content resource-page">
-    <LearningResourceTabs />
+  <div class="page-content resource-page my-space-page">
+    <section class="my-space-shell">
+      <div class="page-header">
+        <div>
+          <h1 class="page-title">我的空间</h1>
+          <p class="page-subtitle">管理自己上传的资源和审核状态。</p>
+        </div>
 
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">我的空间</h1>
-        <p class="page-subtitle">管理自己上传的资源和审核状态。</p>
+        <div class="page-header-actions">
+          <PermissionsTooltip
+            v-if="showTeachingGenerationAction"
+            :allowed="canUseTeachingGeneration"
+            :block="isMobile"
+            tips="需要 USE_TEACHING_RESOURCE_GENERATION 权限"
+          >
+            <template #default="{ disabled }">
+              <a-button class="header-btn secondary-btn" :disabled="disabled" @click="router.push('/resource/teaching-generate')">
+                教学资源生成
+              </a-button>
+            </template>
+          </PermissionsTooltip>
+
+          <a-button class="header-btn upload-btn" type="primary" @click="uploadModalOpen = true">
+            上传资源
+          </a-button>
+        </div>
       </div>
-      <a-space wrap>
-        <a-button v-if="showLibraryAction" @click="router.push('/resource/library')">资源库</a-button>
-        <PermissionsTooltip v-if="showTeachingGenerationAction" :allowed="canUseTeachingGeneration" tips="需要 USE_TEACHING_RESOURCE_GENERATION 权限">
-          <template #default="{ disabled }">
-            <a-button :disabled="disabled" @click="router.push('/resource/teaching-generate')">教学资源生成</a-button>
+
+      <a-card :bordered="false" class="filter-card">
+        <div class="filter-toolbar" :class="{ mobile: isMobile }">
+          <a-select v-model:value="query.status" class="status-select" @change="handleFilterChange">
+            <a-select-option value="">全部状态</a-select-option>
+            <a-select-option value="draft">草稿</a-select-option>
+            <a-select-option value="pending_review">待审核</a-select-option>
+            <a-select-option value="reviewing">审核中</a-select-option>
+            <a-select-option value="published">已发布</a-select-option>
+            <a-select-option value="rejected">已驳回</a-select-option>
+            <a-select-option value="offline">已下线</a-select-option>
+          </a-select>
+          <ResourceSearchInput
+            v-model:value="query.search"
+            class="search-input"
+            placeholder="搜索我的空间资源"
+            @search="handleSearch"
+          />
+        </div>
+      </a-card>
+
+      <a-card :bordered="false" class="content-card">
+        <a-spin :spinning="loading">
+          <template v-if="isMobile">
+            <div v-if="!rows.length && !loading" class="mobile-empty-state">
+              <a-empty description="暂无资源" />
+            </div>
+
+            <div v-else class="mobile-resource-list">
+              <article v-for="record in rows" :key="record.id" class="mobile-resource-card">
+                <div class="mobile-card-top">
+                  <ResourceCardCover
+                    class="mobile-resource-cover"
+                    :title="record.title"
+                    :content-type="record.content_type"
+                    :cover-url="record.cover_url"
+                    :status-label="getResourceStatusLabel(record.status)"
+                    minimal
+                  />
+
+                  <div class="mobile-card-main">
+                    <div class="mobile-card-head">
+                      <h3 class="mobile-card-title">{{ record.title }}</h3>
+                      <a-tag :color="getResourceStatusColor(record.status)">{{ getResourceStatusLabel(record.status) }}</a-tag>
+                    </div>
+
+                    <div class="mobile-card-meta">
+                      <span>{{ getResourceContentTypeLabel(record.content_type) }}</span>
+                      <span>{{ formatDateTime(record.updated_at || record.created_at) }}</span>
+                    </div>
+
+                    <p class="mobile-card-summary">{{ record.summary || '暂无摘要' }}</p>
+
+                    <div v-if="record.tags?.length" class="mobile-card-tags">
+                      <a-tag v-for="tag in record.tags" :key="tag">{{ tag }}</a-tag>
+                    </div>
+                  </div>
+                </div>
+
+                <MyResourceActionGroup
+                  compact
+                  :record="record"
+                  :can-submit-review="canSubmitReview"
+                  :can-manage="canManage(record)"
+                  @view="goDetail"
+                  @workflow="viewWorkflow"
+                  @submit-review="submitReview"
+                  @publish="handlePublish"
+                  @offline="handleOffline"
+                  @delete="handleDelete"
+                />
+              </article>
+            </div>
           </template>
-        </PermissionsTooltip>
-        <PermissionsTooltip :allowed="canUploadResource" tips="需要 CREATE_RESOURCE 或 VIEW_RESOURCE_ALL 权限">
-          <template #default="{ disabled }">
-            <a-button type="primary" :disabled="disabled" @click="uploadModalOpen = true">上传资源</a-button>
-          </template>
-        </PermissionsTooltip>
-      </a-space>
-    </div>
 
-    <a-card :bordered="false" class="filter-card">
-      <a-space wrap class="filter-toolbar">
-        <a-select v-model:value="query.status" style="width: 180px" @change="fetchMine">
-          <a-select-option value="">全部状态</a-select-option>
-          <a-select-option value="draft">草稿</a-select-option>
-          <a-select-option value="pending_review">待审核</a-select-option>
-          <a-select-option value="reviewing">审核中</a-select-option>
-          <a-select-option value="published">已发布</a-select-option>
-          <a-select-option value="rejected">已驳回</a-select-option>
-          <a-select-option value="offline">已下线</a-select-option>
-        </a-select>
-        <ResourceSearchInput v-model:value="query.search" style="width: 320px" placeholder="搜索我的空间资源" @search="fetchMine" />
-      </a-space>
-    </a-card>
+          <a-table
+            v-else
+            class="my-space-table"
+            :data-source="rows"
+            :columns="columns"
+            :pagination="false"
+            row-key="id"
+            :scroll="{ x: 1040 }"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'status'">
+                <a-tag :color="getResourceStatusColor(record.status)">{{ getResourceStatusLabel(record.status) }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'content_type'">
+                {{ getResourceContentTypeLabel(record.content_type) }}
+              </template>
+              <template v-else-if="column.key === 'tags'">
+                <a-space wrap>
+                  <a-tag v-for="tag in record.tags || []" :key="tag">{{ tag }}</a-tag>
+                </a-space>
+              </template>
+              <template v-else-if="column.key === 'action'">
+                <MyResourceActionGroup
+                  :record="record"
+                  :can-submit-review="canSubmitReview"
+                  :can-manage="canManage(record)"
+                  @view="goDetail"
+                  @workflow="viewWorkflow"
+                  @submit-review="submitReview"
+                  @publish="handlePublish"
+                  @offline="handleOffline"
+                  @delete="handleDelete"
+                />
+              </template>
+            </template>
+          </a-table>
+        </a-spin>
+      </a-card>
 
-    <a-table
-      :data-source="rows"
-      :columns="columns"
-      :loading="loading"
-      :pagination="false"
-      row-key="id"
-      :scroll="{ x: 1040 }"
-    >
-      <template #bodyCell="{ column, record }">
-        <template v-if="column.key === 'status'">
-          <a-tag :color="getResourceStatusColor(record.status)">{{ getResourceStatusLabel(record.status) }}</a-tag>
-        </template>
-        <template v-else-if="column.key === 'content_type'">
-          {{ getResourceContentTypeLabel(record.content_type) }}
-        </template>
-        <template v-else-if="column.key === 'tags'">
-          <a-space wrap>
-            <a-tag v-for="tag in record.tags || []" :key="tag">{{ tag }}</a-tag>
-          </a-space>
-        </template>
-        <template v-else-if="column.key === 'action'">
-          <a-space wrap>
-            <a-button size="small" @click="router.push(`/resource/detail/${record.id}`)">查看</a-button>
-            <a-button size="small" @click="viewWorkflow(record.id)">轨迹</a-button>
-            <PermissionsTooltip
-              v-if="['draft', 'rejected'].includes(record.status)"
-              :allowed="canSubmitReview"
-              tips="需要同时具备 CREATE_RESOURCE 和 SUBMIT_RESOURCE_REVIEW 权限"
-            >
-              <template #default="{ disabled }">
-                <a-button size="small" type="primary" ghost :disabled="disabled" @click="submitReview(record.id)">
-                  提交审核
-                </a-button>
-              </template>
-            </PermissionsTooltip>
-            <PermissionsTooltip
-              v-if="['offline', 'rejected'].includes(record.status)"
-              :allowed="canManage(record)"
-              tips="仅资源上传者或具备 UPDATE_RESOURCE / VIEW_RESOURCE_ALL 权限可执行该操作"
-            >
-              <template #default="{ disabled }">
-                <a-button size="small" :disabled="disabled" @click="handlePublish(record.id)">重新发布</a-button>
-              </template>
-            </PermissionsTooltip>
-            <PermissionsTooltip
-              v-if="record.status === 'published'"
-              :allowed="canManage(record)"
-              tips="仅资源上传者或具备 UPDATE_RESOURCE / VIEW_RESOURCE_ALL 权限可执行该操作"
-            >
-              <template #default="{ disabled }">
-                <a-button size="small" danger ghost :disabled="disabled" @click="handleOffline(record.id)">下线</a-button>
-              </template>
-            </PermissionsTooltip>
-            <PermissionsTooltip
-              :allowed="canManage(record)"
-              tips="仅资源上传者或具备 UPDATE_RESOURCE / VIEW_RESOURCE_ALL 权限可执行该操作"
-            >
-              <template #default="{ disabled }">
-                <a-popconfirm v-if="!disabled" title="确认删除该资源吗？" @confirm="handleDelete(record.id)">
-                  <a-button size="small" danger>删除</a-button>
-                </a-popconfirm>
-                <a-button v-else size="small" danger :disabled="disabled">删除</a-button>
-              </template>
-            </PermissionsTooltip>
-          </a-space>
-        </template>
-      </template>
-    </a-table>
-
-    <div class="pagination-wrapper">
-      <a-pagination :current="query.page" :page-size="query.size" :total="total" @change="onPageChange" />
-    </div>
+      <div class="pagination-wrapper" :class="{ mobile: isMobile }">
+        <a-pagination :current="query.page" :page-size="query.size" :total="total" @change="onPageChange" />
+      </div>
+    </section>
 
     <a-modal v-model:open="workflowVisible" title="审核轨迹" :footer="null">
       <a-empty v-if="!workflow?.tasks?.length" description="暂无审核记录" />
@@ -140,11 +175,17 @@ import {
 } from '@/api/learning-resource'
 import { useMobile } from '@/composables/useMobile'
 import { useAuthStore } from '@/stores/auth'
-import LearningResourceTabs from '@/components/resource/LearningResourceTabs.vue'
+import MyResourceActionGroup from '@/components/resource/MyResourceActionGroup.vue'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
+import ResourceCardCover from '@/components/resource/ResourceCardCover.vue'
 import ResourceSearchInput from '@/components/resource/ResourceSearchInput.vue'
 import ResourceUploadModal from '@/components/resource/ResourceUploadModal.vue'
-import { getResourceContentTypeLabel, getResourceStatusColor, getResourceStatusLabel } from '@/utils/learning-resource'
+import {
+  formatDateTime,
+  getResourceContentTypeLabel,
+  getResourceStatusColor,
+  getResourceStatusLabel,
+} from '@/utils/learning-resource'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -164,11 +205,9 @@ const uploadModalOpen = ref(false)
 const workflowVisible = ref(false)
 const workflow = ref<ReviewWorkflowResponse | null>(null)
 
-const canUploadResource = computed(() => authStore.hasAnyPermission(['CREATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
 const canUseTeachingGeneration = computed(() => authStore.hasPermission('USE_TEACHING_RESOURCE_GENERATION'))
-const canSubmitReview = computed(() => authStore.hasAllPermissions(['CREATE_RESOURCE', 'SUBMIT_RESOURCE_REVIEW']))
+const canSubmitReview = computed(() => true)
 const canManageAnyResource = computed(() => authStore.hasAnyPermission(['UPDATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
-const showLibraryAction = computed(() => !isMobile.value)
 const showTeachingGenerationAction = computed(() => !isMobile.value || canUseTeachingGeneration.value)
 
 const columns = [
@@ -176,7 +215,7 @@ const columns = [
   { title: '状态', dataIndex: 'status', key: 'status', width: 120 },
   { title: '类型', dataIndex: 'content_type', key: 'content_type', width: 120 },
   { title: '标签', dataIndex: 'tags', key: 'tags' },
-  { title: '操作', key: 'action', width: 420 },
+  { title: '操作', key: 'action', width: 480 },
 ]
 
 onMounted(() => {
@@ -185,6 +224,13 @@ onMounted(() => {
 
 function canManage(record: ResourceListItemResponse) {
   return record.uploader_id === authStore.currentUser?.id || canManageAnyResource.value
+}
+
+function goDetail(resourceId: number) {
+  void router.push({
+    path: `/resource/detail/${resourceId}`,
+    query: { from: 'my' },
+  })
 }
 
 async function fetchMine() {
@@ -255,6 +301,16 @@ async function viewWorkflow(resourceId: number) {
   }
 }
 
+function handleFilterChange() {
+  query.page = 1
+  void fetchMine()
+}
+
+function handleSearch() {
+  query.page = 1
+  void fetchMine()
+}
+
 function onPageChange(page: number, size: number) {
   query.page = page
   query.size = size
@@ -268,43 +324,331 @@ function handleUploadSuccess() {
 </script>
 
 <style scoped>
+.my-space-page {
+  background:
+    radial-gradient(circle at top center, rgba(48, 48, 50, 0.34), transparent 24%),
+    linear-gradient(180deg, #060606 0%, #0b0b0c 36%, #040404 100%);
+  color: #fff;
+}
+
+.my-space-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  min-height: calc(100vh - var(--v2-bottomnav-height));
+}
+
 .page-header {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 20px;
+}
+
+.page-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.page-header-actions :deep(.permission-tooltip-wrapper) {
+  max-width: 100%;
 }
 
 .page-title {
-  font-size: 24px;
-  font-weight: 700;
-  margin-bottom: 6px;
+  margin: 0 0 8px;
+  font-size: clamp(28px, 3vw, 38px);
+  line-height: 1.08;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  color: #fff;
 }
 
 .page-subtitle {
-  color: var(--v2-text-secondary);
+  margin: 0;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 15px;
 }
 
-.filter-card {
-  margin-bottom: 20px;
-  border-radius: var(--v2-radius-lg);
+.header-btn {
+  height: 44px !important;
+  padding: 0 18px !important;
+  border-radius: 999px !important;
+  font-weight: 700 !important;
+  box-shadow: none !important;
+}
+
+.secondary-btn {
+  border-color: rgba(255, 255, 255, 0.14) !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: rgba(255, 255, 255, 0.92) !important;
+}
+
+.secondary-btn:hover:not(:disabled),
+.secondary-btn:focus:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.2) !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #fff !important;
+}
+
+.upload-btn {
+  border: none !important;
+  background: linear-gradient(135deg, #4b6ef5 0%, #6c82ff 100%) !important;
+  box-shadow: 0 16px 34px rgba(76, 110, 245, 0.22) !important;
+}
+
+.filter-card,
+.content-card {
+  border-radius: 28px;
+  background: linear-gradient(180deg, rgba(18, 18, 20, 0.96) 0%, rgba(10, 10, 11, 0.94) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.26);
 }
 
 .filter-toolbar {
+  display: flex;
+  align-items: center;
   gap: 12px;
+}
+
+.filter-toolbar.mobile {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.status-select {
+  width: 180px;
+  flex: 0 0 auto;
+}
+
+.search-input {
+  width: 320px;
+  flex: 0 1 320px;
+}
+
+.mobile-empty-state {
+  display: flex;
+  min-height: 240px;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-resource-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mobile-resource-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.mobile-card-top {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.mobile-resource-cover :deep(.resource-card-cover) {
+  height: 132px;
+  border-radius: 18px;
+}
+
+.mobile-card-main {
+  min-width: 0;
+}
+
+.mobile-card-head {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.mobile-card-title {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.45;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.94);
+  word-break: break-word;
+}
+
+.mobile-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  margin-top: 10px;
+  color: rgba(255, 255, 255, 0.58);
+  font-size: 12px;
+}
+
+.mobile-card-summary {
+  margin: 10px 0 0;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.mobile-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .pagination-wrapper {
   display: flex;
   justify-content: flex-end;
-  margin-top: 20px;
+  margin-top: 2px;
+}
+
+.pagination-wrapper.mobile {
+  justify-content: center;
+}
+
+.my-space-page :deep(.ant-empty-description) {
+  color: rgba(255, 255, 255, 0.56);
+}
+
+.my-space-page :deep(.ant-tag) {
+  margin: 0;
+  border-radius: 999px;
+}
+
+.my-space-page :deep(.filter-card .ant-card-body),
+.my-space-page :deep(.content-card .ant-card-body) {
+  padding: 18px !important;
+}
+
+.my-space-page :deep(.ant-select-selector),
+.my-space-page :deep(.resource-search-input .ant-input-affix-wrapper) {
+  border-color: rgba(255, 255, 255, 0.1) !important;
+  border-radius: 18px !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  color: rgba(255, 255, 255, 0.92) !important;
+  box-shadow: none !important;
+}
+
+.my-space-page :deep(.ant-select-selector) {
+  min-height: 46px !important;
+  padding-top: 6px !important;
+  padding-bottom: 6px !important;
+}
+
+.my-space-page :deep(.ant-select-selection-placeholder),
+.my-space-page :deep(.resource-search-input .ant-input::placeholder),
+.my-space-page :deep(.resource-search-input .ant-input-prefix) {
+  color: rgba(255, 255, 255, 0.48) !important;
+}
+
+.my-space-page :deep(.resource-search-input .ant-input),
+.my-space-page :deep(.ant-select-selection-item),
+.my-space-page :deep(.ant-select-arrow),
+.my-space-page :deep(.resource-search-input .ant-input-prefix .anticon),
+.my-space-page :deep(.resource-search-input .ant-input-clear-icon) {
+  color: rgba(255, 255, 255, 0.88) !important;
+}
+
+.my-space-page :deep(.my-space-table .ant-table) {
+  background: transparent !important;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.my-space-page :deep(.my-space-table .ant-table-container) {
+  border-inline: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+.my-space-page :deep(.my-space-table .ant-table-thead > tr > th) {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+.my-space-page :deep(.my-space-table .ant-table-tbody > tr > td) {
+  background: transparent !important;
+  border-bottom-color: rgba(255, 255, 255, 0.06) !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+}
+
+.my-space-page :deep(.my-space-table .ant-table-tbody > tr.ant-table-row:hover > td) {
+  background: rgba(255, 255, 255, 0.03) !important;
+}
+
+.my-space-page :deep(.ant-pagination .ant-pagination-item),
+.my-space-page :deep(.ant-pagination .ant-pagination-prev),
+.my-space-page :deep(.ant-pagination .ant-pagination-next) {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}
+
+.my-space-page :deep(.ant-pagination .ant-pagination-item a),
+.my-space-page :deep(.ant-pagination .ant-pagination-prev .anticon),
+.my-space-page :deep(.ant-pagination .ant-pagination-next .anticon) {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.my-space-page :deep(.ant-pagination .ant-pagination-item-active) {
+  border-color: rgba(108, 130, 255, 0.42);
+  background: rgba(108, 130, 255, 0.16);
 }
 
 @media (max-width: 768px) {
+  .my-space-shell {
+    gap: 14px;
+    min-height: calc(100vh - var(--v2-bottomnav-height) - 8px);
+  }
+
   .page-header {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
+    gap: 14px;
+  }
+
+  .page-header-actions {
+    justify-content: stretch;
+  }
+
+  .page-header-actions :deep(.permission-tooltip-wrapper) {
+    flex: 1 1 0;
+    width: 100%;
+  }
+
+  .header-btn {
+    width: 100%;
+    height: 42px !important;
+  }
+
+  .status-select,
+  .search-input {
+    width: 100%;
+    flex: 1 1 auto;
+  }
+
+  .mobile-card-top {
+    grid-template-columns: 92px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .mobile-resource-cover :deep(.resource-card-cover) {
+    height: 116px;
+    border-radius: 16px;
+  }
+
+  .my-space-page :deep(.filter-card .ant-card-body),
+  .my-space-page :deep(.content-card .ant-card-body) {
+    padding: 14px !important;
   }
 }
 </style>

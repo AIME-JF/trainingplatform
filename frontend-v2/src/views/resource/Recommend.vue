@@ -12,49 +12,17 @@
         <template v-else-if="currentResource">
           <div class="community-player-shell">
             <div class="community-overlay-bar">
-              <div class="community-channel-switch" role="tablist" aria-label="资源社区频道">
-                <button
-                  type="button"
-                  class="channel-tab"
-                  :class="{ active: activeFeedTab === 'recommended' }"
-                  @click="activeFeedTab = 'recommended'"
-                >
-                  推荐
-                </button>
-                <button
-                  type="button"
-                  class="channel-tab"
-                  :class="{ active: activeFeedTab === 'featured' }"
-                  @click="activeFeedTab = 'featured'"
-                >
-                  精选
-                </button>
-              </div>
-
-              <div class="community-search">
-                <a-input
-                  v-model:value="searchKeyword"
-                  class="community-search-input"
-                  size="large"
-                  placeholder="搜索标题、简介、作者或标签"
-                  @pressEnter="handleSearch"
-                >
-                  <template #prefix>
-                    <SearchOutlined class="community-search-icon" />
-                  </template>
-                  <template #suffix>
-                    <button
-                      type="button"
-                      class="community-search-trigger"
-                      :aria-label="searching ? '搜索中' : '执行搜索'"
-                      :disabled="searching"
-                      @click="handleSearch"
-                    >
-                      <SearchOutlined class="community-search-trigger-icon" />
-                    </button>
-                  </template>
-                </a-input>
-              </div>
+              <ResourceCommunityTopBar
+                active-tab="recommended"
+                v-model:keyword="searchKeyword"
+                :searching="searching"
+                @search="handleSearch"
+                @tab-change="handleTabChange"
+              >
+                <template #actions>
+                  <ResourceCommunityUploadEntry />
+                </template>
+              </ResourceCommunityTopBar>
             </div>
 
             <div
@@ -130,71 +98,17 @@
       </div>
     </div>
 
-    <a-drawer
+    <ResourceCommentsDrawer
       v-model:open="commentDrawerOpen"
-      class="community-comments-drawer"
-      :class="{ mobile: isMobile }"
-      :placement="commentDrawerPlacement"
-      :width="commentDrawerWidth"
-      :height="commentDrawerHeight"
-      :closable="!isMobile"
-      :body-style="{ padding: 0 }"
-    >
-      <template #title>
-        <div class="comment-drawer-title" :class="{ mobile: isMobile }">
-          <span v-if="isMobile" class="comment-sheet-handle" />
-          <strong>资源评论</strong>
-        </div>
-      </template>
-
-      <div class="comment-drawer-body">
-        <div v-if="currentResource" class="comment-drawer-head">
-          <strong>{{ currentResource.title }}</strong>
-          <span>{{ formatCount(currentResource.comment_count) }} 条评论</span>
-        </div>
-
-        <div class="comment-list-wrapper">
-          <a-spin :spinning="commentLoading">
-            <a-empty v-if="!comments.length && !commentLoading" description="还没有评论，先说点什么吧" />
-
-            <div v-else class="comment-list">
-              <div v-for="item in comments" :key="item.id" class="comment-card">
-                <div class="comment-card-head">
-                  <div class="comment-user-meta">
-                    <strong>{{ item.user_name || `用户#${item.user_id}` }}</strong>
-                    <span>{{ formatDateTime(item.created_at) }}</span>
-                  </div>
-                  <a-popconfirm
-                    v-if="item.can_delete"
-                    title="确认删除这条评论吗？"
-                    ok-text="删除"
-                    cancel-text="取消"
-                    @confirm="handleDeleteComment(item.id)"
-                  >
-                    <a-button type="link" danger size="small">删除</a-button>
-                  </a-popconfirm>
-                </div>
-                <p class="comment-card-content">{{ item.content }}</p>
-              </div>
-            </div>
-          </a-spin>
-        </div>
-
-        <div class="comment-editor">
-          <a-textarea
-            v-model:value="commentDraft"
-            :rows="4"
-            :maxlength="1000"
-            show-count
-            placeholder="写下你的评论"
-          />
-          <div class="comment-editor-actions">
-            <span>当前支持查看评论、发表评论、删除自己的评论。</span>
-            <a-button type="primary" :loading="commentSubmitting" @click="handleSubmitComment">发表评论</a-button>
-          </div>
-        </div>
-      </div>
-    </a-drawer>
+      v-model:draft="commentDraft"
+      :resource-title="currentResource?.title"
+      :comment-count="currentResource?.comment_count || comments.length"
+      :comments="comments"
+      :loading="commentLoading"
+      :submitting="commentSubmitting"
+      @submit="handleSubmitComment"
+      @delete="handleDeleteComment"
+    />
   </div>
 </template>
 
@@ -207,30 +121,25 @@ import {
   HeartOutlined,
   MessageOutlined,
   ProfileOutlined,
-  SearchOutlined,
   ShareAltOutlined,
 } from '@ant-design/icons-vue'
 import type {
   ResourceBehaviorEventCreateEventType,
-  ResourceCommentResponse,
   ResourceDetailResponse,
   ResourceRecommendationItem,
 } from '@/api/learning-resource'
 import {
-  createResourceComment,
-  deleteResourceComment,
   getResourceDetail,
-  likeResource,
   listRecommendationFeed,
-  listResourceComments,
   listResources,
   recordResourceEvent,
-  shareResource,
-  unlikeResource,
 } from '@/api/learning-resource'
 import { useMobile } from '@/composables/useMobile'
+import ResourceCommentsDrawer from '@/components/resource/ResourceCommentsDrawer.vue'
+import ResourceCommunityTopBar from '@/components/resource/ResourceCommunityTopBar.vue'
+import ResourceCommunityUploadEntry from '@/components/resource/ResourceCommunityUploadEntry.vue'
 import ResourceViewer from '@/components/resource/ResourceViewer.vue'
-import { formatDateTime } from '@/utils/learning-resource'
+import { useResourceInteractions } from '@/composables/useResourceInteractions'
 
 const PAGE_SIZE = 10
 const NAVIGATION_COOLDOWN = 420
@@ -238,7 +147,6 @@ const NAVIGATION_COOLDOWN = 420
 const router = useRouter()
 const { isMobile } = useMobile()
 
-const activeFeedTab = ref<'recommended' | 'featured'>('recommended')
 const feedItems = ref<ResourceRecommendationItem[]>([])
 const currentIndex = ref(0)
 const currentPage = ref(0)
@@ -249,13 +157,6 @@ const loadingResource = ref(false)
 const currentResource = ref<ResourceDetailResponse | null>(null)
 const searching = ref(false)
 const searchKeyword = ref('')
-const liking = ref(false)
-const sharing = ref(false)
-const commentDrawerOpen = ref(false)
-const commentLoading = ref(false)
-const commentSubmitting = ref(false)
-const comments = ref<ResourceCommentResponse[]>([])
-const commentDraft = ref('')
 const navigationLockedUntil = ref(0)
 const communityViewerRef = ref<HTMLElement | null>(null)
 const wheelNavigationArmed = ref(false)
@@ -273,21 +174,30 @@ const gesture = ref({
 })
 
 const currentFeedItem = computed(() => feedItems.value[currentIndex.value] || null)
-const currentDisplayTotal = computed(() => {
-  if (total.value > 0) {
-    return Math.max(total.value, feedItems.value.length)
-  }
-  return feedItems.value.length
-})
-const commentDrawerPlacement = computed(() => isMobile.value ? 'bottom' : 'right')
-const commentDrawerWidth = computed(() => isMobile.value ? undefined : 420)
-const commentDrawerHeight = computed(() => isMobile.value ? '56dvh' : undefined)
 const shouldShowCommunityLoading = computed(() => !currentResource.value && (loadingResource.value || loadingFeed.value))
 const viewerTransitionName = computed(() => {
   if (!isMobile.value) {
     return ''
   }
   return viewerTransitionDirection.value === 'prev' ? 'community-viewer-swipe-prev' : 'community-viewer-swipe-next'
+})
+const {
+  liking,
+  sharing,
+  commentDrawerOpen,
+  commentLoading,
+  commentSubmitting,
+  comments,
+  commentDraft,
+  handleToggleLike,
+  handleShare,
+  openComments,
+  handleSubmitComment,
+  handleDeleteComment,
+} = useResourceInteractions({
+  resource: currentResource,
+  isMobile,
+  patchResource,
 })
 
 onMounted(() => {
@@ -303,7 +213,7 @@ onUnmounted(() => {
   document.removeEventListener('click', handleDocumentClick, true)
 })
 
-watch(() => currentFeedItem.value?.resource_id, async (resourceId, previousResourceId) => {
+watch(() => currentFeedItem.value?.resource_id, async (resourceId) => {
   if (!resourceId) {
     currentResource.value = null
     comments.value = []
@@ -314,22 +224,7 @@ watch(() => currentFeedItem.value?.resource_id, async (resourceId, previousResou
   await recordImpression(resourceId)
   void maybePreloadNextPage()
   void preloadAdjacentResources()
-
-  if (commentDrawerOpen.value && resourceId !== previousResourceId) {
-    await loadComments(resourceId)
-  }
 }, { immediate: true })
-
-watch(commentDrawerOpen, async (open) => {
-  if (!open) {
-    commentDraft.value = ''
-    return
-  }
-
-  if (currentResource.value?.id) {
-    await loadComments(currentResource.value.id)
-  }
-})
 
 async function fetchFeedPage(page: number) {
   if (loadingFeed.value || feedFinished.value || page <= 0) {
@@ -460,6 +355,12 @@ function goDetail() {
   })
 }
 
+function handleTabChange(tab: 'recommended' | 'featured') {
+  if (tab === 'featured') {
+    void router.push('/resource/library')
+  }
+}
+
 function lockNavigation() {
   navigationLockedUntil.value = Date.now() + NAVIGATION_COOLDOWN
 }
@@ -588,13 +489,6 @@ function handleKeydown(event: KeyboardEvent) {
   }
 }
 
-function formatScore(score?: number | null) {
-  if (typeof score !== 'number' || Number.isNaN(score)) {
-    return '-'
-  }
-  return score.toFixed(2)
-}
-
 function formatCount(value?: number | null) {
   const count = Number(value || 0)
   if (count >= 10000) {
@@ -636,140 +530,6 @@ function patchResource(resourceId: number, patch: Partial<ResourceDetailResponse
   }
   if (currentResource.value?.id === resourceId) {
     currentResource.value = { ...currentResource.value, ...patch }
-  }
-}
-
-async function handleToggleLike() {
-  if (!currentResource.value?.id || liking.value) {
-    return
-  }
-
-  liking.value = true
-  try {
-    const response = currentResource.value.current_user_liked
-      ? await unlikeResource(currentResource.value.id)
-      : await likeResource(currentResource.value.id)
-
-    patchResource(currentResource.value.id, {
-      current_user_liked: response.liked,
-      like_count: response.like_count,
-    })
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '点赞操作失败')
-  } finally {
-    liking.value = false
-  }
-}
-
-async function handleShare() {
-  if (!currentResource.value?.id || sharing.value) {
-    return
-  }
-
-  sharing.value = true
-  try {
-    const resourceId = currentResource.value.id
-    const response = await shareResource(resourceId)
-    patchResource(resourceId, { share_count: response.share_count })
-
-    const copied = await copyShareLink(resourceId)
-    message.success(copied ? '已复制链接并记录转发' : '已记录转发')
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '转发失败')
-  } finally {
-    sharing.value = false
-  }
-}
-
-async function copyShareLink(resourceId: number) {
-  const shareUrl = new URL(`/resource/detail/${resourceId}`, window.location.origin).toString()
-
-  if (isMobile.value && typeof navigator !== 'undefined' && 'share' in navigator) {
-    try {
-      await navigator.share({
-        title: currentResource.value?.title,
-        text: currentResource.value?.summary || currentResource.value?.title,
-        url: shareUrl,
-      })
-      return true
-    } catch {
-      // fallback to clipboard
-    }
-  }
-
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(shareUrl)
-    return true
-  }
-
-  const textarea = document.createElement('textarea')
-  textarea.value = shareUrl
-  textarea.style.position = 'fixed'
-  textarea.style.opacity = '0'
-  document.body.appendChild(textarea)
-  textarea.focus()
-  textarea.select()
-  const copied = document.execCommand('copy')
-  document.body.removeChild(textarea)
-  return copied
-}
-
-function openComments() {
-  if (!currentResource.value?.id) {
-    return
-  }
-  commentDrawerOpen.value = true
-}
-
-async function loadComments(resourceId: number) {
-  commentLoading.value = true
-  try {
-    comments.value = await listResourceComments(resourceId)
-    patchResource(resourceId, { comment_count: comments.value.length })
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '加载评论失败')
-  } finally {
-    commentLoading.value = false
-  }
-}
-
-async function handleSubmitComment() {
-  if (!currentResource.value?.id || commentSubmitting.value) {
-    return
-  }
-
-  const content = commentDraft.value.trim()
-  if (!content) {
-    message.warning('请输入评论内容')
-    return
-  }
-
-  commentSubmitting.value = true
-  try {
-    const created = await createResourceComment(currentResource.value.id, { content })
-    comments.value = [created, ...comments.value]
-    commentDraft.value = ''
-    patchResource(currentResource.value.id, { comment_count: comments.value.length })
-    message.success('评论已发布')
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '发表评论失败')
-  } finally {
-    commentSubmitting.value = false
-  }
-}
-
-async function handleDeleteComment(commentId: number) {
-  if (!currentResource.value?.id) {
-    return
-  }
-
-  try {
-    await deleteResourceComment(currentResource.value.id, commentId)
-    comments.value = comments.value.filter((item) => item.id !== commentId)
-    patchResource(currentResource.value.id, { comment_count: comments.value.length })
-    message.success('评论已删除')
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '删除评论失败')
   }
 }
 
@@ -935,124 +695,6 @@ function onTouchEnd(event: TouchEvent) {
   background: #000;
   overflow: hidden;
   z-index: 1;
-}
-
-.community-search {
-  width: min(100%, 520px);
-  margin-left: auto;
-}
-
-.community-search :deep(.community-search-input.ant-input-affix-wrapper) {
-  height: 54px;
-  padding: 7px 8px 7px 18px;
-  border: none !important;
-  border-radius: 22px;
-  background: transparent !important;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
-  backdrop-filter: blur(8px);
-}
-
-.community-search :deep(.community-search-input.ant-input-affix-wrapper:hover),
-.community-search :deep(.community-search-input.ant-input-affix-wrapper-focused) {
-  background: transparent !important;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
-}
-
-.community-search :deep(.community-search-input.ant-input-affix-wrapper > input.ant-input) {
-  font-size: 15px;
-  color: rgba(255, 255, 255, 0.96);
-  background: transparent !important;
-}
-
-.community-search :deep(.community-search-input.ant-input-affix-wrapper > input.ant-input::placeholder) {
-  color: rgba(255, 255, 255, 0.58);
-}
-
-.community-search :deep(.community-search-input.ant-input-affix-wrapper .ant-input-prefix),
-.community-search :deep(.community-search-input.ant-input-affix-wrapper .ant-input-suffix) {
-  background: transparent !important;
-}
-
-.community-search-icon {
-  color: rgba(255, 255, 255, 0.74);
-  font-size: 18px;
-}
-
-.community-search-trigger {
-  border: none;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 38px;
-  min-width: 38px;
-  height: 38px;
-  padding: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: #fff;
-  cursor: pointer;
-  box-shadow: none;
-  transition:
-    transform 0.2s ease,
-    color 0.2s ease,
-    opacity 0.2s ease;
-}
-
-.community-search-trigger:hover:not(:disabled) {
-  transform: translateY(-1px);
-  color: rgba(255, 255, 255, 0.82);
-}
-
-.community-search-trigger:disabled {
-  cursor: not-allowed;
-  opacity: 0.68;
-}
-
-.community-search-trigger-icon {
-  font-size: 16px;
-}
-
-.community-channel-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px;
-  border-radius: 22px;
-  background: rgba(14, 20, 31, 0.34);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
-    0 16px 30px rgba(4, 10, 18, 0.18);
-  backdrop-filter: blur(12px);
-}
-
-.channel-tab {
-  border: none;
-  background: transparent;
-  min-width: 78px;
-  padding: 8px 16px;
-  border-radius: 16px;
-  color: rgba(255, 255, 255, 0.72);
-  font-family: SimHei, 'Microsoft YaHei', sans-serif;
-  font-size: 20px;
-  font-weight: 700;
-  cursor: pointer;
-  transition:
-    background 0.2s ease,
-    color 0.2s ease,
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-.channel-tab:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.16);
-}
-
-.channel-tab.active {
-  background: rgba(255, 255, 255, 0.94);
-  color: #111827;
-  transform: translateY(-1px);
-  box-shadow: 0 14px 28px rgba(255, 255, 255, 0.16);
 }
 
 .community-overlay-bar {
@@ -1247,219 +889,6 @@ function onTouchEnd(event: TouchEvent) {
   opacity: 0.72;
 }
 
-.comment-drawer-title {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.comment-drawer-title strong {
-  font-size: 16px;
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.comment-drawer-title.mobile {
-  width: 100%;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-}
-
-.comment-sheet-handle {
-  width: 44px;
-  height: 5px;
-  border-radius: 999px;
-  background: rgba(148, 163, 184, 0.56);
-}
-
-.community-comments-drawer :deep(.ant-drawer-header) {
-  border-bottom: none;
-  background: transparent;
-}
-
-.comment-drawer-body {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 1) 100%);
-}
-
-.comment-drawer-head {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 18px 20px 10px;
-  border-bottom: none;
-  background: transparent;
-}
-
-.comment-drawer-head strong {
-  font-size: 18px;
-  line-height: 1.25;
-  font-weight: 700;
-  color: #0f172a;
-  letter-spacing: -0.02em;
-}
-
-.comment-drawer-head span {
-  color: rgba(71, 85, 105, 0.84);
-  font-size: 13px;
-}
-
-.comment-list-wrapper {
-  flex: 1;
-  min-height: 0;
-  padding: 6px 20px 18px;
-  overflow-y: auto;
-}
-
-.comment-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.comment-card {
-  padding: 18px 0 16px;
-  border: none;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
-}
-
-.comment-card + .comment-card {
-  box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.16);
-}
-
-.comment-card-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 10px;
-}
-
-.comment-user-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.comment-user-meta strong {
-  font-size: 16px;
-  line-height: 1.25;
-  color: #0f172a;
-  font-weight: 700;
-}
-
-.comment-user-meta span {
-  color: rgba(100, 116, 139, 0.86);
-  font-size: 12px;
-}
-
-.comment-card-head :deep(.ant-btn-link) {
-  height: auto !important;
-  padding: 0 !important;
-  color: #ef4444 !important;
-  font-size: 13px !important;
-  font-weight: 600 !important;
-  line-height: 1.4 !important;
-}
-
-.comment-card-content {
-  margin: 0;
-  color: rgba(15, 23, 42, 0.94);
-  font-size: 15px;
-  line-height: 1.8;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.comment-editor {
-  padding: 16px 20px calc(18px + env(safe-area-inset-bottom));
-  border-top: none;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.92) 14%, rgba(255, 255, 255, 0.98) 100%);
-  backdrop-filter: blur(16px);
-}
-
-.comment-editor :deep(.ant-input-textarea) {
-  display: block;
-}
-
-.comment-editor :deep(.ant-input-textarea-show-count::after) {
-  margin-top: 8px;
-  color: rgba(100, 116, 139, 0.9);
-  font-size: 12px;
-}
-
-.comment-editor :deep(.ant-input-textarea textarea) {
-  min-height: 112px !important;
-  padding: 16px 18px !important;
-  border: none !important;
-  border-radius: 20px !important;
-  background: rgba(248, 250, 252, 0.96) !important;
-  box-shadow:
-    inset 0 0 0 1px rgba(148, 163, 184, 0.14),
-    0 14px 32px rgba(15, 23, 42, 0.06);
-  color: #0f172a !important;
-  line-height: 1.75 !important;
-  resize: none;
-}
-
-.comment-editor :deep(.ant-input-textarea textarea::placeholder) {
-  color: rgba(148, 163, 184, 0.96);
-}
-
-.comment-editor :deep(.ant-input-textarea textarea:hover),
-.comment-editor :deep(.ant-input-textarea textarea:focus) {
-  background: #fff !important;
-  box-shadow:
-    inset 0 0 0 1px rgba(59, 130, 246, 0.16),
-    0 18px 40px rgba(37, 99, 235, 0.08);
-}
-
-.comment-editor-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 14px;
-  margin-top: 14px;
-  color: rgba(100, 116, 139, 0.92);
-  font-size: 12px;
-}
-
-.comment-editor-actions span {
-  line-height: 1.65;
-}
-
-.comment-editor-actions :deep(.ant-btn.ant-btn-primary) {
-  min-width: 118px;
-  height: 46px !important;
-  padding: 0 22px !important;
-  border: none !important;
-  border-radius: 16px !important;
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
-  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.22);
-  font-size: 14px !important;
-  font-weight: 700 !important;
-}
-
-.comment-editor-actions :deep(.ant-btn.ant-btn-primary:hover),
-.comment-editor-actions :deep(.ant-btn.ant-btn-primary:focus) {
-  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
-  box-shadow: 0 18px 34px rgba(37, 99, 235, 0.26);
-  transform: translateY(-1px);
-}
-
-@media (max-width: 1024px) {
-  .community-search {
-    width: min(100%, 460px);
-  }
-}
-
 @media (max-width: 768px) {
   .community-viewer-swipe-next-enter-active,
   .community-viewer-swipe-next-leave-active,
@@ -1510,17 +939,6 @@ function onTouchEnd(event: TouchEvent) {
     top: 12px;
     left: 12px;
     right: 12px;
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .community-search-input :deep(.ant-input-affix-wrapper) {
-    height: 54px;
-    padding-left: 16px;
-  }
-
-  .community-channel-switch {
-    align-self: flex-start;
   }
 
   .community-viewer {
@@ -1573,53 +991,6 @@ function onTouchEnd(event: TouchEvent) {
 
   .community-side-actions.mobile .community-action-count {
     opacity: 0.84;
-  }
-
-  .channel-tab {
-    flex: 1;
-    min-width: 0;
-    font-size: 18px;
-  }
-
-  .community-comments-drawer.mobile :deep(.ant-drawer-content-wrapper) {
-    box-shadow: 0 -20px 44px rgba(15, 23, 42, 0.28);
-  }
-
-  .community-comments-drawer.mobile :deep(.ant-drawer-content) {
-    border-radius: 26px 26px 0 0;
-    overflow: hidden;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(248, 250, 252, 1) 100%);
-  }
-
-  .community-comments-drawer.mobile :deep(.ant-drawer-header) {
-    padding: 12px 18px 10px;
-    background: rgba(255, 255, 255, 0.98);
-  }
-
-  .community-comments-drawer.mobile :deep(.ant-drawer-body) {
-    background: transparent;
-  }
-
-  .comment-drawer-head {
-    padding-top: 14px;
-    gap: 4px;
-    background: transparent;
-  }
-
-  .comment-list-wrapper,
-  .comment-editor,
-  .comment-drawer-head {
-    padding-left: 16px;
-    padding-right: 16px;
-  }
-
-  .comment-editor-actions {
-    grid-template-columns: 1fr;
-    align-items: stretch;
-  }
-
-  .comment-editor-actions :deep(.ant-btn.ant-btn-primary) {
-    width: 100%;
   }
 }
 

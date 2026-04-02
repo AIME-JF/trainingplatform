@@ -1,134 +1,79 @@
 <template>
-  <div class="page-content resource-page">
-    <LearningResourceTabs />
-
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">资源库</h1>
-        <p class="page-subtitle">浏览平台内已发布的学习资源。</p>
-      </div>
-      <a-space v-if="showHeaderActions">
-        <a-button v-if="showMySpaceAction" @click="router.push('/resource/my')">我的空间</a-button>
-        <PermissionsTooltip v-if="!isStudentOnly" :allowed="canUploadResource" tips="需要 CREATE_RESOURCE 或 VIEW_RESOURCE_ALL 权限">
-          <template #default="{ disabled }">
-            <a-button type="primary" :disabled="disabled" @click="uploadModalOpen = true">上传资源</a-button>
+  <div class="page-content resource-page featured-page">
+    <section class="featured-shell">
+      <div class="featured-topbar">
+        <ResourceCommunityTopBar
+          active-tab="featured"
+          v-model:keyword="query.search"
+          v-model:content-type="query.content_type"
+          :show-filter="true"
+          :searching="loading && !resources.length"
+          placeholder="搜索精选标题、简介、作者或标签"
+          @search="handleSearch"
+          @tab-change="handleTabChange"
+        >
+          <template #actions>
+            <ResourceCommunityUploadEntry />
           </template>
-        </PermissionsTooltip>
-      </a-space>
-    </div>
-
-    <a-card :bordered="false" class="filter-card">
-      <a-row :gutter="[12, 12]">
-        <a-col :xs="24" :md="10">
-          <ResourceSearchInput v-model:value="query.search" placeholder="搜索资源标题" @search="fetchResources" />
-        </a-col>
-        <a-col :xs="24" :md="6">
-          <a-select v-model:value="query.content_type" style="width: 100%" @change="fetchResources">
-            <a-select-option value="">全部类型</a-select-option>
-            <a-select-option value="video">视频</a-select-option>
-            <a-select-option value="document">文档</a-select-option>
-            <a-select-option value="image">图片</a-select-option>
-          </a-select>
-        </a-col>
-      </a-row>
-    </a-card>
-
-    <div v-if="loading" class="loading-wrapper">
-      <a-spin size="large" />
-    </div>
-
-    <a-empty v-else-if="!resources.length" description="暂无已发布的资源" class="empty-block" />
-
-    <div v-else class="resource-grid">
-      <div
-        v-for="item in resources"
-        :key="item.id"
-        class="resource-card"
-        role="link"
-        tabindex="0"
-        @click="goToDetail(item.id)"
-        @keydown.enter.prevent="goToDetail(item.id)"
-        @keydown.space.prevent="goToDetail(item.id)"
-      >
-        <ResourceCardCover
-          :title="item.title"
-          :content-type="item.content_type"
-          :cover-url="item.cover_url"
-          :status-label="getResourceStatusLabel(item.status)"
-        />
-        <div class="resource-body">
-          <h3>{{ item.title }}</h3>
-          <p>{{ item.summary || '暂无摘要' }}</p>
-          <div class="resource-meta">
-            <span>上传者：{{ item.uploader_name || '-' }}</span>
-            <span>{{ formatDateTime(item.created_at) }}</span>
-          </div>
-          <div class="resource-tags">
-            <a-tag v-for="tag in (item.tags || []).slice(0, 4)" :key="tag">{{ tag }}</a-tag>
-          </div>
-          <div v-if="canManage(item)" class="resource-actions" @click.stop>
-            <PermissionsTooltip
-              v-if="item.status === 'published'"
-              :allowed="canManage(item)"
-              tips="仅资源上传者或具备 UPDATE_RESOURCE / VIEW_RESOURCE_ALL 权限可执行该操作"
-            >
-              <template #default="{ disabled }">
-                <a-button size="small" danger ghost :disabled="disabled" @click="handleOffline(item.id)">下线</a-button>
-              </template>
-            </PermissionsTooltip>
-            <PermissionsTooltip
-              :allowed="canManage(item)"
-              tips="仅资源上传者或具备 UPDATE_RESOURCE / VIEW_RESOURCE_ALL 权限可执行该操作"
-            >
-              <template #default="{ disabled }">
-                <a-popconfirm v-if="!disabled" title="确认删除该资源吗？" @confirm="handleDelete(item.id)">
-                  <a-button size="small" danger>删除</a-button>
-                </a-popconfirm>
-                <a-button v-else size="small" danger :disabled="disabled">删除</a-button>
-              </template>
-            </PermissionsTooltip>
-          </div>
-        </div>
+        </ResourceCommunityTopBar>
       </div>
-    </div>
 
-    <div v-if="total > 0" class="pagination-wrapper">
-      <a-pagination
-        :current="query.page"
-        :page-size="query.size"
-        :total="total"
-        show-size-changer
-        :page-size-options="['10', '20', '50']"
-        @change="onPageChange"
-      />
-    </div>
+      <div v-if="loading && !resources.length" class="featured-loading">
+        <a-spin size="large" />
+      </div>
 
-    <ResourceUploadModal v-model:open="uploadModalOpen" @success="handleUploadSuccess" />
+      <a-empty v-else-if="!resources.length" description="暂无精选内容" class="featured-empty" />
+
+      <div v-else class="featured-grid">
+        <article
+          v-for="item in resources"
+          :key="item.id"
+          class="featured-card"
+          role="link"
+          tabindex="0"
+          @click="goToDetail(item.id)"
+          @keydown.enter.prevent="goToDetail(item.id)"
+          @keydown.space.prevent="goToDetail(item.id)"
+        >
+          <ResourceCardCover
+            class="featured-card-cover"
+            :title="item.title"
+            :content-type="item.content_type"
+            :cover-url="item.cover_url"
+            minimal
+          />
+          <h3 class="featured-title">{{ item.title }}</h3>
+        </article>
+      </div>
+
+      <div ref="loadMoreTriggerRef" class="featured-load-trigger" aria-hidden="true" />
+
+      <div v-if="resources.length" class="featured-footer-state">
+        <a-spin v-if="loadingMore" size="small" />
+        <span v-else-if="finished">没有更多精选内容了</span>
+        <span v-else>继续下滑加载更多</span>
+      </div>
+    </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import type { ResourceListItemResponse } from '@/api/learning-resource'
-import { listResources, offlineResource, removeResource } from '@/api/learning-resource'
-import { useMobile } from '@/composables/useMobile'
-import { useAuthStore } from '@/stores/auth'
-import LearningResourceTabs from '@/components/resource/LearningResourceTabs.vue'
-import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
+import { listResources } from '@/api/learning-resource'
 import ResourceCardCover from '@/components/resource/ResourceCardCover.vue'
-import ResourceSearchInput from '@/components/resource/ResourceSearchInput.vue'
-import ResourceUploadModal from '@/components/resource/ResourceUploadModal.vue'
-import { formatDateTime, getResourceStatusLabel } from '@/utils/learning-resource'
+import ResourceCommunityTopBar from '@/components/resource/ResourceCommunityTopBar.vue'
+import ResourceCommunityUploadEntry from '@/components/resource/ResourceCommunityUploadEntry.vue'
+
+const PAGE_SIZE = 20
 
 const router = useRouter()
-const authStore = useAuthStore()
-const { isMobile } = useMobile()
 
 const query = reactive({
   page: 1,
-  size: 10,
+  size: PAGE_SIZE,
   search: '',
   content_type: '',
 })
@@ -136,218 +81,252 @@ const query = reactive({
 const resources = ref<ResourceListItemResponse[]>([])
 const total = ref(0)
 const loading = ref(false)
-const uploadModalOpen = ref(false)
+const loadingMore = ref(false)
+const finished = ref(false)
+const loadMoreTriggerRef = ref<HTMLElement | null>(null)
 
-const canUploadResource = computed(() => authStore.hasAnyPermission(['CREATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
-const canManageAnyResource = computed(() => authStore.hasAnyPermission(['UPDATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
-const showMySpaceAction = computed(() => !isMobile.value)
-const isStudentOnly = computed(() => {
-  const roleCodes = authStore.roleCodes.length ? authStore.roleCodes : [authStore.role].filter(Boolean)
-  return roleCodes.length > 0 && roleCodes.every((code) => code === 'student')
-})
-const showHeaderActions = computed(() => showMySpaceAction.value || !isStudentOnly.value)
+let observer: IntersectionObserver | null = null
 
 onMounted(() => {
-  void fetchResources()
+  void resetAndFetch()
 })
 
-function canManage(item: ResourceListItemResponse) {
-  if (isStudentOnly.value) {
-    return false
+onUnmounted(() => {
+  disconnectObserver()
+})
+
+watch(loadMoreTriggerRef, (element) => {
+  disconnectObserver()
+  if (!element) {
+    return
   }
-  return item.uploader_id === authStore.currentUser?.id || canManageAnyResource.value
+
+  observer = new IntersectionObserver((entries) => {
+    if (entries.some((entry) => entry.isIntersecting)) {
+      void loadMore()
+    }
+  }, { rootMargin: '260px 0px' })
+
+  observer.observe(element)
+}, { flush: 'post' })
+
+watch(() => query.content_type, (value, previousValue) => {
+  if (value === previousValue) {
+    return
+  }
+  void resetAndFetch()
+})
+
+function disconnectObserver() {
+  observer?.disconnect()
+  observer = null
 }
 
-async function fetchResources() {
-  loading.value = true
+async function fetchResources(page: number, reset = false) {
+  if (!reset && (loading.value || loadingMore.value || finished.value)) {
+    return
+  }
+
+  const isFirstPage = reset || page === 1
+  if (isFirstPage) {
+    loading.value = true
+  } else {
+    loadingMore.value = true
+  }
+
   try {
     const response = await listResources({
-      page: query.page,
+      page,
       size: query.size,
       search: query.search || undefined,
       content_type: query.content_type || undefined,
       status: 'published',
     })
-    resources.value = response.items || []
+
+    const items = response.items || []
     total.value = response.total || 0
+
+    const nextResources = reset ? [] : [...resources.value]
+    const existingIds = new Set(nextResources.map((item) => item.id))
+    for (const item of items) {
+      if (!existingIds.has(item.id)) {
+        nextResources.push(item)
+      }
+    }
+
+    resources.value = nextResources
+    query.page = page
+    finished.value = items.length < query.size || (total.value > 0 && resources.value.length >= total.value)
   } catch (error) {
-    message.error(error instanceof Error ? error.message : '加载资源失败')
+    if (reset) {
+      resources.value = []
+      total.value = 0
+    }
+    message.error(error instanceof Error ? error.message : '加载精选内容失败')
   } finally {
-    loading.value = false
+    if (isFirstPage) {
+      loading.value = false
+    } else {
+      loadingMore.value = false
+    }
+  }
+}
+
+async function resetAndFetch() {
+  finished.value = false
+  total.value = 0
+  resources.value = []
+  query.page = 1
+  await fetchResources(1, true)
+}
+
+async function loadMore() {
+  if (loading.value || loadingMore.value || finished.value) {
+    return
+  }
+  await fetchResources(query.page + 1)
+}
+
+function handleSearch() {
+  void resetAndFetch()
+}
+
+function handleTabChange(tab: 'recommended' | 'featured') {
+  if (tab === 'recommended') {
+    void router.push('/resource/community')
   }
 }
 
 function goToDetail(resourceId: number) {
-  void router.push({ path: `/resource/detail/${resourceId}`, query: { from: 'library' } })
-}
-
-async function handleOffline(resourceId: number) {
-  try {
-    await offlineResource(resourceId)
-    message.success('资源已下线')
-    await fetchResources()
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '下线失败')
-  }
-}
-
-async function handleDelete(resourceId: number) {
-  try {
-    await removeResource(resourceId)
-    message.success('删除成功')
-    await fetchResources()
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '删除失败')
-  }
-}
-
-function onPageChange(page: number, size: number) {
-  query.page = page
-  query.size = size
-  void fetchResources()
-}
-
-function handleUploadSuccess() {
-  query.page = 1
-  void fetchResources()
+  void router.push({ path: `/resource/detail/${resourceId}`, query: { from: 'featured' } })
 }
 </script>
 
 <style scoped>
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
+.featured-page {
+  background:
+    radial-gradient(circle at top center, rgba(46, 46, 46, 0.4), transparent 24%),
+    linear-gradient(180deg, #060606 0%, #0b0b0c 36%, #040404 100%);
 }
 
-.page-title {
-  font-size: 24px;
-  font-weight: 700;
-  margin-bottom: 6px;
-}
-
-.page-subtitle {
-  color: var(--v2-text-secondary);
-}
-
-.filter-card {
-  margin-bottom: 20px;
-  border-radius: var(--v2-radius-lg);
-}
-
-.loading-wrapper,
-.empty-block {
-  padding: 80px 0;
-}
-
-.resource-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 18px;
-}
-
-.resource-card {
+.featured-shell {
   display: flex;
   flex-direction: column;
-  overflow: hidden;
-  cursor: pointer;
-  border-radius: var(--v2-radius-lg);
-  background: var(--v2-bg-card);
-  border: 1px solid rgba(15, 23, 42, 0.06);
-  box-shadow: var(--v2-shadow-sm);
-  transition:
-    transform 0.22s ease,
-    box-shadow 0.22s ease,
-    border-color 0.22s ease;
+  gap: 18px;
+  min-height: calc(100vh - var(--v2-bottomnav-height));
 }
 
-.resource-card:hover {
-  transform: translateY(-4px);
-  border-color: rgba(59, 130, 246, 0.12);
-  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.1);
+.featured-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  padding-top: 2px;
+  background: linear-gradient(180deg, rgba(6, 6, 6, 0.96) 0%, rgba(6, 6, 6, 0.88) 78%, rgba(6, 6, 6, 0) 100%);
+  backdrop-filter: blur(16px);
 }
 
-.resource-card:focus-visible {
-  outline: 2px solid rgba(59, 130, 246, 0.45);
-  outline-offset: 2px;
-}
-
-.resource-body {
+.featured-loading,
+.featured-empty {
   display: flex;
   flex: 1;
+  min-height: 42vh;
+  align-items: center;
+  justify-content: center;
+}
+
+.featured-empty :deep(.ant-empty-description) {
+  color: rgba(255, 255, 255, 0.58);
+}
+
+.featured-loading :deep(.ant-spin-dot-item),
+.featured-footer-state :deep(.ant-spin-dot-item) {
+  background-color: rgba(255, 255, 255, 0.9);
+}
+
+.featured-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px 12px;
+}
+
+.featured-card {
+  display: flex;
   flex-direction: column;
-  padding: 18px;
+  gap: 10px;
+  cursor: pointer;
 }
 
-.resource-body h3 {
-  font-size: 18px;
-  line-height: 1.4;
-  margin: 0 0 8px;
+.featured-card:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.38);
+  outline-offset: 4px;
+  border-radius: 20px;
+}
+
+.featured-card :deep(.featured-card-cover.resource-card-cover) {
+  height: auto;
+  aspect-ratio: 16 / 10;
+  border-radius: 18px;
+  background: #141414;
+  box-shadow: 0 18px 36px rgba(0, 0, 0, 0.28);
+}
+
+.featured-card :deep(.featured-card-cover .cover-media) {
+  background: #141414;
+}
+
+.featured-card :deep(.featured-card-cover .cover-fallback) {
+  border-radius: 18px;
+}
+
+.featured-card :deep(.featured-card-cover .video-indicator) {
+  right: 12px;
+  bottom: 12px;
+  width: 38px;
+  height: 38px;
+  background: rgba(0, 0, 0, 0.58);
+}
+
+.featured-title {
+  margin: 0;
+  padding: 0 2px;
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 14px;
+  line-height: 1.6;
+  font-weight: 600;
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   overflow: hidden;
-  min-height: 50px;
 }
 
-.resource-body p {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  min-height: 48px;
-  margin: 0 0 12px;
-  color: var(--v2-text-secondary);
-  line-height: 1.7;
+.featured-load-trigger {
+  width: 100%;
+  height: 1px;
 }
 
-.resource-meta {
+.featured-footer-state {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: center;
+  gap: 10px;
+  padding: 4px 0 10px;
+  color: rgba(255, 255, 255, 0.56);
+  font-size: 13px;
 }
 
-.resource-meta {
-  flex-wrap: wrap;
-  align-items: flex-start;
-  color: var(--v2-text-secondary);
-  font-size: 12px;
-  margin-bottom: 8px;
-}
-
-.resource-meta span {
-  flex: 1 1 120px;
-}
-
-.resource-tags {
-  margin-bottom: 12px;
-}
-
-.resource-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: auto;
-}
-
-.pagination-wrapper {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 20px;
-}
-
-@media (max-width: 768px) {
-  .page-header,
-  .resource-meta {
-    flex-direction: column;
-    align-items: flex-start;
+@media (min-width: 769px) {
+  .featured-shell {
+    min-height: 100vh;
+    gap: 22px;
   }
 
-  .resource-actions {
-    width: 100%;
-    flex-wrap: wrap;
+  .featured-grid {
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 22px 18px;
+  }
+
+  .featured-title {
+    font-size: 15px;
   }
 }
 </style>

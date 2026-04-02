@@ -41,7 +41,7 @@
 
     <div class="cover-shade" />
 
-    <div class="cover-head">
+    <div v-if="!props.minimal" class="cover-head">
       <span class="cover-type-pill">{{ contentTypeLabel }}</span>
       <a-tag class="cover-status-tag" color="blue">{{ statusLabel }}</a-tag>
     </div>
@@ -62,10 +62,12 @@ const props = withDefaults(defineProps<{
   contentType?: string | null
   coverUrl?: string | null
   statusLabel?: string
+  minimal?: boolean
 }>(), {
   contentType: '',
   coverUrl: '',
   statusLabel: '已发布',
+  minimal: false,
 })
 
 const videoRef = ref<HTMLVideoElement | null>(null)

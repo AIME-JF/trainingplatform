@@ -19,7 +19,6 @@ import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
   COURSE_PERMISSIONS,
-  MY_RESOURCE_PERMISSIONS,
   TEACHING_RESOURCE_GENERATION_PERMISSIONS,
 } from '@/constants/permissions'
 
@@ -35,8 +34,6 @@ const authStore = useAuthStore()
 
 const tabs: TabItem[] = [
   { path: '/resource/courses', label: '课程资源', permissions: COURSE_PERMISSIONS },
-  { path: '/resource/library', label: '资源库' },
-  { path: '/resource/my', label: '我的空间', permissions: MY_RESOURCE_PERMISSIONS },
   { path: '/resource/teaching-generate', label: '教学资源生成', permissions: TEACHING_RESOURCE_GENERATION_PERMISSIONS },
 ]
 
