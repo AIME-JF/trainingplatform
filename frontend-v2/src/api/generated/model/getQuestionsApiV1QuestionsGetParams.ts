@@ -18,4 +18,12 @@ search?: string | null;
 type?: string | null;
 difficulty?: number | null;
 knowledge_point?: string | null;
+/**
+ * 按文件夹ID筛选
+ */
+folder_id?: number | null;
+/**
+ * 是否递归查询子文件夹的题目
+ */
+recursive?: boolean;
 };

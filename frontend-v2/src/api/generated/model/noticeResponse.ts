@@ -16,6 +16,9 @@ export interface NoticeResponse {
   training_id?: number | null;
   author_id?: number | null;
   author_name?: string | null;
+  target_user_id?: number | null;
+  reminder_type?: string | null;
+  is_read?: boolean;
   created_at?: string | null;
   updated_at?: string | null;
 }

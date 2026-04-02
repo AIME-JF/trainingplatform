@@ -114,9 +114,9 @@ const notifyCount = ref(0)
 
 async function fetchNotifyCount() {
   try {
-    const { getUnreadCount } = await import('@/services/notification')
-    const data = await getUnreadCount()
-    notifyCount.value = data.total
+    const { getUnreadCountApiV1NoticesUnreadCountGet } = await import('@/api/generated/notice-management/notice-management')
+    const data = await getUnreadCountApiV1NoticesUnreadCountGet()
+    notifyCount.value = data.total ?? 0
   } catch { /* ignore */ }
 }
 

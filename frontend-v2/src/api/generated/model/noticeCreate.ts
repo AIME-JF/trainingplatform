@@ -16,8 +16,12 @@ export interface NoticeCreate {
   title: string;
   /** 公告内容 */
   content: string;
-  /** 类型: system/training */
+  /** 类型: system/training/reminder */
   type?: string;
   /** 培训班ID(培训班公告时必填) */
   training_id?: number | null;
+  /** 目标用户ID(提醒类通知) */
+  target_user_id?: number | null;
+  /** 提醒子类型: exam_reminder/review_approved/review_rejected/enrollment_approved */
+  reminder_type?: string | null;
 }

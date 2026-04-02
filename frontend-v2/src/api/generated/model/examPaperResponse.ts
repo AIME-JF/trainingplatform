@@ -18,8 +18,10 @@ export interface ExamPaperResponse {
   type?: string;
   status?: string;
   folder_id?: number | null;
+  folder_name?: string | null;
   published_at?: string | null;
   created_by?: number | null;
+  creator_name?: string | null;
   question_count?: number;
   usage_count?: number;
   linked_exam_count?: number;

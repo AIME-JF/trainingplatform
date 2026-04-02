@@ -40,6 +40,7 @@ export interface UserResponse {
   instructor_review_count?: number;
   created_at: string;
   updated_at?: string | null;
+  permissions?: string[];
   roles?: RoleResponse[];
   departments?: DepartmentSimpleResponse[];
   police_types?: PoliceTypeSimpleResponse[];
