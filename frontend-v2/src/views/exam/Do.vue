@@ -254,9 +254,23 @@ const currentOptions = computed(() => {
   const opts = currentQuestion.value?.options
   if (!opts || !Array.isArray(opts)) return []
   return opts.map((item) => {
-    const [key, value] = Object.entries(item)[0]
-    return { key, value: String(value) }
-  })
+    if (item && typeof item === 'object' && !Array.isArray(item)) {
+      const record = item as Record<string, unknown>
+      if ('key' in record) {
+        const key = String(record.key ?? '').trim()
+        const value = String(record.text ?? record.value ?? '').trim()
+        if (key) {
+          return { key, value: value || key }
+        }
+      }
+
+      const entry = Object.entries(record).find(([k]) => k !== 'key' && k !== 'text' && k !== 'value')
+      if (entry) {
+        return { key: String(entry[0]), value: String(entry[1] ?? '') }
+      }
+    }
+    return { key: '', value: '' }
+  }).filter((item) => item.key)
 })
 
 const answeredCount = computed(() => {
