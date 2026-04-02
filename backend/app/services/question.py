@@ -256,7 +256,7 @@ class QuestionService:
             q_count = recursive_question_counts.get(folder.id, 0)
             p_count = paper_counts.get(folder.id, 0)
             creator = creators.get(folder.created_by)
-            creator_name = creator.name if creator and creator.name else (creator.username if creator else None)
+            creator_name = creator.nickname if creator and creator.nickname else (creator.username if creator else None)
 
             if q_count > 0 or p_count > 0:
                 status = "使用中"
