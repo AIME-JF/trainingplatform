@@ -460,9 +460,10 @@ class ExamService:
 
     def create_exam(self, data: ExamCreate, user_id: int) -> ExamResponse:
         """创建培训班内考试"""
-        training = self.db.query(Training).filter(Training.id == data.training_id).first()
-        if not training:
-            raise ValueError("关联培训班不存在")
+        if data.training_id is not None:
+            training = self.db.query(Training).filter(Training.id == data.training_id).first()
+            if not training:
+                raise ValueError("关联培训班不存在")
 
         paper = self._get_selectable_paper(data.paper_id, user_id)
         duration = self._resolve_exam_duration(data.duration, paper.duration)
@@ -933,7 +934,8 @@ class ExamService:
         if scope_context is None:
             return True
         if not exam.training:
-            return False
+            # 无关联培训班的考试允许查看
+            return True
         return can_view_training_with_context(scope_context, exam.training)
 
     def _get_paper_detail_entity(self, paper_id: int) -> Optional[ExamPaper]:
