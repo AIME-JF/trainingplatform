@@ -14,67 +14,84 @@
 
     <a-card :bordered="false" class="filter-card">
       <div class="filter-shell">
-        <div class="filter-top">
-          <div class="filter-search">
-            <ResourceSearchInput
-              v-model:value="filters.search"
-              placeholder="搜索课程名称、简介、章节或标签..."
-              @search="fetchCourses"
-            />
-          </div>
-          <div class="filter-top-actions">
-            <a-select v-model:value="filters.sort" class="sort-select" @change="fetchCourses">
-              <a-select-option value="latest">按最新上线</a-select-option>
-              <a-select-option value="learning_priority">按学习进度</a-select-option>
-              <a-select-option value="required_first">按必修优先</a-select-option>
-              <a-select-option value="duration_asc">按课程时长</a-select-option>
-              <a-select-option value="rating">按评分</a-select-option>
-              <a-select-option value="students">按学员数</a-select-option>
-            </a-select>
-          </div>
-        </div>
+        <div class="filter-search-panel">
+          <ResourceSearchInput
+            v-model:value="filters.search"
+            placeholder="搜索课程名称、简介、章节或标签..."
+            @search="fetchCourses"
+          />
 
-        <div class="category-tabs">
-          <a-tag
-            v-for="cat in categoryTabs"
-            :key="cat.key"
-            class="cat-tag"
-            :class="{ active: filters.category === cat.key }"
-            @click="selectCategory(cat.key)"
+          <button
+            type="button"
+            class="advanced-toggle"
+            :class="{ expanded: advancedFiltersVisible }"
+            :aria-expanded="advancedFiltersVisible"
+            @click="toggleAdvancedFilters"
           >
-            {{ cat.label }}
-          </a-tag>
+            <span class="advanced-toggle-copy">
+              <FilterOutlined />
+              <span>高级检索</span>
+            </span>
+            <component :is="advancedFiltersVisible ? UpOutlined : DownOutlined" class="advanced-toggle-arrow" />
+          </button>
         </div>
 
-        <div class="filter-grid">
-          <a-select
-            v-model:value="filters.instructor_id"
-            :options="instructorOptions"
-            allow-clear
-            placeholder="按教官筛选"
-            @change="fetchCourses"
-          />
-          <a-select v-model:value="filters.is_required" allow-clear placeholder="必修/选修" @change="fetchCourses">
-            <a-select-option :value="true">仅看必修</a-select-option>
-            <a-select-option :value="false">仅看选修</a-select-option>
-          </a-select>
-          <a-select v-model:value="filters.learning_status" allow-clear placeholder="学习状态" @change="fetchCourses">
-            <a-select-option value="not_started">未开始</a-select-option>
-            <a-select-option value="in_progress">进行中</a-select-option>
-            <a-select-option value="completed">已完成</a-select-option>
-          </a-select>
-          <a-select v-model:value="filters.file_type" allow-clear placeholder="内容类型" @change="fetchCourses">
-            <a-select-option value="video">视频型</a-select-option>
-            <a-select-option value="document">文档型</a-select-option>
-            <a-select-option value="image">图片型</a-select-option>
-            <a-select-option value="mixed">混合型</a-select-option>
-          </a-select>
-          <a-range-picker
-            v-model:value="dateRange"
-            class="date-range"
-            @change="handleDateRangeChange"
-          />
-        </div>
+        <transition name="advanced-filters">
+          <div v-show="advancedFiltersVisible" class="advanced-filters">
+            <div class="advanced-top-actions">
+              <a-select v-model:value="filters.sort" class="sort-select" @change="fetchCourses">
+                <a-select-option value="latest">按最新上线</a-select-option>
+                <a-select-option value="learning_priority">按学习进度</a-select-option>
+                <a-select-option value="required_first">按必修优先</a-select-option>
+                <a-select-option value="duration_asc">按课程时长</a-select-option>
+                <a-select-option value="rating">按评分</a-select-option>
+                <a-select-option value="students">按学员数</a-select-option>
+              </a-select>
+            </div>
+
+            <div class="category-tabs">
+              <a-tag
+                v-for="cat in categoryTabs"
+                :key="cat.key"
+                class="cat-tag"
+                :class="{ active: filters.category === cat.key }"
+                @click="selectCategory(cat.key)"
+              >
+                {{ cat.label }}
+              </a-tag>
+            </div>
+
+            <div class="filter-grid">
+              <a-select
+                v-model:value="filters.instructor_id"
+                :options="instructorOptions"
+                allow-clear
+                placeholder="按教官筛选"
+                @change="fetchCourses"
+              />
+              <a-select v-model:value="filters.is_required" allow-clear placeholder="必修/选修" @change="fetchCourses">
+                <a-select-option :value="true">仅看必修</a-select-option>
+                <a-select-option :value="false">仅看选修</a-select-option>
+              </a-select>
+              <a-select v-model:value="filters.learning_status" allow-clear placeholder="学习状态" @change="fetchCourses">
+                <a-select-option value="not_started">未开始</a-select-option>
+                <a-select-option value="in_progress">进行中</a-select-option>
+                <a-select-option value="completed">已完成</a-select-option>
+              </a-select>
+              <a-select v-model:value="filters.file_type" allow-clear placeholder="内容类型" @change="fetchCourses">
+                <a-select-option value="video">视频型</a-select-option>
+                <a-select-option value="document">文档型</a-select-option>
+                <a-select-option value="image">图片型</a-select-option>
+                <a-select-option value="mixed">混合型</a-select-option>
+              </a-select>
+              <a-range-picker
+                v-model:value="dateRange"
+                class="date-range"
+                @change="handleDateRangeChange"
+              />
+            </div>
+          </div>
+        </transition>
       </div>
     </a-card>
 
@@ -181,12 +198,15 @@ import {
   AppstoreOutlined,
   CarOutlined,
   ClockCircleOutlined,
+  DownOutlined,
+  FilterOutlined,
   LaptopOutlined,
   PlayCircleOutlined,
   ReadOutlined,
   SafetyCertificateOutlined,
   TeamOutlined,
   ThunderboltOutlined,
+  UpOutlined,
 } from '@ant-design/icons-vue'
 import type { Dayjs } from 'dayjs'
 import { computed, onMounted, reactive, ref, type Component } from 'vue'
@@ -218,6 +238,7 @@ const instructorOptions = ref<Array<{ value: number; label: string }>>([])
 const editorVisible = ref(false)
 const editingCourseId = ref<number | null>(null)
 const dateRange = ref<Dayjs[] | null>(null)
+const advancedFiltersVisible = ref(false)
 
 const filters = reactive({
   search: '',
@@ -354,6 +375,10 @@ function selectCategory(category: string) {
   void fetchCourses()
 }
 
+function toggleAdvancedFilters() {
+  advancedFiltersVisible.value = !advancedFiltersVisible.value
+}
+
 function getCourseCoverVisual(category?: string | null) {
   return courseCoverVisualMap[category || ''] || defaultCourseCoverVisual
 }
@@ -417,27 +442,79 @@ async function handleDelete(courseId: number) {
 .filter-shell {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-}
-
-.filter-top {
-  display: flex;
-  align-items: center;
   gap: 16px;
 }
 
-.filter-search {
-  flex: 1;
+.filter-search-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.filter-top-actions {
-  display: flex;
+.advanced-toggle {
+  display: inline-flex;
   align-items: center;
   gap: 12px;
+  align-self: flex-end;
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid rgba(75, 110, 245, 0.16);
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 246, 255, 0.96));
+  color: var(--v2-text-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 10px 24px rgba(75, 110, 245, 0.08);
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease,
+    background 0.2s ease;
+}
+
+.advanced-toggle:hover {
+  color: var(--v2-primary);
+  border-color: rgba(75, 110, 245, 0.28);
+  box-shadow: 0 14px 28px rgba(75, 110, 245, 0.12);
+  transform: translateY(-1px);
+}
+
+.advanced-toggle.expanded {
+  color: var(--v2-primary);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(236, 242, 255, 0.96));
+  border-color: rgba(75, 110, 245, 0.24);
+}
+
+.advanced-toggle-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.advanced-toggle-copy :deep(.anticon) {
+  font-size: 15px;
+}
+
+.advanced-toggle-arrow {
+  font-size: 12px;
+}
+
+.advanced-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.advanced-top-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .sort-select {
   width: 180px;
+  max-width: 100%;
 }
 
 .filter-grid {
@@ -454,6 +531,19 @@ async function handleDelete(courseId: number) {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+
+.advanced-filters-enter-active,
+.advanced-filters-leave-active {
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
+}
+
+.advanced-filters-enter-from,
+.advanced-filters-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
 }
 
 :deep(.cat-tag.ant-tag) {
@@ -741,16 +831,19 @@ async function handleDelete(courseId: number) {
 
 @media (max-width: 768px) {
   .page-header,
-  .filter-top,
   .card-head {
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .filter-top,
-  .filter-top-actions,
+  .advanced-top-actions,
   .sort-select {
     width: 100%;
+  }
+
+  .advanced-toggle {
+    min-height: 38px;
+    padding: 0 14px;
   }
 
   .filter-grid,

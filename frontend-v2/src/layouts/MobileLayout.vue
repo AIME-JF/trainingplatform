@@ -176,29 +176,10 @@ const bottomNavConfig: NavItem[] = [
   { path: '/', label: '首页', icon: HomeOutlined, permissions: DASHBOARD_PERMISSIONS },
   { path: '/classes', label: '班级', icon: ReadOutlined, permissions: TRAINING_PERMISSIONS },
   {
-    path: '/resource/courses',
-    label: '资源',
-    icon: DatabaseOutlined,
-    permissions: resourceNavPermissions,
-    matchPaths: [
-      '/resource/courses',
-      '/resource/library',
-      '/resource/my',
-      '/resource/teaching-generate',
-      '/resource/ai-generate',
-    ],
-  },
-  {
     path: '/resource/community',
     label: '社区',
     icon: AppstoreOutlined,
     matchPaths: ['/resource/community', '/resource/recommend'],
-  },
-  {
-    path: '/exam/list',
-    label: '考试',
-    icon: FileProtectOutlined,
-    matchPaths: ['/exam/list', '/exam/do', '/exam/result'],
   },
   { path: '/profile', label: '我的', icon: UserOutlined, permissions: PROFILE_PERMISSIONS },
 ]
