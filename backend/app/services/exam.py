@@ -5,6 +5,7 @@ from datetime import datetime
 from math import ceil
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from app.models import (
@@ -41,6 +42,7 @@ from app.schemas.exam import (
     ExamPaperDetailResponse,
     ExamPaperResponse,
     ExamPaperUpdate,
+    ExamQuestionAnswerDetailResponse,
     ExamQuestionSnapshotResponse,
     ExamRecordResponse,
     ExamResponse,
@@ -362,7 +364,19 @@ class ExamService:
         if exam_type:
             query = query.filter(Exam.type == exam_type)
         if search:
-            query = query.filter(Exam.title.contains(search))
+            keyword = str(search).strip()
+            if keyword:
+                query = query.filter(
+                    or_(
+                        Exam.title.contains(keyword),
+                        Exam.training.has(
+                            or_(
+                                Training.name.contains(keyword),
+                                Training.class_code.contains(keyword),
+                            )
+                        ),
+                    )
+                )
         if training_id:
             query = query.filter(Exam.training_id == training_id)
         if purpose:
@@ -1515,6 +1529,11 @@ class ExamService:
             ExamWrongQuestionResponse.model_validate(item)
             for item in (record.wrong_question_details or [])
         ]
+        question_details = self._build_record_question_details(
+            answers=record.answers or {},
+            paper=exam.paper if exam else None,
+            paper_id=record.paper_id,
+        )
         user = record.user if getattr(record, "user", None) else None
         return ExamRecordResponse(
             id=record.id,
@@ -1537,6 +1556,7 @@ class ExamService:
             wrong_count=record.wrong_count or 0,
             wrong_questions=record.wrong_questions or [],
             wrong_question_details=details,
+            question_details=question_details,
             dimension_scores=record.dimension_scores or {},
         )
 
@@ -1549,6 +1569,11 @@ class ExamService:
             ExamWrongQuestionResponse.model_validate(item)
             for item in (record.wrong_question_details or [])
         ]
+        question_details = self._build_record_question_details(
+            answers=record.answers or {},
+            paper=exam.paper if exam else None,
+            paper_id=record.paper_id,
+        )
         user = record.user if getattr(record, "user", None) else None
         return AdmissionExamRecordResponse(
             id=record.id,
@@ -1571,8 +1596,47 @@ class ExamService:
             wrong_count=record.wrong_count or 0,
             wrong_questions=record.wrong_questions or [],
             wrong_question_details=details,
+            question_details=question_details,
             dimension_scores=record.dimension_scores or {},
         )
+
+    def _build_record_question_details(
+        self,
+        answers: Dict[str, Any],
+        paper: Optional[ExamPaper],
+        paper_id: Optional[int],
+    ) -> List[ExamQuestionAnswerDetailResponse]:
+        target_paper = paper or self._get_paper_snapshot_entity(paper_id)
+        if not target_paper:
+            return []
+
+        snapshots = self._build_snapshot_responses(target_paper)
+        details: List[ExamQuestionAnswerDetailResponse] = []
+        for snapshot in snapshots:
+            my_answer = answers.get(str(snapshot.id))
+            if my_answer is None:
+                my_answer = answers.get(snapshot.id)
+            correct_answer = self._resolve_correct_answer(target_paper, snapshot.id)
+            details.append(
+                ExamQuestionAnswerDetailResponse(
+                    question_id=snapshot.id,
+                    type=snapshot.type,
+                    content=snapshot.content,
+                    my_answer=my_answer,
+                    answer=correct_answer,
+                    is_correct=self._is_correct_answer(snapshot.type, my_answer, correct_answer),
+                    explanation=snapshot.explanation,
+                    score=int(snapshot.score or 0),
+                )
+            )
+        return details
+
+    def _get_paper_snapshot_entity(self, paper_id: Optional[int]) -> Optional[ExamPaper]:
+        if not paper_id:
+            return None
+        return self.db.query(ExamPaper).options(
+            selectinload(ExamPaper.paper_questions).joinedload(ExamPaperQuestion.question),
+        ).filter(ExamPaper.id == paper_id).first()
 
     @staticmethod
     def _is_aware_datetime(value: Optional[datetime]) -> bool:

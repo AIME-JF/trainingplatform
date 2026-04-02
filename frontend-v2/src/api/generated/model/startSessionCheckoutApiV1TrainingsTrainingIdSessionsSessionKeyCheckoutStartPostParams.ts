@@ -16,4 +16,8 @@ checkout_mode?: string;
  * @maximum 120
  */
 checkout_duration_minutes?: number;
+/**
+ * 手势签退图案，JSON数组如[0,1,2,5,8]
+ */
+checkout_gesture_pattern?: string | null;
 };

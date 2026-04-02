@@ -163,6 +163,19 @@ class ExamWrongQuestionResponse(BaseModel):
     score: int = 0
 
 
+class ExamQuestionAnswerDetailResponse(BaseModel):
+    """答题详情（完整题目维度）"""
+
+    question_id: int
+    type: str
+    content: str
+    my_answer: Any = None
+    answer: Any = None
+    is_correct: bool = False
+    explanation: Optional[str] = None
+    score: int = 0
+
+
 class PaperFolderCreate(BaseModel):
     """创建试卷文件夹"""
 
@@ -541,6 +554,7 @@ class AdmissionExamRecordResponse(BaseModel):
     wrong_count: int = 0
     wrong_questions: List[int] = Field(default_factory=list)
     wrong_question_details: List[ExamWrongQuestionResponse] = Field(default_factory=list)
+    question_details: List[ExamQuestionAnswerDetailResponse] = Field(default_factory=list)
     dimension_scores: Dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(from_attributes=True)
@@ -570,6 +584,7 @@ class ExamRecordResponse(BaseModel):
     wrong_count: int = 0
     wrong_questions: List[int] = Field(default_factory=list)
     wrong_question_details: List[ExamWrongQuestionResponse] = Field(default_factory=list)
+    question_details: List[ExamQuestionAnswerDetailResponse] = Field(default_factory=list)
     dimension_scores: Dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(from_attributes=True)

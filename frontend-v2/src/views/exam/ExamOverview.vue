@@ -16,7 +16,7 @@
       <div class="info-card">
         <!-- 标题区 -->
         <div class="exam-badge" :class="getStatusClass(exam.status)">
-          {{ getStatusText(exam) }}
+          {{ getDisplayStatusText(exam) }}
         </div>
         <h1 class="exam-title">{{ exam.title }}</h1>
         <p class="exam-desc">{{ exam.description || '暂无考试说明' }}</p>
@@ -109,7 +109,13 @@
         <!-- 操作区 -->
         <div class="action-section">
           <div class="action-btn-wrap">
-            <template v-if="exam.can_join">
+            <template v-if="!isStudentView">
+              <a-button type="primary" size="large" block @click="router.push('/exam/list')">
+                查看考试列表
+              </a-button>
+              <p class="action-hint">教官视角仅查看考试情况与成绩，不参与在线答题</p>
+            </template>
+            <template v-else-if="exam.can_join">
               <a-button type="primary" size="large" block @click="handleStartExam">
                 <template #icon><RightOutlined /></template>
                 开始答题
@@ -123,7 +129,7 @@
             </template>
             <template v-else>
               <a-button type="primary" size="large" block disabled>
-                {{ getStatusText(exam) }}
+                {{ getDisplayStatusText(exam) }}
               </a-button>
               <p class="action-hint" v-if="isUpcomingExam(exam.status)">
                 考试尚未开始，请耐心等待
@@ -171,6 +177,7 @@ import dayjs from 'dayjs'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import { useAuthStore } from '@/stores/auth'
 import type { AdmissionExamRecordResponse, ExamDetailResponse, ExamRecordResponse } from '@/api/generated/model'
 import {
   getAdmissionExamApiV1ExamsAdmissionExamIdGet,
@@ -190,10 +197,12 @@ import {
 
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 
 const loading = ref(false)
 const exam = ref<ExamDetailResponse | null>(null)
 const examKind = ref<ExamKind>(resolveExamKind(route.query.kind, 'training'))
+const isStudentView = computed(() => authStore.isStudent)
 const latestRecord = ref<ExamRecordResponse | AdmissionExamRecordResponse | null>(null)
 
 const examId = computed(() => Number(route.params.id))
@@ -258,6 +267,15 @@ function getStatusClass(status?: string | null) {
 
 function getStatusText(detail: ExamDetailResponse) {
   return getExamStatusText(detail)
+}
+
+function getDisplayStatusText(detail: ExamDetailResponse) {
+  if (isStudentView.value) return getStatusText(detail)
+  const normalizedStatus = normalizeExamStatus(detail.status)
+  if (normalizedStatus === 'active') return '进行中'
+  if (normalizedStatus === 'upcoming') return '即将开始'
+  if (normalizedStatus === 'ended') return '已结束'
+  return '状态未知'
 }
 
 function isActiveExam(status?: string | null) {

@@ -170,15 +170,10 @@
           <div v-show="activeTab === 'students'" v-if="!authStore.isStudent">
             <div class="content-section-header">
               <h3>学员名单</h3>
-              <a-dropdown :trigger="['hover']">
-                <a-button type="primary"><PlusOutlined /> 添加学员 <DownOutlined /></a-button>
-                <template #overlay>
-                  <a-menu>
-                    <a-menu-item @click="openStudentImportModal">导入学员</a-menu-item>
-                    <a-menu-item @click="openStudentModal">添加学员</a-menu-item>
-                  </a-menu>
-                </template>
-              </a-dropdown>
+              <a-space>
+                <a-button @click="openStudentImportModal">导入学员</a-button>
+                <a-button type="primary" @click="openStudentModal"><PlusOutlined /> 添加学员</a-button>
+              </a-space>
             </div>
             <TrainingStudentsContent
               :student-search="studentSearch"
@@ -199,16 +194,12 @@
           <div v-show="activeTab === 'schedule'">
             <div class="content-section-header">
               <h3>课程管理</h3>
-              <a-dropdown :trigger="['hover']">
-                <a-button type="primary"><PlusOutlined /> 添加课程 <DownOutlined /></a-button>
-                <template #overlay>
-                  <a-menu>
-                    <a-menu-item @click="openAiScheduleTask">智能排课</a-menu-item>
-                    <a-menu-item @click="openCourseImportModal">导入课程</a-menu-item>
-                    <a-menu-item @click="openScheduleImportModal">导入课次</a-menu-item>
-                  </a-menu>
-                </template>
-              </a-dropdown>
+              <a-space>
+                <a-button @click="openAiScheduleTask">智能排课</a-button>
+                <a-button @click="openCourseImportModal">导入课程</a-button>
+                <a-button @click="openScheduleImportModal">导入课次</a-button>
+                <a-button type="primary" @click="openCourseModal()"><PlusOutlined /> 添加课程</a-button>
+              </a-space>
             </div>
             <TrainingScheduleContent
               ref="scheduleContentRef"
@@ -317,7 +308,7 @@
                         :value="inst.userId"
                         :label="inst.name"
                       >
-                        {{ inst.name }} · {{ inst.title }}
+                        {{ inst.name }}{{ inst.title ? ' · ' + inst.title : '' }}
                       </a-select-option>
                     </a-select>
                   </a-form-item>
@@ -459,7 +450,7 @@
                     :value="inst.userId"
                     :label="inst.name"
                   >
-                    {{ inst.name }} · {{ inst.title }}
+                    {{ inst.name }}{{ inst.title ? ' · ' + inst.title : '' }}
                   </a-select-option>
                 </a-select>
               </a-form-item>
@@ -475,12 +466,12 @@
                   style="width:100%"
                 >
                   <a-select-option
-                    v-for="inst in instructorList"
+                    v-for="inst in instructorList.filter(i => i.userId !== courseForm.instructorId)"
                     :key="inst.userId"
                     :value="inst.userId"
                     :label="inst.name"
                   >
-                    {{ inst.name }} · {{ inst.title }}
+                    {{ inst.name }}{{ inst.title ? ' · ' + inst.title : '' }}
                   </a-select-option>
                 </a-select>
               </a-form-item>
@@ -799,7 +790,7 @@
                   :value="inst.userId"
                   :label="inst.name"
                 >
-                  {{ inst.name }} · {{ inst.title }}
+                  {{ inst.name }}{{ inst.title ? ' · ' + inst.title : '' }}
                 </a-select-option>
               </a-select>
             </a-form-item>
@@ -953,7 +944,7 @@
 import { ref, computed, reactive, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
-import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QuestionCircleOutlined, AppstoreOutlined, ReadOutlined, FileTextOutlined, SettingOutlined, PlusOutlined, DownOutlined, TeamOutlined } from '@ant-design/icons-vue'
+import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QuestionCircleOutlined, AppstoreOutlined, ReadOutlined, FileTextOutlined, SettingOutlined, PlusOutlined, TeamOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import {
   getTraining,
@@ -976,12 +967,15 @@ import {
   downloadTrainingCourseImportTemplate,
   importTrainingSessions,
   downloadTrainingSessionImportTemplate,
+  getStudents,
+  getCheckinRecords,
+  getTrainingCourses,
 } from '@/api/training'
 import { getUsers, getPoliceTypes } from '@/api/user'
 import { getDepartmentList } from '@/api/department'
 import { getTrainingBases } from '@/api/training'
 import { getTrainingTypes } from '@/api/trainingType'
-import { createNotice as apiCreateNotice, updateNotice as apiUpdateNotice, deleteNotice as apiDeleteNotice } from '@/api/notice'
+import { getNotices as apiGetNotices, createNotice as apiCreateNotice, updateNotice as apiUpdateNotice, deleteNotice as apiDeleteNotice } from '@/api/notice'
 import { useAuthStore } from '@/stores/auth'
 import { formatDateTime } from '@/utils/datetime'
 import { downloadBlob } from '@/utils/download'
@@ -1183,6 +1177,70 @@ function applyTrainingDetail(data) {
   syncEditFormFromTraining()
 }
 
+async function fetchSubResources() {
+  const promises = []
+
+  // Fetch students
+  promises.push(
+    getStudents(trainingId, { size: -1 })
+      .then((result) => {
+        const students = result.items || result || []
+        const studentIds = students.map((item) => item.userId).filter((item) => item != null)
+        trainingData.students = students
+        trainingData.studentIds = studentIds
+        trainingData.enrolledCount = studentIds.length
+        trainingData.enrolled = studentIds.length
+        syncTrainingRoster(students, studentIds)
+      })
+      .catch(() => {})
+  )
+
+  // Fetch checkin records
+  promises.push(
+    getCheckinRecords(trainingId)
+      .then((result) => {
+        const records = result.items || result || []
+        trainingData.checkinRecords = normalizeCheckinRecords(records)
+      })
+      .catch(() => {})
+  )
+
+  // Fetch courses
+  promises.push(
+    getTrainingCourses(trainingId)
+      .then((result) => {
+        const courses = result.items || result || []
+        const ruleConfig = trainingData.scheduleRuleConfig || {}
+        trainingData.courses = courses.map((course) => ({
+          ...course,
+          schedules: (course.schedules || []).map((schedule) => ({
+            ...schedule,
+            timeRange: schedule.timeRange || schedule.time_range || '',
+            sessionId: schedule.sessionId || schedule.session_id,
+            hours: calculateScheduleUnitsFromTimeRange(
+              schedule.timeRange || schedule.time_range || '',
+              schedule.hours,
+              ruleConfig
+            ),
+          })),
+        }))
+      })
+      .catch(() => {})
+  )
+
+  // Fetch notices
+  promises.push(
+    apiGetNotices({ training_id: trainingId, size: -1 })
+      .then((result) => {
+        const items = result.items || result || []
+        notices.value = normalizeNotices(items)
+      })
+      .catch(() => {})
+  )
+
+  await Promise.all(promises)
+}
+
 async function loadTrainingDetail() {
   try {
     const data = await getTraining(trainingId)
@@ -1207,6 +1265,7 @@ async function loadTrainingDetail() {
       return
     }
     applyTrainingDetail(data)
+    await fetchSubResources()
     if (authStore.isStudent || !data.canViewCourseChangeLogs) {
       courseChangeLogs.value = []
       if (activeTab.value === 'courseChangeLogs') {

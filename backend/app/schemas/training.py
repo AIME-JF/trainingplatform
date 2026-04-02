@@ -89,6 +89,8 @@ class TrainingCurrentSessionResponse(BaseModel):
     checkout_mode: Optional[str] = None  # "direct" or "qr"
     checkout_duration_minutes: Optional[int] = None
     checkout_deadline: Optional[str] = None  # ISO datetime
+    checkin_gesture_pattern: Optional[str] = None  # JSON array string like "[0,1,2,5,8]"
+    checkout_gesture_pattern: Optional[str] = None
     action_permissions: TrainingSessionActionPermissions = Field(default_factory=TrainingSessionActionPermissions)
 
 

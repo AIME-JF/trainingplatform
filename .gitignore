@@ -20,6 +20,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 venv/
+backend/.venv311/
 .env
 
 # Editor directories and files
@@ -40,3 +41,10 @@ docs/
 原型图/
 日志/
 git-commit/
+
+# Local generated assets
+tmp_*/
+tmp-review-ppt.pptx
+tmp_style_ref.pdf
+智慧教育训练平台介绍-角色终端版*.pptx
+skills/

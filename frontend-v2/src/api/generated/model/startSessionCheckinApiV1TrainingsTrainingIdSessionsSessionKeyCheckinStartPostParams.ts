@@ -16,4 +16,8 @@ checkin_mode?: string;
  * @maximum 120
  */
 checkin_duration_minutes?: number;
+/**
+ * 手势签到图案，JSON数组如[0,1,2,5,8]
+ */
+checkin_gesture_pattern?: string | null;
 };

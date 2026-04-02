@@ -22,6 +22,8 @@ export interface AdmissionExamUpdate {
   scope_type?: string | null;
   /** 适用范围目标ID列表 */
   scope_target_ids?: number[] | null;
+  /** 显式绑定课程ID列表 */
+  course_ids?: number[] | null;
   max_attempts?: number | null;
   start_time?: string | null;
   end_time?: string | null;

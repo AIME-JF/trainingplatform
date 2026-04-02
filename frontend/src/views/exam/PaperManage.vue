@@ -10,7 +10,21 @@
           <!-- 第一层：操作与搜索过滤 -->
           <div class="toolbar-row">
             <div class="toolbar-left">
-              <button class="btn-primary" @click="openCreateDrawer">新建试卷</button>
+              <button class="btn-primary" @click="openCreateDrawer">
+                手动选题目
+              </button>
+              <a-dropdown>
+                <button class="btn-primary">
+                  智能出卷
+                  <svg style="width:12px;height:12px;margin-left:4px" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <template #overlay>
+                  <a-menu @click="({ key }) => handleCreateClick(key)">
+                    <a-menu-item key="ai">智能组卷</a-menu-item>
+                    <a-menu-item key="list">任务列表</a-menu-item>
+                  </a-menu>
+                </template>
+              </a-dropdown>
               <div class="search-wrapper">
                 <svg class="search-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                 <input type="text" class="input-minimal" v-model="searchText" placeholder="请输入关键字搜索..." @input="handleSearch">
@@ -917,6 +931,16 @@ function openCreateDrawer() {
   paperDraft.folderId = null
   drawerMode.value = 'create'
   drawerVisible.value = true
+}
+
+function handleCreateClick(key) {
+  if (key === 'manual') {
+    openCreateDrawer()
+  } else if (key === 'ai') {
+    router.push({ path: '/paper/ai-assemble' })
+  } else if (key === 'list') {
+    router.push({ path: '/paper/ai-assemble', query: { mode: 'list' } })
+  }
 }
 
 async function openPaperDetail(record, mode) {

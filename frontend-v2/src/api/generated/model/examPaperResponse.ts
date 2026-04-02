@@ -32,6 +32,8 @@ export interface ExamPaperResponse {
   police_type_name?: string | null;
   course_id?: number | null;
   course_name?: string | null;
+  course_ids?: number[];
+  course_names?: string[];
   created_at?: string | null;
   updated_at?: string | null;
 }

@@ -41,10 +41,28 @@
             >
               <span
                 class="mobile-shortcut-icon"
-                :class="{ 'has-profile-badge': action.path === '/profile' }"
-                :style="{ background: action.mobileBackground || action.background }"
+                :style="{
+                  background: action.mobileBackground || action.background,
+                  '--mobile-shortcut-icon-color': action.mobileIconColor || '#fff',
+                  '--mobile-shortcut-shadow-color': action.mobileShadowColor || 'rgba(57, 79, 168, 0.16)',
+                }"
               >
-                <component :is="action.mobileIcon || action.icon" />
+                <svg
+                  v-if="action.path === '/profile'"
+                  class="profile-shortcut-svg"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="8" r="3.25" fill="none" stroke="currentColor" stroke-width="1.8" />
+                  <path
+                    d="M6.8 17.7c1.35-2.95 3.3-4.45 5.2-4.45s3.85 1.5 5.2 4.45"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                  />
+                </svg>
+                <component v-else :is="action.mobileIcon || action.icon" />
               </span>
               <span class="mobile-shortcut-label">{{ action.title }}</span>
             </button>
@@ -91,6 +109,7 @@
                   '--mobile-event-border': item.palette.border,
                   '--mobile-event-bg-start': item.palette.backgroundStart,
                   '--mobile-event-bg-end': item.palette.backgroundEnd,
+                  '--mobile-event-wash': item.palette.backgroundEnd,
                 }"
                 @click="navigateTo(item.path)"
               >
@@ -278,13 +297,15 @@ import dayjs from 'dayjs'
 import isoWeek from 'dayjs/plugin/isoWeek'
 import {
   BellOutlined,
+  BookFilled,
+  CalendarFilled,
   CalendarOutlined,
   ClockCircleOutlined,
   DatabaseOutlined,
   EnvironmentOutlined,
+  ProfileFilled,
   ReadOutlined,
   RightOutlined,
-  UnorderedListOutlined,
   UserOutlined,
 } from '@ant-design/icons-vue'
 import axiosInstance from '@/api/custom-instance'
@@ -316,6 +337,8 @@ interface QuickAction {
   background: string
   mobileBackground?: string
   mobileIcon?: Component
+  mobileIconColor?: string
+  mobileShadowColor?: string
   permissions: string[]
 }
 
@@ -403,8 +426,10 @@ const quickActionConfigs: QuickAction[] = [
     path: '/classes',
     icon: ReadOutlined,
     background: 'var(--v2-cover-blue)',
-    mobileIcon: UnorderedListOutlined,
-    mobileBackground: 'linear-gradient(135deg, #A886FF 0%, #8278FF 100%)',
+    mobileIcon: ProfileFilled,
+    mobileBackground: '#efe6ff',
+    mobileIconColor: '#7e58ef',
+    mobileShadowColor: 'rgba(126, 88, 239, 0.12)',
     permissions: TRAINING_PERMISSIONS,
   },
   {
@@ -413,7 +438,10 @@ const quickActionConfigs: QuickAction[] = [
     path: '/classes/schedule',
     icon: CalendarOutlined,
     background: 'var(--v2-cover-green)',
-    mobileBackground: 'linear-gradient(135deg, #5FD9D4 0%, #2CB7D7 100%)',
+    mobileIcon: CalendarFilled,
+    mobileBackground: '#e2f4ff',
+    mobileIconColor: '#3899ff',
+    mobileShadowColor: 'rgba(56, 153, 255, 0.12)',
     permissions: TRAINING_SCHEDULE_PERMISSIONS,
   },
   {
@@ -422,8 +450,10 @@ const quickActionConfigs: QuickAction[] = [
     path: '/resource/courses',
     icon: DatabaseOutlined,
     background: 'var(--v2-cover-purple)',
-    mobileIcon: ReadOutlined,
-    mobileBackground: 'linear-gradient(135deg, #FFB45D 0%, #FF8B49 100%)',
+    mobileIcon: BookFilled,
+    mobileBackground: '#fff1dc',
+    mobileIconColor: '#ffab47',
+    mobileShadowColor: 'rgba(255, 171, 71, 0.12)',
     permissions: COURSE_PERMISSIONS,
   },
   {
@@ -432,7 +462,10 @@ const quickActionConfigs: QuickAction[] = [
     path: '/profile',
     icon: UserOutlined,
     background: 'var(--v2-cover-orange)',
-    mobileBackground: 'linear-gradient(135deg, #FF9CCB 0%, #FF75B1 100%)',
+    mobileIcon: UserOutlined,
+    mobileBackground: '#ffe4ef',
+    mobileIconColor: '#ff7ea8',
+    mobileShadowColor: 'rgba(255, 126, 168, 0.12)',
     permissions: PROFILE_PERMISSIONS,
   },
 ]
@@ -703,47 +736,24 @@ watch(
 .dashboard-page.mobile-dashboard-page {
   gap: 0;
   padding: 0 0 calc(var(--v2-bottomnav-height) + 18px);
-  background: linear-gradient(180deg, #f4f7ff 0%, #eef2fb 100%);
+  background: #eef5fb;
 }
 
 .mobile-dashboard-shell {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 16px;
 }
 
 .mobile-hero-card {
   position: relative;
   overflow: hidden;
-  padding: 20px 18px 26px;
-  border-radius: 0 0 30px 30px;
-  background:
-    radial-gradient(circle at top right, rgba(255, 255, 255, 0.14), transparent 28%),
-    radial-gradient(circle at left center, rgba(255, 255, 255, 0.08), transparent 24%),
-    linear-gradient(135deg, #3049d9 0%, #4564f3 100%);
-  box-shadow: 0 18px 32px rgba(47, 82, 222, 0.24);
-}
-
-.mobile-hero-card::before,
-.mobile-hero-card::after {
-  content: '';
-  position: absolute;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
-}
-
-.mobile-hero-card::before {
-  width: 186px;
-  height: 186px;
-  top: 24px;
-  right: -94px;
-}
-
-.mobile-hero-card::after {
-  width: 132px;
-  height: 132px;
-  left: -46px;
-  bottom: -42px;
+  margin: 0;
+  padding: 28px 18px 26px;
+  border-radius: 0;
+  background: #2045A0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(18px);
 }
 
 .mobile-hero-head {
@@ -764,9 +774,11 @@ watch(
 
 .mobile-user-avatar {
   flex-shrink: 0;
-  background: rgba(255, 255, 255, 0.16);
-  border: 2px solid rgba(255, 255, 255, 0.58);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  background: rgba(104, 131, 220, 0.92);
+  border: 2px solid rgba(255, 255, 255, 0.78);
+  box-shadow:
+    0 10px 24px rgba(32, 63, 181, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.24);
   color: #fff;
   font-size: 28px;
   font-weight: 700;
@@ -782,14 +794,14 @@ watch(
 .mobile-user-copy strong {
   font-size: 18px;
   line-height: 1.2;
-  color: #fff;
+  color: #ffffff;
   font-weight: 700;
 }
 
 .mobile-user-copy span {
   font-size: 13px;
   line-height: 1.4;
-  color: rgba(255, 255, 255, 0.82);
+  color: rgba(236, 243, 255, 0.9);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -799,12 +811,14 @@ watch(
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 46px;
-  height: 46px;
+  width: 44px;
+  height: 44px;
   border: 0;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.16);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 10px 22px rgba(32, 63, 181, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
   backdrop-filter: blur(12px);
   cursor: pointer;
 }
@@ -817,9 +831,10 @@ watch(
 .mobile-shortcuts {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  padding: 0 16px;
-  margin-top: -6px;
+  gap: 10px;
+  padding: 0 18px;
+  margin-top: 12px;
+  margin-bottom: 2px;
 }
 
 .mobile-shortcut-item {
@@ -838,40 +853,39 @@ watch(
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 58px;
-  height: 58px;
-  border-radius: 20px;
-  color: rgba(255, 255, 255, 0.98);
-  font-size: 27px;
-  box-shadow:
-    0 10px 18px rgba(57, 79, 168, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.2);
-}
-
-.mobile-shortcut-icon.has-profile-badge::after {
-  content: '';
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 10px;
-  height: 10px;
+  width: 60px;
+  height: 60px;
   border-radius: 999px;
-  background: #3666ff;
-  border: 2px solid #fff;
+  color: var(--mobile-shortcut-icon-color);
+  font-size: 27px;
+  border: 1px solid rgba(255, 255, 255, 0.82);
+  box-shadow:
+    0 10px 22px var(--mobile-shortcut-shadow-color),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42);
 }
 
 .mobile-shortcut-label {
   font-size: 12px;
   line-height: 1.35;
   color: #1a2656;
-  font-weight: 700;
+  font-weight: 600;
   text-align: center;
+}
+
+.profile-shortcut-svg {
+  display: block;
+  width: 28px;
+  height: 28px;
 }
 
 .mobile-schedule-surface.surface-card {
   padding: 18px 16px 20px;
   margin: 0 16px;
   border-radius: 28px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.74);
+  box-shadow: 0 16px 34px rgba(48, 71, 122, 0.08);
+  backdrop-filter: blur(18px);
 }
 
 .mobile-section-head {
@@ -891,8 +905,16 @@ watch(
 }
 
 .mobile-section-link {
-  padding: 8px 10px;
+  padding: 0;
   font-size: 12px;
+  background: transparent;
+  color: #4d67e8;
+  box-shadow: none;
+}
+
+.mobile-section-link:hover {
+  background: transparent;
+  transform: none;
 }
 
 .mobile-week-strip {
@@ -962,8 +984,8 @@ watch(
   overflow: hidden;
   border: 1px solid rgba(232, 236, 244, 0.94);
   border-radius: 24px;
-  background: linear-gradient(135deg, var(--mobile-event-bg-start) 0%, var(--mobile-event-bg-end) 100%);
-  box-shadow: 0 12px 24px rgba(35, 46, 87, 0.06);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(251, 252, 255, 0.98) 100%);
+  box-shadow: 0 10px 24px rgba(45, 59, 103, 0.06);
   text-align: left;
   padding: 14px 16px 16px 20px;
   cursor: pointer;
@@ -980,6 +1002,17 @@ watch(
   background: var(--mobile-event-border);
 }
 
+.mobile-event-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0) 40%, var(--mobile-event-wash) 100%);
+  opacity: 0.42;
+  pointer-events: none;
+}
+
 .mobile-event-card-top,
 .mobile-event-detail {
   display: flex;
@@ -992,7 +1025,7 @@ watch(
   justify-content: space-between;
   gap: 12px;
   padding-left: 18px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .mobile-event-card strong {
@@ -1000,10 +1033,10 @@ watch(
   z-index: 1;
   display: block;
   padding-left: 18px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
   font-size: 15px;
-  line-height: 1.35;
-  color: #19234a;
+  line-height: 1.4;
+  color: #1a2450;
   font-weight: 800;
 }
 
@@ -1012,9 +1045,9 @@ watch(
   align-items: center;
   padding: 5px 10px;
   border-radius: 999px;
-  background: rgba(242, 245, 255, 0.96);
-  border: 1px solid rgba(178, 193, 247, 0.66);
-  color: #7380a7;
+  background: rgba(244, 247, 255, 0.94);
+  border: 1px solid rgba(202, 214, 246, 0.88);
+  color: #7b87b0;
   font-size: 11px;
   line-height: 1;
   font-weight: 700;
@@ -1033,13 +1066,13 @@ watch(
 }
 
 .mobile-event-status.is-active {
-  color: #3459f4;
-  background: rgba(225, 232, 255, 0.92);
+  color: #3a62f5;
+  background: rgba(238, 243, 255, 0.96);
 }
 
 .mobile-event-status.is-neutral {
-  color: #7b8096;
-  background: rgba(243, 245, 250, 0.96);
+  color: #8188a0;
+  background: rgba(246, 247, 251, 0.98);
 }
 
 .mobile-event-status.is-muted {
@@ -1052,7 +1085,7 @@ watch(
   z-index: 1;
   gap: 6px;
   padding-left: 18px;
-  color: #7b849d;
+  color: #98a0b6;
   font-size: 13px;
   flex-wrap: wrap;
 }
@@ -1094,7 +1127,7 @@ watch(
   overflow: hidden;
   background:
     radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.24), transparent 18%),
-    linear-gradient(135deg, #1c2a8f 0%, #2548d6 42%, #2b57f8 100%);
+    #2045A0;
   color: var(--v2-text-white);
   box-shadow: 0 24px 40px rgba(29, 65, 194, 0.24);
 }

@@ -38,13 +38,33 @@
                 </button>
                 <span class="toolbar-title">{{ selectedFolderName }}（共 {{ questionList.length }} 道题目）</span>
               </div>
+              <div class="toolbar-right">
+                <!-- 筛选控件 -->
+                <a-input-search v-model:value="pickerSearch" placeholder="搜索题干" style="width:180px" allow-clear />
+                <a-select v-model:value="pickerKpName" allow-clear show-search placeholder="按知识点" :options="kpSelectOptions" style="width:160px" />
+                <a-select v-model:value="pickerType" style="width:120px">
+                  <a-select-option value="all">全部题型</a-select-option>
+                  <a-select-option value="single">单选题</a-select-option>
+                  <a-select-option value="multi">多选题</a-select-option>
+                  <a-select-option value="judge">判断题</a-select-option>
+                </a-select>
+                <div class="divider-v"></div>
+                <button v-if="!pickMode" class="btn-primary" @click="enterPickMode">
+                  从题库选题
+                </button>
+                <template v-else>
+                  <span class="pick-hint">已选 {{ pickSelectedKeys.length }} 道</span>
+                  <button class="btn-aux" @click="exitPickMode">取消</button>
+                  <button class="btn-primary" :disabled="pickSelectedKeys.length === 0" @click="confirmPick">加入试卷</button>
+                </template>
+              </div>
             </template>
             <template v-else>
               <div class="toolbar-left">
                 <button class="btn-primary" @click="openCreateFolderModal">
                 添加题库
                 </button>
-                <button v-if="canUseAiQuestion" class="btn-aux" @click="goToAiQuestion">
+                <button v-if="canUseAiQuestion" class="btn-primary" @click="goToAiQuestion">
                   智能出题
                 </button>
                 <div class="search-wrapper">
@@ -126,22 +146,29 @@
             <table v-else class="data-table">
               <thead>
                 <tr>
+                  <th v-if="pickMode" class="col-check">
+                    <input type="checkbox" class="custom-checkbox" :checked="isAllPickSelected" @change="togglePickSelectAll">
+                  </th>
                   <th class="col-index">序号</th>
                   <th class="col-type text-center">题型</th>
                   <th class="col-content">题干</th>
                   <th class="col-answer">答案</th>
                   <th class="col-difficulty text-center">难度</th>
+                  <th class="col-kp">知识点</th>
                   <th class="col-time">添加时间</th>
                   <th class="col-action text-center">操作</th>
                 </tr>
               </thead>
               <tbody v-if="questionLoading">
                 <tr>
-                  <td colspan="7" class="empty-row">加载中...</td>
+                  <td :colspan="pickMode ? 9 : 8" class="empty-row">加载中...</td>
                 </tr>
               </tbody>
               <tbody v-else>
                 <tr v-for="(q, index) in displayedQuestionList" :key="q.id" class="table-row">
+                  <td v-if="pickMode" class="col-check">
+                    <input type="checkbox" class="custom-checkbox" :checked="pickSelectedKeys.includes(q.id)" @change="togglePickSelect(q.id)">
+                  </td>
                   <td class="col-index">{{ (questionPagination.current - 1) * questionPagination.pageSize + index + 1 }}</td>
                   <td class="col-type text-center">
                     <span :class="['tag-pill', typeTagColors[q.type]]">{{ typeLabels[q.type] }}</span>
@@ -158,6 +185,9 @@
                   <td class="col-difficulty text-center">
                     <span class="difficulty-badge">{{ q.difficulty || 1 }}</span>
                   </td>
+                  <td class="col-kp">
+                    <span class="kp-text">{{ formatKps(q.knowledgePointNames) }}</span>
+                  </td>
                   <td class="col-time">{{ q.createdAt || '-' }}</td>
                   <td class="col-action text-center">
                     <div class="action-btns">
@@ -168,7 +198,7 @@
                   </td>
                 </tr>
                 <tr v-if="questionList.length === 0">
-                  <td colspan="7" class="empty-row">该题库暂无题目</td>
+                  <td :colspan="pickMode ? 9 : 8" class="empty-row">该题库暂无题目</td>
                 </tr>
               </tbody>
             </table>
@@ -275,11 +305,9 @@
         </a-form-item>
         <a-form-item label="题库分类">
           <a-select v-model:value="folderForm.category" placeholder="请选择分类">
-            <a-select-option value="default">默认分类</a-select-option>
-            <a-select-option value="criminal">刑事类</a-select-option>
-            <a-select-option value="public_security">治安类</a-select-option>
-            <a-select-option value="traffic">交通类</a-select-option>
-            <a-select-option value="comprehensive">综合类</a-select-option>
+            <a-select-option value="默认分类">默认分类</a-select-option>
+            <a-select-option value="科目">科目</a-select-option>
+            <a-select-option value="legacy">legacy</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item v-if="editingFolderId" label="移动到">
@@ -342,6 +370,7 @@ import {
   updateQuestionFolder,
 } from '@/api/question'
 import { getPoliceTypes } from '@/api/user'
+import { getKnowledgePoints } from '@/api/knowledgePoint'
 import QuestionFormModal from './components/QuestionFormModal.vue'
 import KnowledgePointPanel from './components/KnowledgePointPanel.vue'
 
@@ -374,6 +403,14 @@ const selectedFolderId = ref(null)
 const selectedFolderName = ref('')
 const questionList = ref([])
 const questionLoading = ref(false)
+
+// 题目筛选与选题模式
+const pickerSearch = ref('')
+const pickerKpName = ref(null)
+const pickerType = ref('all')
+const kpSelectOptions = ref([])
+const pickMode = ref(false)
+const pickSelectedKeys = ref([])
 
 // ============ 分页 ============
 const pagination = reactive({ current: 1, pageSize: 20, total: 0 })
@@ -558,11 +595,33 @@ function handleQuestionPageSizeChange(size) {
   questionPagination.current = 1
 }
 
-// 题目列表分页后的展示列表
+// 题目列表分页后的展示列表（应用筛选）
 const displayedQuestionList = computed(() => {
+  let list = questionList.value
+  // 搜索题干
+  if (pickerSearch.value) {
+    const kw = pickerSearch.value.toLowerCase()
+    list = list.filter(q => q.content?.toLowerCase().includes(kw))
+  }
+  // 知识点筛选
+  if (pickerKpName.value) {
+    list = list.filter(q => {
+      const kps = q.knowledgePointNames || []
+      return kps.some(kp => String(kp).includes(pickerKpName.value))
+    })
+  }
+  // 题型筛选
+  if (pickerType.value !== 'all') {
+    list = list.filter(q => q.type === pickerType.value)
+  }
+  questionPagination.total = list.length
   const start = (questionPagination.current - 1) * questionPagination.pageSize
   const end = start + questionPagination.pageSize
-  return questionList.value.slice(start, end)
+  return list.slice(start, end)
+})
+
+const isAllPickSelected = computed(() => {
+  return questionList.value.length > 0 && questionList.value.every(q => pickSelectedKeys.value.includes(q.id))
 })
 
 // 题目总页数
@@ -607,6 +666,14 @@ function goToAiQuestion() {
   router.push({ path: '/question/ai' })
 }
 
+function handleCreateClick(key) {
+  if (key === 'manual') {
+    router.push({ path: '/paper/repository' })
+  } else if (key === 'ai') {
+    router.push({ path: '/paper/ai-assemble' })
+  }
+}
+
 function switchNav(target) {
   if (target === activeNav.value) return
   if (target === 'knowledge') {
@@ -641,7 +708,8 @@ async function handleFolderSubmit() {
     const payload = {
       name: folderForm.name,
       category: folderForm.category || null,
-      parentId: folderForm.parentId,
+      parent_id: folderForm.parentId,
+      sort_order: 0,
     }
     if (editingFolderId.value) {
       await updateQuestionFolder(editingFolderId.value, payload)
@@ -685,14 +753,23 @@ function handleViewQuestions(item) {
   }
   selectedFolderId.value = item.id
   selectedFolderName.value = item.name
+  pickMode.value = false
+  pickSelectedKeys.value = []
+  pickerSearch.value = ''
+  pickerKpName.value = null
+  pickerType.value = 'all'
   router.replace({ path: '/question/repository', query: { folderId: item.id } })
   loadQuestionsForFolder(item.id)
+  loadKpOptionsForPicker()
 }
 
 async function loadQuestionsForFolder(folderId) {
   questionLoading.value = true
   questionList.value = []
   questionPagination.current = 1
+  pickerSearch.value = ''
+  pickerKpName.value = null
+  pickerType.value = 'all'
   try {
     const result = await getQuestions({ folder_id: folderId, recursive: true, size: -1 })
     questionList.value = result.items || result || []
@@ -704,10 +781,61 @@ async function loadQuestionsForFolder(folderId) {
   }
 }
 
+async function loadKpOptionsForPicker() {
+  try {
+    const result = await getKnowledgePoints({ size: -1 })
+    kpSelectOptions.value = (result.items || []).map(kp => ({ label: kp.name, value: kp.name }))
+  } catch { kpSelectOptions.value = [] }
+}
+
+function enterPickMode() {
+  pickMode.value = true
+  pickSelectedKeys.value = []
+}
+
+function exitPickMode() {
+  pickMode.value = false
+  pickSelectedKeys.value = []
+}
+
+function togglePickSelect(id) {
+  const idx = pickSelectedKeys.value.indexOf(id)
+  if (idx >= 0) {
+    pickSelectedKeys.value.splice(idx, 1)
+  } else {
+    pickSelectedKeys.value.push(id)
+  }
+}
+
+function togglePickSelectAll() {
+  if (isAllPickSelected.value) {
+    pickSelectedKeys.value = []
+  } else {
+    pickSelectedKeys.value = questionList.value.map(q => q.id)
+  }
+}
+
+function confirmPick() {
+  if (!pickSelectedKeys.value.length) return
+  const ids = pickSelectedKeys.value.join(',')
+  router.push({ path: '/paper/repository', query: { pickQuestions: ids } })
+  exitPickMode()
+}
+
+function formatKps(kps = []) {
+  if (!Array.isArray(kps)) return '-'
+  return kps.length > 0 ? kps.join('、') : '-'
+}
+
 function handleBackToFolders() {
   selectedFolderId.value = null
   selectedFolderName.value = ''
   questionList.value = []
+  pickMode.value = false
+  pickSelectedKeys.value = []
+  pickerSearch.value = ''
+  pickerKpName.value = null
+  pickerType.value = 'all'
   router.replace({ path: '/question/repository' })
 }
 
@@ -866,6 +994,10 @@ watch(() => route.path, () => {
 watch(() => route.query.folderId, (newVal) => {
   if (!ensureActiveViewAccess()) return
   syncFolderState(newVal)
+})
+
+watch([pickerSearch, pickerKpName, pickerType], () => {
+  questionPagination.current = 1
 })
 
 onUnmounted(() => {
@@ -1062,6 +1194,13 @@ onUnmounted(() => {
   color: #334155;
 }
 
+.pick-hint {
+  font-size: 13px;
+  color: #2563EB;
+  font-weight: 600;
+  padding: 0 8px;
+}
+
 .filter-select {
   width: 160px;
   appearance: none;
@@ -1226,6 +1365,19 @@ onUnmounted(() => {
 
 .col-difficulty {
   width: 60px;
+}
+
+.col-kp {
+  max-width: 180px;
+}
+
+.kp-text {
+  font-size: 12px;
+  color: #64748B;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
 }
 
 .options-preview {

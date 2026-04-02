@@ -5,12 +5,74 @@ from datetime import datetime, date
 from sqlalchemy.orm import Session
 from app.database import engine, init_db
 from app.models import User, Role, Permission, Department, PoliceType
+from app.models.permission import PermissionGroup
 from app.models.training_type import TrainingType
 from app.models.system import SystemMeta
 from app.services.auth import auth_service
 from app.services.system import SystemConfigService
 from app.utils.permission_group import infer_permission_group
 from logger import logger
+
+
+def init_permission_groups():
+    """初始化权限组（每次运行都同步，补充缺失的组）"""
+    groups_data = [
+        {"group_key": "SYSTEM", "group_name": "系统基础", "description": "系统基础权限", "sort_order": 0},
+        {"group_key": "AUTH", "group_name": "认证鉴权", "description": "登录、密码、Token 相关", "sort_order": 1},
+        {"group_key": "USER_MANAGEMENT", "group_name": "用户管理", "description": "用户增删改查、导入导出", "sort_order": 2},
+        {"group_key": "ROLE_MANAGEMENT", "group_name": "角色管理", "description": "角色与权限分配", "sort_order": 3},
+        {"group_key": "PERMISSION_MANAGEMENT", "group_name": "权限管理", "description": "权限维护与同步", "sort_order": 4},
+        {"group_key": "DEPARTMENT_MANAGEMENT", "group_name": "部门管理", "description": "部门树与部门权限", "sort_order": 5},
+        {"group_key": "POLICE_TYPE_MANAGEMENT", "group_name": "警种管理", "description": "警种维护", "sort_order": 6},
+        {"group_key": "COURSE_MANAGEMENT", "group_name": "课程管理", "description": "课程资源与学习进度", "sort_order": 10},
+        {"group_key": "EXAM_MANAGEMENT", "group_name": "考试管理", "description": "考试、成绩与试卷", "sort_order": 11},
+        {"group_key": "QUESTION_BANK", "group_name": "题库管理", "description": "题目与知识点维护", "sort_order": 12},
+        {"group_key": "TRAINING_MANAGEMENT", "group_name": "培训管理", "description": "培训班、签到、报名", "sort_order": 13},
+        {"group_key": "CERTIFICATE_MANAGEMENT", "group_name": "证书管理", "description": "结业证书签发", "sort_order": 14},
+        {"group_key": "RESOURCE_REVIEW", "group_name": "资源与审核", "description": "资源库、审核工作流", "sort_order": 15},
+        {"group_key": "AI", "group_name": "AI 智能任务", "description": "智能出题、组卷、排课等", "sort_order": 20},
+        {"group_key": "PROFILE", "group_name": "个人中心", "description": "个人信息与学习统计", "sort_order": 30},
+        {"group_key": "DASHBOARD", "group_name": "工作台", "description": "工作台数据", "sort_order": 31},
+        {"group_key": "REPORT", "group_name": "数据看板", "description": "KPI、趋势、排名等", "sort_order": 32},
+        {"group_key": "TALENT", "group_name": "人才库", "description": "人才列表与统计", "sort_order": 33},
+    ]
+    try:
+        with Session(engine) as db:
+            existing_keys = {g.group_key for g in db.query(PermissionGroup).all()}
+            added = []
+            for gd in groups_data:
+                if gd["group_key"] not in existing_keys:
+                    db.add(PermissionGroup(**gd, is_active=True))
+                    added.append(gd["group_key"])
+            if added:
+                db.commit()
+                logger.info(f"权限组补充完成: {', '.join(added)}")
+            else:
+                logger.info("权限组已是最新，无需补充")
+    except Exception as e:
+        logger.error(f"初始化权限组失败: {e}")
+        raise
+
+
+def sync_permission_group_ids():
+    """同步权限的 group_id 外键（根据 group 字段匹配权限组）"""
+    try:
+        with Session(engine) as db:
+            group_map = {g.group_key: g.id for g in db.query(PermissionGroup).all()}
+            if not group_map:
+                return
+            updated = 0
+            for perm in db.query(Permission).filter(Permission.group_id.is_(None)).all():
+                gid = group_map.get(perm.group)
+                if gid:
+                    perm.group_id = gid
+                    updated += 1
+            if updated:
+                db.commit()
+                logger.info(f"已为 {updated} 个权限关联权限组")
+    except Exception as e:
+        logger.error(f"同步权限组关联失败: {e}")
+        raise
 
 
 def init_permissions():
@@ -116,6 +178,7 @@ def init_permissions():
                 {"path": "/api/v1/trainings/{id}/enrollments", "code": "GET_ENROLLMENTS", "description": "获取报名列表"},
                 {"path": "/api/v1/trainings/{id}/enrollments/{eid}/approve", "code": "APPROVE_ENROLLMENT", "description": "审批通过"},
                 {"path": "/api/v1/trainings/{id}/enrollments/{eid}/reject", "code": "REJECT_ENROLLMENT", "description": "审批拒绝"},
+                {"path": "/api/v1/trainings/{id}/courses", "code": "GET_TRAINING_COURSES", "description": "获取培训课程列表"},
                 {"path": "/api/v1/trainings/{id}/checkin/records", "code": "GET_CHECKIN_RECORDS", "description": "获取签到记录"},
                 {"path": "/api/v1/trainings/{id}/checkin", "code": "CHECKIN", "description": "签到"},
                 {"path": "/api/v1/trainings/{id}/checkin/qr", "code": "GET_CHECKIN_QR", "description": "生成签到二维码"},
@@ -266,70 +329,96 @@ def init_roles():
     try:
         with Session(engine) as db:
             existing_count = db.query(Role).count()
-            if existing_count > 0:
-                logger.info("角色数据已存在，跳过初始化")
-                return
-
             all_permissions = db.query(Permission).all()
             perm_map = {str(p.code): p for p in all_permissions}
 
-            # 管理员角色 - 全部权限
-            admin_role = Role(
-                code="admin", name="管理员",
-                description="系统管理员，拥有所有权限", is_active=True,
-                data_scopes=["all"],
-            )
-            admin_role.permissions = all_permissions
-            db.add(admin_role)
+            # 角色权限定义
+            role_perm_defs = {
+                "admin": {
+                    "name": "管理员",
+                    "description": "系统管理员，拥有所有权限",
+                    "data_scopes": ["all"],
+                    "perm_codes": None,  # None = 全部权限
+                },
+                "instructor": {
+                    "name": "教官",
+                    "description": "教官，负责教学和培训管理",
+                    "data_scopes": ["department_and_sub", "police_type", "self"],
+                    "perm_codes": [
+                        "GET_CURRENT_USER", "CHANGE_PASSWORD", "ROOT", "HEALTH_CHECK",
+                        "GET_DASHBOARD",
+                        "GET_COURSES", "CREATE_COURSE", "GET_COURSE_DETAIL", "UPDATE_COURSE",
+                        "GET_EXAMS", "CREATE_EXAM", "GET_EXAM_DETAIL", "GET_EXAM_SCORES",
+                        "GET_QUESTIONS", "CREATE_QUESTION", "UPDATE_QUESTION", "DELETE_QUESTION", "BATCH_CREATE_QUESTIONS",
+                        "GET_KNOWLEDGE_POINTS", "CREATE_KNOWLEDGE_POINT", "UPDATE_KNOWLEDGE_POINT", "DELETE_KNOWLEDGE_POINT",
+                        "GET_TRAININGS", "CREATE_TRAINING", "GET_TRAINING_DETAIL", "UPDATE_TRAINING",
+                        "GET_TRAINING_STUDENTS", "GET_TRAINING_COURSES", "GET_TRAINING_SCHEDULE",
+                        "GET_ENROLLMENTS", "APPROVE_ENROLLMENT", "REJECT_ENROLLMENT",
+                        "GET_CHECKIN_RECORDS", "GET_CHECKIN_QR",
+                        "GET_CERTIFICATES", "CREATE_CERTIFICATE",
+                        "GET_PROFILE", "UPDATE_PROFILE", "GET_STUDY_STATS", "GET_EXAM_HISTORY",
+                        "GET_AI_QUESTION_TASKS", "CREATE_AI_QUESTION_TASK", "UPDATE_AI_QUESTION_TASK", "CONFIRM_AI_QUESTION_TASK",
+                        "GET_AI_PAPER_ASSEMBLY_TASKS", "CREATE_AI_PAPER_ASSEMBLY_TASK", "UPDATE_AI_PAPER_ASSEMBLY_TASK", "CONFIRM_AI_PAPER_ASSEMBLY_TASK",
+                        "GET_AI_PAPER_GENERATION_TASKS", "CREATE_AI_PAPER_GENERATION_TASK", "UPDATE_AI_PAPER_GENERATION_TASK", "CONFIRM_AI_PAPER_GENERATION_TASK",
+                        "CREATE_RESOURCE", "UPDATE_RESOURCE", "VIEW_RESOURCE_DEPARTMENT",
+                        "USE_TEACHING_RESOURCE_GENERATION",
+                        "MANAGE_RESOURCE_VISIBILITY", "SUBMIT_RESOURCE_REVIEW",
+                        "REVIEW_RESOURCE_STAGE1", "REVIEW_RESOURCE_STAGE2",
+                    ],
+                },
+                "student": {
+                    "name": "学员",
+                    "description": "学员，参与学习和考试",
+                    "data_scopes": ["department", "police_type", "self"],
+                    "perm_codes": [
+                        "GET_CURRENT_USER", "CHANGE_PASSWORD", "ROOT", "HEALTH_CHECK",
+                        "GET_DASHBOARD",
+                        "GET_COURSES", "GET_COURSE_DETAIL", "GET_COURSE_PROGRESS", "UPDATE_CHAPTER_PROGRESS",
+                        "GET_EXAMS", "GET_EXAM_DETAIL", "SUBMIT_EXAM", "GET_EXAM_RESULT",
+                        "GET_TRAININGS", "GET_TRAINING_DETAIL", "ENROLL_TRAINING",
+                        "GET_TRAINING_COURSES", "GET_TRAINING_SCHEDULE",
+                        "CHECKIN", "GET_CHECKIN_RECORDS",
+                        "GET_CERTIFICATES",
+                        "GET_PROFILE", "UPDATE_PROFILE", "GET_STUDY_STATS", "GET_EXAM_HISTORY",
+                    ],
+                },
+            }
 
-            # 教官角色
-            instructor_perm_codes = [
-                "GET_CURRENT_USER", "CHANGE_PASSWORD", "ROOT", "HEALTH_CHECK",
-                "GET_DASHBOARD",
-                "GET_COURSES", "CREATE_COURSE", "GET_COURSE_DETAIL", "UPDATE_COURSE",
-                "GET_EXAMS", "CREATE_EXAM", "GET_EXAM_DETAIL", "GET_EXAM_SCORES",
-                "GET_QUESTIONS", "CREATE_QUESTION", "UPDATE_QUESTION", "DELETE_QUESTION", "BATCH_CREATE_QUESTIONS",
-                "GET_KNOWLEDGE_POINTS", "CREATE_KNOWLEDGE_POINT", "UPDATE_KNOWLEDGE_POINT", "DELETE_KNOWLEDGE_POINT",
-                "GET_TRAININGS", "CREATE_TRAINING", "GET_TRAINING_DETAIL", "UPDATE_TRAINING",
-                "GET_TRAINING_STUDENTS", "GET_TRAINING_SCHEDULE",
-                "GET_ENROLLMENTS", "APPROVE_ENROLLMENT", "REJECT_ENROLLMENT",
-                "GET_CHECKIN_RECORDS", "GET_CHECKIN_QR",
-                "GET_CERTIFICATES", "CREATE_CERTIFICATE",
-                "GET_PROFILE", "UPDATE_PROFILE", "GET_STUDY_STATS", "GET_EXAM_HISTORY",
-                "GET_AI_QUESTION_TASKS", "CREATE_AI_QUESTION_TASK", "UPDATE_AI_QUESTION_TASK", "CONFIRM_AI_QUESTION_TASK",
-                "GET_AI_PAPER_ASSEMBLY_TASKS", "CREATE_AI_PAPER_ASSEMBLY_TASK", "UPDATE_AI_PAPER_ASSEMBLY_TASK", "CONFIRM_AI_PAPER_ASSEMBLY_TASK",
-                "GET_AI_PAPER_GENERATION_TASKS", "CREATE_AI_PAPER_GENERATION_TASK", "UPDATE_AI_PAPER_GENERATION_TASK", "CONFIRM_AI_PAPER_GENERATION_TASK",
-                "CREATE_RESOURCE", "UPDATE_RESOURCE", "VIEW_RESOURCE_DEPARTMENT",
-                "USE_TEACHING_RESOURCE_GENERATION",
-                "MANAGE_RESOURCE_VISIBILITY", "SUBMIT_RESOURCE_REVIEW",
-                "REVIEW_RESOURCE_STAGE1", "REVIEW_RESOURCE_STAGE2",
-            ]
-            instructor_role = Role(
-                code="instructor", name="教官",
-                description="教官，负责教学和培训管理", is_active=True,
-                data_scopes=["department_and_sub", "police_type", "self"],
-            )
-            instructor_role.permissions = [perm_map[c] for c in instructor_perm_codes if c in perm_map]
-            db.add(instructor_role)
+            if existing_count > 0:
+                # 角色已存在，补充缺失的权限（不替换现有权限）
+                for role_code, role_def in role_perm_defs.items():
+                    role = db.query(Role).filter(Role.code == role_code).first()
+                    if not role:
+                        continue
+                    if role_def["perm_codes"] is None:
+                        # 管理员：确保拥有全部权限
+                        target_perms = all_permissions
+                    else:
+                        target_perms = [perm_map[c] for c in role_def["perm_codes"] if c in perm_map]
+                    existing_perm_ids = {p.id for p in role.permissions}
+                    added = []
+                    for perm in target_perms:
+                        if perm.id not in existing_perm_ids:
+                            role.permissions.append(perm)
+                            added.append(perm.code)
+                    if added:
+                        logger.info(f"角色 {role_code} 补充权限: {', '.join(added)}")
+                db.commit()
+                logger.info("角色权限同步完成")
+                return
 
-            # 学员角色
-            student_perm_codes = [
-                "GET_CURRENT_USER", "CHANGE_PASSWORD", "ROOT", "HEALTH_CHECK",
-                "GET_DASHBOARD",
-                "GET_COURSES", "GET_COURSE_DETAIL", "GET_COURSE_PROGRESS", "UPDATE_CHAPTER_PROGRESS",
-                "GET_EXAMS", "GET_EXAM_DETAIL", "SUBMIT_EXAM", "GET_EXAM_RESULT",
-                "GET_TRAININGS", "GET_TRAINING_DETAIL", "ENROLL_TRAINING",
-                "GET_TRAINING_SCHEDULE", "CHECKIN",
-                "GET_CERTIFICATES",
-                "GET_PROFILE", "UPDATE_PROFILE", "GET_STUDY_STATS", "GET_EXAM_HISTORY",
-            ]
-            student_role = Role(
-                code="student", name="学员",
-                description="学员，参与学习和考试", is_active=True,
-                data_scopes=["department", "police_type", "self"],
-            )
-            student_role.permissions = [perm_map[c] for c in student_perm_codes if c in perm_map]
-            db.add(student_role)
+            # 首次初始化：创建角色
+            for role_code, role_def in role_perm_defs.items():
+                role = Role(
+                    code=role_code, name=role_def["name"],
+                    description=role_def["description"], is_active=True,
+                    data_scopes=role_def["data_scopes"],
+                )
+                if role_def["perm_codes"] is None:
+                    role.permissions = all_permissions
+                else:
+                    role.permissions = [perm_map[c] for c in role_def["perm_codes"] if c in perm_map]
+                db.add(role)
 
             db.commit()
             logger.info("角色数据初始化完成")
@@ -557,15 +646,17 @@ def main():
         init_db()
         init_system_configs()
         init_training_types()
+        init_permission_groups()
+        init_permissions()
+        sync_permission_group_ids()
+        init_roles()
 
         if is_db_initialized():
             logger.info("数据库已初始化，跳过种子数据初始化")
             return
 
-        init_permissions()
         init_departments()
         init_police_types()
-        init_roles()
         init_users()
         init_dashboard_modules()
         mark_db_initialized()

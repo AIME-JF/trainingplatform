@@ -100,6 +100,10 @@ export function getCheckinRecords(id, params) {
   return request.get(`/trainings/${id}/checkin/records`, { params })
 }
 
+export function getTrainingCourses(id) {
+  return request.get(`/trainings/${id}/courses`)
+}
+
 export function checkin(id, data) {
   return request.post(`/trainings/${id}/checkin`, data)
 }
