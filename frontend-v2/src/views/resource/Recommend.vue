@@ -129,11 +129,20 @@
     <a-drawer
       v-model:open="commentDrawerOpen"
       class="community-comments-drawer"
-      placement="right"
+      :class="{ mobile: isMobile }"
+      :placement="commentDrawerPlacement"
       :width="commentDrawerWidth"
+      :height="commentDrawerHeight"
+      :closable="!isMobile"
       :body-style="{ padding: 0 }"
-      title="资源评论"
     >
+      <template #title>
+        <div class="comment-drawer-title" :class="{ mobile: isMobile }">
+          <span v-if="isMobile" class="comment-sheet-handle" />
+          <strong>资源评论</strong>
+        </div>
+      </template>
+
       <div class="comment-drawer-body">
         <div v-if="currentResource" class="comment-drawer-head">
           <strong>{{ currentResource.title }}</strong>
@@ -264,7 +273,9 @@ const currentDisplayTotal = computed(() => {
   }
   return feedItems.value.length
 })
-const commentDrawerWidth = computed(() => isMobile.value ? '100%' : 420)
+const commentDrawerPlacement = computed(() => isMobile.value ? 'bottom' : 'right')
+const commentDrawerWidth = computed(() => isMobile.value ? undefined : 420)
+const commentDrawerHeight = computed(() => isMobile.value ? '56dvh' : undefined)
 
 onMounted(() => {
   window.addEventListener('wheel', handleWheel, { passive: false })
@@ -1163,48 +1174,91 @@ function onTouchEnd(event: TouchEvent) {
   opacity: 0.72;
 }
 
+.comment-drawer-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.comment-drawer-title strong {
+  font-size: 16px;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.comment-drawer-title.mobile {
+  width: 100%;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+.comment-sheet-handle {
+  width: 44px;
+  height: 5px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.56);
+}
+
 .community-comments-drawer :deep(.ant-drawer-header) {
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  border-bottom: none;
+  background: transparent;
 }
 
 .comment-drawer-body {
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  height: 100%;
+  min-height: 0;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 252, 1) 100%);
 }
 
 .comment-drawer-head {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding: 18px 20px 14px;
-  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(248, 250, 252, 0.9);
+  gap: 4px;
+  padding: 18px 20px 10px;
+  border-bottom: none;
+  background: transparent;
+}
+
+.comment-drawer-head strong {
+  font-size: 18px;
+  line-height: 1.25;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.02em;
 }
 
 .comment-drawer-head span {
-  color: var(--v2-text-secondary);
+  color: rgba(71, 85, 105, 0.84);
   font-size: 13px;
 }
 
 .comment-list-wrapper {
   flex: 1;
   min-height: 0;
-  padding: 18px 20px;
+  padding: 6px 20px 18px;
   overflow-y: auto;
 }
 
 .comment-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
 }
 
 .comment-card {
-  padding: 14px 14px 12px;
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  border-radius: 18px;
-  background: #fff;
+  padding: 18px 0 16px;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.comment-card + .comment-card {
+  box-shadow: inset 0 1px 0 rgba(148, 163, 184, 0.16);
 }
 
 .comment-card-head {
@@ -1212,42 +1266,119 @@ function onTouchEnd(event: TouchEvent) {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .comment-user-meta {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
+}
+
+.comment-user-meta strong {
+  font-size: 16px;
+  line-height: 1.25;
+  color: #0f172a;
+  font-weight: 700;
 }
 
 .comment-user-meta span {
-  color: var(--v2-text-secondary);
+  color: rgba(100, 116, 139, 0.86);
   font-size: 12px;
+}
+
+.comment-card-head :deep(.ant-btn-link) {
+  height: auto !important;
+  padding: 0 !important;
+  color: #ef4444 !important;
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  line-height: 1.4 !important;
 }
 
 .comment-card-content {
   margin: 0;
-  color: #111;
-  line-height: 1.7;
+  color: rgba(15, 23, 42, 0.94);
+  font-size: 15px;
+  line-height: 1.8;
   white-space: pre-wrap;
   word-break: break-word;
 }
 
 .comment-editor {
-  padding: 18px 20px 20px;
-  border-top: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(248, 250, 252, 0.96);
+  padding: 16px 20px calc(18px + env(safe-area-inset-bottom));
+  border-top: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.92) 14%, rgba(255, 255, 255, 0.98) 100%);
+  backdrop-filter: blur(16px);
+}
+
+.comment-editor :deep(.ant-input-textarea) {
+  display: block;
+}
+
+.comment-editor :deep(.ant-input-textarea-show-count::after) {
+  margin-top: 8px;
+  color: rgba(100, 116, 139, 0.9);
+  font-size: 12px;
+}
+
+.comment-editor :deep(.ant-input-textarea textarea) {
+  min-height: 112px !important;
+  padding: 16px 18px !important;
+  border: none !important;
+  border-radius: 20px !important;
+  background: rgba(248, 250, 252, 0.96) !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(148, 163, 184, 0.14),
+    0 14px 32px rgba(15, 23, 42, 0.06);
+  color: #0f172a !important;
+  line-height: 1.75 !important;
+  resize: none;
+}
+
+.comment-editor :deep(.ant-input-textarea textarea::placeholder) {
+  color: rgba(148, 163, 184, 0.96);
+}
+
+.comment-editor :deep(.ant-input-textarea textarea:hover),
+.comment-editor :deep(.ant-input-textarea textarea:focus) {
+  background: #fff !important;
+  box-shadow:
+    inset 0 0 0 1px rgba(59, 130, 246, 0.16),
+    0 18px 40px rgba(37, 99, 235, 0.08);
 }
 
 .comment-editor-actions {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 12px;
-  color: var(--v2-text-secondary);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 14px;
+  margin-top: 14px;
+  color: rgba(100, 116, 139, 0.92);
   font-size: 12px;
+}
+
+.comment-editor-actions span {
+  line-height: 1.65;
+}
+
+.comment-editor-actions :deep(.ant-btn.ant-btn-primary) {
+  min-width: 118px;
+  height: 46px !important;
+  padding: 0 22px !important;
+  border: none !important;
+  border-radius: 16px !important;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%) !important;
+  box-shadow: 0 14px 28px rgba(37, 99, 235, 0.22);
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+
+.comment-editor-actions :deep(.ant-btn.ant-btn-primary:hover),
+.comment-editor-actions :deep(.ant-btn.ant-btn-primary:focus) {
+  background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%) !important;
+  box-shadow: 0 18px 34px rgba(37, 99, 235, 0.26);
+  transform: translateY(-1px);
 }
 
 @media (max-width: 1024px) {
@@ -1286,25 +1417,81 @@ function onTouchEnd(event: TouchEvent) {
 
   .community-side-actions {
     top: auto;
-    right: 10px;
-    bottom: 16px;
+    right: 12px;
+    bottom: 88px;
+    gap: 16px;
     transform: none;
   }
 
-  .community-action-btn {
-    width: 68px;
-    padding: 10px 7px 9px;
-    border-radius: 18px;
+  .community-side-actions.mobile .community-action-btn {
+    width: 56px;
+    padding: 0;
+    border: none;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    color: rgba(255, 255, 255, 0.96);
   }
 
-  .community-action-icon {
-    font-size: 19px;
+  .community-side-actions.mobile .community-action-btn:hover:not(:disabled),
+  .community-side-actions.mobile .community-action-btn.active,
+  .community-side-actions.mobile .community-action-btn.secondary,
+  .community-side-actions.mobile .community-action-btn.secondary:hover:not(:disabled) {
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    transform: none;
+  }
+
+  .community-side-actions.mobile .community-action-btn.active {
+    color: #ff8fa3;
+  }
+
+  .community-side-actions.mobile .community-action-icon {
+    font-size: 22px;
+    text-shadow: 0 4px 16px rgba(0, 0, 0, 0.42);
+  }
+
+  .community-side-actions.mobile .community-action-label,
+  .community-side-actions.mobile .community-action-count {
+    color: currentColor;
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.54);
+  }
+
+  .community-side-actions.mobile .community-action-count {
+    opacity: 0.84;
   }
 
   .channel-tab {
     flex: 1;
     min-width: 0;
     font-size: 18px;
+  }
+
+  .community-comments-drawer.mobile :deep(.ant-drawer-content-wrapper) {
+    box-shadow: 0 -20px 44px rgba(15, 23, 42, 0.28);
+  }
+
+  .community-comments-drawer.mobile :deep(.ant-drawer-content) {
+    border-radius: 26px 26px 0 0;
+    overflow: hidden;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(248, 250, 252, 1) 100%);
+  }
+
+  .community-comments-drawer.mobile :deep(.ant-drawer-header) {
+    padding: 12px 18px 10px;
+    background: rgba(255, 255, 255, 0.98);
+  }
+
+  .community-comments-drawer.mobile :deep(.ant-drawer-body) {
+    background: transparent;
+  }
+
+  .comment-drawer-head {
+    padding-top: 14px;
+    gap: 4px;
+    background: transparent;
   }
 
   .comment-list-wrapper,
@@ -1315,8 +1502,12 @@ function onTouchEnd(event: TouchEvent) {
   }
 
   .comment-editor-actions {
-    flex-direction: column;
-    align-items: flex-start;
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .comment-editor-actions :deep(.ant-btn.ant-btn-primary) {
+    width: 100%;
   }
 }
 

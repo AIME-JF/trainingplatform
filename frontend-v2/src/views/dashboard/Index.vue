@@ -1,135 +1,258 @@
 <template>
-  <section class="page-content dashboard-page">
+  <section
+    class="page-content dashboard-page"
+    :class="{ 'mobile-dashboard-page': isDashboardRoute && isMobile }"
+  >
     <template v-if="isDashboardRoute">
-      <section class="hero-card">
-        <div class="hero-copy">
-          <div class="hero-topline">
-            <span class="hero-badge">{{ greetingText }}</span>
-            <span class="hero-date-pill">
-              <CalendarOutlined />
-              {{ todayText }}
-            </span>
-          </div>
-          <h1 class="hero-title">欢迎回来，{{ displayName }}</h1>
-          <div class="hero-profile-list">
-            <strong>{{ identityCode }}</strong>
-            <span class="hero-profile-divider">·</span>
-            <span>{{ roleLabel }}</span>
-            <span class="hero-profile-divider">·</span>
-            <span>{{ authStore.currentUser?.unit || '未设置单位' }}</span>
-          </div>
-        </div>
-
-        <div class="hero-summary">
-          <div v-for="item in overviewStats" :key="item.label" class="summary-card">
-            <span class="summary-label">{{ item.label }}</span>
-            <strong class="summary-value">
-              {{ item.value }}
-              <small v-if="item.suffix">{{ item.suffix }}</small>
-            </strong>
-          </div>
-        </div>
-      </section>
-
-      <section class="dashboard-workbench">
-        <article class="surface-card mini-schedule-card">
-          <div class="section-head">
-            <div>
-              <h2>今日安排</h2>
-              <p>点击日期查看当天课程安排</p>
-            </div>
-            <button type="button" class="section-link" @click="navigateTo('/classes/schedule')">
-              完整日历
-              <RightOutlined />
-            </button>
-          </div>
-
-          <div class="mini-week-strip">
-            <button
-              v-for="day in previewWeekDays"
-              :key="day.dateKey"
-              type="button"
-              class="mini-day-pill"
-              :class="{
-                today: day.isToday,
-                selected: day.dateKey === selectedPreviewDate,
-                'has-event': day.hasEvent,
-              }"
-              :aria-pressed="day.dateKey === selectedPreviewDate"
-              @click="selectedPreviewDate = day.dateKey"
-            >
-              <span>{{ day.label }}</span>
-              <strong>{{ day.displayDate }}</strong>
-            </button>
-          </div>
-
-          <div v-if="calendarLoading" class="mini-state">
-            <a-spin size="small" />
-            <span>课表加载中...</span>
-          </div>
-          <div v-else-if="calendarPreviewItems.length" class="mini-event-list">
-            <button
-              v-for="item in calendarPreviewItems"
-              :key="item.key"
-              type="button"
-              class="mini-event-item"
-              :style="{
-                '--mini-event-border': item.palette.border,
-                '--mini-event-bg-start': item.palette.backgroundStart,
-                '--mini-event-bg-end': item.palette.backgroundEnd,
-              }"
-              @click="navigateTo(item.path)"
-            >
-              <div class="mini-event-main">
-                <strong>{{ item.title }}</strong>
-                <span>{{ item.timeLabel }}</span>
+      <template v-if="isMobile">
+        <section class="mobile-dashboard-shell">
+          <section class="mobile-hero-card">
+            <div class="mobile-hero-head">
+              <div class="mobile-user-block">
+                <a-avatar :size="58" class="mobile-user-avatar">
+                  {{ avatarText }}
+                </a-avatar>
+                <div class="mobile-user-copy">
+                  <strong>Hello, {{ displayName }}</strong>
+                  <span>{{ identityCode }} · {{ authStore.currentUser?.unit || '未设置单位' }}</span>
+                </div>
               </div>
-              <div class="mini-event-meta">
-                <span class="mini-event-meta-row">
-                  <EnvironmentOutlined class="mini-event-meta-icon" />
-                  <span>{{ item.primaryMeta }}</span>
-                </span>
-                <span class="mini-event-meta-row">
-                  <UserOutlined class="mini-event-meta-icon" />
-                  <span>{{ item.secondaryMeta }}</span>
-                </span>
-              </div>
-            </button>
-          </div>
-          <div v-else class="mini-state mini-empty">
-            <CalendarOutlined />
-            <span>{{ calendarError || '所选日期暂无安排' }}</span>
-          </div>
-        </article>
 
-        <article class="surface-card quick-surface">
-          <div class="section-head">
-            <div>
-              <h2>快捷入口</h2>
-              <p>按当前权限进入常用功能模块</p>
+              <button
+                type="button"
+                class="mobile-notify-button"
+                aria-label="通知"
+                @click="navigateTo('/notifications')"
+              >
+                <a-badge :dot="notifyCount > 0" :offset="[-1, 2]">
+                  <BellOutlined class="mobile-notify-icon" />
+                </a-badge>
+              </button>
             </div>
-          </div>
+          </section>
 
-          <div class="quick-grid quick-grid-compact">
+          <section class="mobile-shortcuts">
             <button
-              v-for="action in quickActions"
+              v-for="action in mobileQuickActions"
               :key="action.path"
               type="button"
-              class="quick-item"
+              class="mobile-shortcut-item"
               @click="navigateTo(action.path)"
             >
-              <span class="quick-icon" :style="{ background: action.background }">
-                <component :is="action.icon" />
+              <span
+                class="mobile-shortcut-icon"
+                :class="{ 'has-profile-badge': action.path === '/profile' }"
+                :style="{ background: action.mobileBackground || action.background }"
+              >
+                <component :is="action.mobileIcon || action.icon" />
               </span>
-              <span class="quick-text">
-                <strong>{{ action.title }}</strong>
-                <span>{{ action.description }}</span>
-              </span>
-              <RightOutlined class="quick-arrow" />
+              <span class="mobile-shortcut-label">{{ action.title }}</span>
             </button>
+          </section>
+
+          <article class="surface-card mobile-schedule-surface">
+            <div class="mobile-section-head">
+              <h2>今日课表</h2>
+              <button type="button" class="section-link mobile-section-link" @click="navigateTo('/classes/schedule')">
+                完整日历
+                <RightOutlined />
+              </button>
+            </div>
+
+            <div class="mobile-week-strip">
+              <button
+                v-for="day in previewWeekDays"
+                :key="day.dateKey"
+                type="button"
+                class="mobile-day-pill"
+                :class="{
+                  today: day.isToday,
+                  selected: day.dateKey === selectedPreviewDate,
+                }"
+                :aria-pressed="day.dateKey === selectedPreviewDate"
+                @click="selectedPreviewDate = day.dateKey"
+              >
+                <span>{{ day.label }}</span>
+                <strong>{{ day.mobileDate }}</strong>
+              </button>
+            </div>
+
+            <div v-if="calendarLoading" class="mobile-state">
+              <a-spin size="small" />
+              <span>课表加载中...</span>
+            </div>
+            <div v-else-if="mobileCalendarPreviewItems.length" class="mobile-event-list">
+              <button
+                v-for="item in mobileCalendarPreviewItems"
+                :key="item.key"
+                type="button"
+                class="mobile-event-card"
+                :style="{
+                  '--mobile-event-border': item.palette.border,
+                  '--mobile-event-bg-start': item.palette.backgroundStart,
+                  '--mobile-event-bg-end': item.palette.backgroundEnd,
+                }"
+                @click="navigateTo(item.path)"
+              >
+                <div class="mobile-event-card-top">
+                  <span class="mobile-event-chip">{{ item.type === 'exam' ? '考试安排' : '课程安排' }}</span>
+                  <span
+                    class="mobile-event-status"
+                    :class="`is-${getMobileEventStatus(item).tone}`"
+                  >
+                    {{ getMobileEventStatus(item).label }}
+                  </span>
+                </div>
+                <strong>{{ item.title }}</strong>
+                <div class="mobile-event-detail">
+                  <span class="mobile-event-time">
+                    <ClockCircleOutlined />
+                    {{ item.timeLabel }}
+                  </span>
+                  <span class="mobile-event-divider">·</span>
+                  <span>{{ item.primaryMeta }}</span>
+                </div>
+              </button>
+            </div>
+            <div v-else class="mobile-state mobile-empty">
+              <CalendarOutlined />
+              <span>{{ calendarError || '所选日期暂无安排' }}</span>
+            </div>
+          </article>
+        </section>
+      </template>
+
+      <template v-else>
+        <section class="hero-card">
+          <div class="hero-copy">
+            <div class="hero-topline">
+              <span class="hero-badge">{{ greetingText }}</span>
+              <span class="hero-date-pill">
+                <CalendarOutlined />
+                {{ todayText }}
+              </span>
+            </div>
+            <h1 class="hero-title">欢迎回来，{{ displayName }}</h1>
+            <div class="hero-profile-list">
+              <strong>{{ identityCode }}</strong>
+              <span class="hero-profile-divider">·</span>
+              <span>{{ roleLabel }}</span>
+              <span class="hero-profile-divider">·</span>
+              <span>{{ authStore.currentUser?.unit || '未设置单位' }}</span>
+            </div>
           </div>
-        </article>
-      </section>
+
+          <div class="hero-summary">
+            <div v-for="item in overviewStats" :key="item.label" class="summary-card">
+              <span class="summary-label">{{ item.label }}</span>
+              <strong class="summary-value">
+                {{ item.value }}
+                <small v-if="item.suffix">{{ item.suffix }}</small>
+              </strong>
+            </div>
+          </div>
+        </section>
+
+        <section class="dashboard-workbench">
+          <article class="surface-card mini-schedule-card">
+            <div class="section-head">
+              <div>
+                <h2>今日安排</h2>
+                <p>点击日期查看当天课程安排</p>
+              </div>
+              <button type="button" class="section-link" @click="navigateTo('/classes/schedule')">
+                完整日历
+                <RightOutlined />
+              </button>
+            </div>
+
+            <div class="mini-week-strip">
+              <button
+                v-for="day in previewWeekDays"
+                :key="day.dateKey"
+                type="button"
+                class="mini-day-pill"
+                :class="{
+                  today: day.isToday,
+                  selected: day.dateKey === selectedPreviewDate,
+                  'has-event': day.hasEvent,
+                }"
+                :aria-pressed="day.dateKey === selectedPreviewDate"
+                @click="selectedPreviewDate = day.dateKey"
+              >
+                <span>{{ day.label }}</span>
+                <strong>{{ day.displayDate }}</strong>
+              </button>
+            </div>
+
+            <div v-if="calendarLoading" class="mini-state">
+              <a-spin size="small" />
+              <span>课表加载中...</span>
+            </div>
+            <div v-else-if="calendarPreviewItems.length" class="mini-event-list">
+              <button
+                v-for="item in calendarPreviewItems"
+                :key="item.key"
+                type="button"
+                class="mini-event-item"
+                :style="{
+                  '--mini-event-border': item.palette.border,
+                  '--mini-event-bg-start': item.palette.backgroundStart,
+                  '--mini-event-bg-end': item.palette.backgroundEnd,
+                }"
+                @click="navigateTo(item.path)"
+              >
+                <div class="mini-event-main">
+                  <strong>{{ item.title }}</strong>
+                  <span>{{ item.timeLabel }}</span>
+                </div>
+                <div class="mini-event-meta">
+                  <span class="mini-event-meta-row">
+                    <EnvironmentOutlined class="mini-event-meta-icon" />
+                    <span>{{ item.primaryMeta }}</span>
+                  </span>
+                  <span class="mini-event-meta-row">
+                    <UserOutlined class="mini-event-meta-icon" />
+                    <span>{{ item.secondaryMeta }}</span>
+                  </span>
+                </div>
+              </button>
+            </div>
+            <div v-else class="mini-state mini-empty">
+              <CalendarOutlined />
+              <span>{{ calendarError || '所选日期暂无安排' }}</span>
+            </div>
+          </article>
+
+          <article class="surface-card quick-surface">
+            <div class="section-head">
+              <div>
+                <h2>快捷入口</h2>
+                <p>按当前权限进入常用功能模块</p>
+              </div>
+            </div>
+
+            <div class="quick-grid quick-grid-compact">
+              <button
+                v-for="action in quickActions"
+                :key="action.path"
+                type="button"
+                class="quick-item"
+                @click="navigateTo(action.path)"
+              >
+                <span class="quick-icon" :style="{ background: action.background }">
+                  <component :is="action.icon" />
+                </span>
+                <span class="quick-text">
+                  <strong>{{ action.title }}</strong>
+                  <span>{{ action.description }}</span>
+                </span>
+                <RightOutlined class="quick-arrow" />
+              </button>
+            </div>
+          </article>
+        </section>
+      </template>
     </template>
 
     <section v-else class="surface-card placeholder-card">
@@ -154,16 +277,20 @@ import { useRoute, useRouter } from 'vue-router'
 import dayjs from 'dayjs'
 import isoWeek from 'dayjs/plugin/isoWeek'
 import {
+  BellOutlined,
   CalendarOutlined,
+  ClockCircleOutlined,
   DatabaseOutlined,
   EnvironmentOutlined,
   ReadOutlined,
   RightOutlined,
+  UnorderedListOutlined,
   UserOutlined,
 } from '@ant-design/icons-vue'
 import axiosInstance from '@/api/custom-instance'
 import type { CalendarEventResponse } from '@/api/generated/model/calendarEventResponse'
 import type { ExamResponse } from '@/api/generated/model/examResponse'
+import { useMobile } from '@/composables/useMobile'
 import { useAuthStore } from '@/stores/auth'
 import {
   COURSE_PERMISSIONS,
@@ -187,6 +314,8 @@ interface QuickAction {
   path: string
   icon: Component
   background: string
+  mobileBackground?: string
+  mobileIcon?: Component
   permissions: string[]
 }
 
@@ -202,7 +331,9 @@ interface DashboardPreviewItem {
   timeLabel: string
   primaryMeta: string
   secondaryMeta: string
+  type: 'course' | 'exam'
   sortMin: number
+  endMin: number
   palette: PreviewPalette
   path: string
 }
@@ -233,13 +364,16 @@ const previewPalette: PreviewPalette[] = [
 const router = useRouter()
 const currentRoute = useRoute()
 const authStore = useAuthStore()
+const { isMobile } = useMobile()
 const calendarLoading = ref(false)
 const calendarError = ref('')
 const calendarEvents = ref<CalendarEventResponse[]>([])
 const examEvents = ref<ExamResponse[]>([])
 const selectedPreviewDate = ref(dayjs().format('YYYY-MM-DD'))
+const notifyCount = ref(0)
 
 const displayName = computed(() => authStore.currentUser?.name || authStore.currentUser?.username || '用户')
+const avatarText = computed(() => (displayName.value || '用').slice(0, 1))
 const isDashboardRoute = computed(() => currentRoute.path === '/')
 const currentTitle = computed(() => currentRoute.meta.title || '当前页面')
 
@@ -269,6 +403,8 @@ const quickActionConfigs: QuickAction[] = [
     path: '/classes',
     icon: ReadOutlined,
     background: 'var(--v2-cover-blue)',
+    mobileIcon: UnorderedListOutlined,
+    mobileBackground: 'linear-gradient(135deg, #A886FF 0%, #8278FF 100%)',
     permissions: TRAINING_PERMISSIONS,
   },
   {
@@ -277,6 +413,7 @@ const quickActionConfigs: QuickAction[] = [
     path: '/classes/schedule',
     icon: CalendarOutlined,
     background: 'var(--v2-cover-green)',
+    mobileBackground: 'linear-gradient(135deg, #5FD9D4 0%, #2CB7D7 100%)',
     permissions: TRAINING_SCHEDULE_PERMISSIONS,
   },
   {
@@ -285,6 +422,8 @@ const quickActionConfigs: QuickAction[] = [
     path: '/resource/courses',
     icon: DatabaseOutlined,
     background: 'var(--v2-cover-purple)',
+    mobileIcon: ReadOutlined,
+    mobileBackground: 'linear-gradient(135deg, #FFB45D 0%, #FF8B49 100%)',
     permissions: COURSE_PERMISSIONS,
   },
   {
@@ -293,11 +432,14 @@ const quickActionConfigs: QuickAction[] = [
     path: '/profile',
     icon: UserOutlined,
     background: 'var(--v2-cover-orange)',
+    mobileBackground: 'linear-gradient(135deg, #FF9CCB 0%, #FF75B1 100%)',
     permissions: PROFILE_PERMISSIONS,
   },
 ]
 
 const quickActions = computed(() => quickActionConfigs.filter((item) => authStore.hasAnyPermission(item.permissions)))
+const mobileQuickActions = computed(() => quickActions.value.slice(0, 4))
+const mobileCalendarPreviewItems = computed(() => calendarPreviewItems.value.slice(0, 4))
 
 const identityCode = computed(() => authStore.currentUser?.police_id || authStore.currentUser?.username || '未设置警号')
 
@@ -319,6 +461,7 @@ const previewWeekDays = computed(() => {
       label: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][index],
       dateKey,
       displayDate: date.format('MM-DD'),
+      mobileDate: date.format('DD'),
       isToday: date.isSame(today, 'day'),
       hasEvent: datesWithEvents.has(dateKey),
     }
@@ -336,7 +479,9 @@ const calendarPreviewItems = computed<DashboardPreviewItem[]>(() => {
         timeLabel: parsedRange.timeLabel,
         primaryMeta: event.location || '地点待定',
         secondaryMeta: event.instructor || '教师待定',
+        type: 'course' as const,
         sortMin: parsedRange.startMin,
+        endMin: parsedRange.endMin,
         palette: getPreviewPalette(event),
         path: '/classes/schedule',
       }
@@ -352,7 +497,9 @@ const calendarPreviewItems = computed<DashboardPreviewItem[]>(() => {
         timeLabel: parsedRange.timeLabel,
         primaryMeta: '考试地点待定',
         secondaryMeta: '监考信息待定',
+        type: 'exam' as const,
         sortMin: parsedRange.startMin,
+        endMin: parsedRange.endMin,
         palette: getExamPalette(exam),
         path: '/exam/list',
       }
@@ -370,14 +517,20 @@ function formatMetric(value: number | undefined) {
 
 function parseTimeRange(timeRange: string) {
   if (!timeRange || !timeRange.includes('~')) {
-    return { startMin: Number.MAX_SAFE_INTEGER, timeLabel: '时间待定' }
+    return {
+      startMin: Number.MAX_SAFE_INTEGER,
+      endMin: Number.MAX_SAFE_INTEGER,
+      timeLabel: '时间待定',
+    }
   }
 
   const [start, end] = timeRange.split('~').map((part) => part.trim())
   const [startHour = 0, startMinute = 0] = start.split(':').map(Number)
+  const [endHour = 0, endMinute = 0] = end.split(':').map(Number)
 
   return {
     startMin: startHour * 60 + startMinute,
+    endMin: endHour * 60 + endMinute,
     timeLabel: `${start.slice(0, 5)} - ${end.slice(0, 5)}`,
   }
 }
@@ -388,7 +541,11 @@ function getExamDateKey(exam: ExamResponse) {
 
 function parseExamTime(exam: ExamResponse) {
   if (!exam.start_time) {
-    return { startMin: Number.MAX_SAFE_INTEGER, timeLabel: '考试时间待定' }
+    return {
+      startMin: Number.MAX_SAFE_INTEGER,
+      endMin: Number.MAX_SAFE_INTEGER,
+      timeLabel: '考试时间待定',
+    }
   }
 
   const start = dayjs(exam.start_time)
@@ -396,6 +553,7 @@ function parseExamTime(exam: ExamResponse) {
 
   return {
     startMin: start.hour() * 60 + start.minute(),
+    endMin: end.hour() * 60 + end.minute(),
     timeLabel: `${start.format('HH:mm')} - ${end.format('HH:mm')}`,
   }
 }
@@ -424,6 +582,41 @@ function getExamPalette(exam: ExamResponse) {
 
 function getEventTitle(event: CalendarEventResponse) {
   return event.course_name?.trim() || event.training_name?.trim() || '未命名课程'
+}
+
+function getMobileEventStatus(item: DashboardPreviewItem) {
+  const todayKey = dayjs().format('YYYY-MM-DD')
+  const defaultStatus = item.type === 'exam'
+    ? { label: '待参加', tone: 'neutral' }
+    : { label: '待开始', tone: 'neutral' }
+
+  if (selectedPreviewDate.value !== todayKey || item.sortMin === Number.MAX_SAFE_INTEGER) {
+    return defaultStatus
+  }
+
+  const currentMinutes = dayjs().hour() * 60 + dayjs().minute()
+
+  if (currentMinutes < item.sortMin) {
+    return defaultStatus
+  }
+
+  if (currentMinutes <= item.endMin) {
+    return item.type === 'exam'
+      ? { label: '进行中', tone: 'active' }
+      : { label: '进行中', tone: 'active' }
+  }
+
+  return { label: '已结束', tone: 'muted' }
+}
+
+async function fetchNotifyCount() {
+  try {
+    const { getUnreadCountApiV1NoticesUnreadCountGet } = await import('@/api/generated/notice-management/notice-management')
+    const data = await getUnreadCountApiV1NoticesUnreadCountGet()
+    notifyCount.value = data.total ?? 0
+  } catch {
+    notifyCount.value = 0
+  }
 }
 
 async function fetchDashboardCalendar() {
@@ -488,6 +681,9 @@ watch(
   (active) => {
     if (active) {
       void fetchDashboardCalendar()
+      if (isMobile.value) {
+        void fetchNotifyCount()
+      }
     }
   },
   { immediate: true },
@@ -502,6 +698,390 @@ watch(
   background:
     radial-gradient(circle at top right, rgba(75, 110, 245, 0.1), transparent 28%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(245, 246, 250, 0.92) 100%);
+}
+
+.dashboard-page.mobile-dashboard-page {
+  gap: 0;
+  padding: 0 0 calc(var(--v2-bottomnav-height) + 18px);
+  background: linear-gradient(180deg, #f4f7ff 0%, #eef2fb 100%);
+}
+
+.mobile-dashboard-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.mobile-hero-card {
+  position: relative;
+  overflow: hidden;
+  padding: 20px 18px 26px;
+  border-radius: 0 0 30px 30px;
+  background:
+    radial-gradient(circle at top right, rgba(255, 255, 255, 0.14), transparent 28%),
+    radial-gradient(circle at left center, rgba(255, 255, 255, 0.08), transparent 24%),
+    linear-gradient(135deg, #3049d9 0%, #4564f3 100%);
+  box-shadow: 0 18px 32px rgba(47, 82, 222, 0.24);
+}
+
+.mobile-hero-card::before,
+.mobile-hero-card::after {
+  content: '';
+  position: absolute;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mobile-hero-card::before {
+  width: 186px;
+  height: 186px;
+  top: 24px;
+  right: -94px;
+}
+
+.mobile-hero-card::after {
+  width: 132px;
+  height: 132px;
+  left: -46px;
+  bottom: -42px;
+}
+
+.mobile-hero-head {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.mobile-user-block {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.mobile-user-avatar {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.16);
+  border: 2px solid rgba(255, 255, 255, 0.58);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  color: #fff;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.mobile-user-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.mobile-user-copy strong {
+  font-size: 18px;
+  line-height: 1.2;
+  color: #fff;
+  font-weight: 700;
+}
+
+.mobile-user-copy span {
+  font-size: 13px;
+  line-height: 1.4;
+  color: rgba(255, 255, 255, 0.82);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mobile-notify-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  border: 0;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.16);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+}
+
+.mobile-notify-icon {
+  color: #fff;
+  font-size: 22px;
+}
+
+.mobile-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 16px;
+  margin-top: -6px;
+}
+
+.mobile-shortcut-item {
+  border: 0;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0;
+  cursor: pointer;
+}
+
+.mobile-shortcut-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 20px;
+  color: rgba(255, 255, 255, 0.98);
+  font-size: 27px;
+  box-shadow:
+    0 10px 18px rgba(57, 79, 168, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.mobile-shortcut-icon.has-profile-badge::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: #3666ff;
+  border: 2px solid #fff;
+}
+
+.mobile-shortcut-label {
+  font-size: 12px;
+  line-height: 1.35;
+  color: #1a2656;
+  font-weight: 700;
+  text-align: center;
+}
+
+.mobile-schedule-surface.surface-card {
+  padding: 18px 16px 20px;
+  margin: 0 16px;
+  border-radius: 28px;
+}
+
+.mobile-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.mobile-section-head h2 {
+  margin: 0;
+  font-size: 17px;
+  line-height: 1.2;
+  font-weight: 800;
+  color: #162255;
+}
+
+.mobile-section-link {
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+.mobile-week-strip {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(64px, 1fr);
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 2px 6px;
+  margin-bottom: 16px;
+  scrollbar-width: none;
+}
+
+.mobile-week-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.mobile-day-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 64px;
+  padding: 10px 8px;
+  border: 1px solid rgba(230, 234, 246, 0.92);
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(250, 251, 255, 0.98) 0%, rgba(255, 255, 255, 0.98) 100%);
+  cursor: pointer;
+}
+
+.mobile-day-pill span {
+  font-size: 12px;
+  color: #8a93ae;
+  font-weight: 600;
+}
+
+.mobile-day-pill strong {
+  font-size: 18px;
+  line-height: 1;
+  color: #293457;
+  font-weight: 700;
+}
+
+.mobile-day-pill.selected {
+  border-color: rgba(73, 103, 244, 0.22);
+  background: linear-gradient(180deg, #3550e0 0%, #3048d7 100%);
+  box-shadow: 0 12px 20px rgba(58, 86, 230, 0.18);
+}
+
+.mobile-day-pill.selected span,
+.mobile-day-pill.selected strong {
+  color: #fff;
+}
+
+.mobile-day-pill.today:not(.selected) {
+  border-color: rgba(73, 103, 244, 0.16);
+}
+
+.mobile-event-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mobile-event-card {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(232, 236, 244, 0.94);
+  border-radius: 24px;
+  background: linear-gradient(135deg, var(--mobile-event-bg-start) 0%, var(--mobile-event-bg-end) 100%);
+  box-shadow: 0 12px 24px rgba(35, 46, 87, 0.06);
+  text-align: left;
+  padding: 14px 16px 16px 20px;
+  cursor: pointer;
+}
+
+.mobile-event-card::before {
+  content: '';
+  position: absolute;
+  left: 14px;
+  top: 16px;
+  bottom: 16px;
+  width: 5px;
+  border-radius: 999px;
+  background: var(--mobile-event-border);
+}
+
+.mobile-event-card-top,
+.mobile-event-detail {
+  display: flex;
+  align-items: center;
+}
+
+.mobile-event-card-top {
+  position: relative;
+  z-index: 1;
+  justify-content: space-between;
+  gap: 12px;
+  padding-left: 18px;
+  margin-bottom: 10px;
+}
+
+.mobile-event-card strong {
+  position: relative;
+  z-index: 1;
+  display: block;
+  padding-left: 18px;
+  margin-bottom: 10px;
+  font-size: 15px;
+  line-height: 1.35;
+  color: #19234a;
+  font-weight: 800;
+}
+
+.mobile-event-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(242, 245, 255, 0.96);
+  border: 1px solid rgba(178, 193, 247, 0.66);
+  color: #7380a7;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 700;
+}
+
+.mobile-event-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mobile-event-status.is-active {
+  color: #3459f4;
+  background: rgba(225, 232, 255, 0.92);
+}
+
+.mobile-event-status.is-neutral {
+  color: #7b8096;
+  background: rgba(243, 245, 250, 0.96);
+}
+
+.mobile-event-status.is-muted {
+  color: #9aa2ba;
+  background: rgba(245, 247, 251, 0.92);
+}
+
+.mobile-event-detail {
+  position: relative;
+  z-index: 1;
+  gap: 6px;
+  padding-left: 18px;
+  color: #7b849d;
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.mobile-event-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mobile-event-divider {
+  color: rgba(136, 145, 170, 0.72);
+}
+
+.mobile-state {
+  display: flex;
+  min-height: 168px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(248, 250, 255, 0.96) 0%, rgba(255, 255, 255, 0.98) 100%);
+  color: #7d86a0;
+}
+
+.mobile-empty :deep(.anticon) {
+  font-size: 20px;
+  color: #5472f7;
 }
 
 .hero-card {
