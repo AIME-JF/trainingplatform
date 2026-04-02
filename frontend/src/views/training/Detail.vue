@@ -925,6 +925,12 @@
       </a-form>
     </a-modal>
 
+    <QuickCreateExamModal
+      v-model:open="showQuickExamModal"
+      :training-id="trainingId"
+      @success="onQuickExamSuccess"
+    />
+
     <a-tour
       v-model:current="detailTourCurrent"
       :open="detailTourOpen"
@@ -985,6 +991,7 @@ import TrainingOverviewContent from './components/TrainingOverviewContent.vue'
 import TrainingScheduleContent from './components/TrainingScheduleContent.vue'
 import TrainingScheduleRuleContent from './components/TrainingScheduleRuleContent.vue'
 import TrainingExamsContent from './components/TrainingExamsContent.vue'
+import QuickCreateExamModal from './components/QuickCreateExamModal.vue'
 import TrainingStudentsContent from './components/TrainingStudentsContent.vue'
 import CourseResourcePicker from './components/CourseResourcePicker.vue'
 import TrainingCourseChangeLogsContent from './components/TrainingCourseChangeLogsContent.vue'
@@ -2007,16 +2014,15 @@ function openAiScheduleTask(options = {}) {
   router.push({ name: 'AiScheduleTask', params: { id: trainingData.id }, query })
 }
 
+const showQuickExamModal = ref(false)
+
 function quickCreateTrainingExam() {
   if (!canQuickCreateExam.value) return
-  router.push({
-    name: 'ExamManage',
-    query: {
-      kind: 'training',
-      trainingId: String(trainingData.id),
-      quickCreate: '1',
-    },
-  })
+  showQuickExamModal.value = true
+}
+
+function onQuickExamSuccess() {
+  loadTrainingDetail()
 }
 
 function getWorkflowMissingSteps(action) {
