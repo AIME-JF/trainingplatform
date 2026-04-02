@@ -88,19 +88,19 @@ export const routes: RouteRecordRaw[] = [
       {
         path: 'exam/list',
         name: 'ExamList',
-        component: () => import('@/views/dashboard/Index.vue'),
+        component: () => import('@/views/exam/List.vue'),
         meta: { title: '在线考试', anyPermissions: EXAM_LIST_PERMISSIONS },
       },
       {
         path: 'exam/do/:id',
         name: 'ExamDo',
-        component: () => import('@/views/dashboard/Index.vue'),
+        component: () => import('@/views/exam/Do.vue'),
         meta: { title: '考试作答' },
       },
       {
         path: 'exam/result/:id',
         name: 'ExamResult',
-        component: () => import('@/views/dashboard/Index.vue'),
+        component: () => import('@/views/exam/Result.vue'),
         meta: { title: '考试结果' },
       },
       // -- 资源 --

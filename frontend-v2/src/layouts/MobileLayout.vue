@@ -74,12 +74,14 @@ import {
   UserOutlined,
   DownOutlined,
   LogoutOutlined,
+  FileProtectOutlined,
 } from '@ant-design/icons-vue'
 import { useMobile } from '@/composables/useMobile'
 import { useAuthStore } from '@/stores/auth'
 import {
   COURSE_PERMISSIONS,
   DASHBOARD_PERMISSIONS,
+  EXAM_LIST_PERMISSIONS,
   MY_RESOURCE_PERMISSIONS,
   PROFILE_PERMISSIONS,
   RESOURCE_LIBRARY_PERMISSIONS,
@@ -136,6 +138,13 @@ const sidebarNavConfig: NavItem[] = [
     icon: AppstoreOutlined,
     matchPaths: ['/resource/community', '/resource/recommend'],
   },
+  {
+    path: '/exam/list',
+    label: '在线考试',
+    icon: FileProtectOutlined,
+    permissions: EXAM_LIST_PERMISSIONS,
+    matchPaths: ['/exam/list', '/exam/do', '/exam/result'],
+  },
 ]
 
 const bottomNavConfig: NavItem[] = [
@@ -159,6 +168,13 @@ const bottomNavConfig: NavItem[] = [
     label: '社区',
     icon: AppstoreOutlined,
     matchPaths: ['/resource/community', '/resource/recommend'],
+  },
+  {
+    path: '/exam/list',
+    label: '考试',
+    icon: FileProtectOutlined,
+    permissions: EXAM_LIST_PERMISSIONS,
+    matchPaths: ['/exam/list', '/exam/do', '/exam/result'],
   },
   { path: '/profile', label: '我的', icon: UserOutlined, permissions: PROFILE_PERMISSIONS },
 ]
