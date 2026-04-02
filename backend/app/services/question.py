@@ -205,6 +205,9 @@ class QuestionService:
         """获取试题文件夹树"""
         folders = self.db.query(QuestionFolder).order_by(QuestionFolder.sort_order, QuestionFolder.id).all()
 
+        creator_ids = {f.created_by for f in folders if f.created_by}
+        creators = {u.id: u for u in self.db.query(User).filter(User.id.in_(creator_ids)).all()} if creator_ids else {}
+
         folder_ids = [f.id for f in folders]
         question_counts = {}
         if folder_ids:
