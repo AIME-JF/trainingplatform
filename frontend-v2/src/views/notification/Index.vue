@@ -61,20 +61,19 @@
 import { ref, onMounted } from 'vue'
 import dayjs from 'dayjs'
 import {
-  getMyNotifications,
-  getUnreadCount,
-  markAsRead,
-  markAllAsRead,
-  type NoticeItem,
-  type NoticeUnreadCount,
-} from '@/services/notification'
+  getMyNotificationsApiV1NoticesMyGet,
+  getUnreadCountApiV1NoticesUnreadCountGet,
+  markAsReadApiV1NoticesNoticeIdReadPost,
+  markAllAsReadApiV1NoticesReadAllPost,
+} from '@/api/generated/notice-management/notice-management'
+import type { NoticeResponse, NoticeUnreadCountResponse } from '@/api/generated/model'
 
 const activeTab = ref('reminder')
 const loading = ref(false)
-const list = ref<NoticeItem[]>([])
+const list = ref<NoticeResponse[]>([])
 const total = ref(0)
 const page = ref(1)
-const unreadCount = ref<NoticeUnreadCount>({ total: 0, reminder: 0, system: 0 })
+const unreadCount = ref<NoticeUnreadCountResponse>({ total: 0, reminder: 0, system: 0 })
 
 const hasUnread = ref(false)
 
@@ -107,7 +106,7 @@ async function fetchList(reset = false) {
   }
   loading.value = true
   try {
-    const data = await getMyNotifications({
+    const data = await getMyNotificationsApiV1NoticesMyGet({
       page: page.value,
       size: 20,
       tab: activeTab.value,
@@ -125,8 +124,8 @@ async function fetchList(reset = false) {
 
 async function fetchUnreadCount() {
   try {
-    unreadCount.value = await getUnreadCount()
-    hasUnread.value = unreadCount.value.total > 0
+    unreadCount.value = await getUnreadCountApiV1NoticesUnreadCountGet()
+    hasUnread.value = (unreadCount.value.total ?? 0) > 0
   } catch { /* ignore */ }
 }
 
@@ -139,10 +138,10 @@ function loadMore() {
   fetchList()
 }
 
-async function handleClickItem(item: NoticeItem) {
+async function handleClickItem(item: NoticeResponse) {
   if (!item.is_read) {
     try {
-      await markAsRead(item.id)
+      await markAsReadApiV1NoticesNoticeIdReadPost(item.id)
       item.is_read = true
       fetchUnreadCount()
     } catch { /* ignore */ }
@@ -151,7 +150,7 @@ async function handleClickItem(item: NoticeItem) {
 
 async function handleMarkAllRead() {
   try {
-    await markAllAsRead(activeTab.value)
+    await markAllAsReadApiV1NoticesReadAllPost({ tab: activeTab.value })
     list.value.forEach((item) => { item.is_read = true })
     fetchUnreadCount()
   } catch { /* ignore */ }

@@ -14,9 +14,9 @@ import type {
   CheckinCreate,
   CheckoutCreate,
   EnrollmentCreate,
+  GetAttendanceQrApiV1TrainingsTrainingIdAttendanceQrGetParams,
   GetAttendanceSummaryApiV1TrainingsTrainingIdAttendanceSummaryGetParams,
   GetCalendarEventsApiV1TrainingsCalendarGetParams,
-  GetCheckinQrApiV1TrainingsTrainingIdCheckinQrGetParams,
   GetCheckinRecordsApiV1TrainingsTrainingIdCheckinRecordsGetParams,
   GetEnrollmentsApiV1TrainingsTrainingIdEnrollmentsGetParams,
   GetStudentsApiV1TrainingsTrainingIdStudentsGetParams,
@@ -126,28 +126,6 @@ export const getTrainingActivitiesApiV1TrainingsTrainingIdActivitiesGet = (
       return customInstance<StandardResponseListTrainingActivityResponse>(
       {url: `/trainings/${trainingId}/activities`, method: 'GET',
         params
-    },
-      );
-    }
-  /**
- * @summary 扫码签到信息
- */
-export const getCheckinQrPayloadApiV1TrainingsCheckinQrTokenGet = (
-    token: string,
- ) => {
-      return customInstance<StandardResponseTrainingCheckinQrResponse>(
-      {url: `/trainings/checkin/qr/${token}`, method: 'GET'
-    },
-      );
-    }
-  /**
- * @summary 扫码签到
- */
-export const checkinByQrApiV1TrainingsCheckinQrTokenPost = (
-    token: string,
- ) => {
-      return customInstance<StandardResponseCheckinResponse>(
-      {url: `/trainings/checkin/qr/${token}`, method: 'POST'
     },
       );
     }
@@ -650,12 +628,12 @@ export const submitTrainingEvaluationApiV1TrainingsTrainingIdEvaluationPost = (
   /**
  * @summary 生成出勤二维码
  */
-export const getCheckinQrApiV1TrainingsTrainingIdCheckinQrGet = (
+export const getAttendanceQrApiV1TrainingsTrainingIdAttendanceQrGet = (
     trainingId: number,
-    params?: GetCheckinQrApiV1TrainingsTrainingIdCheckinQrGetParams,
+    params?: GetAttendanceQrApiV1TrainingsTrainingIdAttendanceQrGetParams,
  ) => {
       return customInstance<StandardResponseTrainingCheckinQrResponse>(
-      {url: `/trainings/${trainingId}/checkin/qr`, method: 'GET',
+      {url: `/trainings/${trainingId}/attendance/qr`, method: 'GET',
         params
     },
       );
@@ -740,8 +718,6 @@ export type CreateTrainingApiV1TrainingsPostResult = NonNullable<Awaited<ReturnT
 export type GetTrainingStatsApiV1TrainingsStatsGetResult = NonNullable<Awaited<ReturnType<typeof getTrainingStatsApiV1TrainingsStatsGet>>>
 export type GetCalendarEventsApiV1TrainingsCalendarGetResult = NonNullable<Awaited<ReturnType<typeof getCalendarEventsApiV1TrainingsCalendarGet>>>
 export type GetTrainingActivitiesApiV1TrainingsTrainingIdActivitiesGetResult = NonNullable<Awaited<ReturnType<typeof getTrainingActivitiesApiV1TrainingsTrainingIdActivitiesGet>>>
-export type GetCheckinQrPayloadApiV1TrainingsCheckinQrTokenGetResult = NonNullable<Awaited<ReturnType<typeof getCheckinQrPayloadApiV1TrainingsCheckinQrTokenGet>>>
-export type CheckinByQrApiV1TrainingsCheckinQrTokenPostResult = NonNullable<Awaited<ReturnType<typeof checkinByQrApiV1TrainingsCheckinQrTokenPost>>>
 export type GetAttendanceQrPayloadApiV1TrainingsAttendanceQrTokenGetResult = NonNullable<Awaited<ReturnType<typeof getAttendanceQrPayloadApiV1TrainingsAttendanceQrTokenGet>>>
 export type AttendanceByQrApiV1TrainingsAttendanceQrTokenPostResult = NonNullable<Awaited<ReturnType<typeof attendanceByQrApiV1TrainingsAttendanceQrTokenPost>>>
 export type GetTrainingApiV1TrainingsTrainingIdGetResult = NonNullable<Awaited<ReturnType<typeof getTrainingApiV1TrainingsTrainingIdGet>>>
@@ -780,7 +756,7 @@ export type SkipSessionApiV1TrainingsTrainingIdSessionsSessionKeySkipPostResult 
 export type CheckinApiV1TrainingsTrainingIdCheckinPostResult = NonNullable<Awaited<ReturnType<typeof checkinApiV1TrainingsTrainingIdCheckinPost>>>
 export type CheckoutApiV1TrainingsTrainingIdCheckoutPostResult = NonNullable<Awaited<ReturnType<typeof checkoutApiV1TrainingsTrainingIdCheckoutPost>>>
 export type SubmitTrainingEvaluationApiV1TrainingsTrainingIdEvaluationPostResult = NonNullable<Awaited<ReturnType<typeof submitTrainingEvaluationApiV1TrainingsTrainingIdEvaluationPost>>>
-export type GetCheckinQrApiV1TrainingsTrainingIdCheckinQrGetResult = NonNullable<Awaited<ReturnType<typeof getCheckinQrApiV1TrainingsTrainingIdCheckinQrGet>>>
+export type GetAttendanceQrApiV1TrainingsTrainingIdAttendanceQrGetResult = NonNullable<Awaited<ReturnType<typeof getAttendanceQrApiV1TrainingsTrainingIdAttendanceQrGet>>>
 export type GetTrainingHistoriesApiV1TrainingsTrainingIdHistoriesGetResult = NonNullable<Awaited<ReturnType<typeof getTrainingHistoriesApiV1TrainingsTrainingIdHistoriesGet>>>
 export type GetTrainingCourseChangeLogsApiV1TrainingsTrainingIdCourseChangeLogsGetResult = NonNullable<Awaited<ReturnType<typeof getTrainingCourseChangeLogsApiV1TrainingsTrainingIdCourseChangeLogsGet>>>
 export type AddTrainingResourceApiV1TrainingsTrainingIdResourcesPostResult = NonNullable<Awaited<ReturnType<typeof addTrainingResourceApiV1TrainingsTrainingIdResourcesPost>>>

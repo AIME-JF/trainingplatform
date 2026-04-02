@@ -5,11 +5,14 @@
  * OpenAPI spec version: 1.0.0
  */
 import type {
+  GetMyNotificationsApiV1NoticesMyGetParams,
   GetNoticesApiV1NoticesGetParams,
+  MarkAllAsReadApiV1NoticesReadAllPostParams,
   NoticeCreate,
   NoticeUpdate,
   StandardResponse,
   StandardResponseNoticeResponse,
+  StandardResponseNoticeUnreadCountResponse,
   StandardResponsePaginatedResponseNoticeResponse
 } from '../model';
 
@@ -17,6 +20,56 @@ import { customInstance } from '../../custom-instance';
 
 
 
+  /**
+ * 获取当前用户的通知列表（系统公告 + 定向提醒）
+ * @summary 我的通知
+ */
+export const getMyNotificationsApiV1NoticesMyGet = (
+    params?: GetMyNotificationsApiV1NoticesMyGetParams,
+ ) => {
+      return customInstance<StandardResponsePaginatedResponseNoticeResponse>(
+      {url: `/notices/my`, method: 'GET',
+        params
+    },
+      );
+    }
+  /**
+ * 获取当前用户的未读通知计数
+ * @summary 未读通知计数
+ */
+export const getUnreadCountApiV1NoticesUnreadCountGet = (
+
+ ) => {
+      return customInstance<StandardResponseNoticeUnreadCountResponse>(
+      {url: `/notices/unread-count`, method: 'GET'
+    },
+      );
+    }
+  /**
+ * 标记单条通知为已读
+ * @summary 标记通知为已读
+ */
+export const markAsReadApiV1NoticesNoticeIdReadPost = (
+    noticeId: number,
+ ) => {
+      return customInstance<StandardResponse>(
+      {url: `/notices/${noticeId}/read`, method: 'POST'
+    },
+      );
+    }
+  /**
+ * 将当前用户的通知全部标记为已读
+ * @summary 全部标记已读
+ */
+export const markAllAsReadApiV1NoticesReadAllPost = (
+    params?: MarkAllAsReadApiV1NoticesReadAllPostParams,
+ ) => {
+      return customInstance<StandardResponse>(
+      {url: `/notices/read-all`, method: 'POST',
+        params
+    },
+      );
+    }
   /**
  * 获取公告列表。type=system 系统公告；type=training + training_id 培训班公告
  * @summary 公告列表
@@ -31,7 +84,7 @@ export const getNoticesApiV1NoticesGet = (
       );
     }
   /**
- * 创建公告（系统公告或培训班公告）
+ * 创建公告（系统公告、培训班公告或提醒通知）
  * @summary 创建公告
  */
 export const createNoticeApiV1NoticesPost = (
@@ -71,7 +124,11 @@ export const deleteNoticeApiV1NoticesNoticeIdDelete = (
     },
       );
     }
-  export type GetNoticesApiV1NoticesGetResult = NonNullable<Awaited<ReturnType<typeof getNoticesApiV1NoticesGet>>>
+  export type GetMyNotificationsApiV1NoticesMyGetResult = NonNullable<Awaited<ReturnType<typeof getMyNotificationsApiV1NoticesMyGet>>>
+export type GetUnreadCountApiV1NoticesUnreadCountGetResult = NonNullable<Awaited<ReturnType<typeof getUnreadCountApiV1NoticesUnreadCountGet>>>
+export type MarkAsReadApiV1NoticesNoticeIdReadPostResult = NonNullable<Awaited<ReturnType<typeof markAsReadApiV1NoticesNoticeIdReadPost>>>
+export type MarkAllAsReadApiV1NoticesReadAllPostResult = NonNullable<Awaited<ReturnType<typeof markAllAsReadApiV1NoticesReadAllPost>>>
+export type GetNoticesApiV1NoticesGetResult = NonNullable<Awaited<ReturnType<typeof getNoticesApiV1NoticesGet>>>
 export type CreateNoticeApiV1NoticesPostResult = NonNullable<Awaited<ReturnType<typeof createNoticeApiV1NoticesPost>>>
 export type UpdateNoticeApiV1NoticesNoticeIdPutResult = NonNullable<Awaited<ReturnType<typeof updateNoticeApiV1NoticesNoticeIdPut>>>
 export type DeleteNoticeApiV1NoticesNoticeIdDeleteResult = NonNullable<Awaited<ReturnType<typeof deleteNoticeApiV1NoticesNoticeIdDelete>>>

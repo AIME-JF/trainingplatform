@@ -19,5 +19,6 @@ export const ConfigFormat = {
   boolean: 'boolean',
   list: 'list',
   select: 'select',
+  multi_select: 'multi_select',
   password: 'password',
 } as const;

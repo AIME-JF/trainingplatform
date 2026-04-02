@@ -3,7 +3,7 @@ AI 自动生成试卷/文档生成试卷 Celery 任务。
 """
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -23,6 +23,7 @@ PAPER_GENERATION_TASK_TYPES = {
 }
 PAPER_GENERATION_DISPATCH_LOCK = "ai:paper-generation:dispatch-lock"
 AI_PAPER_GENERATION_TASK_NAME = "app.tasks.ai_paper_generation.generate_ai_paper_generation_task"
+PROCESSING_STALE_TIMEOUT_SECONDS = 10 * 60
 
 
 @celery_app.task(bind=True, name=AI_PAPER_GENERATION_TASK_NAME, max_retries=3)
@@ -37,11 +38,11 @@ def generate_ai_paper_generation_task(self, task_id: int, task_type: str) -> Non
             AITask.task_type == task_type,
         ).first()
         if not task:
-            logger.warning("AI 自动生成试卷类任务不存在: %s (%s)", task_id, task_type)
+            logger.warning("AI 自动生成试卷类任务不存在: {} ({})", task_id, task_type)
             return
 
         if task.status in {"completed", "confirmed", "failed"}:
-            logger.info("AI 自动生成试卷类任务已结束，跳过重复执行: %s (%s)", task_id, task_type)
+            logger.info("AI 自动生成试卷类任务已结束，跳过重复执行: {} ({})", task_id, task_type)
             return
 
         service = AIService(db)
@@ -53,11 +54,11 @@ def generate_ai_paper_generation_task(self, task_id: int, task_type: str) -> Non
             raise ValueError(f"不支持的任务类型: {task_type}")
 
         should_schedule_next = True
-        logger.info("AI 自动生成试卷类任务完成: %s (%s)", task_id, task_type)
+        logger.info("AI 自动生成试卷类任务完成: {} ({})", task_id, task_type)
     except Exception as exc:
         db.rollback()
         logger.error(
-            "AI 自动生成试卷类任务执行失败(task_id=%s, task_type=%s, retry=%s): %s",
+            "AI 自动生成试卷类任务执行失败(task_id={}, task_type={}, retry={}): {}",
             task_id,
             task_type,
             self.request.retries,
@@ -76,7 +77,7 @@ def generate_ai_paper_generation_task(self, task_id: int, task_type: str) -> Non
         try:
             schedule_ai_paper_generation_task()
         except Exception as exc:
-            logger.error("AI 自动生成试卷类任务后续调度失败: %s", exc)
+            logger.error("AI 自动生成试卷类任务后续调度失败: {}", exc)
 
 
 def schedule_ai_paper_generation_task(
@@ -91,6 +92,7 @@ def schedule_ai_paper_generation_task(
 
     try:
         lock = _acquire_dispatch_lock()
+        _recover_stale_processing_tasks(session)
         if session.query(AITask.id).filter(
             AITask.task_type.in_(tuple(PAPER_GENERATION_TASK_TYPES)),
             AITask.status == "processing",
@@ -121,10 +123,10 @@ def schedule_ai_paper_generation_task(
                 revert_task.completed_at = None
                 revert_task.error_message = f"任务调度失败: {exc}"
                 session.commit()
-            logger.error("调度 AI 自动生成试卷类任务失败: %s", exc)
+            logger.error("调度 AI 自动生成试卷类任务失败: {}", exc)
             return None
 
-        logger.info("AI 自动生成试卷类任务已加入 Celery: %s (%s)", next_task.id, next_task.task_type)
+        logger.info("AI 自动生成试卷类任务已加入 Celery: {} ({})", next_task.id, next_task.task_type)
         return next_task.id
     finally:
         if lock is not None:
@@ -170,6 +172,30 @@ def _mark_task_failed(db: Session, task_id: int, task_type: str, error_message: 
     db.commit()
 
 
+def _recover_stale_processing_tasks(session: Session) -> None:
+    deadline = datetime.now() - timedelta(seconds=PROCESSING_STALE_TIMEOUT_SECONDS)
+    stale_tasks = session.query(AITask).filter(
+        AITask.task_type.in_(tuple(PAPER_GENERATION_TASK_TYPES)),
+        AITask.status == "processing",
+        (
+            (AITask.started_at.is_(None) & (AITask.created_at <= deadline))
+            | (AITask.started_at <= deadline)
+        ),
+    ).all()
+    if not stale_tasks:
+        return
+
+    recovered_ids = []
+    for task in stale_tasks:
+        task.status = "pending"
+        task.started_at = None
+        task.completed_at = None
+        task.error_message = "任务处理超时，已自动恢复并重新入队"
+        recovered_ids.append(task.id)
+    session.commit()
+    logger.warning("检测到 {} 个 AI 自动生成试卷类任务卡住，已自动恢复: {}", len(recovered_ids), recovered_ids)
+
+
 def _acquire_dispatch_lock():
     try:
         redis_client = get_redis()
@@ -179,5 +205,5 @@ def _acquire_dispatch_lock():
             return None
         return lock
     except Exception as exc:
-        logger.warning("获取 AI 自动生成试卷类调度锁异常，改为无锁调度: %s", exc)
+        logger.warning("获取 AI 自动生成试卷类调度锁异常，改为无锁调度: {}", exc)
         return None

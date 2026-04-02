@@ -9,10 +9,6 @@
           <div class="sub-nav-left">
             <span :class="['sub-nav-item', { active: activeNav === 'bank' }]" @click="activeNav = 'bank'">题库中心</span>
           </div>
-          <div class="sub-nav-right">
-            <button class="btn-aux" @click="showDisabled = !showDisabled">已禁用的项目</button>
-            <button class="btn-aux" @click="showArchived = !showArchived">已归档</button>
-          </div>
         </div>
 
         <!-- 2. 统一的大边框容器 -->
@@ -50,10 +46,6 @@
                   <input type="checkbox" v-model="filterMyOnly" class="custom-checkbox">
                   <span>只看我发布的</span>
                 </label>
-                <button class="btn-aux" @click="handleExport">
-                  <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                  导出数据
-                </button>
               </div>
             </template>
           </div>
@@ -192,7 +184,6 @@
                   <div class="batch-ops">
                     <span class="batch-label">批量操作:</span>
                     <button class="btn-batch btn-batch-danger" @click="handleBatchDelete">批量删除</button>
-                    <button class="btn-batch" @click="handleBatchMove">批量移动分类</button>
                   </div>
                 </div>
 
@@ -286,55 +277,6 @@
       </a-form>
     </a-modal>
 
-    <!-- 管理目录弹窗 -->
-    <a-modal
-      v-model:open="folderModalVisible"
-      title="管理目录"
-      width="600px"
-      @ok="folderModalVisible = false"
-    >
-      <div class="folder-manager">
-        <div class="folder-manager-header">
-          <a-input-search v-model:value="folderSearchText" placeholder="搜索文件夹..." allow-clear style="margin-bottom: 12px" />
-          <a-button type="primary" size="small" @click="openCreateFolderModal">
-            <template #icon><PlusOutlined /></template>
-            新建文件夹
-          </a-button>
-        </div>
-        <div class="folder-manager-list">
-          <div v-for="folder in filteredFolderList" :key="folder.id" class="folder-manager-item">
-            <div class="folder-manager-item-left">
-              <FolderOutlined />
-              <span>{{ folder.displayName || folder.name }}</span>
-              <span class="text-xs text-slate-400">({{ folder.questionCount }}道题)</span>
-            </div>
-            <div class="folder-manager-item-actions">
-              <a-button type="link" size="small" @click="openEditFolderModal(folder)">编辑</a-button>
-              <a-button type="link" size="small" danger @click="handleDeleteFolder(folder)">删除</a-button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </a-modal>
-
-    <!-- 批量移动弹窗 -->
-    <a-modal
-      v-model:open="batchMoveModalVisible"
-      title="批量移动试题"
-      @ok="handleBatchMoveConfirm"
-    >
-      <a-form layout="vertical">
-        <a-form-item label="选择目标文件夹">
-          <a-select v-model:value="batchMoveTargetFolderId" placeholder="请选择目标文件夹">
-            <a-select-option :value="null">根目录（移出文件夹）</a-select-option>
-            <a-select-option v-for="folder in allFolderList" :key="folder.id" :value="folder.id">
-              {{ folder.name }}
-            </a-select-option>
-          </a-select>
-        </a-form-item>
-      </a-form>
-    </a-modal>
-
     <!-- 移动单个题目弹窗 -->
     <a-modal
       v-model:open="moveQuestionModalVisible"
@@ -369,7 +311,6 @@
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
-import { PlusOutlined, FolderOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import {
   createQuestion,
@@ -391,8 +332,6 @@ const router = useRouter()
 
 // ============ 导航 ============
 const activeNav = ref('bank')
-const showDisabled = ref(false)
-const showArchived = ref(false)
 
 // ============ 搜索与筛选 ============
 const searchText = ref('')
@@ -406,7 +345,6 @@ const typeTagColors = { single: 'tag-blue', multi: 'tag-purple', judge: 'tag-ora
 // ============ 题库列表数据 ============
 const loading = ref(false)
 const folderList = ref([])
-const userList = ref(new Map()) // id -> name 映射
 const selectedIds = ref([])
 
 // 文件夹内题目查看模式
@@ -421,13 +359,9 @@ const pageSizeOptions = [10, 20, 50]
 const questionPagination = reactive({ current: 1, pageSize: 20, total: 0 })
 
 // ============ 文件夹管理弹窗 ============
-const folderModalVisible = ref(false)
 const folderFormModalVisible = ref(false)
-const folderSearchText = ref('')
 const editingFolderId = ref(null)
 const folderForm = reactive({ name: '', category: '', parentId: null })
-const batchMoveModalVisible = ref(false)
-const batchMoveTargetFolderId = ref(null)
 const moveQuestionModalVisible = ref(false)
 const moveQuestionTargetFolderId = ref(null)
 const currentMovingQuestion = ref(null)
@@ -474,20 +408,7 @@ const isAllSelected = computed(() => {
   return displayedList.value.every(item => selectedIds.value.includes(item.id))
 })
 
-// 所有文件夹列表（扁平，用于批量移动选择）
-const allFolderList = computed(() => {
-  const result = []
-  const flatten = (folders) => {
-    folders.forEach(folder => {
-      result.push(folder)
-      if (folder.children && folder.children.length > 0) {
-        flatten(folder.children)
-      }
-    })
-  }
-  flatten(folderList.value)
-  return result
-})
+const allFolderList = computed(() => [...folderList.value])
 
 // 文件夹树形数据（用于选择父文件夹）
 const folderTreeData = computed(() => {
@@ -501,12 +422,6 @@ const folderTreeData = computed(() => {
       }))
   }
   return convert(folderList.value)
-})
-
-// 过滤后的文件夹列表（管理弹窗用）
-const filteredFolderList = computed(() => {
-  if (!folderSearchText.value) return folderList.value
-  return folderList.value.filter(f => f.name.includes(folderSearchText.value))
 })
 
 // ============ 方法 ============
@@ -572,29 +487,6 @@ function buildBankList(folders) {
       createdBy,
     }
   })
-}
-
-async function loadFolders() {
-  try {
-    const result = await getQuestionFolders()
-    folderList.value = result || []
-  } catch (error) {
-    console.error('加载题库文件夹失败:', error)
-    folderList.value = []
-  }
-}
-
-async function loadUsers() {
-  try {
-    const result = await getPoliceTypes()
-    // 尝试从 authStore 获取用户信息
-    const currentUser = authStore.currentUser
-    if (currentUser?.name) {
-      userList.value.set(currentUser.id, currentUser.name)
-    }
-  } catch {
-    // ignore
-  }
 }
 
 async function loadData() {
@@ -768,27 +660,6 @@ function handleBackToFolders() {
   router.replace({ query: {} })
 }
 
-function openActionMenu(item) {
-  if (item.isSystem) {
-    message.info('系统题库不支持编辑、删除和导出等操作')
-    return
-  }
-  // 弹出操作菜单
-  Modal.confirm({
-    title: `操作「${item.name}」`,
-    content: '请选择要执行的操作',
-    okText: '编辑',
-    cancelText: '取消',
-    onOk() {
-      openEditFolderModal(item)
-    },
-  })
-}
-
-function handleExport() {
-  message.info('导出功能开发中')
-}
-
 function handleBatchDelete() {
   if (selectedIds.value.length === 0) {
     message.warning('请先选择要删除的题库')
@@ -811,38 +682,6 @@ function handleBatchDelete() {
       }
     },
   })
-}
-
-function handleBatchMove() {
-  if (selectedIds.value.length === 0) {
-    message.warning('请先选择要移动的题库')
-    return
-  }
-  batchMoveTargetFolderId.value = null
-  batchMoveModalVisible.value = true
-}
-
-async function handleBatchMoveConfirm() {
-  if (batchMoveTargetFolderId.value === null && batchMoveTargetFolderId.value !== 0) {
-    message.warning('请选择目标文件夹')
-    return
-  }
-  try {
-    // 移动选中题库下的所有题目
-    for (const folderId of selectedIds.value) {
-      const folderQuestions = await getQuestions({ size: -1 })
-      const questions = (folderQuestions.items || []).filter(q => q.folderId === folderId)
-      for (const q of questions) {
-        await moveQuestionToFolder(q.id, batchMoveTargetFolderId.value)
-      }
-    }
-    message.success('批量移动成功')
-    selectedIds.value = []
-    batchMoveModalVisible.value = false
-    await loadData()
-  } catch (error) {
-    message.error(error.message || '移动失败')
-  }
 }
 
 // 单个题目操作

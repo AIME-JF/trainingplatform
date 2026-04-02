@@ -15,7 +15,7 @@ page?: number;
  */
 size?: number;
 /**
- * 类型: system/training
+ * 类型: system/training/reminder
  */
 type?: string | null;
 /**

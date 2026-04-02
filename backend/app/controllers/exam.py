@@ -220,6 +220,26 @@ class ExamController:
             logger.error("更新准入考试异常: %s", exc)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新准入考试失败")
 
+    def delete_exam(self, exam_id: int):
+        try:
+            self.service.delete_exam(exam_id)
+            return {"deleted": True}
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("删除培训班内考试异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="删除考试失败")
+
+    def delete_admission_exam(self, exam_id: int):
+        try:
+            self.service.delete_admission_exam(exam_id)
+            return {"deleted": True}
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("删除准入考试异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="删除准入考试失败")
+
     def get_exam_detail(self, exam_id: int, current_user_id: Optional[int] = None):
         result = self.service.get_exam_detail(exam_id, current_user_id)
         if not result:

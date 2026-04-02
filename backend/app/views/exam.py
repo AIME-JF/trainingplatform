@@ -236,6 +236,18 @@ def update_admission_exam(
     return StandardResponse(data=result)
 
 
+@router.delete("/admission/{exam_id}", response_model=StandardResponse[dict], summary="删除准入考试")
+def delete_admission_exam(
+    exam_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = ExamController(db)
+    result = controller.delete_admission_exam(exam_id)
+    return StandardResponse(data=result)
+
+
 @router.get("/admission/{exam_id}", response_model=StandardResponse[AdmissionExamDetailResponse], summary="准入考试详情")
 def get_admission_exam(
     exam_id: int,
@@ -339,6 +351,18 @@ def update_exam(
     _require_admin_or_instructor(db, current_user.user_id)
     controller = ExamController(db)
     result = controller.update_exam(exam_id, data)
+    return StandardResponse(data=result)
+
+
+@router.delete("/{exam_id}", response_model=StandardResponse[dict], summary="删除培训班内考试")
+def delete_exam(
+    exam_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = ExamController(db)
+    result = controller.delete_exam(exam_id)
     return StandardResponse(data=result)
 
 

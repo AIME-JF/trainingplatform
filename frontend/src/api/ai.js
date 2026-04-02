@@ -92,6 +92,12 @@ export function deleteAiPaperDocumentGenerationTask(taskId) {
   return request.delete(`/ai/paper-document-generation-tasks/${taskId}`)
 }
 
+export function parseAiDocumentFile(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post('/ai/files/parse', formData)
+}
+
 export function getTeachingResourceGenerationTasks(params) {
   return request.get('/ai/teaching-resource-generation-tasks', { params })
 }

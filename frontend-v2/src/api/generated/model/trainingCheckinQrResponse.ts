@@ -6,7 +6,7 @@
  */
 
 /**
- * 签到二维码响应
+ * 出勤二维码响应
  */
 export interface TrainingCheckinQrResponse {
   token: string;
