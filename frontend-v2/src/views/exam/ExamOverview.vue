@@ -15,16 +15,18 @@
       <!-- 左侧：考试信息 -->
       <div class="overview-layout">
         <div class="overview-main">
-          <!-- 考试信息卡片 -->
+          <!-- 考试信息卡片（合并考试信息+须知） -->
           <div class="info-card">
-            <div class="info-card-header">
-              <div class="exam-badge" :class="getStatusClass(exam.status)">
-                {{ getStatusText(exam.status, exam.can_join) }}
-              </div>
-              <h1 class="exam-title">{{ exam.title }}</h1>
-              <p class="exam-desc">{{ exam.description || '暂无考试说明' }}</p>
+            <!-- 标题区 -->
+            <div class="exam-badge" :class="getStatusClass(exam.status)">
+              {{ getStatusText(exam) }}
             </div>
+            <h1 class="exam-title">{{ exam.title }}</h1>
+            <p class="exam-desc">{{ exam.description || '暂无考试说明' }}</p>
 
+            <div class="divider"></div>
+
+            <!-- 基础信息 -->
             <div class="info-grid">
               <div class="info-item">
                 <div class="info-icon">
@@ -90,10 +92,10 @@
                 </div>
               </div>
             </div>
-          </div>
 
-          <!-- 考试须知 -->
-          <div class="rules-card">
+            <div class="divider"></div>
+
+            <!-- 考试须知 -->
             <div class="rules-title">
               <WarningOutlined /> 考试须知
             </div>
@@ -110,13 +112,13 @@
         <!-- 右侧：操作面板 -->
         <div class="overview-side">
           <div class="action-card">
-            <div class="action-status">
+              <div class="action-status">
               <div class="status-icon" :class="getStatusClass(exam.status)">
-                <CheckCircleOutlined v-if="exam.status === 'ongoing'" />
-                <ClockCircleOutlined v-else-if="exam.status === 'upcoming'" />
+                <CheckCircleOutlined v-if="isActiveExam(exam.status)" />
+                <ClockCircleOutlined v-else-if="isUpcomingExam(exam.status)" />
                 <FileTextOutlined v-else />
               </div>
-              <div class="status-label">{{ getStatusText(exam.status, exam.can_join) }}</div>
+              <div class="status-label">{{ getStatusText(exam) }}</div>
             </div>
 
             <div class="action-btn-wrap">
@@ -127,27 +129,33 @@
                 </a-button>
                 <p class="action-hint">点击开始即表示您已阅读并同意考试须知</p>
               </template>
-              <template v-else-if="exam.status === 'finished' || exam.latest_result === 'pass'">
-                <a-button type="primary" size="large" block @click="router.push(`/exam/result/${examId}`)">
+              <template v-else-if="showResultAction">
+                <a-button type="primary" size="large" block @click="goToResult">
                   查看成绩
                 </a-button>
               </template>
               <template v-else>
                 <a-button type="primary" size="large" block disabled>
-                  {{ getStatusText(exam.status, exam.can_join) }}
+                  {{ getStatusText(exam) }}
                 </a-button>
-                <p class="action-hint" v-if="exam.status === 'upcoming'">
+                <p class="action-hint" v-if="isUpcomingExam(exam.status)">
                   考试尚未开始，请耐心等待
                 </p>
               </template>
             </div>
 
             <div class="attempt-history" v-if="exam.attempt_count && exam.attempt_count > 0">
-              <div class="history-title">历史成绩</div>
+              <div class="history-title">最近作答</div>
               <div class="history-item">
-                <span class="history-label">最佳成绩</span>
-                <span class="history-score" :class="{ pass: exam.latest_result === 'pass' }">
-                  {{ exam.latest_score || '-' }} 分
+                <span class="history-label">最近得分</span>
+                <span class="history-score" :class="{ pass: latestRecord?.result === 'pass' }">
+                  {{ latestRecord?.score ?? '-' }} 分
+                </span>
+              </div>
+              <div class="history-item">
+                <span class="history-label">最近结果</span>
+                <span class="history-score" :class="{ pass: latestRecord?.result === 'pass' }">
+                  {{ latestRecord ? (latestRecord.result === 'pass' ? '通过' : '未通过') : '-' }}
                 </span>
               </div>
             </div>
@@ -177,40 +185,60 @@ import dayjs from 'dayjs'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import type { ExamResponse } from '@/api/generated/model'
+import type { AdmissionExamRecordResponse, ExamDetailResponse, ExamRecordResponse } from '@/api/generated/model'
 import {
   getAdmissionExamApiV1ExamsAdmissionExamIdGet,
+  getAdmissionExamResultApiV1ExamsAdmissionExamIdResultGet,
   getExamApiV1ExamsExamIdGet,
+  getExamResultApiV1ExamsExamIdResultGet,
 } from '@/api/generated/exam-management/exam-management'
+import {
+  getExamStatusClass,
+  getExamStatusText,
+  isExamActive,
+  isExamEnded,
+  normalizeExamStatus,
+  resolveExamKind,
+  type ExamKind,
+} from './examDisplay'
 
 const route = useRoute()
 const router = useRouter()
 
 const loading = ref(false)
-const exam = ref<ExamResponse | null>(null)
-const examKind = ref<'admission' | 'training'>('training')
+const exam = ref<ExamDetailResponse | null>(null)
+const examKind = ref<ExamKind>(resolveExamKind(route.query.kind, 'training'))
+const latestRecord = ref<ExamRecordResponse | AdmissionExamRecordResponse | null>(null)
 
 const examId = computed(() => Number(route.params.id))
+const showResultAction = computed(() => !!exam.value && (isExamEnded(exam.value.status) || Number(exam.value.attempt_count || 0) > 0))
 
 onMounted(async () => {
-  // 优先使用列表页传递过来的数据，避免 API 数据不一致
-  const passedExam = route.meta?.exam || history.state?.exam
+  const passedExam = history.state?.exam
   if (passedExam && passedExam.id === examId.value) {
-    exam.value = passedExam as ExamResponse
-  } else {
-    await fetchExamDetail()
+    exam.value = passedExam as ExamDetailResponse
   }
+  await fetchExamDetail()
 })
 
 async function fetchExamDetail() {
   loading.value = true
   try {
     try {
-      exam.value = await getExamApiV1ExamsExamIdGet(examId.value)
-      examKind.value = 'training'
-    } catch {
-      exam.value = await getAdmissionExamApiV1ExamsAdmissionExamIdGet(examId.value)
-      examKind.value = 'admission'
+      if (examKind.value === 'admission') {
+        exam.value = await getAdmissionExamApiV1ExamsAdmissionExamIdGet(examId.value)
+      } else {
+        exam.value = await getExamApiV1ExamsExamIdGet(examId.value)
+      }
+      await fetchLatestRecord()
+    } catch (primaryError) {
+      examKind.value = examKind.value === 'admission' ? 'training' : 'admission'
+      if (examKind.value === 'admission') {
+        exam.value = await getAdmissionExamApiV1ExamsAdmissionExamIdGet(examId.value)
+      } else {
+        exam.value = await getExamApiV1ExamsExamIdGet(examId.value)
+      }
+      await fetchLatestRecord()
     }
   } catch (error) {
     message.error('加载考试信息失败')
@@ -221,26 +249,41 @@ async function fetchExamDetail() {
 
 function handleStartExam() {
   if (!exam.value?.can_join) return
-  router.push(`/exam/do/${examId.value}`)
+  router.push({ path: `/exam/do/${examId.value}`, query: { kind: examKind.value } })
 }
 
-function getStatusClass(status?: string) {
-  switch (status) {
-    case 'ongoing': return 'status-ongoing'
-    case 'upcoming': return 'status-upcoming'
-    case 'finished': return 'status-finished'
-    default: return ''
+async function fetchLatestRecord() {
+  if (!exam.value || Number(exam.value.attempt_count || 0) <= 0) {
+    latestRecord.value = null
+    return
+  }
+  try {
+    latestRecord.value = examKind.value === 'admission'
+      ? await getAdmissionExamResultApiV1ExamsAdmissionExamIdResultGet(examId.value)
+      : await getExamResultApiV1ExamsExamIdResultGet(examId.value)
+  } catch {
+    latestRecord.value = null
   }
 }
 
-function getStatusText(status?: string, canJoin?: boolean | null) {
-  if (canJoin === false && status !== 'finished') return '暂不可参加'
-  switch (status) {
-    case 'ongoing': return '进行中'
-    case 'upcoming': return '即将开始'
-    case 'finished': return '已结束'
-    default: return '未知'
-  }
+function getStatusClass(status?: string | null) {
+  return getExamStatusClass(status)
+}
+
+function getStatusText(detail: ExamDetailResponse) {
+  return getExamStatusText(detail)
+}
+
+function isActiveExam(status?: string | null) {
+  return isExamActive(status)
+}
+
+function isUpcomingExam(status?: string | null) {
+  return normalizeExamStatus(status) === 'upcoming'
+}
+
+function goToResult() {
+  router.push({ path: `/exam/result/${examId.value}`, query: { kind: examKind.value } })
 }
 
 function formatTime(date?: string | null) {
@@ -310,10 +353,6 @@ function formatTime(date?: string | null) {
   border-radius: 24px;
   padding: 28px;
   box-shadow: 0 8px 24px rgba(24, 39, 75, 0.06);
-}
-
-.info-card-header {
-  margin-bottom: 24px;
 }
 
 .exam-badge {
@@ -398,14 +437,13 @@ function formatTime(date?: string | null) {
   color: var(--v2-text-primary);
 }
 
-/* 考试须知 */
-.rules-card {
-  background: var(--v2-bg-card);
-  border-radius: 24px;
-  padding: 24px 28px;
-  box-shadow: 0 8px 24px rgba(24, 39, 75, 0.06);
+.divider {
+  height: 1px;
+  background: rgba(0, 0, 0, 0.06);
+  margin: 20px 0;
 }
 
+/* 考试须知 */
 .rules-title {
   display: flex;
   align-items: center;
