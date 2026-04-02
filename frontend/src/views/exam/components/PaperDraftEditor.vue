@@ -72,17 +72,36 @@
       </div>
     </div>
 
+    <!-- 从题库选题弹窗 -->
     <a-modal
       v-model:open="pickerVisible"
       title="从题库选题"
-      width="920px"
+      width="960px"
       ok-text="加入试卷"
       cancel-text="取消"
       @ok="confirmQuestionPick"
       @cancel="pickerVisible = false"
     >
+      <!-- 筛选工具栏 -->
       <div class="picker-toolbar">
-        <a-input-search v-model:value="pickerSearch" placeholder="搜索题干或知识点" style="width:260px" @search="loadPickerQuestions" />
+        <a-select
+          v-model:value="pickerPaperId"
+          allow-clear
+          placeholder="选择试卷（查看该卷题目）"
+          :options="paperOptions"
+          style="width:200px"
+          @change="loadPickerQuestions"
+        />
+        <a-select
+          v-model:value="pickerKpName"
+          allow-clear
+          show-search
+          placeholder="按知识点筛选"
+          :options="kpOptions"
+          style="width:180px"
+          @change="loadPickerQuestions"
+        />
+        <a-input-search v-model:value="pickerSearch" placeholder="搜索题干" style="width:200px" @search="loadPickerQuestions" allow-clear />
         <a-select v-model:value="pickerType" style="width:120px" @change="loadPickerQuestions">
           <a-select-option value="all">全部题型</a-select-option>
           <a-select-option value="single">单选题</a-select-option>
@@ -90,12 +109,14 @@
           <a-select-option value="judge">判断题</a-select-option>
         </a-select>
       </div>
+
       <a-table
         :columns="pickerColumns"
         :data-source="pickerQuestions"
         :loading="pickerLoading"
         :pagination="pickerPagination"
         :row-selection="pickerRowSelection"
+        :scroll="{ y: 400 }"
         row-key="id"
         size="small"
         @change="handlePickerTableChange"
@@ -108,6 +129,8 @@
 import { computed, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { getQuestions } from '@/api/question'
+import { getExamPapers, getExamPaperDetail } from '@/api/exam'
+import { getKnowledgePoints } from '@/api/knowledgePoint'
 import { sortQuestionsByType } from '../utils/questionSort'
 
 const props = defineProps({
@@ -130,15 +153,23 @@ const pickerSearch = ref('')
 const pickerType = ref('all')
 const pickerLoading = ref(false)
 const pickerQuestions = ref([])
-const pickerPagination = reactive({ current: 1, pageSize: 8, total: 0 })
+const pickerPagination = reactive({ current: 1, pageSize: 10, total: 0 })
 const pickerSelectedMap = ref(new Map())
 const pickerSelectedKeys = ref([])
 
+// 试卷和知识点筛选
+const pickerPaperId = ref(null)
+const pickerKpName = ref(null)
+const paperOptions = ref([])
+const kpOptions = ref([])
+
 const pickerColumns = [
-  { title: '题干', dataIndex: 'content', key: 'content' },
-  { title: '题型', dataIndex: 'type', key: 'type', width: 90 },
-  { title: '知识点', dataIndex: 'knowledgePointNames', key: 'knowledgePointNames', width: 220 },
-  { title: '分值', dataIndex: 'score', key: 'score', width: 80 },
+  { title: '题干', dataIndex: 'content', key: 'content', ellipsis: true },
+  { title: '题型', dataIndex: 'type', key: 'type', width: 90,
+    customRender: ({ text }) => typeLabels[text] || text },
+  { title: '知识点', dataIndex: 'knowledgePointNames', key: 'knowledgePointNames', width: 220,
+    customRender: ({ text }) => Array.isArray(text) ? text.join('、') : (text || '-') },
+  { title: '分值', dataIndex: 'score', key: 'score', width: 70 },
 ]
 
 const pickerRowSelection = computed(() => ({
@@ -165,30 +196,80 @@ function removeQuestion(index) {
   emitChange()
 }
 
+async function loadPaperOptions() {
+  try {
+    const result = await getExamPapers({ size: -1 })
+    paperOptions.value = (result.items || []).map(p => ({ label: p.title, value: p.id }))
+  } catch { paperOptions.value = [] }
+}
+
+async function loadKpOptions() {
+  try {
+    const result = await getKnowledgePoints({ size: -1 })
+    kpOptions.value = (result.items || []).map(kp => ({ label: kp.name, value: kp.name }))
+  } catch { kpOptions.value = [] }
+}
+
 function openQuestionPicker() {
   pickerPagination.current = 1
   pickerSelectedMap.value = new Map()
   pickerSelectedKeys.value = []
+  pickerPaperId.value = null
+  pickerKpName.value = null
+  pickerSearch.value = ''
+  pickerType.value = 'all'
   pickerVisible.value = true
+  // 懒加载筛选选项
+  if (paperOptions.value.length === 0) loadPaperOptions()
+  if (kpOptions.value.length === 0) loadKpOptions()
   loadPickerQuestions()
 }
 
 async function loadPickerQuestions() {
   pickerLoading.value = true
   try {
-    const result = await getQuestions({
-      page: pickerPagination.current,
-      size: pickerPagination.pageSize,
-      search: pickerSearch.value || undefined,
-      type: pickerType.value !== 'all' ? pickerType.value : undefined,
-    })
-    pickerQuestions.value = (result.items || []).map((item) => ({
-      ...item,
-      knowledgePointNames: item.knowledgePointNames
-        || item.knowledgePoints?.map((point) => (typeof point === 'string' ? point : point?.name)).filter(Boolean)
-        || [],
-    }))
-    pickerPagination.total = result.total || 0
+    // 如果选了试卷，加载该卷题目
+    if (pickerPaperId.value) {
+      const detail = await getExamPaperDetail(pickerPaperId.value)
+      const questions = detail.questions || []
+      let filtered = questions
+      if (pickerKpName.value) {
+        filtered = filtered.filter(q => {
+          const kps = q.knowledgePointNames || q.knowledge_points || []
+          return kps.some(kp => String(kp).includes(pickerKpName.value))
+        })
+      }
+      if (pickerSearch.value) {
+        const kw = pickerSearch.value.toLowerCase()
+        filtered = filtered.filter(q => q.content?.toLowerCase().includes(kw))
+      }
+      if (pickerType.value !== 'all') {
+        filtered = filtered.filter(q => q.type === pickerType.value)
+      }
+      pickerQuestions.value = filtered.map(q => ({
+        ...q,
+        knowledgePointNames: q.knowledgePointNames
+          || q.knowledge_points?.map(kp => typeof kp === 'string' ? kp : kp?.name).filter(Boolean)
+          || [],
+      }))
+      pickerPagination.total = filtered.length
+    } else {
+      // 从题库加载
+      const result = await getQuestions({
+        page: pickerPagination.current,
+        size: pickerPagination.pageSize,
+        search: pickerSearch.value || undefined,
+        type: pickerType.value !== 'all' ? pickerType.value : undefined,
+        knowledge_point: pickerKpName.value || undefined,
+      })
+      pickerQuestions.value = (result.items || []).map((item) => ({
+        ...item,
+        knowledgePointNames: item.knowledgePointNames
+          || item.knowledgePoints?.map((point) => (typeof point === 'string' ? point : point?.name)).filter(Boolean)
+          || [],
+      }))
+      pickerPagination.total = result.total || 0
+    }
   } catch (error) {
     message.error(error.message || '加载题库失败')
   } finally {
