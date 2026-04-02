@@ -92,8 +92,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { Modal, message } from 'ant-design-vue'
 import {
   getAdmissionExamDetail,
@@ -106,6 +106,7 @@ const route = useRoute()
 const router = useRouter()
 const examId = route.params.id
 const resolvedKind = ref(route.query.kind === 'admission' ? 'admission' : 'training')
+const answerStorageKey = computed(() => `student-exam:${resolvedKind.value}:${examId}`)
 
 const loading = ref(true)
 const submitting = ref(false)
@@ -119,6 +120,8 @@ const startTime = ref(null)
 const typeLabels = { single: '单选', multi: '多选', judge: '判断' }
 const currentQuestion = computed(() => questions.value[currentIdx.value])
 const answeredCount = computed(() => answers.value.filter(item => Array.isArray(item) ? item.length > 0 : item !== null && item !== undefined && item !== '').length)
+const unansweredCount = computed(() => Math.max(0, questions.value.length - answeredCount.value))
+const hasStarted = computed(() => questions.value.length > 0 && !!startTime.value)
 
 let timer = null
 
@@ -141,6 +144,50 @@ function formatTime(seconds) {
   const minutes = Math.floor(seconds / 60).toString().padStart(2, '0')
   const secs = String(seconds % 60).padStart(2, '0')
   return `${minutes}:${secs}`
+}
+
+function serializeProgress() {
+  if (!questions.value.length) return
+  sessionStorage.setItem(answerStorageKey.value, JSON.stringify({
+    answers: answers.value,
+    currentIdx: currentIdx.value,
+    remainingTime: remainingTime.value,
+    startTime: startTime.value,
+  }))
+}
+
+function clearProgress() {
+  sessionStorage.removeItem(answerStorageKey.value)
+}
+
+function restoreProgress() {
+  const raw = sessionStorage.getItem(answerStorageKey.value)
+  if (!raw) return false
+  try {
+    const saved = JSON.parse(raw)
+    if (Array.isArray(saved.answers) && saved.answers.length === questions.value.length) {
+      answers.value = saved.answers
+    }
+    if (Number.isInteger(saved.currentIdx) && saved.currentIdx >= 0 && saved.currentIdx < questions.value.length) {
+      currentIdx.value = saved.currentIdx
+    }
+    if (Number.isFinite(saved.remainingTime) && saved.remainingTime > 0) {
+      remainingTime.value = saved.remainingTime
+    }
+    if (saved.startTime) {
+      startTime.value = saved.startTime
+    }
+    return true
+  } catch {
+    clearProgress()
+    return false
+  }
+}
+
+function handleBeforeUnload(event) {
+  if (!hasStarted.value || submitting.value) return
+  event.preventDefault()
+  event.returnValue = ''
 }
 
 async function loadExam() {
@@ -166,13 +213,14 @@ async function loadExam() {
     answers.value = questions.value.map(question => question.type === 'multi' ? [] : null)
     remainingTime.value = (detail.duration || 60) * 60
     startTime.value = new Date().toISOString()
+    restoreProgress()
     timer = setInterval(() => {
       if (remainingTime.value > 0) {
         remainingTime.value -= 1
         return
       }
       clearInterval(timer)
-      handleSubmit()
+      handleSubmit(true)
     }, 1000)
   } catch (error) {
     message.error(error.message || '加载试卷失败')
@@ -182,7 +230,7 @@ async function loadExam() {
   }
 }
 
-async function handleSubmit() {
+async function handleSubmit(isAutoSubmit = false) {
   submitting.value = true
   try {
     const payload = { startTime: startTime.value, answers: {} }
@@ -194,7 +242,8 @@ async function handleSubmit() {
     } else {
       await submitExam(examId, payload)
     }
-    message.success('交卷成功')
+    clearProgress()
+    message.success(isAutoSubmit ? '考试时间结束，系统已自动交卷' : '交卷成功')
     router.replace({ name: 'ExamResult', params: { id: examId }, query: { kind: resolvedKind.value } })
   } catch (error) {
     message.error(error.message || '交卷失败')
@@ -206,17 +255,34 @@ async function handleSubmit() {
 function confirmSubmit() {
   Modal.confirm({
     title: '确认提交试卷？',
-    content: `已答 ${answeredCount.value} 题，共 ${questions.value.length} 题。`,
+    content: unansweredCount.value > 0
+      ? `已答 ${answeredCount.value} 题，仍有 ${unansweredCount.value} 题未作答，确认提交吗？`
+      : `已完成全部 ${questions.value.length} 题，确认提交吗？`,
     onOk: () => {
       clearInterval(timer)
-      return handleSubmit()
+      return handleSubmit(false)
     },
   })
 }
 
-onMounted(loadExam)
+watch([answers, currentIdx, remainingTime], () => {
+  serializeProgress()
+}, { deep: true })
+
+onMounted(() => {
+  window.addEventListener('beforeunload', handleBeforeUnload)
+  loadExam()
+})
 onUnmounted(() => {
   clearInterval(timer)
+  window.removeEventListener('beforeunload', handleBeforeUnload)
+})
+
+onBeforeRouteLeave(() => {
+  if (!hasStarted.value || submitting.value) {
+    return true
+  }
+  return window.confirm('考试进行中，离开页面后仍可返回继续作答，确认离开吗？')
 })
 </script>
 

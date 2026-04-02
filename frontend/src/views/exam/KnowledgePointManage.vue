@@ -1,100 +1,143 @@
 <template>
-  <div class="knowledge-point-page">
-    <div class="page-header">
-      <div>
-        <h2>知识点管理</h2>
-        <p class="page-sub">统一维护题库知识点，题目与 AI 草稿都可复用这里的知识点</p>
+  <div class="kp-page">
+    <main class="main-content">
+      <div class="content-wrapper">
+
+        <!-- 二级导航 -->
+        <div class="sub-nav-bar">
+          <div class="sub-nav-left">
+            <span :class="['sub-nav-item', { active: true }]">知识点管理</span>
+          </div>
+        </div>
+
+        <!-- 主容器 -->
+        <div class="main-container">
+
+          <!-- 工具栏 -->
+          <div class="toolbar-row">
+            <div class="toolbar-left">
+              <button class="btn-primary" @click="openCreateModal">
+                新增知识点
+              </button>
+              <div class="search-wrapper">
+                <svg class="search-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <input
+                  type="text"
+                  class="input-minimal"
+                  v-model="searchText"
+                  placeholder="搜索知识点名称..."
+                  @input="handleSearch"
+                >
+              </div>
+            </div>
+            <div class="toolbar-right">
+              <select class="input-minimal filter-select" v-model="statusFilter" @change="reloadKnowledgePoints">
+                <option value="all">全部状态</option>
+                <option value="true">启用</option>
+                <option value="false">停用</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 表格 -->
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th class="col-index text-center">序号</th>
+                  <th class="col-name">知识点名称</th>
+                  <th class="col-desc">描述</th>
+                  <th class="col-count text-center">关联题目</th>
+                  <th class="col-status text-center">状态</th>
+                  <th class="col-action text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(item, index) in displayedList" :key="item.id" class="table-row">
+                  <td class="text-center">{{ (pagination.current - 1) * pagination.pageSize + index + 1 }}</td>
+                  <td>
+                    <span class="name-text">{{ item.name }}</span>
+                  </td>
+                  <td class="col-desc-cell">
+                    <span class="desc-text">{{ item.description || '-' }}</span>
+                  </td>
+                  <td class="text-center">
+                    <span class="count-badge">{{ item.questionCount || 0 }} 题</span>
+                  </td>
+                  <td class="text-center">
+                    <span :class="['status-pill', item.isActive ? 'status-active' : 'status-inactive']">
+                      {{ item.isActive ? '启用' : '停用' }}
+                    </span>
+                  </td>
+                  <td class="text-right">
+                    <div class="action-btns">
+                      <button class="btn-link" @click="openEditModal(item)">编辑</button>
+                      <button class="btn-link btn-link-danger" @click="handleDelete(item)">删除</button>
+                    </div>
+                  </td>
+                </tr>
+                <tr v-if="displayedList.length === 0 && !loading">
+                  <td colspan="6" class="empty-row">
+                    <div class="empty-state">
+                      <svg class="empty-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                      <span>暂无知识点</span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+
+            <div v-if="loading" class="loading-overlay">
+              <a-spin size="large" />
+            </div>
+          </div>
+
+          <!-- 底部 -->
+          <div class="footer-area">
+            <div class="footer-left">
+              <span class="page-info">共 {{ pagination.total }} 个知识点</span>
+            </div>
+            <div class="footer-right">
+              <div class="page-size-selector">
+                <span class="page-size-label">每页显示</span>
+                <select class="page-size-select" :value="pagination.pageSize" @change="handlePageSizeChange(Number($event.target.value))">
+                  <option v-for="size in pageSizeOptions" :key="size" :value="size">{{ size }}条</option>
+                </select>
+              </div>
+              <div class="pagination-btns">
+                <button class="page-btn" :disabled="pagination.current <= 1" @click="changePage(pagination.current - 1)">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+                </button>
+                <button v-for="page in visiblePages" :key="page" class="page-btn" :class="{ 'page-btn-active': page === pagination.current }" @click="changePage(page)">{{ page }}</button>
+                <button class="page-btn" :disabled="pagination.current >= totalPages" @click="changePage(pagination.current + 1)">
+                  <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
       </div>
-      <permissions-tooltip
-        :allowed="canCreateKnowledgePoint"
-        tips="需要 CREATE_KNOWLEDGE_POINT 权限"
-        v-slot="{ disabled }"
-      >
-        <a-button type="primary" :disabled="disabled" @click="openCreateModal">
-          新增知识点
-        </a-button>
-      </permissions-tooltip>
-    </div>
+    </main>
 
-    <a-card :bordered="false" style="margin-bottom:16px">
-      <a-row :gutter="16">
-        <a-col :span="10">
-          <a-input-search
-            v-model:value="searchText"
-            placeholder="搜索知识点名称"
-            allow-clear
-            @search="reloadKnowledgePoints"
-          />
-        </a-col>
-        <a-col :span="6">
-          <a-select v-model:value="statusFilter" style="width:100%" @change="reloadKnowledgePoints">
-            <a-select-option value="all">全部状态</a-select-option>
-            <a-select-option value="true">启用</a-select-option>
-            <a-select-option value="false">停用</a-select-option>
-          </a-select>
-        </a-col>
-      </a-row>
-    </a-card>
-
-    <a-card :bordered="false">
-      <a-table
-        :columns="columns"
-        :data-source="knowledgePointList"
-        :loading="loading"
-        :pagination="pagination"
-        row-key="id"
-        @change="handleTableChange"
-      >
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'isActive'">
-            <a-tag :color="record.isActive ? 'green' : 'default'">
-              {{ record.isActive ? '启用' : '停用' }}
-            </a-tag>
-          </template>
-          <template v-else-if="column.key === 'questionCount'">
-            {{ record.questionCount || 0 }} 题
-          </template>
-          <template v-else-if="column.key === 'action'">
-            <a-space>
-              <permissions-tooltip
-                :allowed="canUpdateKnowledgePoint"
-                tips="需要 UPDATE_KNOWLEDGE_POINT 权限"
-                v-slot="{ disabled }"
-              >
-                <a-button type="link" size="small" :disabled="disabled" @click="openEditModal(record)">
-                  编辑
-                </a-button>
-              </permissions-tooltip>
-              <permissions-tooltip
-                :allowed="canDeleteKnowledgePoint"
-                tips="需要 DELETE_KNOWLEDGE_POINT 权限"
-                v-slot="{ disabled }"
-              >
-                <a-button type="link" danger size="small" :disabled="disabled" @click="handleDelete(record)">
-                  删除
-                </a-button>
-              </permissions-tooltip>
-            </a-space>
-          </template>
-        </template>
-      </a-table>
-    </a-card>
-
+    <!-- 新增/编辑弹窗 -->
     <a-modal
       :open="modalOpen"
       :title="editingKnowledgePoint ? '编辑知识点' : '新增知识点'"
       ok-text="保存"
       cancel-text="取消"
+      width="520px"
       @update:open="modalOpen = $event"
       @ok="handleSubmit"
       @cancel="modalOpen = false"
     >
       <a-form layout="vertical">
         <a-form-item label="知识点名称" required>
-          <a-input v-model:value="form.name" :maxlength="100" show-count />
+          <a-input v-model:value="form.name" :maxlength="100" show-count placeholder="如：行政处罚程序、接处警规范" />
+          <div class="field-hint">仅维护可复用于题目与 AI 组卷的细粒度知识点</div>
         </a-form-item>
         <a-form-item label="描述">
-          <a-textarea v-model:value="form.description" :rows="4" :maxlength="500" show-count />
+          <a-textarea v-model:value="form.description" :rows="3" :maxlength="500" show-count placeholder="请输入描述信息" />
         </a-form-item>
         <a-form-item label="状态">
           <a-switch v-model:checked="form.isActive" checked-children="启用" un-checked-children="停用" />
@@ -114,9 +157,9 @@ import {
   getKnowledgePoints,
   updateKnowledgePoint,
 } from '@/api/knowledgePoint'
-import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
 const authStore = useAuthStore()
+
 const loading = ref(false)
 const modalOpen = ref(false)
 const editingKnowledgePoint = ref(null)
@@ -130,29 +173,47 @@ const form = reactive({
   isActive: true,
 })
 
-const columns = [
-  { title: '知识点名称', dataIndex: 'name', key: 'name', width: 220 },
-  { title: '描述', dataIndex: 'description', key: 'description' },
-  { title: '关联题目', key: 'questionCount', width: 120 },
-  { title: '状态', key: 'isActive', width: 100 },
-  { title: '操作', key: 'action', width: 140 },
-]
-
 const pagination = reactive({
   current: 1,
-  pageSize: 10,
+  pageSize: 20,
   total: 0,
-  showTotal: (total) => `共 ${total} 个知识点`,
 })
 
-const canCreateKnowledgePoint = computed(() => authStore.hasPermission('CREATE_KNOWLEDGE_POINT'))
-const canUpdateKnowledgePoint = computed(() => authStore.hasPermission('UPDATE_KNOWLEDGE_POINT'))
-const canDeleteKnowledgePoint = computed(() => authStore.hasPermission('DELETE_KNOWLEDGE_POINT'))
+const pageSizeOptions = [10, 20, 50]
+
+// 过滤后的列表
+const filteredList = computed(() => {
+  let list = [...knowledgePointList.value]
+  if (searchText.value) {
+    const kw = searchText.value.toLowerCase()
+    list = list.filter(item => item.name.toLowerCase().includes(kw) || (item.description || '').toLowerCase().includes(kw))
+  }
+  if (statusFilter.value !== 'all') {
+    const active = statusFilter.value === 'true'
+    list = list.filter(item => item.isActive === active)
+  }
+  return list
+})
+
+// 分页后的展示列表
+const displayedList = computed(() => {
+  const start = (pagination.current - 1) * pagination.pageSize
+  const end = start + pagination.pageSize
+  return filteredList.value.slice(start, end)
+})
+
+const totalPages = computed(() => Math.ceil(filteredList.value.length / pagination.pageSize) || 1)
+
+const visiblePages = computed(() => {
+  const pages = [], total = totalPages.value, cur = pagination.current
+  let start = Math.max(1, cur - 2), end = Math.min(total, start + 4)
+  if (end - start < 4) start = Math.max(1, end - 4)
+  for (let i = start; i <= end; i++) pages.push(i)
+  return pages
+})
 
 function resolveStatusFilter() {
-  if (statusFilter.value === 'all') {
-    return undefined
-  }
+  if (statusFilter.value === 'all') return undefined
   return statusFilter.value === 'true'
 }
 
@@ -163,40 +224,52 @@ function resetForm(record = null) {
 }
 
 function openCreateModal() {
-  if (!canCreateKnowledgePoint.value) return
   editingKnowledgePoint.value = null
   resetForm()
   modalOpen.value = true
 }
 
 function openEditModal(record) {
-  if (!canUpdateKnowledgePoint.value) return
   editingKnowledgePoint.value = record
   resetForm(record)
   modalOpen.value = true
 }
 
-function reloadKnowledgePoints() {
+function handleSearch() {
   pagination.current = 1
-  loadKnowledgePoints()
+}
+
+function changePage(page) {
+  if (page < 1 || page > totalPages.value) return
+  pagination.current = page
+}
+
+function handlePageSizeChange(size) {
+  pagination.pageSize = size
+  pagination.current = 1
 }
 
 async function loadKnowledgePoints() {
   loading.value = true
   try {
     const result = await getKnowledgePoints({
-      page: pagination.current,
-      size: pagination.pageSize,
+      page: 1,
+      size: -1,
       search: searchText.value || undefined,
       isActive: resolveStatusFilter(),
     })
     knowledgePointList.value = result.items || []
-    pagination.total = result.total || 0
+    pagination.total = filteredList.value.length
   } catch (error) {
     message.error(error.message || '加载知识点失败')
   } finally {
     loading.value = false
   }
+}
+
+function reloadKnowledgePoints() {
+  pagination.current = 1
+  loadKnowledgePoints()
 }
 
 async function handleSubmit() {
@@ -205,7 +278,6 @@ async function handleSubmit() {
     message.warning('请填写知识点名称')
     return
   }
-
   const payload = {
     name,
     description: form.description?.trim() || undefined,
@@ -228,7 +300,6 @@ async function handleSubmit() {
 }
 
 function handleDelete(record) {
-  if (!canDeleteKnowledgePoint.value) return
   Modal.confirm({
     title: '确认删除知识点',
     content: '若该知识点已被题目引用，将无法删除。',
@@ -245,38 +316,479 @@ function handleDelete(record) {
   })
 }
 
-function handleTableChange(pag) {
-  pagination.current = pag.current
-  pagination.pageSize = pag.pageSize
-  loadKnowledgePoints()
-}
-
 onMounted(() => {
   loadKnowledgePoints()
 })
 </script>
 
 <style scoped>
-.knowledge-point-page {
+/* ============ 页面布局 ============ */
+.kp-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background-color: #F8FAFC;
+  color: #334155;
+  margin: 0;
   padding: 0;
 }
 
-.page-header {
+.main-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 32px;
+}
+
+.content-wrapper {
+  max-width: 100%;
+  width: 100%;
+}
+
+/* ============ 二级导航 ============ */
+.sub-nav-bar {
   display: flex;
   justify-content: space-between;
-  align-items: flex-start;
+  align-items: center;
+  margin-bottom: 24px;
+}
+
+.sub-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.sub-nav-item {
+  font-size: 18px;
+  font-weight: 600;
+  color: #94A3B8;
+  padding-bottom: 8px;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.sub-nav-item:hover {
+  color: #64748B;
+}
+
+.sub-nav-item.active {
+  color: #1E293B;
+  border-color: #2563EB;
+}
+
+/* ============ 主容器 ============ */
+.main-container {
+  background: white;
+  border: 1px solid #E2E8F0;
+  border-radius: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 500px;
+}
+
+/* ============ 工具栏 ============ */
+.toolbar-row {
+  padding: 24px 32px;
+  border-bottom: 1px solid #F1F5F9;
+  display: flex;
+  flex-wrap: wrap;
   gap: 16px;
-  margin-bottom: 20px;
+  align-items: center;
+  justify-content: space-between;
 }
 
-.page-header h2 {
-  margin: 0;
-  color: #001234;
+.toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
 }
 
-.page-sub {
-  margin: 6px 0 0;
-  color: #8c8c8c;
-  font-size: 13px;
+.toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-primary {
+  background: #2563EB;
+  color: white;
+  font-size: 18px;
+  font-weight: 700;
+  padding: 10px 16px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  box-shadow: 0 4px 6px rgba(37, 99, 235, 0.1);
+}
+
+.btn-primary:hover {
+  background: #1D4ED8;
+  transform: scale(0.98);
+}
+
+.search-wrapper {
+  position: relative;
+  width: 280px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  width: 16px;
+  height: 16px;
+  color: #94A3B8;
+  pointer-events: none;
+}
+
+.input-minimal {
+  background-color: transparent;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 18px;
+  color: #1E293B;
+  transition: all 0.2s;
+  outline: none;
+  height: 36px;
+}
+
+.input-minimal:hover {
+  border-color: #CBD5E1;
+}
+
+.input-minimal:focus {
+  border-color: #3B82F6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.search-wrapper .input-minimal {
+  padding-left: 36px;
+  width: 100%;
+}
+
+.filter-select {
+  width: 140px;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M5%207l5%205%205-5%22%20stroke%3D%22%2394A3B8%22%20stroke-width%3D%221.5%22%20fill%3D%22none%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  font-size: 16px;
+  font-weight: 500;
+  color: #64748B;
+  cursor: pointer;
+}
+
+/* ============ 表格 ============ */
+.table-wrapper {
+  flex: 1;
+  overflow-x: auto;
+  position: relative;
+}
+
+.data-table {
+  width: 100%;
+  text-align: left;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.data-table thead tr {
+  background: #F8FAFC;
+  border-bottom: 1px solid #F1F5F9;
+}
+
+.data-table th {
+  padding: 14px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #94A3B8;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.col-index {
+  width: 60px;
+}
+
+.col-name {
+  width: 160px;
+}
+
+.col-desc {
+  width: 160px;
+}
+
+.col-desc-cell {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.col-count {
+  width: 90px;
+}
+
+.col-status {
+  width: 80px;
+}
+
+.col-action {
+  width: 100px;
+}
+
+.table-row {
+  transition: background-color 0.2s;
+  border-bottom: 1px solid #F8FAFC;
+}
+
+.table-row:hover {
+  background-color: #F8FAFC;
+}
+
+.data-table td {
+  padding: 14px 12px;
+  vertical-align: middle;
+}
+
+.name-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.desc-text {
+  font-size: 16px;
+  color: #64748B;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
+}
+
+.count-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+  background: #EFF6FF;
+  color: #2563EB;
+}
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.status-active {
+  background: #DCFCE7;
+  color: #16A34A;
+}
+
+.status-inactive {
+  background: #F1F5F9;
+  color: #94A3B8;
+}
+
+.action-btns {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.btn-link {
+  background: none;
+  border: none;
+  color: #2563EB;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: color 0.2s;
+}
+
+.btn-link:hover {
+  color: #1D4ED8;
+  text-decoration: underline;
+}
+
+.btn-link-danger {
+  color: #EF4444;
+}
+
+.btn-link-danger:hover {
+  color: #DC2626;
+}
+
+.empty-row {
+  text-align: center;
+  padding: 60px;
+  color: #94A3B8;
+  font-size: 18px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.empty-icon {
+  width: 48px;
+  height: 48px;
+  color: #CBD5E1;
+}
+
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+/* ============ 底部 ============ */
+.footer-area {
+  padding: 20px 32px;
+  border-top: 1px solid #F1F5F9;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-shrink: 0;
+}
+
+.footer-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.page-info {
+  font-size: 16px;
+  color: #64748B;
+  font-weight: 500;
+}
+
+.pagination-btns {
+  display: flex;
+  gap: 4px;
+}
+
+.page-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  border: 1px solid #E2E8F0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 16px;
+  font-weight: 600;
+  color: #64748B;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: #F1F5F9;
+}
+
+.page-btn:disabled {
+  color: #CBD5E1;
+  cursor: not-allowed;
+}
+
+.page-btn-active {
+  background: #1E293B;
+  color: white;
+  border-color: #1E293B;
+}
+
+.page-size-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-size-label {
+  font-size: 16px;
+  color: #94A3B8;
+  font-weight: 500;
+}
+
+.page-size-select {
+  font-size: 16px;
+  color: #64748B;
+  border: 1px solid #E2E8F0;
+  border-radius: 6px;
+  padding: 4px 28px 4px 8px;
+  background: white;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M5%207l5%205%205-5%22%20stroke%3D%22%2394A3B8%22%20stroke-width%3D%221.5%22%20fill%3D%22none%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
+  background-size: 16px;
+  transition: all 0.2s;
+}
+
+.page-size-select:hover {
+  border-color: #CBD5E1;
+}
+
+/* ============ 弹窗 ============ */
+.field-hint {
+  margin-top: 6px;
+  color: #94A3B8;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+/* ============ 滚动条 ============ */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #E2E8F0;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
 }
 </style>

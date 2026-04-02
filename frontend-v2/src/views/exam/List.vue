@@ -126,7 +126,7 @@
               </a-button>
             </template>
             <template v-else-if="exam.can_join">
-              <a-button type="primary" block @click.stop="router.push(`/exam/do/${exam.id}`)">
+              <a-button type="primary" block @click.stop="router.push({ path: `/exam/overview/${exam.id}`, state: { exam } })">
                 进入考试
               </a-button>
             </template>
@@ -223,7 +223,7 @@ function selectStatus(status: string) {
 
 function handleExamClick(exam: ExamResponse) {
   if (exam.can_join) {
-    void router.push(`/exam/do/${exam.id}`)
+    void router.push({ path: `/exam/overview/${exam.id}`, state: { exam } })
   } else if (exam.status === 'finished' || exam.latest_result === 'pass') {
     void router.push(`/exam/result/${exam.id}`)
   }

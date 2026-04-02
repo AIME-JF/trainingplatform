@@ -28,7 +28,6 @@
             <template v-else>
               <div class="toolbar-left">
                 <button class="btn-primary" @click="openCreateFolderModal">
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
                 添加题库
                 </button>
                 <div class="search-wrapper">
@@ -201,7 +200,7 @@
                     <button class="page-btn" :disabled="pagination.current <= 1" @click="changePage(pagination.current - 1)">
                       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
                     </button>
-                    <button class="page-btn page-btn-active">{{ pagination.current }}</button>
+                    <button v-for="page in visiblePages" :key="page" class="page-btn" :class="{ 'page-btn-active': page === pagination.current }" @click="changePage(page)">{{ page }}</button>
                     <button class="page-btn" :disabled="pagination.current >= totalPages" @click="changePage(pagination.current + 1)">
                       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
                     </button>
@@ -229,7 +228,7 @@
                     <button class="page-btn" :disabled="questionPagination.current <= 1" @click="changeQuestionPage(questionPagination.current - 1)">
                       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
                     </button>
-                    <button class="page-btn page-btn-active">{{ questionPagination.current }}</button>
+                    <button v-for="page in questionVisiblePages" :key="page" class="page-btn" :class="{ 'page-btn-active': page === questionPagination.current }" @click="changeQuestionPage(page)">{{ page }}</button>
                     <button class="page-btn" :disabled="questionPagination.current >= questionTotalPages" @click="changeQuestionPage(questionPagination.current + 1)">
                       <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
                     </button>
@@ -402,6 +401,14 @@ const displayedList = computed(() => {
 // 总页数
 const totalPages = computed(() => Math.ceil(pagination.total / pagination.pageSize) || 1)
 
+const visiblePages = computed(() => {
+  const pages = [], total = totalPages.value, cur = pagination.current
+  let start = Math.max(1, cur - 2), end = Math.min(total, start + 4)
+  if (end - start < 4) start = Math.max(1, end - 4)
+  for (let i = start; i <= end; i++) pages.push(i)
+  return pages
+})
+
 // 全选状态
 const isAllSelected = computed(() => {
   if (displayedList.value.length === 0) return false
@@ -537,6 +544,14 @@ const displayedQuestionList = computed(() => {
 
 // 题目总页数
 const questionTotalPages = computed(() => Math.ceil(questionPagination.total / questionPagination.pageSize) || 1)
+
+const questionVisiblePages = computed(() => {
+  const pages = [], total = questionTotalPages.value, cur = questionPagination.current
+  let start = Math.max(1, cur - 2), end = Math.min(total, start + 4)
+  if (end - start < 4) start = Math.max(1, end - 4)
+  for (let i = start; i <= end; i++) pages.push(i)
+  return pages
+})
 
 function toggleSelect(id) {
   const idx = selectedIds.value.indexOf(id)

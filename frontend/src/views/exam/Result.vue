@@ -3,7 +3,8 @@
     <div class="score-card" :class="{ failed: result.result !== 'pass' }">
       <div class="score-main">
         <div class="score-value">{{ result.score }}</div>
-        <div class="score-label">得分 / {{ result.passingScore || 60 }}</div>
+        <div class="score-label">本次得分</div>
+        <div class="score-sub">及格线 {{ result.passingScore || 60 }} 分</div>
       </div>
       <div class="score-stats">
         <div class="stat-item">
@@ -24,6 +25,27 @@
         </div>
       </div>
     </div>
+
+    <a-card :bordered="false" style="margin-top:20px">
+      <div class="summary-grid">
+        <div class="summary-item">
+          <div class="summary-label">考试名称</div>
+          <div class="summary-value">{{ result.examTitle || '未命名考试' }}</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-label">考试类型</div>
+          <div class="summary-value">{{ result.kind === 'admission' ? '准入考试' : '培训班考试' }}</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-label">作答次数</div>
+          <div class="summary-value">第 {{ result.attemptNo || 1 }} 次</div>
+        </div>
+        <div class="summary-item">
+          <div class="summary-label">交卷时间</div>
+          <div class="summary-value">{{ formatDate(result.endTime) }}</div>
+        </div>
+      </div>
+    </a-card>
 
     <a-row :gutter="20" style="margin-top:20px">
       <a-col :span="10">
@@ -82,6 +104,10 @@ function displayAnswer(value) {
   return value ?? '未作答'
 }
 
+function formatDate(value) {
+  return value ? String(value).replace('T', ' ').slice(0, 16) : '未记录'
+}
+
 async function loadResult() {
   try {
     if (resolvedKind.value === 'admission') {
@@ -114,10 +140,15 @@ onMounted(loadResult)
 .score-main { min-width: 160px; text-align: center; }
 .score-value { font-size: 64px; font-weight: 800; line-height: 1; }
 .score-label { margin-top: 10px; color: rgba(255,255,255,0.75); }
+.score-sub { margin-top: 6px; color: rgba(255,255,255,0.75); font-size: 12px; }
 .score-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; flex: 1; }
 .stat-item { background: rgba(255,255,255,0.12); border-radius: 10px; padding: 16px; text-align: center; }
 .stat-value { font-size: 22px; font-weight: 700; }
 .stat-label { font-size: 12px; color: rgba(255,255,255,0.75); margin-top: 4px; }
+.summary-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.summary-item { background: #f7f9fc; border-radius: 10px; padding: 14px 16px; }
+.summary-label { font-size: 12px; color: #8c8c8c; margin-bottom: 6px; }
+.summary-value { color: #1f1f1f; font-weight: 600; }
 .dimension-item { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .dimension-item span { width: 72px; font-size: 12px; color: #555; }
 .wrong-list { display: flex; flex-direction: column; gap: 12px; }
@@ -130,5 +161,6 @@ onMounted(loadResult)
 @media (max-width: 768px) {
   .score-card { flex-direction: column; }
   .score-stats { grid-template-columns: 1fr 1fr; }
+  .summary-grid { grid-template-columns: 1fr 1fr; }
 }
 </style>

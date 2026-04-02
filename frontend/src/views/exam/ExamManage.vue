@@ -18,7 +18,6 @@
           <div class="toolbar-row">
             <div class="toolbar-left">
               <button class="btn-primary" @click="openCreateDrawer">
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
                 添加准入考试
               </button>
               <div class="search-wrapper">
@@ -166,15 +165,6 @@
           </div>
 
         </div>
-
-        <!-- 页脚辅助信息 -->
-        <footer class="page-footer">
-          <span>© 2024 警务训练指挥平台 | 考试服务运行中</span>
-          <div class="status-indicator">
-            <span class="status-dot"></span>
-            考试服务运行中
-          </div>
-        </footer>
 
       </div>
     </main>

@@ -121,7 +121,7 @@
               <div class="footer-right">
                 <div class="pagination-btns">
                   <button class="page-btn" :disabled="pagination.current <= 1" @click="handlePrevPage">‹</button>
-                  <button class="page-btn page-btn-active">{{ pagination.current }}</button>
+                  <button v-for="page in visiblePages" :key="page" class="page-btn" :class="{ 'page-btn-active': page === pagination.current }" @click="pagination.current = page">{{ page }}</button>
                   <button class="page-btn" :disabled="pagination.current >= totalPages" @click="handleNextPage">›</button>
                 </div>
               </div>
@@ -361,6 +361,14 @@ const folderTreeData = computed(() => {
 const folderCount = computed(() => folderList.value.length)
 
 const totalPages = computed(() => Math.ceil(statsState.total / pagination.pageSize) || 1)
+
+const visiblePages = computed(() => {
+  const pages = [], total = totalPages.value, cur = pagination.current
+  let start = Math.max(1, cur - 2), end = Math.min(total, start + 4)
+  if (end - start < 4) start = Math.max(1, end - 4)
+  for (let i = start; i <= end; i++) pages.push(i)
+  return pages
+})
 
 const viewLabel = computed(() => {
   const labels = {

@@ -272,12 +272,11 @@ const primaryTrainingRoute = computed(() => {
 })
 const primaryExamRoute = computed(() => {
   const preferredRoutes = [
-    '/exam/manage',
-    '/exam/list',
+    '/question/knowledge-points',
     '/question/repository',
-    '/paper/repository',
     '/question/ai',
-    '/paper/ai-assemble',
+    '/paper/repository',
+    '/exam/manage',
   ]
   return preferredRoutes.find((item) => visibleMenuKeys.value.includes(item)) || ''
 })
@@ -285,14 +284,16 @@ const primaryExamRoute = computed(() => {
 function getSelectedMenuKeyByPath(path) {
   if (path === '/') return '/'
   if (path.startsWith('/courses')) return '/courses'
-  if (path.startsWith('/exam/list')) return '/exam/list'
+  if (path.startsWith('/exam/do')) return '/exam/manage'
+  if (path.startsWith('/exam/result')) return '/exam/manage'
+  if (path.startsWith('/exam/list')) return '/exam/manage'
   if (path.startsWith('/exam/manage')) return '/exam/manage'
   if (path.startsWith('/exam/scores')) return '/exam/manage'
   if (path.startsWith('/question/repository')) return '/question/repository'
   if (path.startsWith('/question/knowledge-points')) return '/question/knowledge-points'
   if (path.startsWith('/question/ai')) return '/question/ai'
   if (path.startsWith('/paper/repository')) return '/paper/repository'
-  if (path.startsWith('/paper/ai-assemble')) return '/paper/ai-assemble'
+  if (path.startsWith('/paper/ai-assemble')) return '/paper/repository'
   if (path.startsWith('/training/base')) return '/training/base'
   if (path.startsWith('/training/schedule')) return '/training/schedule'
   if (path.startsWith('/training/board')) return '/training/board'
@@ -358,7 +359,7 @@ watch(
 )
 
 function handleMenuClick({ key }) {
-  // 跳过父菜单（如"智能题库"），它们没有 '/' 前缀
+  // 跳过父菜单，它们没有 '/' 前缀
   if (!key.startsWith('/')) {
     return
   }

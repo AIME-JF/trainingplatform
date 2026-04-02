@@ -98,6 +98,12 @@ export const routes: RouteRecordRaw[] = [
         meta: { title: '在线考试' },
       },
       {
+        path: 'exam/overview/:id',
+        name: 'ExamOverview',
+        component: () => import('@/views/exam/ExamOverview.vue'),
+        meta: { title: '考试概览' },
+      },
+      {
         path: 'exam/do/:id',
         name: 'ExamDo',
         component: () => import('@/views/exam/Do.vue'),

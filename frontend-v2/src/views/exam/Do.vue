@@ -1,5 +1,6 @@
 <template>
   <div class="exam-do-page">
+    <!-- 顶部栏 -->
     <div class="exam-header">
       <div class="exam-title">
         <h1>{{ examDetail?.title || '考试' }}</h1>
@@ -24,73 +25,123 @@
       <a-spin size="large" />
     </div>
 
+    <!-- 主体：左侧题目 + 右侧概览 -->
     <template v-else-if="questions.length > 0">
-      <div class="question-card">
-        <div class="question-header">
-          <a-tag class="type-tag" :color="getQuestionTypeColor(currentQuestion?.type)">
-            {{ getQuestionTypeText(currentQuestion?.type) }}
-          </a-tag>
-          <span class="question-score">{{ currentQuestion?.score || 0 }} 分</span>
-        </div>
-
-        <div class="question-content">
-          {{ currentQuestion?.content }}
-        </div>
-
-        <div class="question-options">
-          <template v-if="currentQuestion?.type === 'multiple_choice'">
-            <div
-              v-for="(option, index) in currentOptions"
-              :key="index"
-              class="option-item multiple"
-              :class="{ selected: isOptionSelected(option.key) }"
-              @click="toggleOption(option.key)"
-            >
-              <div class="option-checkbox">
-                <CheckOutlined v-if="isOptionSelected(option.key)" />
-              </div>
-              <span class="option-label">{{ option.key }}.</span>
-              <span class="option-text">{{ option.value }}</span>
+      <div class="exam-body">
+        <!-- 左侧：题目区域 -->
+        <div class="exam-main">
+          <div class="question-card">
+            <div class="question-header">
+              <a-tag class="type-tag" :color="getQuestionTypeColor(currentQuestion?.type)">
+                {{ getQuestionTypeText(currentQuestion?.type) }}
+              </a-tag>
+              <span class="question-score">{{ currentQuestion?.score || 0 }} 分</span>
             </div>
-          </template>
-          <template v-else>
-            <div
-              v-for="(option, index) in currentOptions"
-              :key="index"
-              class="option-item single"
-              :class="{ selected: answers[currentQuestion?.id ?? 0] === option.key }"
-              @click="selectOption(option.key)"
-            >
-              <div class="option-radio">
-                <div v-if="answers[currentQuestion?.id ?? 0] === option.key" class="radio-inner" />
-              </div>
-              <span class="option-label">{{ option.key }}.</span>
-              <span class="option-text">{{ option.value }}</span>
+
+            <div class="question-content">
+              {{ currentQuestion?.content }}
             </div>
-          </template>
-        </div>
-      </div>
 
-      <div v-if="currentQuestion?.explanation" class="question-explanation">
-        <div class="explanation-title">
-          <InfoCircleOutlined /> 解析
-        </div>
-        <p>{{ currentQuestion.explanation }}</p>
-      </div>
+            <div class="question-options">
+              <template v-if="currentQuestion?.type === 'multiple_choice'">
+                <div
+                  v-for="(option, index) in currentOptions"
+                  :key="index"
+                  class="option-item multiple"
+                  :class="{ selected: isOptionSelected(option.key) }"
+                  @click="toggleOption(option.key)"
+                >
+                  <div class="option-checkbox">
+                    <CheckOutlined v-if="isOptionSelected(option.key)" />
+                  </div>
+                  <span class="option-label">{{ option.key }}.</span>
+                  <span class="option-text">{{ option.value }}</span>
+                </div>
+              </template>
+              <template v-else>
+                <div
+                  v-for="(option, index) in currentOptions"
+                  :key="index"
+                  class="option-item single"
+                  :class="{ selected: answers[currentQuestion?.id ?? 0] === option.key }"
+                  @click="selectOption(option.key)"
+                >
+                  <div class="option-radio">
+                    <div v-if="answers[currentQuestion?.id ?? 0] === option.key" class="radio-inner" />
+                  </div>
+                  <span class="option-label">{{ option.key }}.</span>
+                  <span class="option-text">{{ option.value }}</span>
+                </div>
+              </template>
+            </div>
+          </div>
 
-      <div class="question-nav">
-        <a-button :disabled="currentIndex === 0" @click="prevQuestion">
-          <LeftOutlined /> 上一题
-        </a-button>
-        <a-button type="primary" @click="showAnswerSheet = !showAnswerSheet">
-          <MenuOutlined /> 答题卡
-        </a-button>
-        <a-button v-if="currentIndex < questions.length - 1" type="primary" @click="nextQuestion">
-          下一题 <RightOutlined />
-        </a-button>
-        <a-button v-else type="primary" @click="showSubmitConfirm">
-          提交试卷
-        </a-button>
+          <div v-if="currentQuestion?.explanation" class="question-explanation">
+            <div class="explanation-title">
+              <InfoCircleOutlined /> 解析
+            </div>
+            <p>{{ currentQuestion.explanation }}</p>
+          </div>
+
+          <div class="question-nav">
+            <a-button :disabled="currentIndex === 0" @click="prevQuestion">
+              <LeftOutlined /> 上一题
+            </a-button>
+            <a-button type="primary" @click="showAnswerSheet = !showAnswerSheet">
+              <MenuOutlined /> 答题卡
+            </a-button>
+            <a-button v-if="currentIndex < questions.length - 1" type="primary" @click="nextQuestion">
+              下一题 <RightOutlined />
+            </a-button>
+            <a-button v-else type="primary" @click="showSubmitConfirm">
+              提交试卷
+            </a-button>
+          </div>
+        </div>
+
+        <!-- 右侧：题目概览 -->
+        <div class="exam-sidebar">
+          <div class="sidebar-card">
+            <div class="sidebar-title">题目概览</div>
+            <div class="sidebar-stats">
+              <div class="stat-item">
+                <span class="stat-num">{{ answeredCount }}</span>
+                <span class="stat-label">已答</span>
+              </div>
+              <div class="stat-divider" />
+              <div class="stat-item">
+                <span class="stat-num">{{ questions.length - answeredCount }}</span>
+                <span class="stat-label">未答</span>
+              </div>
+            </div>
+
+            <div class="question-grid">
+              <div
+                v-for="(q, index) in questions"
+                :key="q.id"
+                class="q-grid-item"
+                :class="{
+                  current: index === currentIndex,
+                  answered: answers[q.id] !== undefined && answers[q.id] !== '' && answers[q.id] !== null,
+                }"
+                @click="goToQuestion(index)"
+              >
+                {{ index + 1 }}
+              </div>
+            </div>
+
+            <div class="sidebar-legend">
+              <div class="legend-item">
+                <span class="legend-dot current-dot" />
+                <span>当前题</span>
+              </div>
+              <div class="legend-item">
+                <span class="legend-dot answered-dot" />
+                <span>已作答</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </template>
 
@@ -188,7 +239,7 @@ const examKind = ref<'admission' | 'training'>('training')
 const examDetail = ref<ExamDetailResponse | null>(null)
 const questions = ref<ExamQuestionSnapshotResponse[]>([])
 const currentIndex = ref(0)
-const answers = reactive<Record<number, string | string[]>>({})
+const answers = ref<Record<number, string | string[]>>({})
 const showAnswerSheet = ref(false)
 const submitModalVisible = ref(false)
 
@@ -208,8 +259,8 @@ const currentOptions = computed(() => {
 })
 
 const answeredCount = computed(() => {
-  return Object.keys(answers).filter((k) => {
-    const v = answers[Number(k)]
+  return Object.keys(answers.value).filter((k) => {
+    const v = answers.value[Number(k)]
     return v !== undefined && v !== '' && (Array.isArray(v) ? v.length > 0 : true)
   }).length
 })
@@ -288,7 +339,7 @@ function formatDuration(seconds: number) {
 }
 
 function isOptionSelected(key: string) {
-  const answer = answers[currentQuestion.value?.id ?? 0]
+  const answer = answers.value[currentQuestion.value?.id ?? 0]
   if (Array.isArray(answer)) {
     return answer.includes(key)
   }
@@ -297,7 +348,7 @@ function isOptionSelected(key: string) {
 
 function selectOption(key: string) {
   if (currentQuestion.value) {
-    answers[currentQuestion.value.id] = key
+    answers.value[currentQuestion.value.id] = key
   }
 }
 
@@ -305,9 +356,9 @@ function toggleOption(key: string) {
   const qid = currentQuestion.value?.id
   if (!qid) return
 
-  const current = answers[qid]
+  const current = answers.value[qid]
   if (!Array.isArray(current)) {
-    answers[qid] = [key]
+    answers.value[qid] = [key]
   } else {
     const index = current.indexOf(key)
     if (index === -1) {
@@ -315,7 +366,7 @@ function toggleOption(key: string) {
     } else {
       current.splice(index, 1)
     }
-    answers[qid] = [...current]
+    answers.value[qid] = [...current]
   }
 }
 
@@ -471,6 +522,147 @@ function getQuestionTypeText(type?: string) {
 .loading-wrapper {
   padding: 80px 0;
   text-align: center;
+}
+
+/* 主体布局：左侧题目 + 右侧概览 */
+.exam-body {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.exam-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.exam-sidebar {
+  width: 220px;
+  flex-shrink: 0;
+  position: sticky;
+  top: 20px;
+}
+
+.sidebar-card {
+  background: var(--v2-bg-card);
+  border-radius: 20px;
+  padding: 20px;
+  box-shadow: 0 8px 24px rgba(24, 39, 75, 0.06);
+}
+
+.sidebar-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--v2-text-primary);
+  margin-bottom: 16px;
+}
+
+.sidebar-stats {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  margin-bottom: 18px;
+  padding: 14px;
+  background: var(--v2-bg);
+  border-radius: 14px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.stat-num {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--v2-text-primary);
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--v2-text-secondary);
+}
+
+.stat-divider {
+  width: 1px;
+  height: 32px;
+  background: var(--v2-border);
+}
+
+.question-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.q-grid-item {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--v2-bg);
+  color: var(--v2-text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 2px solid transparent;
+}
+
+.q-grid-item:hover {
+  border-color: var(--v2-primary);
+}
+
+.q-grid-item.current {
+  background: var(--v2-primary);
+  color: #fff;
+  border-color: var(--v2-primary);
+}
+
+.q-grid-item.answered {
+  background: rgba(52, 199, 89, 0.12);
+  color: var(--v2-success);
+  border-color: rgba(52, 199, 89, 0.3);
+}
+
+.q-grid-item.answered.current {
+  background: var(--v2-primary);
+  color: #fff;
+  border-color: var(--v2-primary);
+}
+
+.sidebar-legend {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--v2-text-secondary);
+}
+
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.current-dot {
+  background: var(--v2-primary);
+}
+
+.answered-dot {
+  background: rgba(52, 199, 89, 0.5);
 }
 
 .question-card {
@@ -687,6 +879,14 @@ function getQuestionTypeText(type?: string) {
 @media (max-width: 768px) {
   .exam-do-page {
     padding: 12px;
+  }
+
+  .exam-body {
+    flex-direction: column;
+  }
+
+  .exam-sidebar {
+    display: none;
   }
 
   .question-nav {
