@@ -18,6 +18,9 @@ from app.schemas import (
 class KnowledgePointService:
     """知识点服务"""
 
+    NON_STANDARD_NAME_KEYWORDS = ("题库", "试卷", "题库模块")
+    NON_STANDARD_DESCRIPTION_KEYWORDS = ("从旧系统科目",)
+
     def __init__(self, db: Session):
         self.db = db
 
@@ -29,7 +32,7 @@ class KnowledgePointService:
         is_active: Optional[bool] = None,
     ) -> PaginatedResponse[KnowledgePointResponse]:
         """获取知识点列表"""
-        base_query = self.db.query(KnowledgePoint)
+        base_query = self._apply_standard_knowledge_point_filter(self.db.query(KnowledgePoint))
         if search:
             base_query = base_query.filter(KnowledgePoint.name.contains(search))
         if is_active is not None:
@@ -54,6 +57,7 @@ class KnowledgePointService:
     def create_knowledge_point(self, data: KnowledgePointCreate, user_id: int) -> KnowledgePointResponse:
         """创建知识点"""
         normalized_name = self._normalize_name(data.name)
+        self._validate_standard_knowledge_point(normalized_name, data.description)
         if self._get_by_name(normalized_name):
             raise ValueError("知识点名称已存在")
 
@@ -83,6 +87,7 @@ class KnowledgePointService:
             knowledge_point.name = normalized_name
         if "description" in update_data:
             knowledge_point.description = self._normalize_description(update_data["description"])
+        self._validate_standard_knowledge_point(knowledge_point.name, knowledge_point.description)
         if "is_active" in update_data:
             knowledge_point.is_active = bool(update_data["is_active"])
 
@@ -149,10 +154,10 @@ class KnowledgePointService:
         return normalized
 
     def _base_list_query(self, search: Optional[str], is_active: Optional[bool]):
-        query = self.db.query(
+        query = self._apply_standard_knowledge_point_filter(self.db.query(
             KnowledgePoint,
             func.count(question_knowledge_point_relations.c.question_id).label("question_count"),
-        ).outerjoin(
+        )).outerjoin(
             question_knowledge_point_relations,
             question_knowledge_point_relations.c.knowledge_point_id == KnowledgePoint.id,
         )
@@ -184,9 +189,32 @@ class KnowledgePointService:
             raise ValueError("请填写知识点名称")
         return normalized_name[:100]
 
+    def _validate_standard_knowledge_point(self, name: str, description: Optional[str]) -> None:
+        if self._is_non_standard_knowledge_point(name, description):
+            raise ValueError("该名称更像题库/试卷分类，不适合作为知识点，请改到题库管理中维护")
+
     @staticmethod
     def _normalize_description(description: Optional[str]) -> Optional[str]:
         return str(description or "").strip() or None
+
+    def _apply_standard_knowledge_point_filter(self, query):
+        for keyword in self.NON_STANDARD_NAME_KEYWORDS:
+            query = query.filter(~KnowledgePoint.name.contains(keyword))
+        for keyword in self.NON_STANDARD_DESCRIPTION_KEYWORDS:
+            query = query.filter(
+                (KnowledgePoint.description.is_(None))
+                | (~KnowledgePoint.description.contains(keyword))
+            )
+        return query
+
+    def _is_non_standard_knowledge_point(self, name: Optional[str], description: Optional[str]) -> bool:
+        normalized_name = str(name or "").strip()
+        normalized_description = str(description or "").strip()
+        if any(keyword in normalized_name for keyword in self.NON_STANDARD_NAME_KEYWORDS):
+            return True
+        if any(keyword in normalized_description for keyword in self.NON_STANDARD_DESCRIPTION_KEYWORDS):
+            return True
+        return False
 
     @staticmethod
     def _to_response(knowledge_point: KnowledgePoint, question_count: int) -> KnowledgePointResponse:

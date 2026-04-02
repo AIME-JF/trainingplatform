@@ -617,7 +617,10 @@ class ExamService:
 
         return ExamDetailResponse(
             **self._to_training_exam_response(exam, current_user_id).model_dump(),
-            questions=self._build_snapshot_responses(exam.paper),
+            questions=self._build_snapshot_responses(
+                exam.paper,
+                include_sensitive=self._can_view_exam_sensitive_fields(current_user_id),
+            ),
         )
 
     def get_admission_exam_detail(
@@ -645,7 +648,10 @@ class ExamService:
 
         return AdmissionExamDetailResponse(
             **self._to_admission_exam_response(exam, current_user_id, current_user).model_dump(),
-            questions=self._build_snapshot_responses(exam.paper),
+            questions=self._build_snapshot_responses(
+                exam.paper,
+                include_sensitive=self._can_view_exam_sensitive_fields(current_user_id),
+            ),
         )
 
     def submit_exam(self, exam_id: int, user_id: int, data: ExamSubmit) -> ExamRecordResponse:
@@ -1220,7 +1226,11 @@ class ExamService:
                 knowledge_points=self._resolve_question_knowledge_points(question),
             ))
 
-    def _build_snapshot_responses(self, paper: Optional[ExamPaper]) -> List[ExamQuestionSnapshotResponse]:
+    def _build_snapshot_responses(
+        self,
+        paper: Optional[ExamPaper],
+        include_sensitive: bool = True,
+    ) -> List[ExamQuestionSnapshotResponse]:
         if not paper:
             return []
         return [
@@ -1229,8 +1239,12 @@ class ExamService:
                 type=item.question_type or (item.question.type if item.question else "single"),
                 content=item.content or (item.question.content if item.question else ""),
                 options=item.options if item.options is not None else (item.question.options if item.question else None),
-                answer=item.answer if item.answer is not None else (item.question.answer if item.question else None),
-                explanation=item.explanation if item.explanation is not None else (item.question.explanation if item.question else None),
+                answer=(
+                    item.answer if item.answer is not None else (item.question.answer if item.question else None)
+                ) if include_sensitive else None,
+                explanation=(
+                    item.explanation if item.explanation is not None else (item.question.explanation if item.question else None)
+                ) if include_sensitive else None,
                 score=int(item.score or (item.question.score if item.question else 0) or 0),
                 knowledge_points=(
                     item.knowledge_points
@@ -1703,6 +1717,11 @@ class ExamService:
         previous_total = float(user.avg_score or 0) * previous_count
         user.exam_count = previous_count + 1
         user.avg_score = (previous_total + score) / user.exam_count
+
+    def _can_view_exam_sensitive_fields(self, current_user_id: Optional[int]) -> bool:
+        if not current_user_id:
+            return False
+        return is_admin_user(self.db, current_user_id) or is_instructor_user(self.db, current_user_id)
 
     def _paginate(self, items: List[Any], page: int, size: int) -> PaginatedResponse[Any]:
         total = len(items)
