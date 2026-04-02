@@ -17,18 +17,9 @@
           <!-- 第一层：操作与搜索过滤 -->
           <div class="toolbar-row">
             <div class="toolbar-left">
-              <a-dropdown>
-                <button class="btn-primary">
-                  {{ createExamType === 'admission' ? '添加准入考试' : '添加培训班考试' }}
-                  <svg style="width:12px;height:12px;margin-left:4px" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
-                </button>
-                <template #overlay>
-                  <a-menu @click="({ key }) => { createExamType = key; openCreateDrawer() }">
-                    <a-menu-item key="admission">添加准入考试</a-menu-item>
-                    <a-menu-item key="training">添加培训班考试</a-menu-item>
-                  </a-menu>
-                </template>
-              </a-dropdown>
+              <button class="btn-primary" @click="openCreateDrawer">
+                添加准入考试
+              </button>
               <div class="search-wrapper">
                 <svg class="search-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                 <a-input-search v-model:value="searchText" placeholder="请输入关键字搜索..." allow-clear @search="handleSearch" class="search-input" />
@@ -114,9 +105,17 @@
                   <td class="col-category text-center text-slate-600">{{ exam.courseNames?.length ? exam.courseNames.join('、') : (exam.courseName || '默认分类') }}</td>
                   <td class="col-training text-center text-slate-600">{{ exam.training_name || '-' }}</td>
                   <td class="col-action text-right">
-                    <button class="btn-action" @click.stop="openEditDrawer(exam)">
-                      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h.01M12 12h.01M19 12h.01"/></svg>
-                    </button>
+                    <a-dropdown :trigger="['click']">
+                      <button class="btn-action" @click.stop>
+                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h.01M12 12h.01M19 12h.01"/></svg>
+                      </button>
+                      <template #overlay>
+                        <a-menu @click="({ key }) => handleAction(key, exam)">
+                          <a-menu-item key="edit">编辑</a-menu-item>
+                          <a-menu-item key="delete" style="color: #ef4444;">删除</a-menu-item>
+                        </a-menu>
+                      </template>
+                    </a-dropdown>
                   </td>
                 </tr>
 
@@ -288,7 +287,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { message, Modal } from 'ant-design-vue'
+import { message, Modal, Dropdown as aDropdown, Menu as aMenu, MenuItem as aMenuItem } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -343,6 +342,7 @@ const form = reactive({
   type: 'formal', status: 'upcoming',
   scopeType: 'all', scopeTargetIds: [],
   duration: 60, passingScore: 60, maxAttempts: 1,
+  trainingId: 0,
 })
 
 const drawerTitle = computed(() => isEdit.value ? '编辑考试' : '添加考试')
@@ -365,6 +365,32 @@ function switchStatusTab(tab) {
   filterStatusSelect.value = tab === 'all' ? '' : tab
   pagination.current = 1
   loadExams()
+}
+
+function handleAction(key, exam) {
+  if (key === 'edit') {
+    openEditDrawer(exam)
+  } else if (key === 'delete') {
+    Modal.confirm({
+      title: '确定删除该考试吗？',
+      content: '已有作答记录或已关联培训班的考试不能删除。',
+      okText: '确定删除',
+      okType: 'danger',
+      async onOk() {
+        try {
+          if ((exam.kind || filterExamType.value) === 'admission') {
+            await deleteAdmissionExam(exam.id)
+          } else {
+            await deleteExam(exam.id)
+          }
+          message.success('删除成功')
+          await loadExams()
+        } catch (e) {
+          message.error(e.message || '删除失败')
+        }
+      },
+    })
+  }
 }
 
 function handleSearch() { pagination.current = 1; loadExams() }
@@ -478,6 +504,9 @@ async function handleSave() {
   if (!Number.isFinite(ps) || ps < 1) { message.warning('及格分不能小于1分'); return }
   if (selectedPaperDetail.value && ps > selectedPaperDetail.value.totalScore) { message.warning('及格分不能超过试卷满分'); return }
   const payload = { title: form.title, paperId: form.paperId, description: form.description || undefined, type: form.type, status: form.status, duration: dur, passingScore: ps, startTime: dateRange.value?.[0], endTime: dateRange.value?.[1], maxAttempts: form.maxAttempts, scopeType: form.scopeType, scopeTargetIds: form.scopeTargetIds }
+  if (createExamType.value === 'training' && form.trainingId) {
+    payload.trainingId = form.trainingId
+  }
   submitting.value = true
   try {
     if (isEdit.value) {
