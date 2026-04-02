@@ -3,7 +3,7 @@ AI 任务服务
 """
 import json
 from datetime import datetime, timedelta
-from typing import Callable, Iterable, List, Optional
+from typing import Iterable, List, Optional
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, selectinload
@@ -121,7 +121,7 @@ class AIService:
         current_user_id: int,
     ) -> AIPaperGenerationTaskDetailResponse:
         task = self._get_task_or_raise(task_id, self.PAPER_GENERATION_TASK_TYPE, current_user_id)
-        task = self._ensure_paper_generation_task_progress(task, self.execute_paper_generation_task)
+        task = self._ensure_paper_generation_task_progress(task)
         return self._to_paper_generation_task_detail(task)
 
     def get_paper_document_generation_task_detail(
@@ -130,7 +130,7 @@ class AIService:
         current_user_id: int,
     ) -> AIPaperDocumentGenerationTaskDetailResponse:
         task = self._get_task_or_raise(task_id, self.PAPER_DOCUMENT_GENERATION_TASK_TYPE, current_user_id)
-        task = self._ensure_paper_generation_task_progress(task, self.execute_paper_document_generation_task)
+        task = self._ensure_paper_generation_task_progress(task)
         return self._to_paper_document_generation_task_detail(task)
 
     def create_question_task(
@@ -273,7 +273,7 @@ class AIService:
         except Exception as exc:
             logger.error("调度 AI 自动生成试卷任务失败: %s", exc)
 
-        return self.get_paper_generation_task_detail(task.id, current_user_id)
+        return self._to_paper_generation_task_detail(task)
 
     def create_paper_document_generation_task(
         self,
@@ -303,7 +303,7 @@ class AIService:
         except Exception as exc:
             logger.error("调度 AI 文档生成试卷任务失败: %s", exc)
 
-        return self.get_paper_document_generation_task_detail(task.id, current_user_id)
+        return self._to_paper_document_generation_task_detail(task)
 
     def execute_paper_generation_task(self, task_id: int) -> None:
         task = self.db.query(AITask).filter(
@@ -1581,7 +1581,6 @@ class AIService:
     def _ensure_paper_generation_task_progress(
         self,
         task: AITask,
-        executor: Callable[[int], None],
     ) -> AITask:
         if task.status in {"completed", "confirmed", "failed"}:
             return task
@@ -1596,18 +1595,6 @@ class AIService:
 
         self._try_schedule_ai_paper_generation_task()
         self.db.refresh(task)
-        if task.status in {"completed", "confirmed", "failed"}:
-            return task
-
-        # Celery worker 不在线时，自动降级同步执行，避免任务长时间卡住。
-        if task.status in {"pending", "processing"} and not self._has_active_celery_worker():
-            logger.warning("未检测到可用 Celery worker，降级同步执行任务: %s (%s)", task.id, task.task_type)
-            try:
-                executor(task.id)
-                self.db.refresh(task)
-            except Exception as exc:
-                logger.error("同步兜底执行 AI 自动生成试卷类任务失败(task_id=%s): %s", task.id, exc)
-                self.db.refresh(task)
         return task
 
     @staticmethod
@@ -1619,17 +1606,6 @@ class AIService:
         if hasattr(anchor, "replace") and getattr(anchor, "tzinfo", None) is not None:
             anchor = anchor.replace(tzinfo=None)
         return anchor <= deadline
-
-    @staticmethod
-    def _has_active_celery_worker() -> bool:
-        try:
-            from celery_app import celery_app
-
-            inspector = celery_app.control.inspect(timeout=0.6)
-            result = inspector.ping() or {}
-            return bool(result)
-        except Exception:
-            return False
 
     @staticmethod
     def _build_knowledge_point_like_pattern(keyword: str) -> str:
