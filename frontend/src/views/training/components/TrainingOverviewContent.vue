@@ -18,8 +18,9 @@
         <div
           v-for="item in setupGuideItems"
           :key="item.key"
-          class="setup-guide-item"
+          class="setup-guide-item clickable"
           :class="`status-${item.status}`"
+          @click="$emit('guide-click', item.key)"
         >
           <div class="setup-guide-main">
             <div class="setup-guide-title-row">
@@ -85,6 +86,7 @@ defineProps({
 
 defineEmits([
   'go-schedule',
+  'guide-click',
   'start-session-checkout',
   'end-session-checkout',
   'go-current-session-checkout',
@@ -107,7 +109,9 @@ defineExpose({
 .ov-label { font-size: 12px; color: #888; margin-top: 4px; }
 .setup-guide-card { margin-bottom: 16px; padding: 16px; border: 1px solid #e2e8f0; border-radius: 12px; background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%); }
 .setup-guide-list { display: flex; flex-direction: column; gap: 10px; }
-.setup-guide-item { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 10px; border: 1px solid #e5e7eb; background: #fff; }
+.setup-guide-item { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 10px; border: 1px solid #e5e7eb; background: #fff; transition: box-shadow 0.2s, border-color 0.2s; }
+.setup-guide-item.clickable { cursor: pointer; }
+.setup-guide-item.clickable:hover { border-color: #b0c4de; box-shadow: 0 2px 8px rgba(0, 48, 135, 0.08); }
 .setup-guide-item.status-done { border-color: #d1fae5; background: #f0fdf4; }
 .setup-guide-item.status-progress { border-color: #fde68a; background: #fffbeb; }
 .setup-guide-main { min-width: 0; }
