@@ -857,6 +857,7 @@ class TrainingService:
                 title=c.title,
                 category=c.category,
                 file_type=c.file_type,
+                instructor_id=c.instructor_id,
                 instructor_name=instructor.nickname if instructor else None,
                 duration=c.duration,
                 chapter_count=len(c.chapters) if c.chapters else 0,

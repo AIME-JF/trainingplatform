@@ -135,6 +135,7 @@ class CourseResourceItem(BaseModel):
     title: str
     category: Optional[str] = None
     file_type: Optional[str] = None
+    instructor_id: Optional[int] = None
     instructor_name: Optional[str] = None
     duration: Optional[int] = None
     chapter_count: int = 0

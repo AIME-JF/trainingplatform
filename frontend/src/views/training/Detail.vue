@@ -206,64 +206,44 @@
           </div>
         </div>
 
-        <a-form layout=”vertical” style=”margin-top:12px”>
-          <a-alert
-            type=”info”
-            show-icon
-            message=”计划课时用于智能排课任务的「按课时排」模式；如果选择排满或排满工作日，则不会按这里的课时限制生成。”
-            style=”margin-bottom:16px”
-          />
-          <a-form-item label="课程来源">
-            <a-radio-group v-model:value="courseForm.sourceMode" @change="onCourseSourceChange">
-              <a-radio value="resource">选择课程资源</a-radio>
-              <a-radio value="custom">自定义课程</a-radio>
+        <a-form layout="vertical" style="margin-top:12px">
+          <!-- 课程来源 -->
+          <a-form-item style="margin-bottom:12px">
+            <a-radio-group v-model:value="courseForm.sourceMode" @change="onCourseSourceChange" button-style="solid" size="small">
+              <a-radio-button value="resource">从课程资源选择</a-radio-button>
+              <a-radio-button value="custom">自定义课程</a-radio-button>
             </a-radio-group>
           </a-form-item>
+
+          <!-- 课程选择 / 名称 -->
           <a-form-item v-if="courseForm.sourceMode === 'resource'" label="课程资源" required>
-            <div style="display:flex;gap:8px;align-items:center">
-              <a-input :value="courseForm.name" disabled placeholder="点击右侧按钮选择课程资源" style="flex:1" />
-              <a-button @click="showCourseResourcePicker = true">选择</a-button>
-            </div>
+            <a-input
+              :value="courseForm.name"
+              disabled
+              placeholder="请点击选择课程资源"
+            >
+              <template #addonAfter>
+                <a-button type="link" size="small" style="margin:-1px -11px" @click="showCourseResourcePicker = true">选择</a-button>
+              </template>
+            </a-input>
           </a-form-item>
           <a-form-item v-else label="课程名称" required>
             <a-input v-model:value="courseForm.name" placeholder="例：刑事诉讼法实务操作" />
           </a-form-item>
-          <a-form-item label="课程地点">
-            <a-input v-model:value="courseForm.location" placeholder="请输入课程地点" />
-          </a-form-item>
-          <a-row :gutter="12">
-            <a-col :span="12">
-              <a-form-item
-                label="计划课时"
-                extra="用于 AI 的“按课时排”模式；如果不填，仍可在 AI 任务中选择排满或排满工作日。"
-              >
-                <a-input-number
-                  v-model:value="courseForm.hours"
-                  :min="0"
-                  :step="0.5"
-                  :precision="1"
-                  style="width:100%"
-                />
-              </a-form-item>
-            </a-col>
-            <a-col :span="12">
-              <a-form-item label="课程类型">
-                <a-radio-group v-model:value="courseForm.type">
-                  <a-radio value="theory">理论课</a-radio>
-                  <a-radio value="practice">实操课</a-radio>
-                </a-radio-group>
-              </a-form-item>
-            </a-col>
-          </a-row>
-          <a-row :gutter="12">
+
+          <a-divider style="margin:8px 0 16px" />
+
+          <!-- 教官 -->
+          <a-row :gutter="16">
             <a-col :span="12">
               <a-form-item label="授课教官" required>
                 <a-select
                   v-model:value="courseForm.instructorId"
-                  placeholder="从教官库中选择"
+                  placeholder="选择授课教官"
                   show-search
                   option-filter-prop="label"
                   style="width:100%"
+                  :disabled="courseForm.sourceMode === 'resource' && !!courseForm.instructorId"
                   @change="onInstructorChange"
                 >
                   <a-select-option
@@ -282,7 +262,7 @@
                 <a-select
                   v-model:value="courseForm.assistantInstructorIds"
                   mode="multiple"
-                  placeholder="可多选带教教官"
+                  placeholder="可多选"
                   show-search
                   option-filter-prop="label"
                   style="width:100%"
@@ -299,6 +279,45 @@
               </a-form-item>
             </a-col>
           </a-row>
+
+          <!-- 课程属性 -->
+          <a-row :gutter="16">
+            <a-col :span="8">
+              <a-form-item label="课程类型">
+                <a-radio-group v-model:value="courseForm.type">
+                  <a-radio value="theory">理论课</a-radio>
+                  <a-radio value="practice">实操课</a-radio>
+                </a-radio-group>
+              </a-form-item>
+            </a-col>
+            <a-col :span="8">
+              <a-form-item label="计划课时">
+                <a-input-number
+                  v-model:value="courseForm.hours"
+                  :min="0"
+                  :step="0.5"
+                  :precision="1"
+                  style="width:100%"
+                  placeholder="0"
+                />
+              </a-form-item>
+            </a-col>
+            <a-col :span="8">
+              <a-form-item label="上课地点">
+                <a-input v-model:value="courseForm.location" placeholder="教室/场地" />
+              </a-form-item>
+            </a-col>
+          </a-row>
+
+          <a-alert
+            type="info"
+            show-icon
+            style="margin-top:-4px"
+          >
+            <template #message>
+              <span style="font-size:12px">计划课时用于智能排课「按课时排」模式，不填时可在 AI 任务中选择排满模式。</span>
+            </template>
+          </a-alert>
         </a-form>
 
         <div class="wizard-footer">
@@ -2584,8 +2603,20 @@ function onCourseSourceChange() {
 function onCourseResourceSelected(item) {
   courseForm.courseId = item.id
   courseForm.name = item.title
-  if (item.instructorName && !courseForm.instructorId) {
-    courseForm.instructor = item.instructorName
+  // 自动设置授课教官
+  if (item.instructorId) {
+    courseForm.instructorId = item.instructorId
+    courseForm.instructor = item.instructorName || ''
+    // 确保教官在选项列表中
+    ensureInstructorOptionsLoaded(true)
+  } else if (item.instructorName) {
+    const matched = instructorList.value.find(i => i.name === item.instructorName)
+    if (matched) {
+      courseForm.instructorId = matched.userId
+      courseForm.instructor = matched.name
+    } else {
+      courseForm.instructor = item.instructorName
+    }
   }
 }
 

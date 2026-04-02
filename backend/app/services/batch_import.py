@@ -787,7 +787,12 @@ class BatchImportService:
             raise ValueError("课时格式无效")
         if hours is not None and hours < 0:
             raise ValueError("课时不能小于 0")
+
+        # 优先按名称+教官匹配课程资源
+        course_id = self._match_course_resource(course_name, instructor_name)
+
         return {
+            "course_id": course_id,
             "course_key": str(uuid.uuid4()),
             "name": course_name,
             "location": self._to_text(row.get("location")),
@@ -798,6 +803,24 @@ class BatchImportService:
             "hours": round(hours or 0, 2),
             "schedules": [],
         }
+
+    def _match_course_resource(self, course_name: str, instructor_name: Optional[str] = None) -> Optional[int]:
+        """按名称和教官匹配课程资源，返回 course_id 或 None"""
+        from app.models.course import Course as CourseModel
+        query = self.db.query(CourseModel).filter(CourseModel.title == course_name)
+        candidates = query.all()
+        if not candidates:
+            return None
+        if len(candidates) == 1:
+            return candidates[0].id
+        # 多个同名课程时，尝试用教官名进一步匹配
+        if instructor_name:
+            for c in candidates:
+                inst = c.instructor
+                if inst and (inst.nickname == instructor_name or inst.username == instructor_name):
+                    return c.id
+        # 无法精确匹配时返回第一个
+        return candidates[0].id
 
     def _build_session_entry(self, row: Dict[str, Any]) -> Dict[str, Any]:
         course_name = self._to_text(row.get("course_name"))
@@ -882,6 +905,7 @@ class BatchImportService:
 
     @staticmethod
     def _apply_course_payload(course: TrainingCourse, payload: Dict[str, Any]) -> None:
+        course.course_id = payload.get("course_id")
         course.course_key = payload.get("course_key")
         course.name = payload["name"]
         course.location = payload.get("location")
@@ -985,6 +1009,7 @@ class BatchImportService:
 
     def _build_course_payload(self, course: TrainingCourse) -> Dict[str, Any]:
         return {
+            "course_id": course.course_id,
             "course_key": course.course_key or str(uuid.uuid4()),
             "name": course.name,
             "location": self._to_text(course.location),
