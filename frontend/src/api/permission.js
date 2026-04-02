@@ -23,3 +23,7 @@ export function deletePermission(permissionId) {
 export function syncPermissions() {
   return request.post('/permissions/sync')
 }
+
+export function getPermissionGroups() {
+  return request.get('/permissions/groups')
+}

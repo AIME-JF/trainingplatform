@@ -174,21 +174,18 @@
 
     <a-modal
       v-model:open="permissionDialog.visible"
-      title="分配权限"
-      width="1080px"
+      :title="`权限配置 — ${permissionDialog.role?.name || ''}`"
+      width="1000px"
       :confirm-loading="permissionDialog.submitting"
       @ok="submitRolePermissions"
+      ok-text="保存"
+      cancel-text="取消"
     >
-      <p class="perm-tip">
-        当前角色：
-        <strong>{{ permissionDialog.role?.name || '-' }}</strong>
-      </p>
       <PermissionTransfer
         v-model:target-keys="permissionDialog.targetKeys"
         :permissions="permissionDialog.permissions"
         :loading="permissionDialog.loading"
         :disabled="isAdminRole(permissionDialog.role)"
-        :height="480"
       />
     </a-modal>
   </div>

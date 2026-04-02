@@ -107,3 +107,24 @@ def sync_permissions(
     controller = PermissionController(db)
     result = controller.sync_permissions(permissions_data)
     return StandardResponse(message="同步权限成功", data=result)
+
+
+@router.get("/groups", summary="获取权限组列表")
+def get_permission_groups(
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    from app.models.permission import PermissionGroup
+    groups = db.query(PermissionGroup).filter(
+        PermissionGroup.is_active == True
+    ).order_by(PermissionGroup.sort_order).all()
+    return StandardResponse(data=[
+        {
+            "id": g.id,
+            "groupKey": g.group_key,
+            "groupName": g.group_name,
+            "description": g.description,
+            "sortOrder": g.sort_order,
+        }
+        for g in groups
+    ])
