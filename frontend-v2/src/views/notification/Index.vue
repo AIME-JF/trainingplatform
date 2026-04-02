@@ -1,0 +1,287 @@
+<template>
+  <div class="notification-page">
+    <div class="notification-header">
+      <h1 class="notification-title">通知中心</h1>
+      <a-button v-if="hasUnread" type="link" size="small" @click="handleMarkAllRead">
+        全部已读
+      </a-button>
+    </div>
+
+    <a-tabs v-model:activeKey="activeTab" class="notification-tabs" @change="onTabChange">
+      <a-tab-pane key="reminder">
+        <template #tab>
+          <a-badge :count="unreadCount.reminder" :offset="[8, -4]" size="small">
+            <span>消息提醒</span>
+          </a-badge>
+        </template>
+      </a-tab-pane>
+      <a-tab-pane key="system">
+        <template #tab>
+          <a-badge :count="unreadCount.system" :offset="[8, -4]" size="small">
+            <span>平台公告</span>
+          </a-badge>
+        </template>
+      </a-tab-pane>
+    </a-tabs>
+
+    <div class="notification-body">
+      <a-spin :spinning="loading">
+        <div v-if="!list.length && !loading" class="notification-empty">
+          <a-empty :description="activeTab === 'reminder' ? '暂无消息提醒' : '暂无平台公告'" />
+        </div>
+        <div v-else class="notification-list">
+          <div
+            v-for="item in list"
+            :key="item.id"
+            class="notification-item"
+            :class="{ unread: !item.is_read }"
+            @click="handleClickItem(item)"
+          >
+            <div class="notification-item-dot" />
+            <div class="notification-item-body">
+              <div class="notification-item-header">
+                <span class="notification-item-title">{{ item.title }}</span>
+                <a-tag v-if="item.reminder_type" size="small" color="blue">{{ reminderTypeLabel(item.reminder_type) }}</a-tag>
+              </div>
+              <div class="notification-item-content">{{ item.content }}</div>
+              <div class="notification-item-time">{{ formatTime(item.created_at) }}</div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="total > list.length" class="notification-load-more">
+          <a-button type="link" :loading="loading" @click="loadMore">加载更多</a-button>
+        </div>
+      </a-spin>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, onMounted } from 'vue'
+import dayjs from 'dayjs'
+import {
+  getMyNotifications,
+  getUnreadCount,
+  markAsRead,
+  markAllAsRead,
+  type NoticeItem,
+  type NoticeUnreadCount,
+} from '@/services/notification'
+
+const activeTab = ref('reminder')
+const loading = ref(false)
+const list = ref<NoticeItem[]>([])
+const total = ref(0)
+const page = ref(1)
+const unreadCount = ref<NoticeUnreadCount>({ total: 0, reminder: 0, system: 0 })
+
+const hasUnread = ref(false)
+
+const reminderTypeMap: Record<string, string> = {
+  exam_reminder: '考试提醒',
+  review_approved: '审核通过',
+  review_rejected: '审核驳回',
+  enrollment_approved: '报名通过',
+  enrollment_rejected: '报名驳回',
+  training_notice: '培训通知',
+}
+
+function reminderTypeLabel(type: string): string {
+  return reminderTypeMap[type] || type
+}
+
+function formatTime(time: string | null | undefined): string {
+  if (!time) return ''
+  const diff = Date.now() - new Date(time).getTime()
+  if (diff < 60000) return '刚刚'
+  if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`
+  if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`
+  return dayjs(time).format('YYYY-MM-DD HH:mm')
+}
+
+async function fetchList(reset = false) {
+  if (reset) {
+    page.value = 1
+    list.value = []
+  }
+  loading.value = true
+  try {
+    const data = await getMyNotifications({
+      page: page.value,
+      size: 20,
+      tab: activeTab.value,
+    })
+    if (reset) {
+      list.value = data.items
+    } else {
+      list.value.push(...data.items)
+    }
+    total.value = data.total
+  } catch { /* ignore */ } finally {
+    loading.value = false
+  }
+}
+
+async function fetchUnreadCount() {
+  try {
+    unreadCount.value = await getUnreadCount()
+    hasUnread.value = unreadCount.value.total > 0
+  } catch { /* ignore */ }
+}
+
+function onTabChange() {
+  fetchList(true)
+}
+
+function loadMore() {
+  page.value++
+  fetchList()
+}
+
+async function handleClickItem(item: NoticeItem) {
+  if (!item.is_read) {
+    try {
+      await markAsRead(item.id)
+      item.is_read = true
+      fetchUnreadCount()
+    } catch { /* ignore */ }
+  }
+}
+
+async function handleMarkAllRead() {
+  try {
+    await markAllAsRead(activeTab.value)
+    list.value.forEach((item) => { item.is_read = true })
+    fetchUnreadCount()
+  } catch { /* ignore */ }
+}
+
+onMounted(() => {
+  fetchList(true)
+  fetchUnreadCount()
+})
+</script>
+
+<style scoped>
+.notification-page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+.notification-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.notification-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--v2-text-primary);
+  margin: 0;
+}
+
+.notification-tabs {
+  margin-bottom: 4px;
+}
+
+.notification-body {
+  min-height: 300px;
+}
+
+.notification-empty {
+  padding: 60px 0;
+}
+
+.notification-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.notification-item {
+  display: flex;
+  gap: 12px;
+  padding: 16px 12px;
+  border-bottom: 1px solid var(--v2-border-light);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.notification-item:hover {
+  background: var(--v2-bg);
+}
+
+.notification-item:last-child {
+  border-bottom: none;
+}
+
+.notification-item-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 7px;
+  background: transparent;
+}
+
+.notification-item.unread .notification-item-dot {
+  background: var(--v2-primary);
+}
+
+.notification-item-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.notification-item-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.notification-item-title {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--v2-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notification-item.unread .notification-item-title {
+  font-weight: 600;
+}
+
+.notification-item-content {
+  font-size: 13px;
+  color: var(--v2-text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.notification-item-time {
+  font-size: 12px;
+  color: var(--v2-text-muted);
+}
+
+.notification-load-more {
+  text-align: center;
+  padding: 12px 0;
+}
+
+@media (max-width: 768px) {
+  .notification-page {
+    padding: 16px 12px;
+  }
+  .notification-title {
+    font-size: 18px;
+  }
+}
+</style>

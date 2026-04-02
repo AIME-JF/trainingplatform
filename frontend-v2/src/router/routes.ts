@@ -83,6 +83,13 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/dashboard/Index.vue'),
         meta: { title: '签退' },
       },
+      // -- 通知 --
+      {
+        path: 'notifications',
+        name: 'Notifications',
+        component: () => import('@/views/notification/Index.vue'),
+        meta: { title: '通知中心' },
+      },
       // -- 考试 --
       {
         path: 'exam/list',

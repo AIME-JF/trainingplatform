@@ -10,8 +10,10 @@ class NoticeCreate(BaseModel):
     """创建公告"""
     title: str = Field(..., max_length=200, description="公告标题")
     content: str = Field(..., description="公告内容")
-    type: str = Field("system", description="类型: system/training")
+    type: str = Field("system", description="类型: system/training/reminder")
     training_id: Optional[int] = Field(None, description="培训班ID(培训班公告时必填)")
+    target_user_id: Optional[int] = Field(None, description="目标用户ID(提醒类通知)")
+    reminder_type: Optional[str] = Field(None, description="提醒子类型: exam_reminder/review_approved/review_rejected/enrollment_approved")
 
 
 class NoticeUpdate(BaseModel):
@@ -29,7 +31,17 @@ class NoticeResponse(BaseModel):
     training_id: Optional[int] = None
     author_id: Optional[int] = None
     author_name: Optional[str] = None
+    target_user_id: Optional[int] = None
+    reminder_type: Optional[str] = None
+    is_read: bool = False
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class NoticeUnreadCountResponse(BaseModel):
+    """未读通知计数"""
+    total: int = 0
+    reminder: int = 0
+    system: int = 0

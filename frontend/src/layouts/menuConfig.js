@@ -215,6 +215,11 @@ export const appMenuConfig = [
         anyPermissions: DICT_MANAGE_PAGE_PERMISSIONS,
       },
       {
+        key: '/system/notices',
+        label: '通知管理',
+        roles: ['admin'],
+      },
+      {
         key: '/system/dashboard-modules',
         label: '看板配置',
         roles: ['admin'],

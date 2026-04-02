@@ -291,6 +291,12 @@ const router = createRouter({
           meta: { title: '部门管理', anyPermissions: DEPARTMENT_MANAGE_PAGE_PERMISSIONS },
         },
         {
+          path: 'system/notices',
+          name: 'NoticeManage',
+          component: () => import('../views/system/NoticeManage.vue'),
+          meta: { title: '通知管理', roles: ['admin'] },
+        },
+        {
           path: 'system/configs',
           name: 'ConfigManage',
           component: () => import('../views/system/ConfigManage.vue'),

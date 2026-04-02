@@ -19,6 +19,17 @@
         </div>
       </div>
 
+      <!-- 通知入口 -->
+      <div
+        class="sidebar-notify"
+        :class="{ active: currentRoute.path === '/notifications' }"
+        @click="navigateTo('/notifications')"
+      >
+        <a-badge dot :count="notifyCount" :offset="[-2, 2]">
+          <BellOutlined class="sidebar-notify-icon" />
+        </a-badge>
+      </div>
+
       <!-- 底部用户信息 -->
       <a-dropdown placement="topLeft" :trigger="['click']">
         <div class="sidebar-user">
@@ -63,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import {
   AppstoreOutlined,
@@ -75,6 +86,7 @@ import {
   DownOutlined,
   LogoutOutlined,
   FileProtectOutlined,
+  BellOutlined,
 } from '@ant-design/icons-vue'
 import { useMobile } from '@/composables/useMobile'
 import { useAuthStore } from '@/stores/auth'
@@ -96,6 +108,21 @@ const { isMobile } = useMobile()
 
 const displayName = computed(() => authStore.currentUser?.name || authStore.currentUser?.username || '用户')
 const avatarText = computed(() => (displayName.value || '').slice(0, 1))
+
+// 未读通知计数
+const notifyCount = ref(0)
+
+async function fetchNotifyCount() {
+  try {
+    const { getUnreadCount } = await import('@/services/notification')
+    const data = await getUnreadCount()
+    notifyCount.value = data.total
+  } catch { /* ignore */ }
+}
+
+onMounted(() => {
+  if (authStore.isLoggedIn) fetchNotifyCount()
+})
 
 interface NavItem {
   path: string
@@ -290,6 +317,34 @@ function handleLogout() {
   font-weight: 500;
   white-space: nowrap;
   letter-spacing: 0.01em;
+}
+
+/* -- 通知按钮 -- */
+.sidebar-notify {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--v2-sidebar-width) - 16px);
+  height: 44px;
+  border-radius: 14px;
+  cursor: pointer;
+  color: var(--v2-text-muted);
+  transition: background-color 0.2s ease, color 0.2s ease;
+  margin-bottom: 4px;
+}
+
+.sidebar-notify:hover {
+  background: var(--v2-bg);
+  color: var(--v2-text-secondary);
+}
+
+.sidebar-notify.active {
+  background: var(--v2-primary-light);
+  color: var(--v2-primary);
+}
+
+.sidebar-notify-icon {
+  font-size: 20px;
 }
 
 /* -- 底部用户区域 -- */

@@ -26,7 +26,7 @@ from .teaching_resource_generation_snapshot import TeachingResourceGenerationSna
 from .personal_training_plan_snapshot import PersonalTrainingPlanSnapshot
 from .certificate import Certificate
 from .media import MediaFile
-from .notice import Notice
+from .notice import Notice, NoticeRead
 from .resource import (
     Resource, ResourceMediaLink, ResourceTag, ResourceTagRelation,
     ResourceVisibilityScope, CourseResourceRef, TrainingResourceRef,
@@ -75,6 +75,7 @@ __all__ = [
     "MediaFile",
     # 公告
     "Notice",
+    "NoticeRead",
     # 资源库
     "Resource", "ResourceMediaLink", "ResourceTag", "ResourceTagRelation",
     "ResourceVisibilityScope", "CourseResourceRef", "TrainingResourceRef",
