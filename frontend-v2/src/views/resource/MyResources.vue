@@ -8,8 +8,8 @@
         <p class="page-subtitle">管理自己上传的资源和审核状态。</p>
       </div>
       <a-space wrap>
-        <a-button @click="router.push('/resource/library')">资源库</a-button>
-        <PermissionsTooltip :allowed="canUseTeachingGeneration" tips="需要 USE_TEACHING_RESOURCE_GENERATION 权限">
+        <a-button v-if="showLibraryAction" @click="router.push('/resource/library')">资源库</a-button>
+        <PermissionsTooltip v-if="showTeachingGenerationAction" :allowed="canUseTeachingGeneration" tips="需要 USE_TEACHING_RESOURCE_GENERATION 权限">
           <template #default="{ disabled }">
             <a-button :disabled="disabled" @click="router.push('/resource/teaching-generate')">教学资源生成</a-button>
           </template>
@@ -138,6 +138,7 @@ import {
   removeResource,
   submitResourceReview,
 } from '@/api/learning-resource'
+import { useMobile } from '@/composables/useMobile'
 import { useAuthStore } from '@/stores/auth'
 import LearningResourceTabs from '@/components/resource/LearningResourceTabs.vue'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
@@ -147,6 +148,7 @@ import { getResourceContentTypeLabel, getResourceStatusColor, getResourceStatusL
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { isMobile } = useMobile()
 
 const query = reactive({
   page: 1,
@@ -166,6 +168,8 @@ const canUploadResource = computed(() => authStore.hasAnyPermission(['CREATE_RES
 const canUseTeachingGeneration = computed(() => authStore.hasPermission('USE_TEACHING_RESOURCE_GENERATION'))
 const canSubmitReview = computed(() => authStore.hasAllPermissions(['CREATE_RESOURCE', 'SUBMIT_RESOURCE_REVIEW']))
 const canManageAnyResource = computed(() => authStore.hasAnyPermission(['UPDATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
+const showLibraryAction = computed(() => !isMobile.value)
+const showTeachingGenerationAction = computed(() => !isMobile.value || canUseTeachingGeneration.value)
 
 const columns = [
   { title: '标题', dataIndex: 'title', key: 'title', width: 260 },

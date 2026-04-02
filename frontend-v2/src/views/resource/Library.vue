@@ -7,8 +7,8 @@
         <h1 class="page-title">资源库</h1>
         <p class="page-subtitle">浏览平台内已发布的学习资源。</p>
       </div>
-      <a-space>
-        <a-button @click="router.push('/resource/my')">我的空间</a-button>
+      <a-space v-if="showHeaderActions">
+        <a-button v-if="showMySpaceAction" @click="router.push('/resource/my')">我的空间</a-button>
         <PermissionsTooltip v-if="!isStudentOnly" :allowed="canUploadResource" tips="需要 CREATE_RESOURCE 或 VIEW_RESOURCE_ALL 权限">
           <template #default="{ disabled }">
             <a-button type="primary" :disabled="disabled" @click="uploadModalOpen = true">上传资源</a-button>
@@ -113,6 +113,7 @@ import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import type { ResourceListItemResponse } from '@/api/learning-resource'
 import { listResources, offlineResource, removeResource } from '@/api/learning-resource'
+import { useMobile } from '@/composables/useMobile'
 import { useAuthStore } from '@/stores/auth'
 import LearningResourceTabs from '@/components/resource/LearningResourceTabs.vue'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
@@ -123,6 +124,7 @@ import { formatDateTime, getResourceStatusLabel } from '@/utils/learning-resourc
 
 const router = useRouter()
 const authStore = useAuthStore()
+const { isMobile } = useMobile()
 
 const query = reactive({
   page: 1,
@@ -138,10 +140,12 @@ const uploadModalOpen = ref(false)
 
 const canUploadResource = computed(() => authStore.hasAnyPermission(['CREATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
 const canManageAnyResource = computed(() => authStore.hasAnyPermission(['UPDATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
+const showMySpaceAction = computed(() => !isMobile.value)
 const isStudentOnly = computed(() => {
   const roleCodes = authStore.roleCodes.length ? authStore.roleCodes : [authStore.role].filter(Boolean)
   return roleCodes.length > 0 && roleCodes.every((code) => code === 'student')
 })
+const showHeaderActions = computed(() => showMySpaceAction.value || !isStudentOnly.value)
 
 onMounted(() => {
   void fetchResources()
