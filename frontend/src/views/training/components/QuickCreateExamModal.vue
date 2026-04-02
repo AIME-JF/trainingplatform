@@ -1,8 +1,8 @@
 <template>
   <a-modal
     :open="open"
-    title="快捷创建考试"
-    width="800px"
+    :title="isAdmission ? '快捷创建准入考试' : '快捷创建考试'"
+    width="900px"
     :footer="null"
     @cancel="$emit('update:open', false)"
   >
@@ -32,6 +32,7 @@
         :loading="papersLoading"
         :pagination="{ pageSize: 8 }"
         :row-selection="{ type: 'radio', selectedRowKeys: selectedPaperKeys, onChange: onPaperSelect }"
+        :custom-row="(record) => ({ onClick: () => onPaperSelect([record.id]) })"
         row-key="id"
       >
         <template #bodyCell="{ column, record }">
@@ -43,6 +44,12 @@
           </template>
           <template v-if="column.key === 'info'">
             {{ record.questionCount || 0 }}题 / {{ record.totalScore || 0 }}分 / {{ record.duration || 0 }}分钟
+          </template>
+          <template v-if="column.key === 'createdAt'">
+            {{ formatTime(record.createdAt) }}
+          </template>
+          <template v-if="column.key === 'preview'">
+            <a-button type="link" size="small" @click.stop="previewPaper(record)">预览</a-button>
           </template>
         </template>
       </a-table>
@@ -114,16 +121,49 @@
       </div>
     </div>
   </a-modal>
+
+  <!-- 试卷预览弹窗 -->
+  <a-modal
+    v-model:open="showPaperPreview"
+    :title="previewPaperData?.title || '试卷预览'"
+    width="800px"
+    :footer="null"
+  >
+    <div v-if="previewLoading" style="text-align: center; padding: 40px">
+      <a-spin />
+    </div>
+    <template v-else-if="previewPaperData">
+      <div class="preview-meta">
+        <a-tag>{{ previewPaperData.type === 'formal' ? '正式考核' : '测验' }}</a-tag>
+        <span>{{ previewPaperData.questionCount || 0 }} 题</span>
+        <span>总分 {{ previewPaperData.totalScore || 0 }}</span>
+        <span>时长 {{ previewPaperData.duration || 0 }} 分钟</span>
+      </div>
+      <a-divider style="margin: 12px 0" />
+      <div v-if="previewPaperData.questions?.length" class="preview-questions">
+        <div v-for="(q, idx) in previewPaperData.questions" :key="q.id || idx" class="preview-q-item">
+          <div class="preview-q-header">
+            <span class="preview-q-index">{{ idx + 1 }}.</span>
+            <a-tag size="small">{{ { single_choice: '单选', multiple_choice: '多选', true_false: '判断', fill_blank: '填空', essay: '简答' }[q.type] || q.type }}</a-tag>
+            <span class="preview-q-score">{{ q.score || 0 }}分</span>
+          </div>
+          <div class="preview-q-content">{{ q.content || q.title || '-' }}</div>
+        </div>
+      </div>
+      <a-empty v-else description="暂无题目信息" />
+    </template>
+  </a-modal>
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { message } from 'ant-design-vue'
-import { getExamPapers, createExam } from '@/api/exam'
+import { getExamPapers, getExamPaperDetail, createExam, createAdmissionExam } from '@/api/exam'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
-  trainingId: { type: [Number, String], required: true },
+  trainingId: { type: [Number, String], default: 0 },
+  isAdmission: { type: Boolean, default: false },
 })
 
 const emit = defineEmits(['update:open', 'success'])
@@ -136,6 +176,9 @@ const paperTypeFilter = ref(undefined)
 const selectedPaperKeys = ref([])
 const submitting = ref(false)
 const examDateRange = ref([])
+const showPaperPreview = ref(false)
+const previewPaperData = ref(null)
+const previewLoading = ref(false)
 
 const examForm = ref({
   title: '',
@@ -161,8 +204,14 @@ const paperColumns = [
   { title: '试卷名称', key: 'title', ellipsis: true },
   { title: '类型', key: 'type', width: 80 },
   { title: '题量 / 总分 / 时长', key: 'info', width: 200 },
-  { title: '创建时间', dataIndex: 'createdAt', width: 160 },
+  { title: '创建时间', key: 'createdAt', width: 160 },
+  { title: '', key: 'preview', width: 70 },
 ]
+
+function formatTime(value) {
+  if (!value) return '-'
+  return String(value).replace('T', ' ').replace(/\+.*$/, '').slice(0, 16)
+}
 
 function onPaperSelect(keys) {
   selectedPaperKeys.value = keys
@@ -170,12 +219,25 @@ function onPaperSelect(keys) {
 
 function goToConfig() {
   if (!selectedPaper.value) return
-  // 预填试卷信息
   const p = selectedPaper.value
   examForm.value.title = p.title ? `${p.title} - 考试` : ''
   examForm.value.duration = p.duration || 60
-  examForm.value.passingScore = p.passingScore || 60
+  examForm.value.passingScore = Math.floor((p.totalScore || 100) * 0.6)
   step.value = 1
+}
+
+async function previewPaper(record) {
+  showPaperPreview.value = true
+  previewLoading.value = true
+  previewPaperData.value = null
+  try {
+    const detail = await getExamPaperDetail(record.id)
+    previewPaperData.value = detail
+  } catch {
+    previewPaperData.value = record
+  } finally {
+    previewLoading.value = false
+  }
 }
 
 async function fetchPapers() {
@@ -193,11 +255,11 @@ async function fetchPapers() {
 async function handleSubmit() {
   if (!selectedPaperId.value) { message.warning('请先选择试卷'); return }
   if (!examForm.value.title) { message.warning('请填写考试名称'); return }
-  if (!examDateRange.value?.length) { message.warning('请选择考试时间'); return }
+  if (!examDateRange.value?.length) { message.warning('请选择考试开放时间'); return }
 
   submitting.value = true
   try {
-    await createExam({
+    const payload = {
       title: examForm.value.title,
       paperId: selectedPaperId.value,
       description: examForm.value.description || undefined,
@@ -208,9 +270,14 @@ async function handleSubmit() {
       maxAttempts: examForm.value.maxAttempts,
       startTime: examDateRange.value[0],
       endTime: examDateRange.value[1],
-      trainingId: Number(props.trainingId),
-    })
-    message.success('考试创建成功')
+    }
+    if (props.isAdmission) {
+      await createAdmissionExam(payload)
+    } else {
+      payload.trainingId = Number(props.trainingId)
+      await createExam(payload)
+    }
+    message.success(props.isAdmission ? '准入考试创建成功' : '考试创建成功')
     emit('update:open', false)
     emit('success')
   } catch (error) {
@@ -226,6 +293,8 @@ function resetState() {
   paperSearch.value = ''
   paperTypeFilter.value = undefined
   examDateRange.value = []
+  showPaperPreview.value = false
+  previewPaperData.value = null
   examForm.value = {
     title: '',
     status: 'upcoming',
@@ -256,4 +325,26 @@ watch(() => props.open, (val) => {
   color: #888;
   font-size: 13px;
 }
+
+/* 点击行可选择 */
+:deep(.ant-table-row) {
+  cursor: pointer;
+}
+
+/* 试卷预览 */
+.preview-meta {
+  display: flex; align-items: center; gap: 16px; font-size: 13px; color: #666;
+}
+.preview-questions {
+  max-height: 500px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;
+}
+.preview-q-item {
+  padding: 10px 12px; border: 1px solid #f0f0f0; border-radius: 6px; background: #fafafa;
+}
+.preview-q-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 6px;
+}
+.preview-q-index { font-weight: 600; color: #333; }
+.preview-q-score { font-size: 12px; color: #1677ff; margin-left: auto; }
+.preview-q-content { font-size: 14px; color: #333; line-height: 1.6; }
 </style>
