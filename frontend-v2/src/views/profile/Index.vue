@@ -253,12 +253,26 @@ onMounted(() => {
 }
 
 .profile-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   flex-shrink: 0;
   border: 2px solid rgba(255, 255, 255, 0.84);
   background: rgba(255, 255, 255, 0.22);
   color: #fff;
   font-size: 30px;
   font-weight: 700;
+}
+
+.profile-avatar :deep(.ant-avatar-string) {
+  position: static;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  line-height: 1;
+  transform: none !important;
 }
 
 .profile-copy {
@@ -331,10 +345,12 @@ onMounted(() => {
 }
 
 .profile-contact-card strong {
-  font-size: 15px;
-  line-height: 1.45;
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 700;
   color: #fff;
-  word-break: break-all;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .profile-section-grid {
@@ -507,11 +523,15 @@ onMounted(() => {
 }
 
 .quick-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   border: 1px solid rgba(228, 233, 243, 0.96);
   border-radius: 18px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 248, 252, 0.96) 100%);
   padding: 14px;
-  text-align: left;
+  text-align: center;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
@@ -534,16 +554,28 @@ onMounted(() => {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.4);
 }
 
+.quick-icon :deep(.anticon) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
 .quick-text {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
 }
 
 .quick-text strong {
   font-size: 15px;
   line-height: 1.35;
   color: var(--v2-text-primary);
+  text-align: center;
 }
 
 .quick-text span {
@@ -630,8 +662,8 @@ onMounted(() => {
   }
 
   .profile-contact-card strong {
-    font-size: 13px;
-    line-height: 1.35;
+    font-size: 15px;
+    line-height: 1.4;
   }
 
   .profile-card {
@@ -707,6 +739,8 @@ onMounted(() => {
     min-height: 96px;
     padding: 12px 10px;
     border-radius: 16px;
+    align-items: center;
+    justify-content: center;
   }
 
   .quick-icon {
@@ -718,8 +752,9 @@ onMounted(() => {
   }
 
   .quick-text strong {
-    font-size: 13px;
-    line-height: 1.35;
+    font-size: 14px;
+    line-height: 1.4;
+    font-weight: 700;
   }
 
   .quick-text span {
