@@ -206,9 +206,11 @@ import {
   QuestionCircleOutlined,
   StarOutlined,
 } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getPracticeSources } from '@/api/practice'
+import type { PoliceTypeSimpleResponse } from '@/api/generated/model'
 
 const router = useRouter()
 
@@ -220,9 +222,9 @@ const selectedQuestionType = ref(undefined)
 const selectedDifficulty = ref(undefined)
 const selectedPoliceTypeId = ref(undefined)
 
-const knowledgePoints = ref([])
-const questionFolders = ref([])
-const policeTypes = ref([])
+const knowledgePoints = ref<any[]>([])
+const questionFolders = ref<any[]>([])
+const policeTypes = ref<PoliceTypeSimpleResponse[]>([])
 
 const settingsVisible = ref(false)
 const selectedPracticeItem = ref<any>(null)
