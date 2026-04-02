@@ -178,7 +178,7 @@ def get_calendar_events(
 @router.get("/{training_id}/activities", response_model=StandardResponse[List[TrainingActivityResponse]], summary="培训班动态")
 def get_training_activities(
     training_id: int,
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(5, ge=1, le=100),
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):

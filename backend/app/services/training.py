@@ -1012,7 +1012,7 @@ class TrainingService:
         records = query.order_by(CheckinRecord.date.desc(), CheckinRecord.time.asc().nulls_last()).all()
         return [self._checkin_to_response(record) for record in records]
 
-    def get_training_activities(self, training_id: int, limit: int = 20) -> List[TrainingActivityResponse]:
+    def get_training_activities(self, training_id: int, limit: int = 5) -> List[TrainingActivityResponse]:
         """获取培训班动态列表"""
         activities = self.db.query(TrainingActivity).filter(
             TrainingActivity.training_id == training_id

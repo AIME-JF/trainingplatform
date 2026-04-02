@@ -66,7 +66,7 @@ async function fetchActivities() {
   try {
     const data = await getTrainingActivitiesApiV1TrainingsTrainingIdActivitiesGet(
       Number(props.trainingId),
-      { limit: 20 },
+      { limit: 5 },
     )
     activityList.value = data || []
   } catch {
@@ -88,7 +88,7 @@ function connectActivityWs() {
     try {
       const data = JSON.parse(event.data) as TrainingActivityResponse
       activityList.value.unshift(data)
-      if (activityList.value.length > 50) activityList.value.pop()
+      if (activityList.value.length > 10) activityList.value.pop()
     } catch { /* ignore malformed messages */ }
   }
   activityWs.onclose = () => { activityWs = null }

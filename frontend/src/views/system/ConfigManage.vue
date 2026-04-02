@@ -158,6 +158,17 @@
                         @change="markAsChanged(record.id)"
                       />
 
+                      <a-select
+                        v-else-if="record.configFormat === 'multi_select'"
+                        v-model:value="configValues[record.id]"
+                        mode="multiple"
+                        :placeholder="record.configDescription || '请选择（可多选）'"
+                        :options="getSelectOptions(record.id)"
+                        style="width: 100%"
+                        :disabled="!editingRows[record.id]"
+                        @change="markAsChanged(record.id)"
+                      />
+
                       <a-input
                         v-else
                         v-model:value="configValues[record.id]"
@@ -346,6 +357,9 @@ function initConfigValues() {
     } else if (config.configFormat === 'select') {
       value = config.configValue?.selected ?? undefined
       original = cloneValue(config.configValue || { selected: undefined, options: [] })
+    } else if (config.configFormat === 'multi_select') {
+      value = Array.isArray(config.configValue?.selected) ? [...config.configValue.selected] : []
+      original = cloneValue(config.configValue || { selected: [], options: [] })
     } else if (config.configFormat === 'boolean') {
       value = normalizeBooleanValue(config.configValue)
       original = value
@@ -492,6 +506,11 @@ function startEdit(config) {
     return
   }
 
+  if (config.configFormat === 'multi_select') {
+    configValues[config.id] = Array.isArray(originalValues[config.id]?.selected) ? [...originalValues[config.id].selected] : []
+    return
+  }
+
   configValues[config.id] = cloneValue(originalValues[config.id])
 }
 
@@ -505,6 +524,12 @@ function buildConfigValue(config) {
   if (config.configFormat === 'select') {
     const originalValue = cloneValue(originalValues[config.id] || { options: [] })
     originalValue.selected = currentValue ?? null
+    return originalValue
+  }
+
+  if (config.configFormat === 'multi_select') {
+    const originalValue = cloneValue(originalValues[config.id] || { options: [] })
+    originalValue.selected = Array.isArray(currentValue) ? currentValue : []
     return originalValue
   }
 

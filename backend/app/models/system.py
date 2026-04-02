@@ -18,6 +18,7 @@ class ConfigFormat(enum.Enum):
     BOOLEAN = "boolean"            # 布尔
     LIST = "list"                  # 列表
     SELECT = "select"              # 下拉选择
+    MULTI_SELECT = "multi_select"  # 多选
     PASSWORD = "password"          # 密码（前端隐藏显示）
 
 
