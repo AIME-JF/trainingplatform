@@ -43,7 +43,7 @@
             </div>
 
             <div class="question-options">
-              <template v-if="currentQuestion?.type === 'multiple_choice'">
+              <template v-if="currentQuestion?.type === 'multi'">
                 <div
                   v-for="(option, index) in currentOptions"
                   :key="index"
@@ -227,6 +227,11 @@ import {
   submitExamApiV1ExamsExamIdSubmitPost,
 } from '@/api/generated/exam-management/exam-management'
 import type { ExamSubmitAnswers } from '@/api/generated/model'
+import {
+  getExamStatusText,
+  resolveExamKind,
+  type ExamKind,
+} from './examDisplay'
 
 const route = useRoute()
 const router = useRouter()
@@ -234,7 +239,7 @@ const router = useRouter()
 const loading = ref(false)
 const submitting = ref(false)
 const examId = computed(() => Number(route.params.id))
-const examKind = ref<'admission' | 'training'>('training')
+const examKind = ref<ExamKind>(resolveExamKind(route.query.kind, 'training'))
 
 const examDetail = ref<ExamDetailResponse | null>(null)
 const questions = ref<ExamQuestionSnapshotResponse[]>([])
@@ -242,6 +247,7 @@ const currentIndex = ref(0)
 const answers = ref<Record<number, string | string[]>>({})
 const showAnswerSheet = ref(false)
 const submitModalVisible = ref(false)
+const startTime = ref(new Date().toISOString())
 
 // 计时器
 const remainingTime = ref(0)
@@ -250,6 +256,12 @@ let timer: ReturnType<typeof setInterval> | null = null
 const currentQuestion = computed(() => questions.value[currentIndex.value])
 
 const currentOptions = computed(() => {
+  if (currentQuestion.value?.type === 'judge') {
+    return [
+      { key: 'A', value: '正确' },
+      { key: 'B', value: '错误' },
+    ]
+  }
   const opts = currentQuestion.value?.options
   if (!opts || !Array.isArray(opts)) return []
   return opts.map((item) => {
@@ -283,30 +295,47 @@ onBeforeUnmount(() => {
 async function fetchExamDetail() {
   loading.value = true
   try {
-    // 判断是准入考试还是培训班考试
     let detail
-    try {
-      detail = await getExamApiV1ExamsExamIdGet(examId.value)
-      examKind.value = 'training'
-    } catch {
+    if (examKind.value === 'admission') {
       detail = await getAdmissionExamApiV1ExamsAdmissionExamIdGet(examId.value)
-      examKind.value = 'admission'
+    } else {
+      detail = await getExamApiV1ExamsExamIdGet(examId.value)
+    }
+    examDetail.value = detail
+  } catch (primaryError) {
+    try {
+      examKind.value = examKind.value === 'admission' ? 'training' : 'admission'
+      examDetail.value = examKind.value === 'admission'
+        ? await getAdmissionExamApiV1ExamsAdmissionExamIdGet(examId.value)
+        : await getExamApiV1ExamsExamIdGet(examId.value)
+    } catch {
+      throw primaryError
+    }
+  }
+
+  try {
+    const detail = examDetail.value
+    if (!detail) {
+      return
     }
 
-    examDetail.value = detail
+    if (!detail.can_join) {
+      message.warning(`当前考试${getExamStatusText(detail)}`)
+      await router.replace({ path: `/exam/overview/${examId.value}`, query: { kind: examKind.value } })
+      return
+    }
 
     if (detail.questions) {
       questions.value = detail.questions
     } else {
-      // 如果没有题目数据，获取题目详情
       message.warning('该考试暂无题目')
     }
 
-    // 设置倒计时
     if (detail.duration) {
       remainingTime.value = detail.duration * 60
       startTimer()
     }
+    startTime.value = new Date().toISOString()
   } catch (error) {
     message.error('加载考试详情失败')
     console.error(error)
@@ -406,7 +435,7 @@ async function handleSubmit() {
 
     const submitData = {
       answers: answersData,
-      start_time: new Date().toISOString(),
+      start_time: startTime.value,
     }
 
     if (examKind.value === 'admission') {
@@ -416,7 +445,7 @@ async function handleSubmit() {
     }
 
     message.success('提交成功')
-    await router.replace(`/exam/result/${examId.value}`)
+    await router.replace({ path: `/exam/result/${examId.value}`, query: { kind: examKind.value } })
   } catch (error) {
     message.error(error instanceof Error ? error.message : '提交失败')
     submitting.value = false
@@ -425,11 +454,11 @@ async function handleSubmit() {
 
 function getQuestionTypeColor(type?: string) {
   switch (type) {
-    case 'single_choice':
+    case 'single':
       return 'blue'
-    case 'multiple_choice':
+    case 'multi':
       return 'purple'
-    case 'true_false':
+    case 'judge':
       return 'green'
     default:
       return 'default'
@@ -438,11 +467,11 @@ function getQuestionTypeColor(type?: string) {
 
 function getQuestionTypeText(type?: string) {
   switch (type) {
-    case 'single_choice':
+    case 'single':
       return '单选题'
-    case 'multiple_choice':
+    case 'multi':
       return '多选题'
-    case 'true_false':
+    case 'judge':
       return '判断题'
     default:
       return type || '未知'

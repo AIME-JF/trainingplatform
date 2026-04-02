@@ -7,12 +7,26 @@
         <!-- 1. 二级导航与快捷操作入口 -->
         <div class="sub-nav-bar">
           <div class="sub-nav-left">
-            <span :class="['sub-nav-item', { active: activeNav === 'bank' }]" @click="activeNav = 'bank'">题库中心</span>
+            <span
+              v-if="canManageQuestionBank"
+              :class="['sub-nav-item', { active: activeNav === 'bank' }]"
+              @click="switchNav('bank')"
+            >
+              题库中心
+            </span>
+            <span
+              v-if="canManageKnowledgePoints"
+              :class="['sub-nav-item', { active: activeNav === 'knowledge' }]"
+              @click="switchNav('knowledge')"
+            >
+              知识点
+            </span>
           </div>
         </div>
 
         <!-- 2. 统一的大边框容器 -->
         <div class="main-container">
+          <template v-if="activeNav === 'bank'">
 
           <!-- 第一层：操作与搜索过滤 -->
           <div class="toolbar-row">
@@ -29,6 +43,9 @@
               <div class="toolbar-left">
                 <button class="btn-primary" @click="openCreateFolderModal">
                 添加题库
+                </button>
+                <button v-if="canUseAiQuestion" class="btn-aux" @click="goToAiQuestion">
+                  智能出题
                 </button>
                 <div class="search-wrapper">
                   <svg class="search-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
@@ -237,9 +254,10 @@
               </template>
             </div>
           </div>
+          </template>
+          <knowledge-point-panel v-else />
 
         </div>
-
       </div>
     </main>
 
@@ -311,6 +329,7 @@ import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
+import { AI_QUESTION_PAGE_PERMISSIONS, KNOWLEDGE_POINT_PAGE_PERMISSIONS, QUESTION_BANK_PAGE_PERMISSIONS } from '@/constants/pagePermissions'
 import {
   createQuestion,
   createQuestionFolder,
@@ -324,13 +343,14 @@ import {
 } from '@/api/question'
 import { getPoliceTypes } from '@/api/user'
 import QuestionFormModal from './components/QuestionFormModal.vue'
+import KnowledgePointPanel from './components/KnowledgePointPanel.vue'
 
 const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 
 // ============ 导航 ============
-const activeNav = ref('bank')
+const activeNav = computed(() => (route.path.startsWith('/question/knowledge-points') ? 'knowledge' : 'bank'))
 
 // ============ 搜索与筛选 ============
 const searchText = ref('')
@@ -340,6 +360,9 @@ const filterMyOnly = ref(false)
 
 const typeLabels = { single: '单选题', multi: '多选题', judge: '判断题', gap: '填空题' }
 const typeTagColors = { single: 'tag-blue', multi: 'tag-purple', judge: 'tag-orange', gap: 'tag-cyan' }
+const canUseAiQuestion = computed(() => authStore.hasAnyPermission(AI_QUESTION_PAGE_PERMISSIONS))
+const canManageQuestionBank = computed(() => authStore.hasAnyPermission([...QUESTION_BANK_PAGE_PERMISSIONS, ...AI_QUESTION_PAGE_PERMISSIONS]))
+const canManageKnowledgePoints = computed(() => authStore.hasAnyPermission(KNOWLEDGE_POINT_PAGE_PERMISSIONS))
 
 // ============ 题库列表数据 ============
 const loading = ref(false)
@@ -580,6 +603,19 @@ function openCreateFolderModal() {
   folderFormModalVisible.value = true
 }
 
+function goToAiQuestion() {
+  router.push({ path: '/question/ai' })
+}
+
+function switchNav(target) {
+  if (target === activeNav.value) return
+  if (target === 'knowledge') {
+    router.push({ path: '/question/knowledge-points' })
+    return
+  }
+  router.push({ path: '/question/repository' })
+}
+
 function openEditFolderModal(folder) {
   editingFolderId.value = folder.id
   folderForm.name = folder.name
@@ -649,7 +685,7 @@ function handleViewQuestions(item) {
   }
   selectedFolderId.value = item.id
   selectedFolderName.value = item.name
-  router.replace({ query: { folderId: item.id } })
+  router.replace({ path: '/question/repository', query: { folderId: item.id } })
   loadQuestionsForFolder(item.id)
 }
 
@@ -672,7 +708,7 @@ function handleBackToFolders() {
   selectedFolderId.value = null
   selectedFolderName.value = ''
   questionList.value = []
-  router.replace({ query: {} })
+  router.replace({ path: '/question/repository' })
 }
 
 function handleBatchDelete() {
@@ -771,35 +807,65 @@ async function loadPoliceTypeOptions() {
   }
 }
 
-onMounted(async () => {
-  await loadData()
-  await loadPoliceTypeOptions()
-  // 检查 URL 中的 folderId 参数
-  const folderId = route.query.folderId
-  if (folderId) {
-    const folder = folderList.value.find(f => String(f.id) === String(folderId))
-    if (folder) {
-      selectedFolderId.value = folder.id
-      selectedFolderName.value = folder.name
-      loadQuestionsForFolder(folder.id)
-    }
+function clearQuestionSelection() {
+  selectedFolderId.value = null
+  selectedFolderName.value = ''
+  questionList.value = []
+  questionPagination.total = 0
+  questionPagination.current = 1
+}
+
+function ensureActiveViewAccess() {
+  if (activeNav.value === 'knowledge' && !canManageKnowledgePoints.value && canManageQuestionBank.value) {
+    router.replace({ path: '/question/repository' })
+    return false
   }
+  if (activeNav.value === 'bank' && !canManageQuestionBank.value && canManageKnowledgePoints.value) {
+    router.replace({ path: '/question/knowledge-points' })
+    return false
+  }
+  return true
+}
+
+async function syncFolderState(folderId) {
+  if (activeNav.value !== 'bank') {
+    clearQuestionSelection()
+    return
+  }
+
+  if (!folderId) {
+    clearQuestionSelection()
+    return
+  }
+
+  const folder = folderList.value.find((item) => String(item.id) === String(folderId))
+  if (!folder) {
+    clearQuestionSelection()
+    return
+  }
+
+  selectedFolderId.value = folder.id
+  selectedFolderName.value = folder.name
+  await loadQuestionsForFolder(folder.id)
+}
+
+onMounted(async () => {
+  if (canManageQuestionBank.value) {
+    await loadData()
+    await loadPoliceTypeOptions()
+  }
+  if (!ensureActiveViewAccess()) return
+  await syncFolderState(route.query.folderId)
 })
 
-// 监听路由变化（浏览器前进/后退）
+watch(() => route.path, () => {
+  if (!ensureActiveViewAccess()) return
+  syncFolderState(route.query.folderId)
+})
+
 watch(() => route.query.folderId, (newVal) => {
-  if (newVal) {
-    const folder = folderList.value.find(f => String(f.id) === String(newVal))
-    if (folder) {
-      selectedFolderId.value = folder.id
-      selectedFolderName.value = folder.name
-      loadQuestionsForFolder(folder.id)
-    }
-  } else {
-    selectedFolderId.value = null
-    selectedFolderName.value = ''
-    questionList.value = []
-  }
+  if (!ensureActiveViewAccess()) return
+  syncFolderState(newVal)
 })
 
 onUnmounted(() => {
