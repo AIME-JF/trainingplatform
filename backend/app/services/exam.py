@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from app.models import (
     AdmissionExam,
     AdmissionExamRecord,
+    Course,
     Department,
     Enrollment,
     Exam,
@@ -351,6 +352,7 @@ class ExamService:
     ) -> PaginatedResponse[ExamResponse]:
         """获取培训班内考试列表"""
         status_filters = self._normalize_exam_status_filters(status)
+        current_user = self._get_admission_scope_user(current_user_id)
         query = self.db.query(Exam).options(
             joinedload(Exam.paper).joinedload(ExamPaper.paper_questions),
             joinedload(Exam.training),
@@ -377,6 +379,9 @@ class ExamService:
                 continue
             if scope_context and not self._can_view_training_exam_with_context(scope_context, exam):
                 continue
+            if current_user_id and self._is_student_user(current_user):
+                if not self._can_access_training_exam_as_student(exam, current_user_id):
+                    continue
             items.append(self._to_training_exam_response(exam, current_user_id))
 
         if changed:
@@ -466,6 +471,7 @@ class ExamService:
             type=data.type or paper.type or "formal",
             purpose=data.purpose,
             training_id=data.training_id,
+            course_ids=self._resolve_selected_course_ids(data.course_ids),
             max_attempts=data.max_attempts,
             allow_makeup=data.allow_makeup,
             start_time=start_time,
@@ -511,6 +517,7 @@ class ExamService:
             scope=scope_summary,
             scope_type=scope_type,
             scope_target_ids=scope_target_ids,
+            course_ids=self._resolve_selected_course_ids(data.course_ids),
             max_attempts=data.max_attempts,
             start_time=start_time,
             end_time=end_time,
@@ -614,6 +621,10 @@ class ExamService:
         scope_context = self._get_scope_context(current_user_id)
         if scope_context and not self._can_view_training_exam_with_context(scope_context, exam):
             return None
+        current_user = self._get_admission_scope_user(current_user_id)
+        if current_user_id and self._is_student_user(current_user):
+            if not self._can_access_training_exam_as_student(exam, current_user_id):
+                return None
 
         return ExamDetailResponse(
             **self._to_training_exam_response(exam, current_user_id).model_dump(),
@@ -948,6 +959,7 @@ class ExamService:
     def _update_training_exam(self, exam: Exam, data: ExamUpdate) -> None:
         update_data = data.model_dump(exclude_unset=True)
         paper_id = update_data.pop("paper_id", None)
+        next_course_ids = update_data.pop("course_ids", exam.course_ids or [])
         if paper_id is not None and paper_id != exam.paper_id:
             raise ValueError("考试已发布，不能更换试卷")
 
@@ -972,6 +984,7 @@ class ExamService:
 
         exam.duration = next_duration
         exam.passing_score = next_passing_score
+        exam.course_ids = self._resolve_selected_course_ids(next_course_ids)
         exam.start_time = start_time
         exam.end_time = end_time
         exam.total_score = exam.paper.total_score or exam.total_score or 0
@@ -986,6 +999,7 @@ class ExamService:
 
         next_scope_type = update_data.pop("scope_type", exam.scope_type or ADMISSION_SCOPE_ALL)
         next_scope_target_ids = update_data.pop("scope_target_ids", exam.scope_target_ids or [])
+        next_course_ids = update_data.pop("course_ids", exam.course_ids or [])
         update_data.pop("scope", None)
         next_start_time = update_data.get("start_time", exam.start_time)
         next_end_time = update_data.get("end_time", exam.end_time)
@@ -1013,6 +1027,7 @@ class ExamService:
         exam.scope_type = scope_type
         exam.scope_target_ids = scope_target_ids
         exam.scope = scope_summary
+        exam.course_ids = self._resolve_selected_course_ids(next_course_ids)
         exam.duration = next_duration
         exam.passing_score = next_passing_score
         exam.start_time = start_time
@@ -1258,58 +1273,7 @@ class ExamService:
     def _to_paper_response(self, paper: ExamPaper) -> ExamPaperResponse:
         linked_exam_count = len(paper.training_exams or [])
         linked_admission_exam_count = len(paper.admission_exams or [])
-
-        # 从试卷题目快照中提取知识点名称
-        knowledge_point_names: List[str] = []
-        seen_kp_names = set()
-
-        # 收集警种信息
-        police_type_ids = set()
-        police_type_names = set()
-
-        # 收集课程信息
-        course_ids = set()
-        course_names = set()
-
-        for pq in (paper.paper_questions or []):
-            # 提取知识点名称
-            if pq.knowledge_points:
-                for kp_name in pq.knowledge_points:
-                    if kp_name and kp_name not in seen_kp_names:
-                        seen_kp_names.add(kp_name)
-                        knowledge_point_names.append(kp_name)
-
-            # 提取警种信息
-            if pq.question and pq.question.police_type:
-                police_type_ids.add(pq.question.police_type_id)
-                police_type_names.add(pq.question.police_type.name)
-
-            # 提取课程信息（通过知识点的course关联）
-            if pq.question and pq.question.knowledge_points:
-                for kp in pq.question.knowledge_points:
-                    if kp.course_id and kp.course:
-                        course_ids.add(kp.course_id)
-                        course_names.add(kp.course.title)
-
-        # 警种：如果只有一个警种就用它，否则标记为综合类
-        police_type_id = None
-        police_type_name = None
-        if len(police_type_ids) == 1:
-            police_type_id = next(iter(police_type_ids))
-            police_type_name = next(iter(police_type_names))
-        elif len(police_type_ids) > 1:
-            police_type_id = 0
-            police_type_name = "综合类"
-
-        # 课程：如果只有一个课程就用它
-        course_id = None
-        course_name = None
-        if len(course_ids) == 1:
-            course_id = next(iter(course_ids))
-            course_name = next(iter(course_names))
-        elif len(course_ids) > 1:
-            course_id = 0
-            course_name = "综合类"
+        paper_summary = self._extract_paper_dimension_summary(paper)
 
         return ExamPaperResponse(
             id=paper.id,
@@ -1329,11 +1293,13 @@ class ExamService:
             usage_count=linked_exam_count + linked_admission_exam_count,
             linked_exam_count=linked_exam_count,
             linked_admission_exam_count=linked_admission_exam_count,
-            knowledge_point_names=knowledge_point_names,
-            police_type_id=police_type_id,
-            police_type_name=police_type_name,
-            course_id=course_id,
-            course_name=course_name,
+            knowledge_point_names=paper_summary["knowledge_point_names"],
+            police_type_id=paper_summary["police_type_id"],
+            police_type_name=paper_summary["police_type_name"],
+            course_id=paper_summary["course_id"],
+            course_name=paper_summary["course_name"],
+            course_ids=paper_summary["course_ids"],
+            course_names=paper_summary["course_names"],
             created_at=paper.created_at,
             updated_at=paper.updated_at,
         )
@@ -1453,6 +1419,7 @@ class ExamService:
                 attempt_count = self._count_submitted_attempts(ExamRecord, ExamRecord.exam_id, exam.id, current_user_id)
                 latest_result = latest_record.result
             can_join = self._can_join_training_exam(exam, current_user_id, attempt_count)
+        paper_summary = self._extract_paper_dimension_summary(exam.paper, exam.course_ids)
 
         return ExamResponse(
             id=exam.id,
@@ -1469,6 +1436,10 @@ class ExamService:
             purpose=exam.purpose or "class_assessment",
             training_id=exam.training_id,
             training_name=exam.training.name if exam.training else None,
+            course_id=paper_summary["course_id"],
+            course_name=paper_summary["course_name"],
+            course_ids=paper_summary["course_ids"],
+            course_names=paper_summary["course_names"],
             max_attempts=exam.max_attempts or 1,
             allow_makeup=bool(exam.allow_makeup),
             start_time=exam.start_time,
@@ -1505,6 +1476,7 @@ class ExamService:
                 )
                 latest_result = latest_record.result
             can_join = self._can_join_admission_exam(exam, current_user_id, attempt_count, current_user)
+        paper_summary = self._extract_paper_dimension_summary(exam.paper, exam.course_ids)
 
         return AdmissionExamResponse(
             id=exam.id,
@@ -1523,6 +1495,10 @@ class ExamService:
             scope_target_ids=self._normalize_scope_target_ids(exam.scope_target_ids),
             max_attempts=exam.max_attempts or 1,
             linked_training_count=len(exam.linked_trainings or []),
+            course_id=paper_summary["course_id"],
+            course_name=paper_summary["course_name"],
+            course_ids=paper_summary["course_ids"],
+            course_names=paper_summary["course_names"],
             attempt_count=attempt_count,
             latest_result=latest_result,
             can_join=can_join,
@@ -1649,6 +1625,97 @@ class ExamService:
             Enrollment.status == "approved",
         ).first()
         return enrollment is not None
+
+    def _can_access_training_exam_as_student(self, exam: Optional[Exam], user_id: int) -> bool:
+        if not exam or not user_id:
+            return False
+        enrollment = self.db.query(Enrollment.id).filter(
+            Enrollment.training_id == exam.training_id,
+            Enrollment.user_id == user_id,
+            Enrollment.status == "approved",
+        ).first()
+        if enrollment is not None:
+            return True
+        record = self.db.query(ExamRecord.id).filter(
+            ExamRecord.exam_id == exam.id,
+            ExamRecord.user_id == user_id,
+            ExamRecord.status == "submitted",
+        ).first()
+        return record is not None
+
+    def _extract_paper_dimension_summary(
+        self,
+        paper: Optional[ExamPaper],
+        explicit_course_ids: Optional[List[int]] = None,
+    ) -> Dict[str, Any]:
+        knowledge_point_names: List[str] = []
+        seen_kp_names = set()
+        police_type_ids = set()
+        police_type_names = set()
+        course_pairs = []
+        seen_course_ids = set()
+
+        for pq in (paper.paper_questions or []) if paper else []:
+            if pq.knowledge_points:
+                for kp_name in pq.knowledge_points:
+                    if kp_name and kp_name not in seen_kp_names:
+                        seen_kp_names.add(kp_name)
+                        knowledge_point_names.append(kp_name)
+
+            if pq.question and pq.question.police_type:
+                police_type_ids.add(pq.question.police_type_id)
+                police_type_names.add(pq.question.police_type.name)
+
+            if pq.question and pq.question.knowledge_points:
+                for kp in pq.question.knowledge_points:
+                    if kp.course_id and kp.course and kp.course_id not in seen_course_ids:
+                        seen_course_ids.add(kp.course_id)
+                        course_pairs.append((kp.course_id, kp.course.title))
+
+        police_type_id = None
+        police_type_name = None
+        if len(police_type_ids) == 1:
+            police_type_id = next(iter(police_type_ids))
+            police_type_name = next(iter(police_type_names))
+        elif len(police_type_ids) > 1:
+            police_type_id = 0
+            police_type_name = "综合类"
+
+        explicit_pairs = self._get_course_pairs(explicit_course_ids or [], strict=False)
+        selected_course_pairs = explicit_pairs or course_pairs
+        course_ids = [item[0] for item in selected_course_pairs]
+        course_names = [item[1] for item in selected_course_pairs]
+        course_id = None
+        course_name = None
+        if len(selected_course_pairs) == 1:
+            course_id, course_name = selected_course_pairs[0]
+        elif len(selected_course_pairs) > 1:
+            course_id = 0
+            course_name = "综合类"
+
+        return {
+            "knowledge_point_names": knowledge_point_names,
+            "police_type_id": police_type_id,
+            "police_type_name": police_type_name,
+            "course_id": course_id,
+            "course_name": course_name,
+            "course_ids": course_ids,
+            "course_names": course_names,
+        }
+
+    def _resolve_selected_course_ids(self, values: Optional[List[int]]) -> List[int]:
+        return [item[0] for item in self._get_course_pairs(values or [], strict=True)]
+
+    def _get_course_pairs(self, course_ids: List[int], strict: bool = False) -> List[tuple[int, str]]:
+        normalized_ids = self._normalize_scope_target_ids(course_ids)
+        if not normalized_ids:
+            return []
+        courses = self.db.query(Course).filter(Course.id.in_(normalized_ids)).all()
+        course_map = {course.id: course for course in courses}
+        ordered_courses = [course_map.get(course_id) for course_id in normalized_ids]
+        if strict and not all(ordered_courses):
+            raise ValueError("指定课程中包含无效课程")
+        return [(course.id, course.title) for course in ordered_courses if course]
 
     def _can_join_admission_exam(
         self,

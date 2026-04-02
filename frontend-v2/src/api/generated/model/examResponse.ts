@@ -24,6 +24,7 @@ export interface ExamResponse {
   purpose?: string;
   training_id?: number | null;
   training_name?: string | null;
+  course_name?: string | null;
   max_attempts?: number;
   allow_makeup?: boolean;
   start_time?: string | null;

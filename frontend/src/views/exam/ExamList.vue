@@ -19,6 +19,9 @@
             <a-tag :color="statusColors[exam.status]">{{ statusLabels[exam.status] }}</a-tag>
             <a-tag>{{ exam.kind === 'admission' ? '准入考试' : (purposeLabels[exam.purpose] || exam.purpose) }}</a-tag>
             <a-tag>{{ exam.type === 'formal' ? '正式考核' : '测验' }}</a-tag>
+            <a-tag v-for="courseName in visibleCourseTags(exam)" :key="`${exam.kind}-${exam.id}-${courseName}`" color="cyan">
+              {{ courseName }}
+            </a-tag>
           </div>
 
           <div class="exam-title">{{ exam.title }}</div>
@@ -33,6 +36,7 @@
 
           <div class="exam-meta">
             <div>{{ exam.kind === 'admission' ? `适用范围：${exam.scope || '全体学员'}` : `培训班：${exam.trainingName || '独立场次'}` }}</div>
+            <div v-if="exam.courseNames?.length">绑定课程：{{ exam.courseNames.join('、') }}</div>
             <div>次数：{{ exam.attemptCount || 0 }}/{{ exam.maxAttempts || 1 }}</div>
             <div>时间：{{ formatDate(exam.startTime) }} ~ {{ formatDate(exam.endTime) }}</div>
             <div v-if="exam.latestResult">最近结果：{{ exam.latestResult === 'pass' ? '通过' : '未通过' }}</div>
@@ -137,6 +141,10 @@ function formatDate(value) {
   return value ? String(value).replace('T', ' ').slice(0, 16) : '未设置'
 }
 
+function visibleCourseTags(exam) {
+  return (exam.courseNames || []).slice(0, 2)
+}
+
 function disabledLabel(exam) {
   if ((exam.attemptCount || 0) >= (exam.maxAttempts || 1)) return '已达到作答次数'
   if (exam.status === 'upcoming') return '考试未开始'
@@ -173,6 +181,7 @@ function viewExamGuide(exam) {
     `考试状态：${statusLabels[exam.status] || exam.status || '未设置'}`,
     `考试时长：${exam.duration || 0} 分钟`,
     `题量与分值：${exam.questionCount || 0} 题 / 满分 ${exam.totalScore || 0} 分 / 及格 ${exam.passingScore || 0} 分`,
+    `绑定课程：${exam.courseNames?.length ? exam.courseNames.join('、') : '未绑定课程'}`,
     `作答次数：已作答 ${exam.attemptCount || 0} 次，剩余 ${remainingAttempts} 次`,
     `考试时间：${formatDate(exam.startTime)} ~ ${formatDate(exam.endTime)}`,
     exam.kind === 'admission'

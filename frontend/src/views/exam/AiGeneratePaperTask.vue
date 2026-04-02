@@ -142,6 +142,14 @@
           :confirmed-at="activeTask.confirmedAt"
         />
 
+        <a-alert
+          v-if="activeTask.errorMessage"
+          type="warning"
+          show-icon
+          :message="activeTask.errorMessage"
+          style="margin-top: 12px;"
+        />
+
         <div class="detail-section">
           <div class="detail-section-title">任务请求</div>
           <a-descriptions :column="2" size="small" bordered>
