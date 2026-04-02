@@ -1,322 +1,298 @@
 <template>
-  <div class="practice-page">
-    <div class="practice-container">
-      <!-- 页面标题区 -->
-      <header class="page-header">
-        <div class="header-content">
-          <h1 class="page-title">刷题练习</h1>
-          <p class="page-subtitle">选择知识点或题库开始练习</p>
-        </div>
-      </header>
-
-      <!-- 模式切换 -->
-      <div class="mode-tabs">
-        <button
-          class="mode-tab"
-          :class="{ active: activeSourceType === 'knowledge-point' }"
-          @click="selectSourceType('knowledge-point')"
-        >
-          按知识点
-        </button>
-        <button
-          class="mode-tab"
-          :class="{ active: activeSourceType === 'question-folder' }"
-          @click="selectSourceType('question-folder')"
-        >
-          按题库/科目
-        </button>
-      </div>
-
-      <!-- 筛选区域 -->
-      <div class="filter-card">
-        <!-- 知识点/题库选择 -->
-        <div class="filter-block filter-block-main">
-          <label class="filter-label">{{ currentSelectorLabel }}</label>
-          <div class="select-wrapper">
-            <select v-model="selectedSourceId" class="field-control">
-              <option value="">{{ currentPlaceholder }}</option>
-              <option
-                v-for="item in currentSources"
-                :key="item.id"
-                :value="String(item.id)"
-              >
-                {{ item.display_name || item.name }} ({{ item.question_count || 0 }}题)
-              </option>
-            </select>
-            <svg class="select-arrow" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-            </svg>
-          </div>
-          <p class="filter-hint">{{ currentHint }}</p>
-        </div>
-
-        <!-- 高级筛选 -->
-        <div class="advanced-section">
-          <div class="advanced-grid">
-            <div class="filter-block">
-              <label class="filter-label">题量</label>
-              <div class="select-wrapper">
-                <select v-model="questionLimitMode" class="field-control">
-                  <option v-for="option in questionLimitOptions" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
-                <svg class="select-arrow" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </div>
-
-            <div v-if="questionLimitMode === 'custom'" class="filter-block">
-              <label class="filter-label">自定义题量</label>
-              <input
-                v-model="customQuestionLimit"
-                class="field-control"
-                type="number"
-                min="1"
-                step="1"
-                placeholder="请输入题量"
-              >
-            </div>
-
-            <div class="filter-block">
-              <label class="filter-label">题型</label>
-              <div class="select-wrapper">
-                <select v-model="selectedQuestionType" class="field-control">
-                  <option v-for="option in questionTypeOptions" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
-                <svg class="select-arrow" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </div>
-
-            <div class="filter-block">
-              <label class="filter-label">难度</label>
-              <div class="select-wrapper">
-                <select v-model="selectedDifficulty" class="field-control">
-                  <option v-for="option in difficultyOptions" :key="option.value" :value="option.value">
-                    {{ option.label }}
-                  </option>
-                </select>
-                <svg class="select-arrow" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </div>
-
-            <div class="filter-block">
-              <label class="filter-label">警种</label>
-              <div class="select-wrapper">
-                <select v-model="selectedPoliceTypeId" class="field-control">
-                  <option value="">全部警种</option>
-                  <option v-for="item in policeTypes" :key="item.id" :value="String(item.id)">
-                    {{ item.name }}
-                  </option>
-                </select>
-                <svg class="select-arrow" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-            </div>
-          </div>
-
-          <div class="filter-block filter-block-wide">
-            <label class="filter-label">关键词</label>
-            <input
-              v-model="keyword"
-              class="field-control"
-              type="text"
-              placeholder="可按题干或知识点关键词筛选"
-            >
-          </div>
-        </div>
-      </div>
-
-      <!-- 预览区域 -->
-      <div v-if="selectedSource" class="preview-card">
-        <div class="preview-header">
-          <span class="preview-tag">{{ selectedSourceTypeLabel }}</span>
-          <span class="preview-count">{{ selectedSource.question_count || 0 }} 题</span>
-        </div>
-        <div class="preview-name">{{ selectedSource.name }}</div>
-        <div v-if="selectedSourceMeta" class="preview-meta">{{ selectedSourceMeta }}</div>
-        <div v-if="activeFilterTags.length" class="preview-tags">
-          <span v-for="tag in activeFilterTags" :key="tag" class="preview-chip">{{ tag }}</span>
-        </div>
-        <div v-if="selectedSource.description" class="preview-desc">{{ selectedSource.description }}</div>
-      </div>
-
-      <p v-else-if="!loading && !currentSources.length" class="empty-tip">
-        当前暂无可练习的{{ currentSelectorLabel }}
-      </p>
-
-      <!-- 底部操作区 -->
-      <footer class="action-footer">
-        <button
-          class="btn-start"
-          :disabled="!selectedSourceId"
-          @click="startPractice"
-        >
-          开始练习
-        </button>
-      </footer>
-
-      <!-- 加载状态 -->
-      <div v-if="loading" class="loading-overlay">
-        <a-spin size="large" />
+  <div class="page-content practice-page">
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">刷题练习</h1>
+        <p class="page-subtitle">选择知识点或题库，开启专项练习。</p>
       </div>
     </div>
+
+    <!-- 筛选卡片 -->
+    <a-card :bordered="false" class="filter-card">
+      <div class="filter-shell">
+        <div class="filter-top">
+          <div class="filter-search">
+            <a-input-search
+              v-model:value="searchKeyword"
+              placeholder="搜索知识点名称..."
+              @search="handleSearch"
+            />
+          </div>
+          <div class="filter-top-actions">
+            <a-select v-model:value="questionLimitMode" class="sort-select">
+              <a-select-option value="10">最多 10 题</a-select-option>
+              <a-select-option value="20">最多 20 题</a-select-option>
+              <a-select-option value="50">最多 50 题</a-select-option>
+              <a-select-option value="all">题量不限</a-select-option>
+            </a-select>
+          </div>
+        </div>
+
+        <div class="filter-row">
+          <a-select v-model:value="selectedQuestionType" placeholder="全部题型" allow-clear class="filter-select">
+            <a-select-option value="single">单选题</a-select-option>
+            <a-select-option value="multi">多选题</a-select-option>
+            <a-select-option value="judge">判断题</a-select-option>
+          </a-select>
+          <a-select v-model:value="selectedDifficulty" placeholder="全部难度" allow-clear class="filter-select">
+            <a-select-option value="1">难度 1</a-select-option>
+            <a-select-option value="2">难度 2</a-select-option>
+            <a-select-option value="3">难度 3</a-select-option>
+            <a-select-option value="4">难度 4</a-select-option>
+            <a-select-option value="5">难度 5</a-select-option>
+          </a-select>
+          <a-select v-model:value="selectedPoliceTypeId" placeholder="全部警种" allow-clear class="filter-select">
+            <a-select-option v-for="item in policeTypes" :key="item.id" :value="String(item.id)">
+              {{ item.name }}
+            </a-select-option>
+          </a-select>
+        </div>
+      </div>
+    </a-card>
+
+    <!-- 模式切换 -->
+    <div class="category-tabs">
+      <a-tag
+        class="cat-tag"
+        :class="{ active: activeSourceType === 'knowledge-point' }"
+        @click="selectSourceType('knowledge-point')"
+      >
+        按知识点
+      </a-tag>
+      <a-tag
+        class="cat-tag"
+        :class="{ active: activeSourceType === 'question-folder' }"
+        @click="selectSourceType('question-folder')"
+      >
+        按题库/科目
+      </a-tag>
+    </div>
+
+    <!-- 统计 -->
+    <div class="practice-stats">
+      <span>共 <strong>{{ filteredSources.length }}</strong> 个{{ activeSourceType === 'knowledge-point' ? '知识点' : '题库' }}</span>
+    </div>
+
+    <div v-if="loading" class="loading-wrapper">
+      <a-spin size="large" />
+    </div>
+
+    <a-empty v-else-if="!filteredSources.length" description="暂无符合条件的练习来源" class="empty-block" />
+
+    <div v-else class="practice-grid">
+      <div
+        v-for="(item, index) in filteredSources"
+        :key="item.id"
+        class="practice-card"
+        :style="{ '--card-accent': getCardAccent(index) }"
+        @click="handleCardClick(item)"
+      >
+        <div class="card-cover" :style="{ background: getCardCoverBackground(index) }">
+          <div class="cover-labels">
+            <span class="cover-tag-label">{{ activeSourceType === 'knowledge-point' ? '知识点' : '题库' }}</span>
+            <span class="cover-count-tag">{{ item.question_count || 0 }} 题</span>
+          </div>
+
+          <div class="cover-visual">
+            <span class="cover-visual-ring">
+              <NodeIndexOutlined v-if="activeSourceType === 'knowledge-point'" class="cover-visual-icon" />
+              <FolderOutlined v-else class="cover-visual-icon" />
+            </span>
+          </div>
+
+          <div class="cover-footer">
+            <span v-if="activeSourceType === 'question-folder'" class="cover-footer-item">
+              {{ item.category || '默认分类' }}
+            </span>
+            <span v-if="activeSourceType === 'knowledge-point' && item.police_type_name" class="cover-footer-item">
+              {{ item.police_type_name }}
+            </span>
+          </div>
+        </div>
+
+        <div class="card-body">
+          <div class="card-head">
+            <h3>{{ item.name }}</h3>
+            <p v-if="item.description">{{ item.description }}</p>
+            <p v-else style="color: var(--v2-text-muted)">暂无描述</p>
+          </div>
+
+          <div class="meta-grid">
+            <span v-if="item.question_count">
+              <QuestionCircleOutlined />
+              {{ item.question_count }} 题
+            </span>
+            <span v-if="item.difficulty_avg">
+              <StarOutlined />
+              平均难度 {{ item.difficulty_avg.toFixed(1) }}
+            </span>
+          </div>
+
+          <div class="action-row">
+            <a-button type="primary" block @click.stop="startPractice(item)">
+              开始练习
+            </a-button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 练习设置弹窗 -->
+    <a-modal
+      v-model:open="settingsVisible"
+      :title="null"
+      :footer="null"
+      :width="420"
+      centered
+      class="settings-modal"
+    >
+      <div class="settings-panel">
+        <div class="settings-header">
+          <div class="settings-icon">
+            <EditOutlined />
+          </div>
+          <div class="settings-title-area">
+            <h3 class="settings-title">设置练习参数</h3>
+            <p class="settings-subtitle">{{ selectedPracticeItem?.name }}</p>
+          </div>
+        </div>
+
+        <div class="settings-form">
+          <div class="settings-field">
+            <label class="settings-label">题目数量</label>
+            <a-select v-model:value="settingsForm.questionLimit" class="settings-select">
+              <a-select-option value="10">最多 10 题</a-select-option>
+              <a-select-option value="20">最多 20 题</a-select-option>
+              <a-select-option value="50">最多 50 题</a-select-option>
+              <a-select-option value="all">题量不限</a-select-option>
+            </a-select>
+          </div>
+
+          <div class="settings-field">
+            <label class="settings-label">题目类型</label>
+            <a-select v-model:value="settingsForm.questionType" placeholder="全部题型" allow-clear class="settings-select">
+              <a-select-option value="single">单选题</a-select-option>
+              <a-select-option value="multi">多选题</a-select-option>
+              <a-select-option value="judge">判断题</a-select-option>
+            </a-select>
+          </div>
+
+          <div class="settings-field">
+            <label class="settings-label">题目难度</label>
+            <a-select v-model:value="settingsForm.difficulty" placeholder="全部难度" allow-clear class="settings-select">
+              <a-select-option value="1">难度 1</a-select-option>
+              <a-select-option value="2">难度 2</a-select-option>
+              <a-select-option value="3">难度 3</a-select-option>
+              <a-select-option value="4">难度 4</a-select-option>
+              <a-select-option value="5">难度 5</a-select-option>
+            </a-select>
+          </div>
+        </div>
+
+        <div class="settings-actions">
+          <button class="btn-cancel" @click="settingsVisible = false">返回</button>
+          <button class="btn-confirm" @click="confirmStartPractice">开始练习</button>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
-<script setup>
-import { computed, onMounted, ref } from 'vue'
-import { message } from 'ant-design-vue'
+<script setup lang="ts">
+import {
+  EditOutlined,
+  FolderOutlined,
+  NodeIndexOutlined,
+  QuestionCircleOutlined,
+  StarOutlined,
+} from '@ant-design/icons-vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { getKnowledgePointsApiV1KnowledgePointsGet } from '@/api/generated/knowledge-point-management/knowledge-point-management'
-import { getPoliceTypesApiV1PoliceTypesGet } from '@/api/generated/police-type-management/police-type-management'
-import { getQuestionFoldersApiV1QuestionsFoldersGet } from '@/api/generated/question-management/question-management'
+import { getPracticeSources } from '@/api/practice'
 
 const router = useRouter()
 
 const loading = ref(false)
 const activeSourceType = ref('knowledge-point')
-const selectedSourceId = ref('')
+const searchKeyword = ref('')
 const questionLimitMode = ref('20')
-const customQuestionLimit = ref('')
-const selectedQuestionType = ref('')
-const selectedDifficulty = ref('')
-const selectedPoliceTypeId = ref('')
-const keyword = ref('')
+const selectedQuestionType = ref(undefined)
+const selectedDifficulty = ref(undefined)
+const selectedPoliceTypeId = ref(undefined)
 
 const knowledgePoints = ref([])
 const questionFolders = ref([])
 const policeTypes = ref([])
 
-const questionLimitOptions = [
-  { value: '10', label: '最多 10 题' },
-  { value: '20', label: '最多 20 题' },
-  { value: '50', label: '最多 50 题' },
-  { value: 'all', label: '任意数量' },
-  { value: 'custom', label: '自定义题量' },
+const settingsVisible = ref(false)
+const selectedPracticeItem = ref<any>(null)
+
+const settingsForm = reactive({
+  questionLimit: '20',
+  questionType: undefined as string | undefined,
+  difficulty: undefined as string | undefined,
+})
+
+const coverGradients = [
+  'linear-gradient(135deg, #edf1fb 0%, #e4eaf5 100%)',
+  'linear-gradient(135deg, #edf3ee 0%, #e1eae3 100%)',
+  'linear-gradient(135deg, #f6eee7 0%, #eee2d7 100%)',
+  'linear-gradient(135deg, #edf4f3 0%, #e2ece9 100%)',
+  'linear-gradient(135deg, #f3ede7 0%, #e8dfd6 100%)',
 ]
 
-const questionTypeOptions = [
-  { value: '', label: '全部题型' },
-  { value: 'single', label: '单选题' },
-  { value: 'multi', label: '多选题' },
-  { value: 'judge', label: '判断题' },
+const cardAccents = [
+  '#4B6EF5',
+  '#34C759',
+  '#FF9500',
+  '#5856D6',
+  '#FF2D55',
 ]
 
-const difficultyOptions = [
-  { value: '', label: '全部难度' },
-  { value: '1', label: '难度 1' },
-  { value: '2', label: '难度 2' },
-  { value: '3', label: '难度 3' },
-  { value: '4', label: '难度 4' },
-  { value: '5', label: '难度 5' },
-]
+function getCardAccent(index: number) {
+  return cardAccents[index % cardAccents.length]
+}
 
-const currentSelectorLabel = computed(() => (
-  activeSourceType.value === 'knowledge-point' ? '知识点' : '题库/科目'
-))
-
-const currentPlaceholder = computed(() => (
-  activeSourceType.value === 'knowledge-point' ? '请选择知识点' : '请选择题库或科目'
-))
-
-const currentHint = computed(() => (
-  activeSourceType.value === 'knowledge-point'
-    ? '按知识点筛选题目进行专项练习。'
-    : '按题库、科目或其下级分类递归加载题目。'
-))
-
-const selectedSourceTypeLabel = computed(() => (
-  activeSourceType.value === 'knowledge-point' ? '已选知识点' : '已选题库/科目'
-))
+function getCardCoverBackground(index: number) {
+  return coverGradients[index % coverGradients.length]
+}
 
 const currentSources = computed(() => (
   activeSourceType.value === 'knowledge-point' ? knowledgePoints.value : questionFolders.value
 ))
 
-const selectedSource = computed(() => (
-  currentSources.value.find((item) => String(item.id) === String(selectedSourceId.value))
-))
+const filteredSources = computed(() => {
+  let items = currentSources.value
+
+  if (searchKeyword.value.trim()) {
+    const keyword = searchKeyword.value.trim().toLowerCase()
+    items = items.filter((item) =>
+      (item.name || '').toLowerCase().includes(keyword),
+    )
+  }
+
+  return items
+})
 
 const selectedPoliceTypeName = computed(() =>
   policeTypes.value.find((item) => String(item.id) === String(selectedPoliceTypeId.value))?.name || ''
 )
 
-const resolvedQuestionLimit = computed(() => {
-  if (questionLimitMode.value === 'all') {
-    return null
-  }
-  if (questionLimitMode.value === 'custom') {
-    const parsed = Number(customQuestionLimit.value)
-    return Number.isInteger(parsed) && parsed > 0 ? parsed : null
-  }
-  const parsed = Number(questionLimitMode.value)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : 20
-})
-
-const questionLimitLabel = computed(() => {
-  if (questionLimitMode.value === 'all') {
-    return '题量不限'
-  }
-  if (questionLimitMode.value === 'custom') {
-    return resolvedQuestionLimit.value ? `最多 ${resolvedQuestionLimit.value} 题` : '自定义题量'
-  }
-  return `最多 ${resolvedQuestionLimit.value} 题`
-})
-
-const selectedSourceMeta = computed(() => {
-  if (!selectedSource.value) {
-    return ''
-  }
-  if (activeSourceType.value === 'question-folder') {
-    return `${selectedSource.value.category || '默认分类'} · 递归包含子级题目`
-  }
-  return selectedSource.value.question_count ? `关联 ${selectedSource.value.question_count} 道题目` : ''
-})
-
-const activeFilterTags = computed(() => {
-  const tags = [questionLimitLabel.value]
-
-  if (selectedQuestionType.value) {
-    tags.push(questionTypeOptions.find((item) => item.value === selectedQuestionType.value)?.label || '')
-  }
-  if (selectedDifficulty.value) {
-    tags.push(`难度 ${selectedDifficulty.value}`)
-  }
-  if (selectedPoliceTypeName.value) {
-    tags.push(`警种：${selectedPoliceTypeName.value}`)
-  }
-  if (keyword.value.trim()) {
-    tags.push(`关键词：${keyword.value.trim()}`)
-  }
-
-  return tags.filter(Boolean)
-})
-
-function normalizeQuestionCount(value) {
+function normalizeQuestionCount(value: unknown) {
   return Number(value || 0)
 }
 
-function flattenFolderTree(folders, depth = 0) {
-  let flattened = []
+function flattenFolderTree(folders: any[], depth = 0) {
+  let flattened: any[] = []
 
   for (const folder of folders || []) {
     const questionCount = normalizeQuestionCount(folder.question_count ?? folder.questionCount)
     flattened.push({
       id: folder.id,
       name: folder.name,
-      display_name: depth > 0 ? `${'-- '.repeat(depth)}${folder.name}` : folder.name,
       category: folder.category || '默认分类',
       question_count: questionCount,
-      description: '',
+      description: folder.description || '',
     })
 
     if (Array.isArray(folder.children) && folder.children.length > 0) {
@@ -330,21 +306,22 @@ function flattenFolderTree(folders, depth = 0) {
 async function loadPracticeSources() {
   loading.value = true
   try {
-    const [knowledgePointResponse, folderResponse, policeTypeResponse] = await Promise.all([
-      getKnowledgePointsApiV1KnowledgePointsGet({ size: -1 }),
-      getQuestionFoldersApiV1QuestionsFoldersGet(),
-      getPoliceTypesApiV1PoliceTypesGet({ size: -1 }),
-    ])
+    const sourceResponse = await getPracticeSources()
 
-    knowledgePoints.value = (knowledgePointResponse?.items || []).filter(
-      (item) => normalizeQuestionCount(item.question_count) > 0,
+    const rawKps = sourceResponse?.knowledge_points || []
+    knowledgePoints.value = rawKps
+      .filter((item: any) => normalizeQuestionCount(item.question_count) > 0)
+      .map((item: any) => ({
+        ...item,
+        police_type_name: item.police_type?.name || '',
+        difficulty_avg: item.difficulty_avg || null,
+      }))
+
+    questionFolders.value = flattenFolderTree(sourceResponse?.question_folders || []).filter(
+      (item: any) => normalizeQuestionCount(item.question_count) > 0,
     )
 
-    questionFolders.value = flattenFolderTree(folderResponse || []).filter(
-      (item) => normalizeQuestionCount(item.question_count) > 0,
-    )
-
-    policeTypes.value = (policeTypeResponse?.items || []).filter((item) => item.is_active !== false)
+    policeTypes.value = (sourceResponse?.police_types || []).filter((item: any) => item.is_active !== false)
   } catch (error) {
     message.error(error instanceof Error ? error.message : '加载练习来源失败')
   } finally {
@@ -352,37 +329,94 @@ async function loadPracticeSources() {
   }
 }
 
-function selectSourceType(type) {
+function selectSourceType(type: string) {
   if (activeSourceType.value === type) {
     return
   }
   activeSourceType.value = type
-  selectedSourceId.value = ''
+  searchKeyword.value = ''
 }
 
-function startPractice() {
-  if (!selectedSource.value) {
-    message.warning(`请先选择${currentSelectorLabel.value}`)
-    return
+function handleSearch() {
+  // 搜索由 computed 属性自动处理
+}
+
+function handleCardClick(item: any) {
+  startPractice(item)
+}
+
+function getResolvedQuestionLimit() {
+  if (questionLimitMode.value === 'all') {
+    return null
+  }
+  const parsed = Number(questionLimitMode.value)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 20
+}
+
+function getSelectedPoliceTypeName() {
+  return policeTypes.value.find((item) => String(item.id) === String(selectedPoliceTypeId.value))?.name || ''
+}
+
+function getPracticeSettingsText() {
+  const parts: string[] = []
+
+  const limit = getResolvedQuestionLimit()
+  if (limit) {
+    parts.push(`题量：${limit} 题`)
+  } else {
+    parts.push('题量：不限')
   }
 
-  if (questionLimitMode.value === 'custom' && !resolvedQuestionLimit.value) {
-    message.warning('请输入有效的自定义题量')
-    return
+  const typeMap: Record<string, string> = { single: '单选题', multi: '多选题', judge: '判断题' }
+  if (selectedQuestionType.value && typeMap[selectedQuestionType.value]) {
+    parts.push(`题型：${typeMap[selectedQuestionType.value]}`)
+  } else {
+    parts.push('题型：全部')
   }
 
+  if (selectedDifficulty.value) {
+    parts.push(`难度：${selectedDifficulty.value}`)
+  } else {
+    parts.push('难度：全部')
+  }
+
+  if (selectedPoliceTypeId.value) {
+    const policeName = getSelectedPoliceTypeName()
+    if (policeName) parts.push(`警种：${policeName}`)
+  }
+
+  return parts.join(' · ')
+}
+
+function startPractice(item: any) {
+  selectedPracticeItem.value = item
+  settingsForm.questionLimit = questionLimitMode.value
+  settingsForm.questionType = selectedQuestionType.value
+  settingsForm.difficulty = selectedDifficulty.value
+  settingsVisible.value = true
+}
+
+function getSettingsResolvedLimit() {
+  if (settingsForm.questionLimit === 'all') return null
+  const parsed = Number(settingsForm.questionLimit)
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : 20
+}
+
+function confirmStartPractice() {
+  if (!selectedPracticeItem.value) return
+  settingsVisible.value = false
   router.push({
     path: '/practice/do',
     query: {
       sourceType: activeSourceType.value,
-      sourceId: String(selectedSource.value.id),
-      sourceName: selectedSource.value.name,
-      questionLimit: resolvedQuestionLimit.value ? String(resolvedQuestionLimit.value) : 'all',
-      questionType: selectedQuestionType.value || undefined,
-      difficulty: selectedDifficulty.value || undefined,
+      sourceId: String(selectedPracticeItem.value.id),
+      sourceName: selectedPracticeItem.value.name,
+      questionLimit: getSettingsResolvedLimit() ? String(getSettingsResolvedLimit()) : 'all',
+      questionType: settingsForm.questionType || undefined,
+      difficulty: settingsForm.difficulty || undefined,
       policeTypeId: selectedPoliceTypeId.value || undefined,
-      policeTypeName: selectedPoliceTypeName.value || undefined,
-      keyword: keyword.value.trim() || undefined,
+      policeTypeName: getSelectedPoliceTypeName() || undefined,
+      keyword: searchKeyword.value.trim() || undefined,
     },
   })
 }
@@ -393,345 +427,499 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.practice-page {
-  min-height: 100vh;
-  background: var(--v2-bg, #F5F6FA);
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
-}
-
-.practice-container {
-  width: 100%;
-  max-width: 900px;
-  padding: 32px 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-/* 页面标题 */
 .page-header {
-  text-align: center;
-  padding: 16px 0 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
 }
 
 .page-title {
+  margin: 0 0 6px;
   font-size: 28px;
   font-weight: 700;
-  color: var(--v2-text-primary, #1D1D1F);
-  margin: 0 0 8px 0;
+  color: var(--v2-text-primary);
 }
 
 .page-subtitle {
-  font-size: 14px;
-  color: var(--v2-text-secondary, #86868B);
   margin: 0;
+  color: var(--v2-text-secondary);
 }
 
-/* 模式切换 */
-.mode-tabs {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-
-.mode-tab {
-  height: 48px;
-  border: 2px solid var(--v2-border, #E5E5EA);
-  border-radius: var(--v2-radius, 12px);
-  background: var(--v2-bg-card, #FFFFFF);
-  color: var(--v2-text-secondary, #86868B);
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.mode-tab:hover {
-  border-color: var(--v2-primary, #4B6EF5);
-  color: var(--v2-primary, #4B6EF5);
-}
-
-.mode-tab.active {
-  border-color: var(--v2-primary, #4B6EF5);
-  background: var(--v2-primary-light, #EEF2FF);
-  color: var(--v2-primary, #4B6EF5);
-  box-shadow: 0 4px 16px rgba(75, 110, 245, 0.15);
-}
-
-/* 筛选卡片 */
 .filter-card {
-  background: var(--v2-bg-card, #FFFFFF);
-  border-radius: var(--v2-radius-lg, 16px);
-  padding: 24px;
-  box-shadow: var(--v2-shadow, 0 2px 8px rgba(0, 0, 0, 0.06));
+  margin-bottom: 20px;
+  border-radius: 24px;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.06);
 }
 
-.filter-block {
+.filter-shell {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 18px;
 }
 
-.filter-block-main {
-  margin-bottom: 20px;
-}
-
-.filter-block-wide {
-  grid-column: 1 / -1;
-}
-
-.filter-label {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--v2-text-primary, #1D1D1F);
-}
-
-.select-wrapper {
-  position: relative;
-}
-
-.field-control {
-  width: 100%;
-  height: 48px;
-  padding: 0 40px 0 14px;
-  border: 1.5px solid var(--v2-border, #E5E5EA);
-  border-radius: var(--v2-radius, 12px);
-  font-size: 14px;
-  color: var(--v2-text-primary, #1D1D1F);
-  background: var(--v2-bg-card, #FFFFFF);
-  transition: all 0.2s;
-  appearance: none;
-  cursor: pointer;
-}
-
-.field-control:focus {
-  outline: none;
-  border-color: var(--v2-primary, #4B6EF5);
-  box-shadow: 0 0 0 3px var(--v2-primary-light, rgba(75, 110, 245, 0.1));
-}
-
-.select-arrow {
-  position: absolute;
-  right: 14px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 16px;
-  height: 16px;
-  color: var(--v2-text-muted, #AEAEB2);
-  pointer-events: none;
-}
-
-.filter-hint {
-  margin: 4px 0 0;
-  font-size: 13px;
-  color: var(--v2-text-muted, #AEAEB2);
-}
-
-/* 高级筛选 */
-.advanced-section {
-  border-top: 1px solid var(--v2-border-light, #F2F2F7);
-  padding-top: 20px;
-}
-
-.advanced-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
+.filter-top {
+  display: flex;
+  align-items: center;
   gap: 16px;
 }
 
-/* 预览卡片 */
-.preview-card {
-  background: linear-gradient(135deg, var(--v2-primary, #4B6EF5), #3B5DE0);
-  border-radius: var(--v2-radius-lg, 16px);
-  padding: 24px;
-  color: #fff;
-  box-shadow: 0 8px 24px rgba(75, 110, 245, 0.25);
+.filter-search {
+  flex: 1;
 }
 
-.preview-header {
+.filter-top-actions {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 10px;
+  gap: 12px;
 }
 
-.preview-tag {
-  font-size: 12px;
-  opacity: 0.85;
-  font-weight: 500;
+.sort-select {
+  width: 150px;
 }
 
-.preview-count {
-  font-size: 12px;
-  background: rgba(255, 255, 255, 0.2);
-  padding: 3px 10px;
-  border-radius: var(--v2-radius-full, 9999px);
-}
-
-.preview-name {
-  font-size: 20px;
-  font-weight: 700;
-  margin-bottom: 6px;
-}
-
-.preview-meta {
-  font-size: 13px;
-  opacity: 0.85;
-  margin-bottom: 12px;
-}
-
-.preview-tags {
+.filter-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 12px;
 }
 
-.preview-chip {
+.filter-select {
+  min-width: 140px;
+}
+
+.category-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+:deep(.cat-tag.ant-tag) {
+  cursor: pointer;
+  margin: 0;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--v2-text-secondary);
+  border: 1px solid rgba(75, 110, 245, 0.12);
+  background: rgba(255, 255, 255, 0.92);
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+:deep(.cat-tag.ant-tag:hover),
+:deep(.cat-tag.active.ant-tag) {
+  color: var(--v2-primary);
+  border-color: rgba(75, 110, 245, 0.28);
+  background: var(--v2-primary-light);
+  box-shadow: 0 10px 24px rgba(75, 110, 245, 0.12);
+  transform: translateY(-1px);
+}
+
+.practice-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-bottom: 20px;
+  color: var(--v2-text-secondary);
+}
+
+.loading-wrapper,
+.empty-block {
+  padding: 80px 0;
+}
+
+.practice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 20px;
+}
+
+.practice-card {
+  overflow: hidden;
+  background: var(--v2-bg-card);
+  border-radius: 24px;
+  box-shadow: 0 18px 40px rgba(24, 39, 75, 0.08);
+  cursor: pointer;
+  transition:
+    transform 0.22s ease,
+    box-shadow 0.22s ease;
+}
+
+.practice-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 24px 48px rgba(75, 110, 245, 0.12);
+}
+
+.card-cover {
+  position: relative;
+  height: 180px;
+  padding: 18px;
+  overflow: hidden;
+}
+
+.card-cover::before {
+  content: '';
+  position: absolute;
+  right: -34px;
+  bottom: -70px;
+  width: 210px;
+  height: 210px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  filter: blur(8px);
+}
+
+.cover-labels {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cover-tag-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--v2-text-secondary);
+}
+
+.cover-count-tag {
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
-  border-radius: var(--v2-radius-full, 9999px);
-  background: rgba(255, 255, 255, 0.18);
+  padding: 4px 12px;
+  border-radius: 999px;
   font-size: 12px;
-}
-
-.preview-desc {
-  font-size: 13px;
-  opacity: 0.8;
-  line-height: 1.5;
-}
-
-.empty-tip {
-  padding: 20px;
-  margin: 0;
-  text-align: center;
-  color: var(--v2-text-secondary, #86868B);
-  background: var(--v2-bg, #F5F6FA);
-  border: 1px dashed var(--v2-border, #E5E5EA);
-  border-radius: var(--v2-radius, 12px);
-}
-
-/* 底部操作 */
-.action-footer {
-  padding: 8px 0;
-}
-
-.btn-start {
-  width: 100%;
-  height: 52px;
-  background: var(--v2-primary, #4B6EF5);
-  color: #fff;
-  border: none;
-  border-radius: var(--v2-radius, 12px);
-  font-size: 16px;
   font-weight: 700;
+  color: var(--v2-primary);
+  background: rgba(75, 110, 245, 0.1);
+  border: 1px solid rgba(75, 110, 245, 0.2);
+}
+
+.cover-visual {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cover-visual-ring {
+  position: relative;
+  width: 82px;
+  height: 82px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.7));
+  box-shadow:
+    0 16px 28px var(--card-accent, rgba(75, 110, 245, 0.14)),
+    inset 0 1px 0 rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(12px);
+}
+
+.cover-visual-icon {
+  position: relative;
+  z-index: 1;
+  font-size: 34px;
+  color: var(--card-accent, #4B6EF5);
+}
+
+.cover-footer {
+  position: absolute;
+  left: 12px;
+  right: 22px;
+  bottom: 10px;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.cover-footer-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(18, 25, 38, 0.78);
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.72);
+}
+
+.card-body {
+  padding: 22px 22px 24px;
+}
+
+.card-head {
+  margin-bottom: 16px;
+}
+
+.card-head h3 {
+  margin: 0 0 10px;
+  font-size: 21px;
+  line-height: 1.35;
+  color: var(--v2-text-primary);
+}
+
+.card-head p {
+  margin: 0;
+  min-height: 44px;
+  color: var(--v2-text-secondary);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+  margin-bottom: 16px;
+  color: var(--v2-text-secondary);
+  font-size: 14px;
+}
+
+.meta-grid span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.action-row {
+  padding-top: 4px;
+}
+
+@media (max-width: 768px) {
+  .filter-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .sort-select,
+  .filter-select {
+    width: 100%;
+  }
+
+  .practice-grid,
+  .meta-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .card-cover {
+    height: 164px;
+  }
+}
+
+@media (max-width: 480px) {
+  .practice-page {
+    padding-bottom: 80px;
+  }
+
+  .practice-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .practice-card {
+    border-radius: 16px;
+  }
+
+  .card-cover {
+    height: 100px;
+    padding: 12px;
+  }
+
+  .cover-labels {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .cover-tag-label {
+    font-size: 10px;
+  }
+
+  .cover-count-tag {
+    font-size: 10px;
+    padding: 2px 8px;
+  }
+
+  .cover-visual-ring {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+  }
+
+  .cover-visual-icon {
+    font-size: 20px;
+  }
+
+  .cover-footer {
+    display: none;
+  }
+
+  .card-body {
+    padding: 12px;
+  }
+
+  .card-head h3 {
+    font-size: 14px;
+    margin-bottom: 6px;
+  }
+
+  .card-head p {
+    font-size: 12px;
+    min-height: auto;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .meta-grid {
+    display: none;
+  }
+
+  .action-row :deep(.ant-btn) {
+    font-size: 12px;
+    height: 30px;
+    padding: 0 10px;
+  }
+
+  .filter-row {
+    flex-direction: column;
+  }
+
+  .filter-select {
+    width: 100%;
+  }
+}
+
+/* 设置弹窗 */
+.settings-panel {
+  padding: 8px 4px;
+}
+
+.settings-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.settings-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, #4B6EF5, #3B5DE0);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 22px;
+  flex-shrink: 0;
+  box-shadow: 0 8px 20px rgba(75, 110, 245, 0.3);
+}
+
+.settings-title-area {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-title {
+  margin: 0 0 4px;
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--v2-text-primary);
+}
+
+.settings-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: var(--v2-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.settings-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--v2-text-secondary);
+}
+
+.settings-select {
+  width: 100%;
+}
+
+.settings-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-cancel {
+  flex: 1;
+  height: 44px;
+  border: 1.5px solid var(--v2-border);
+  border-radius: 12px;
+  background: transparent;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--v2-text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-cancel:hover {
+  background: var(--v2-bg);
+  border-color: var(--v2-primary);
+  color: var(--v2-primary);
+}
+
+.btn-confirm {
+  flex: 1;
+  height: 44px;
+  border: none;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #4B6EF5, #3B5DE0);
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
   cursor: pointer;
   transition: all 0.2s;
   box-shadow: 0 4px 16px rgba(75, 110, 245, 0.25);
 }
 
-.btn-start:hover:not(:disabled) {
-  background: var(--v2-primary-hover, #3B5DE0);
+.btn-confirm:hover {
   transform: translateY(-1px);
-}
-
-.btn-start:disabled {
-  background: var(--v2-border, #E5E5EA);
-  color: var(--v2-text-muted, #AEAEB2);
-  cursor: not-allowed;
-  box-shadow: none;
-}
-
-/* 加载状态 */
-.loading-overlay {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.9);
-  z-index: 100;
-}
-
-/* =====================
-   响应式设计
-   ===================== */
-
-/* 平板 */
-@media (max-width: 768px) {
-  .practice-container {
-    padding: 20px 16px;
-    gap: 16px;
-  }
-
-  .page-title {
-    font-size: 24px;
-  }
-
-  .filter-card {
-    padding: 20px;
-  }
-
-  .advanced-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .preview-card {
-    padding: 20px;
-  }
-
-  .preview-name {
-    font-size: 18px;
-  }
-}
-
-/* 手机 */
-@media (max-width: 480px) {
-  .practice-container {
-    padding: 16px 12px;
-    gap: 14px;
-  }
-
-  .page-header {
-    padding: 12px 0 4px;
-  }
-
-  .page-title {
-    font-size: 22px;
-  }
-
-  .mode-tab {
-    height: 44px;
-    font-size: 14px;
-  }
-
-  .advanced-grid {
-    grid-template-columns: 1fr;
-    gap: 14px;
-  }
-
-  .filter-card {
-    padding: 16px;
-  }
-
-  .preview-card {
-    padding: 16px;
-  }
-
-  .preview-name {
-    font-size: 16px;
-  }
-
-  .preview-tags {
-    gap: 6px;
-  }
-
-  .btn-start {
-    height: 48px;
-    font-size: 15px;
-  }
+  box-shadow: 0 6px 20px rgba(75, 110, 245, 0.35);
 }
 </style>
