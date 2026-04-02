@@ -18,7 +18,7 @@
           <div class="toolbar-row">
             <div class="toolbar-left">
               <button class="btn-primary" @click="openCreateDrawer">
-                添加准入考试
+                添加{{ filterExamType === 'admission' ? '准入' : '培训' }}考试
               </button>
               <div class="search-wrapper">
                 <svg class="search-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
@@ -67,6 +67,7 @@
                   <th class="col-paper">所用试卷</th>
                   <th class="col-type text-center">类型</th>
                   <th class="col-category text-center">分类</th>
+                  <th class="col-training text-center">关联班级</th>
                   <th class="col-action text-right">操作</th>
                 </tr>
               </thead>
@@ -102,6 +103,7 @@
                   </td>
                   <td class="col-type text-center text-slate-600">{{ exam.type === 'formal' ? '线上' : '测验' }}</td>
                   <td class="col-category text-center text-slate-600">{{ exam.courseNames?.length ? exam.courseNames.join('、') : (exam.courseName || '默认分类') }}</td>
+                  <td class="col-training text-center text-slate-600">{{ exam.training_name || '-' }}</td>
                   <td class="col-action text-right">
                     <button class="btn-action" @click.stop="openEditDrawer(exam)">
                       <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h.01M12 12h.01M19 12h.01"/></svg>
@@ -111,7 +113,7 @@
 
                 <!-- 空状态 -->
                 <tr v-if="!loading && examList.length === 0">
-                  <td colspan="10" class="empty-cell">
+                  <td colspan="11" class="empty-cell">
                     <div class="empty-content">
                       <svg class="empty-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
                       <span class="empty-text">暂无考试记录</span>
@@ -212,22 +214,6 @@
           <a-col :span="12">
             <a-form-item label="考试时间">
               <a-range-picker v-model:value="dateRange" show-time format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm" style="width:100%" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="24">
-            <a-form-item label="绑定课程">
-              <a-select
-                v-model:value="form.courseIds"
-                mode="multiple"
-                allow-clear
-                show-search
-                option-filter-prop="label"
-                placeholder="可显式绑定课程；不选时按试卷题目关联课程自动识别"
-                :options="courseOptions"
-              />
-              <div class="paper-hint">
-                <span class="hint-text">显式绑定后，学生端优先展示这里选择的课程</span>
-              </div>
             </a-form-item>
           </a-col>
           <a-col :span="6">
@@ -345,7 +331,7 @@ const pagination = reactive({ current: 1, pageSize: 15, total: 0 })
 const form = reactive({
   title: '', paperId: undefined, description: '',
   type: 'formal', status: 'upcoming',
-  scopeType: 'all', scopeTargetIds: [], courseIds: [],
+  scopeType: 'all', scopeTargetIds: [],
   duration: 60, passingScore: 60, maxAttempts: 1,
 })
 
@@ -437,10 +423,6 @@ async function setPaperPreview(paperId, applyDefaults = false) {
 
 function handlePaperChange(val) { setPaperPreview(val, !isEdit.value) }
 function openCreateDrawer() {
-  if (filterExamType.value !== 'admission') {
-    message.warning('培训班考试请在培训班详情中创建；此处仅支持独立准入考试')
-    return
-  }
   resetForm()
   drawerVisible.value = true
 }
@@ -473,7 +455,7 @@ async function openEditDrawer(record) {
 }
 
 function resetForm() {
-  Object.assign(form, { title: '', paperId: undefined, description: '', type: 'formal', status: 'upcoming', scopeType: 'all', scopeTargetIds: [], courseIds: [], duration: 60, passingScore: 60, maxAttempts: 1 })
+  Object.assign(form, { title: '', paperId: undefined, description: '', type: 'formal', status: 'upcoming', scopeType: 'all', scopeTargetIds: [], duration: 60, passingScore: 60, maxAttempts: 1 })
   selectedPaperDetail.value = null; drawerVisible.value = false; isEdit.value = false; editingId.value = null; dateRange.value = null
 }
 
@@ -485,17 +467,13 @@ async function handleSave() {
   if (!Number.isFinite(dur) || dur < 10) { message.warning('考试时长不能少于10分钟'); return }
   if (!Number.isFinite(ps) || ps < 1) { message.warning('及格分不能小于1分'); return }
   if (selectedPaperDetail.value && ps > selectedPaperDetail.value.totalScore) { message.warning('及格分不能超过试卷满分'); return }
-  const payload = { title: form.title, paperId: form.paperId, description: form.description || undefined, type: form.type, status: form.status, duration: dur, passingScore: ps, startTime: dateRange.value?.[0], endTime: dateRange.value?.[1], maxAttempts: form.maxAttempts, scopeType: form.scopeType, scopeTargetIds: form.scopeTargetIds, courseIds: form.courseIds }
+  const payload = { title: form.title, paperId: form.paperId, description: form.description || undefined, type: form.type, status: form.status, duration: dur, passingScore: ps, startTime: dateRange.value?.[0], endTime: dateRange.value?.[1], maxAttempts: form.maxAttempts, scopeType: form.scopeType, scopeTargetIds: form.scopeTargetIds }
   submitting.value = true
   try {
     if (isEdit.value) {
       filterExamType.value === 'admission' ? await updateAdmissionExam(editingId.value, payload) : await updateExam(editingId.value, payload)
       message.success('考试已更新')
     } else {
-      if (filterExamType.value !== 'admission') {
-        message.warning('培训班考试请在培训班详情中创建')
-        return
-      }
       filterExamType.value === 'admission' ? await createAdmissionExam(payload) : await createExam(payload)
       message.success('考试已添加')
     }
@@ -545,7 +523,7 @@ function formatDateTime(v) { return v ? String(v).replace('T', ' ').slice(0, 16)
 
 watch(filterExamType, () => { pagination.current = 1; loadExams() })
 watch(filterStatusSelect, val => { currentStatusTab.value = val || 'all' })
-onMounted(() => { loadExams(); loadPaperOptions(); loadCourseOptions() })
+onMounted(() => { loadExams(); loadPaperOptions() })
 </script>
 
 <style scoped>
@@ -844,6 +822,7 @@ onMounted(() => { loadExams(); loadPaperOptions(); loadCourseOptions() })
 .col-paper { width: 180px; }
 .col-type { width: 72px; }
 .col-category { width: 88px; }
+.col-training { width: 100px; }
 .col-action { width: 72px; }
 
 .name-cell {
