@@ -8,6 +8,10 @@ export function getTrainingStats() {
   return request.get('/trainings/stats')
 }
 
+export function getCourseResourcesForTraining(params) {
+  return request.get('/trainings/course-resources', { params })
+}
+
 export function getTraining(id) {
   return request.get(`/trainings/${id}`)
 }

@@ -210,6 +210,22 @@ def attendance_by_qr(
     return StandardResponse(data=result)
 
 
+@router.get("/course-resources", response_model=StandardResponse[PaginatedResponse], summary="获取课程资源列表（培训用）")
+def get_course_resources_for_training(
+    page: int = Query(1, ge=1),
+    size: int = Query(20, ge=1, le=100),
+    search: Optional[str] = Query(None, description="搜索课程名称"),
+    category: Optional[str] = Query(None, description="课程分类"),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取课程资源列表，供培训班添加课程时选择。需要培训班管理权限（教官或管理员）。"""
+    _require_admin_or_instructor(db, current_user.user_id)
+    service = TrainingService(db)
+    data = service.get_course_resources_for_training(current_user.user_id, page, size, search, category)
+    return StandardResponse(data=data)
+
+
 @router.post("", response_model=StandardResponse[TrainingResponse], summary="创建培训班")
 def create_training(
     data: TrainingCreate,

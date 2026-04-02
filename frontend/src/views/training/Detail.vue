@@ -114,7 +114,12 @@
             </a-tab-pane>
 
             <!-- ===== 学员名单 (Admin/Instructor 可管理) ===== -->
-            <a-tab-pane key="students" tab="学员名单" v-if="!authStore.isStudent">
+            <a-tab-pane key="students" v-if="!authStore.isStudent">
+              <template #tab>
+                <a-badge :dot="pendingEnrollmentCount > 0" :offset="[6, -2]">
+                  学员名单
+                </a-badge>
+              </template>
               <TrainingStudentsContent
                 :student-search="studentSearch"
                 :filtered-students="filteredStudents"
@@ -201,15 +206,27 @@
           </div>
         </div>
 
-        <a-form layout="vertical" style="margin-top:12px">
+        <a-form layout=”vertical” style=”margin-top:12px”>
           <a-alert
-            type="info"
+            type=”info”
             show-icon
             message=”计划课时用于智能排课任务的「按课时排」模式；如果选择排满或排满工作日，则不会按这里的课时限制生成。”
-            style="margin-bottom:16px"
+            style=”margin-bottom:16px”
           />
-          <a-form-item label="课程名称" required>
-            <a-input v-model:value="courseForm.name" placeholder="例：刑事诉讼法实务操作" />
+          <a-form-item label=”课程来源”>
+            <a-radio-group v-model:value=”courseForm.sourceMode” @change=”onCourseSourceChange”>
+              <a-radio value=”resource”>选择课程资源</a-radio>
+              <a-radio value=”custom”>自定义课程</a-radio>
+            </a-radio-group>
+          </a-form-item>
+          <a-form-item v-if=”courseForm.sourceMode === 'resource'” label=”课程资源” required>
+            <div style=”display:flex;gap:8px;align-items:center”>
+              <a-input :value=”courseForm.name” disabled placeholder=”点击右侧按钮选择课程资源” style=”flex:1” />
+              <a-button @click=”showCourseResourcePicker = true”>选择</a-button>
+            </div>
+          </a-form-item>
+          <a-form-item v-else label=”课程名称” required>
+            <a-input v-model:value=”courseForm.name” placeholder=”例：刑事诉讼法实务操作” />
           </a-form-item>
           <a-form-item label="课程地点">
             <a-input v-model:value="courseForm.location" placeholder="请输入课程地点" />
@@ -295,6 +312,11 @@
         </div>
       </div>
     </a-modal>
+
+    <CourseResourcePicker
+      v-model:open="showCourseResourcePicker"
+      @select="onCourseResourceSelected"
+    />
 
     <a-modal
       v-model:open="showCourseSessionModal"
@@ -744,6 +766,7 @@ import TrainingScheduleContent from './components/TrainingScheduleContent.vue'
 import TrainingScheduleRuleContent from './components/TrainingScheduleRuleContent.vue'
 import TrainingExamsContent from './components/TrainingExamsContent.vue'
 import TrainingStudentsContent from './components/TrainingStudentsContent.vue'
+import CourseResourcePicker from './components/CourseResourcePicker.vue'
 import TrainingCourseChangeLogsContent from './components/TrainingCourseChangeLogsContent.vue'
 import TrainingNextActionCard from './components/TrainingNextActionCard.vue'
 import TrainingQuickOpsCard from './components/TrainingQuickOpsCard.vue'
@@ -1042,8 +1065,11 @@ async function ensureStudentCandidatesLoaded(force = false) {
   }
 }
 
-onMounted(() => {
-  loadTrainingDetail()
+onMounted(async () => {
+  await loadTrainingDetail()
+  if (canManageEnrollmentApplications.value) {
+    loadEnrollmentApplications()
+  }
 })
 
 const activeTab = ref('overview')
@@ -2100,6 +2126,7 @@ const courseSessionSaveButtonRef = ref(null)
 
 // 'schedules' will store objects like { date: 'YYYY-MM-DD', timeRange: 'HH:mm~HH:mm', hours: 2 }
 const courseForm = reactive({
+  courseId: null,
   courseKey: '',
   name: '',
   location: '',
@@ -2109,7 +2136,9 @@ const courseForm = reactive({
   hours: 0,
   type: 'theory',
   schedules: [],
+  sourceMode: 'resource',
 })
+const showCourseResourcePicker = ref(false)
 const scheduleForm = reactive({
   courseIndex: null,
   sessionId: '',
@@ -2242,6 +2271,7 @@ function resetScheduleModal() {
 
 function resetCourseForm() {
   Object.assign(courseForm, {
+    courseId: null,
     courseKey: '',
     name: '',
     location: '',
@@ -2251,6 +2281,7 @@ function resetCourseForm() {
     hours: 0,
     type: 'theory',
     schedules: [],
+    sourceMode: 'resource',
   })
 }
 
@@ -2260,6 +2291,7 @@ function hydrateCourseForm(course) {
   const c = JSON.parse(JSON.stringify(course))
   const inst = instructorList.value.find(i => i.userId === c.primaryInstructorId || i.name === c.instructor)
   Object.assign(courseForm, {
+    courseId: c.courseId || null,
     courseKey: c.courseKey || '',
     name: c.name,
     location: c.location || '',
@@ -2269,6 +2301,7 @@ function hydrateCourseForm(course) {
     hours: roundCourseHours(c.hours),
     type: c.type,
     schedules: c.schedules || [],
+    sourceMode: c.courseId ? 'resource' : 'custom',
   })
 
   if (courseForm.schedules.length === 0) {
@@ -2538,6 +2571,24 @@ async function saveCourseSessions() {
   }
 }
 
+function onCourseSourceChange() {
+  if (courseForm.sourceMode === 'resource') {
+    courseForm.courseId = null
+    courseForm.name = ''
+  } else {
+    courseForm.courseId = null
+    courseForm.name = ''
+  }
+}
+
+function onCourseResourceSelected(item) {
+  courseForm.courseId = item.id
+  courseForm.name = item.title
+  if (item.instructorName && !courseForm.instructorId) {
+    courseForm.instructor = item.instructorName
+  }
+}
+
 async function saveCourse() {
   if (!canScheduleEdit.value) return
   if (!validateCourseBasicInfo()) {
@@ -2546,7 +2597,9 @@ async function saveCourse() {
   const courseData = { ...courseForm }
   courseData.hours = roundCourseHours(courseForm.hours)
   courseData.primaryInstructorId = courseForm.instructorId
+  courseData.courseId = courseForm.courseId
   delete courseData.instructorId
+  delete courseData.sourceMode
   const nextCourses = [...trainingData.courses]
   if (editingCourseIdx.value !== null) {
     nextCourses.splice(editingCourseIdx.value, 1, courseData)

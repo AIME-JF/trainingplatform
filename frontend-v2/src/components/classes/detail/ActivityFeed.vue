@@ -1,5 +1,15 @@
 <template>
   <div class="activity-feed">
+    <!-- 报名申请提示（仅班级教官可见） -->
+    <div v-if="isClassInstructor && pendingEnrollments?.length" class="activity-checkin-prompt activity-enroll-prompt">
+      <span v-if="pendingEnrollments.length === 1">
+        {{ pendingEnrollments[0].user_nickname || pendingEnrollments[0].user_name }} 申请加入班级
+      </span>
+      <span v-else>
+        {{ pendingEnrollments[0].user_nickname || pendingEnrollments[0].user_name }} 等 {{ pendingEnrollments.length }} 人申请加入班级
+      </span>
+    </div>
+
     <!-- 签到快捷提示 -->
     <div v-if="isStudent && isEnrolled && hasActiveCheckin && !hasCheckedIn" class="activity-checkin-prompt">
       <span>当前课次正在签到中</span>
@@ -38,17 +48,26 @@ import dayjs from 'dayjs'
 import { getTrainingActivitiesApiV1TrainingsTrainingIdActivitiesGet } from '@/api/generated/training-management/training-management'
 import type { TrainingActivityResponse } from '@/api/generated/model'
 
+interface PendingEnrollment {
+  user_id: number
+  user_name?: string | null
+  user_nickname?: string | null
+  status?: string
+}
+
 interface Props {
   trainingId: number | string
   hasFullAccess: boolean
   isStudent: boolean
   isEnrolled: boolean
+  isClassInstructor?: boolean
   hasActiveCheckin: boolean
   hasActiveCheckout: boolean
   hasCheckedIn: boolean
   hasCheckedOut: boolean
   checkinMode?: string | null
   checkoutMode?: string | null
+  pendingEnrollments?: PendingEnrollment[]
 }
 
 const props = defineProps<Props>()
@@ -200,6 +219,11 @@ onUnmounted(() => {
 .activity-checkout-prompt {
   background: rgba(75, 110, 245, 0.08);
   color: var(--v2-primary);
+}
+
+.activity-enroll-prompt {
+  background: rgba(255, 149, 0, 0.08);
+  color: var(--v2-warning);
 }
 
 @media (max-width: 768px) {

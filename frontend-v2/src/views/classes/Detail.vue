@@ -48,21 +48,8 @@
 
         <!-- 操作按钮区 -->
         <div class="action-bar">
-          <!-- 学员按钮 -->
-          <template v-if="authStore.isStudent">
-            <a-button v-if="canEnroll" type="primary" @click="handleEnroll">
-              {{ detail.enrollment_requires_approval ? '报名申请' : '加入班级' }}
-            </a-button>
-            <a-button v-if="detail.current_enrollment_status === 'pending'" disabled>
-              <ClockCircleOutlined /> 待审核
-            </a-button>
-            <a-button v-if="detail.current_enrollment_status === 'rejected'" disabled danger>
-              审核未通过
-            </a-button>
-          </template>
-
           <!-- 通用按钮 -->
-          <a-button v-if="hasFullAccess && (isEnrolled || authStore.isInstructor)" @click="router.push(`/classes/schedule/${detail.id}`)">
+          <a-button v-if="hasFullAccess && (isEnrolled || isClassInstructor)" @click="router.push(`/classes/schedule/${detail.id}`)">
             <CalendarOutlined /> 查看课表
           </a-button>
           <a-button v-if="detail.status === 'ended'" @click="goHistory">
@@ -87,6 +74,22 @@
           <!-- ========== 概览 ========== -->
           <div v-if="activeTab === 'overview'" class="tab-panel">
 
+            <!-- 非班级成员引导 -->
+            <div v-if="!hasFullAccess" class="join-hint-card">
+              <div class="join-hint-icon"><TeamOutlined /></div>
+              <p class="join-hint-title">加入班级查看更多内容</p>
+              <p class="join-hint-desc">加入后可查看课程安排、课次签到、考试、动态等完整信息</p>
+              <a-button v-if="canEnroll" type="primary" @click="enrollModalVisible = true">
+                {{ detail.enrollment_requires_approval ? '报名申请' : '加入班级' }}
+              </a-button>
+              <a-button v-else-if="detail.current_enrollment_status === 'pending'" disabled>
+                <ClockCircleOutlined /> 报名审核中
+              </a-button>
+              <a-button v-else-if="detail.current_enrollment_status === 'rejected'" disabled danger>
+                审核未通过
+              </a-button>
+            </div>
+
             <!-- 当前/下一节课次 -->
             <div v-if="hasFullAccess && currentSession" class="overview-section">
               <h3 class="section-label">
@@ -94,7 +97,7 @@
               </h3>
               <CurrentSessionCard
                 :session="currentSession"
-                :is-instructor="authStore.isInstructor"
+                :is-instructor="isClassInstructor"
                 :is-student="authStore.isStudent"
                 :is-enrolled="isEnrolled"
                 :has-checked-in="hasCheckedIn"
@@ -115,12 +118,14 @@
                 :has-full-access="hasFullAccess"
                 :is-student="authStore.isStudent"
                 :is-enrolled="isEnrolled"
+                :is-class-instructor="isClassInstructor"
                 :has-active-checkin="hasActiveCheckin"
                 :has-active-checkout="hasActiveCheckout"
                 :has-checked-in="hasCheckedIn"
                 :has-checked-out="hasCheckedOut"
                 :checkin-mode="currentSession?.checkin_mode ?? null"
                 :checkout-mode="currentSession?.checkout_mode ?? null"
+                :pending-enrollments="pendingEnrollments"
                 @student-checkin="studentCheckinVisible = true"
                 @student-checkout="studentCheckoutVisible = true"
                 @student-scan-qr="openQrScanner"
@@ -231,6 +236,33 @@
         :action="qrScannerAction"
         @refresh="fetchDetail"
       />
+
+      <!-- 报名弹窗 -->
+      <a-modal
+        v-model:open="enrollModalVisible"
+        :title="detail.enrollment_requires_approval ? '报名申请' : '加入班级'"
+        :confirm-loading="enrollSubmitting"
+        ok-text="提交申请"
+        centered
+        width="480px"
+        @ok="handleEnroll"
+      >
+        <div class="enroll-modal-info">
+          <p class="enroll-class-name">{{ detail.name }}</p>
+          <div class="enroll-meta">
+            <span v-if="detail.start_date"><CalendarOutlined /> {{ detail.start_date?.slice(0, 10) }} ~ {{ detail.end_date?.slice(0, 10) }}</span>
+            <span v-if="detail.location"><EnvironmentOutlined /> {{ detail.location }}</span>
+          </div>
+        </div>
+        <a-form layout="vertical" style="margin-top: 16px">
+          <a-form-item label="是否需要住宿">
+            <a-switch v-model:checked="enrollForm.need_accommodation" checked-children="需要" un-checked-children="不需要" />
+          </a-form-item>
+          <a-form-item label="备注">
+            <a-textarea v-model:value="enrollForm.note" placeholder="如有特殊说明请填写" :rows="3" :maxlength="500" />
+          </a-form-item>
+        </a-form>
+      </a-modal>
     </template>
   </div>
 </template>
@@ -281,6 +313,10 @@ const studentCheckoutVisible = ref(false)
 const qrScannerVisible = ref(false)
 const qrScannerAction = ref<'checkin' | 'checkout'>('checkin')
 
+const enrollModalVisible = ref(false)
+const enrollSubmitting = ref(false)
+const enrollForm = ref({ note: '', need_accommodation: false })
+
 function openQrScanner(action: 'checkin' | 'checkout') {
   qrScannerAction.value = action
   qrScannerVisible.value = true
@@ -302,8 +338,14 @@ const isClassInstructor = computed(() => !!(detail.value?.can_manage_training ||
 const canEnroll = computed(() => {
   const d = detail.value
   if (!d) return false
+  // 已有报名记录（pending/approved/rejected）不显示报名按钮
   if (d.current_enrollment_status) return false
-  return !!d.can_enter_training
+  // 本班教官不需要报名
+  if (isClassInstructor.value) return false
+  // 后端条件：已发布且未锁定
+  if (d.publish_status !== 'published') return false
+  if (d.is_locked) return false
+  return true
 })
 
 const currentSession = computed(() => detail.value?.current_session || null)
@@ -332,7 +374,11 @@ const hasFullAccess = computed(() => {
   return !!(d.courses?.length || d.notices?.length || d.exam_sessions?.length)
 })
 
-const canPublishNotice = computed(() => authStore.isInstructor && hasFullAccess.value)
+const canPublishNotice = computed(() => isClassInstructor.value)
+
+const pendingEnrollments = computed(() =>
+  (detail.value?.students || []).filter((s) => s.status === 'pending'),
+)
 
 const isSessionActive = computed(() => {
   const s = currentSession.value?.status
@@ -349,7 +395,7 @@ const visibleTabs = computed(() => {
     { key: 'schedule', label: '课程' },
     { key: 'exam', label: '考试' },
   ]
-  if (authStore.isInstructor) {
+  if (isClassInstructor.value) {
     tabs.push({ key: 'students', label: '学员名单' })
   }
   return tabs
@@ -409,12 +455,20 @@ function formatDateTime(val: string | null | undefined): string {
 async function handleEnroll() {
   const d = detail.value
   if (!d) return
+  enrollSubmitting.value = true
   try {
-    await enrollApiV1TrainingsTrainingIdEnrollPost(d.id, null)
+    await enrollApiV1TrainingsTrainingIdEnrollPost(d.id, {
+      note: enrollForm.value.note || undefined,
+      need_accommodation: enrollForm.value.need_accommodation,
+    })
     message.success(d.enrollment_requires_approval ? '报名申请已提交，等待审核' : '加入成功')
+    enrollModalVisible.value = false
+    enrollForm.value = { note: '', need_accommodation: false }
     fetchDetail()
   } catch (err: unknown) {
     message.error(err instanceof Error ? err.message : '操作失败')
+  } finally {
+    enrollSubmitting.value = false
   }
 }
 function goHistory() { message.info('训历功能即将上线') }
@@ -610,6 +664,63 @@ onMounted(() => {
 }
 
 .tab-panel { padding: 20px; min-height: 200px; }
+
+/* ====== 加入引导 ====== */
+.join-hint-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 48px 24px;
+  gap: 8px;
+}
+
+.join-hint-icon {
+  font-size: 36px;
+  color: var(--v2-primary);
+  margin-bottom: 4px;
+}
+
+.join-hint-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--v2-text-primary);
+  margin: 0;
+}
+
+.join-hint-desc {
+  font-size: 13px;
+  color: var(--v2-text-muted);
+  margin: 0 0 8px;
+}
+
+/* ====== 报名弹窗 ====== */
+.enroll-modal-info {
+  padding: 16px;
+  background: var(--v2-bg);
+  border-radius: var(--v2-radius-sm);
+}
+
+.enroll-class-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--v2-text-primary);
+  margin: 0 0 8px;
+}
+
+.enroll-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--v2-text-muted);
+  flex-wrap: wrap;
+}
+
+.enroll-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
 
 /* ====== 概览 ====== */
 .overview-section { margin-bottom: 28px; }

@@ -8,9 +8,11 @@
           :tips="trainingManageTooltip"
           v-slot="{ disabled }"
         >
-          <a-button size="small" :disabled="disabled" @click="$emit('open-enrollment-application-modal')">
-            申请管理<span v-if="pendingEnrollmentCount > 0">（{{ pendingEnrollmentCount }}）</span>
-          </a-button>
+          <a-badge :dot="pendingEnrollmentCount > 0" :offset="[6, -2]">
+            <a-button size="small" :disabled="disabled" @click="$emit('open-enrollment-application-modal')">
+              申请管理<span v-if="pendingEnrollmentCount > 0">（{{ pendingEnrollmentCount }}）</span>
+            </a-button>
+          </a-badge>
         </permissions-tooltip>
         <permissions-tooltip
           :allowed="canManageStudents"

@@ -101,6 +101,7 @@ class TrainingCourse(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     training_id = Column(Integer, ForeignKey("trainings.id", ondelete="CASCADE"), nullable=False, comment="培训班ID")
+    course_id = Column(Integer, ForeignKey("courses.id", ondelete="SET NULL"), nullable=True, index=True, comment="关联课程资源ID(为空则是自定义课程)")
     course_key = Column(String(36), nullable=True, index=True, comment="稳定课程键")
     name = Column(String(200), nullable=False, comment="课程名称")
     location = Column(String(200), nullable=True, comment="课程地点")
@@ -116,6 +117,7 @@ class TrainingCourse(Base):
     )
 
     training = relationship("Training", back_populates="courses")
+    course_resource = relationship("Course", foreign_keys=[course_id])
     primary_instructor = relationship("User", foreign_keys=[primary_instructor_id])
 
 

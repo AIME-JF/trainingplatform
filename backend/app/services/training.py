@@ -813,6 +813,57 @@ class TrainingService:
         events.sort(key=lambda e: f"{e.date} {e.time_range}")
         return events
 
+    def get_course_resources_for_training(
+        self,
+        user_id: int,
+        page: int = 1,
+        size: int = 20,
+        search: Optional[str] = None,
+        category: Optional[str] = None,
+    ) -> PaginatedResponse:
+        """获取课程资源列表，供培训班添加课程时选择（尊重课程可见范围）。"""
+        from app.models.course import Course as CourseModel
+        from app.utils.data_scope import build_data_scope_context
+
+        context = build_data_scope_context(self.db, user_id)
+        query = self.db.query(CourseModel)
+
+        if search:
+            query = query.filter(CourseModel.title.ilike(f"%{search}%"))
+        if category:
+            query = query.filter(CourseModel.category == category)
+
+        # 尊重课程可见范围（管理员看全部）
+        if not context.is_admin:
+            from sqlalchemy import or_, cast, String
+            query = query.filter(
+                or_(
+                    CourseModel.scope_type == "all",
+                    CourseModel.created_by == user_id,
+                    (CourseModel.scope_type == "user") & (cast(CourseModel.scope_target_ids, String).contains(str(user_id))),
+                )
+            )
+
+        total = query.count()
+        skip = (page - 1) * size
+        courses = query.order_by(CourseModel.created_at.desc()).offset(skip).limit(size).all()
+
+        from app.schemas.training import CourseResourceItem
+        items = []
+        for c in courses:
+            instructor = c.instructor
+            items.append(CourseResourceItem(
+                id=c.id,
+                title=c.title,
+                category=c.category,
+                file_type=c.file_type,
+                instructor_name=instructor.nickname if instructor else None,
+                duration=c.duration,
+                chapter_count=len(c.chapters) if c.chapters else 0,
+            ))
+
+        return PaginatedResponse(page=page, size=size, total=total, items=items)
+
     def enroll(self, training_id: int, user_id: int, data: EnrollmentCreate) -> EnrollmentResponse:
         """学员报名"""
         training = self.db.query(Training).options(
@@ -861,12 +912,13 @@ class TrainingService:
             approved_count = sum(1 for item in (training.enrollments or []) if item.status == "approved")
             if training.capacity and training.capacity > 0 and approved_count >= training.capacity:
                 raise ValueError("培训班名额已满")
+        contact_phone = getattr(user, 'phone', None) or getattr(user, 'contact_phone', None) if user else None
         enrollment = Enrollment(
             training_id=training_id,
             user_id=user_id,
             status="pending" if requires_approval else "approved",
             note=data.note,
-            contact_phone=data.phone,
+            contact_phone=contact_phone,
             need_accommodation=bool(data.need_accommodation),
             profile_snapshot=self._build_profile_snapshot(user),
             approved_at=None if requires_approval else now,
@@ -878,6 +930,24 @@ class TrainingService:
             self._refresh_training_histories(training_id, [user_id])
         self.db.commit()
         self.db.refresh(enrollment)
+
+        # 发送报名提醒给班主任
+        user_name = (user.nickname or user.username) if user else str(user_id)
+        if requires_approval and training.instructor_id:
+            try:
+                notice = Notice(
+                    title=f"{user_name} 申请加入「{training.name}」",
+                    content=f"{user_name} 提交了入班申请，请前往班级学员管理进行审批。" + (f"\n备注：{data.note}" if data.note else ""),
+                    type="reminder",
+                    training_id=training_id,
+                    target_user_id=training.instructor_id,
+                    reminder_type="enrollment_pending",
+                    author_id=user_id,
+                )
+                self.db.add(notice)
+                self.db.commit()
+            except Exception:
+                logger.warning("发送报名提醒失败: training=%s, user=%s", training_id, user_id)
 
         logger.info("用户%s报名培训%s", user_id, training_id)
         return self._enrollment_to_response(enrollment)
@@ -1584,6 +1654,7 @@ class TrainingService:
             payload = self._normalize_course_payload(course)
             self.db.add(TrainingCourse(
                 training_id=training_id,
+                course_id=payload.get("course_id"),
                 course_key=payload.get("course_key"),
                 name=payload["name"],
                 location=payload.get("location"),
@@ -1597,6 +1668,16 @@ class TrainingService:
 
     def _normalize_course_payload(self, course: Any) -> Dict[str, Any]:
         payload = course.model_dump() if hasattr(course, "model_dump") else dict(course)
+        course_id = payload.get("course_id") or payload.get("courseId") or None
+        if course_id is not None:
+            course_id = int(course_id)
+        # 绑定课程资源时自动填充名称
+        course_name = (payload.get("name") or "").strip()
+        if course_id and not course_name:
+            from app.models.course import Course as CourseModel
+            course_obj = self.db.query(CourseModel).filter(CourseModel.id == course_id).first()
+            if course_obj:
+                course_name = course_obj.title
         course_key = str(payload.get("course_key") or payload.get("courseKey") or "").strip() or str(uuid.uuid4())
         primary_instructor_id = payload.get("primary_instructor_id") or payload.get("primaryInstructorId")
         course_location = self._normalize_optional_text(payload.get("location"))
@@ -1620,8 +1701,9 @@ class TrainingService:
         planned_hours = self._normalize_course_hours(payload.get("hours"))
 
         return {
+            "course_id": course_id,
             "course_key": course_key,
-            "name": payload["name"],
+            "name": course_name or payload.get("name") or "未命名课程",
             "location": course_location,
             "instructor": instructor_name,
             "primary_instructor_id": primary_instructor_id,
@@ -2425,6 +2507,7 @@ class TrainingService:
         return TrainingCourseResponse(
             id=course.id,
             training_id=course.training_id,
+            course_id=course.course_id,
             course_key=course.course_key,
             name=course.name,
             location=course.location,
@@ -2594,6 +2677,10 @@ class TrainingService:
                 cnt = user_checkin_counts.get(item.user_id, 0)
                 resp.checkin_rate = round(cnt / total_sessions, 2) if total_sessions > 0 else None
                 students.append(resp)
+            # 班级管理者还能看到待审核的报名
+            pending_enrollments = [item for item in (training.enrollments or []) if item.status == "pending"]
+            for item in pending_enrollments:
+                students.append(self._enrollment_to_response(item))
         else:
             students = []
         checkin_records = self._get_detail_checkin_records(training.id, current_user_id, can_manage_all) if has_full_access else []

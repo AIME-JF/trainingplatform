@@ -85,9 +85,11 @@ frontend-v2/
         ├── dashboard/Index.vue  # 工作台
         ├── attendance/
         │   └── Scan.vue         # 扫码出勤（签到/签退统一页面）
+        ├── notification/
+        │   └── Index.vue        # 通知中心（消息提醒 + 平台公告）
         └── classes/
             ├── List.vue         # 班级列表（卡片网格，调用 GET /trainings）
-            └── Detail.vue       # 班级详情（调用 GET /trainings/:id）
+            └── Detail.vue       # 班级详情（报名弹窗、签到签退、课表等）
 ```
 
 ## 可用脚本
@@ -369,6 +371,7 @@ AI (品牌图标)
 | `/classes/:id/checkin` | 签到 |
 | `/classes/:id/checkout` | 签退 |
 | `/attendance/:token/:sessionKey?` | 扫码出勤（签到/签退统一页面） |
+| `/notifications` | 通知中心（消息提醒 + 平台公告） |
 | `/exam/list` | 在线考试 |
 | `/exam/do/:id` | 考试作答 |
 | `/exam/result/:id` | 考试结果 |

@@ -95,8 +95,9 @@ class TrainingCurrentSessionResponse(BaseModel):
 class TrainingCourseCreate(BaseModel):
     """创建培训课程安排"""
 
+    course_id: Optional[int] = Field(None, description="关联课程资源ID（为空则是自定义课程）")
     course_key: Optional[str] = Field(None, description="稳定课程键")
-    name: str = Field(..., max_length=200, description="课程名称")
+    name: str = Field("", max_length=200, description="课程名称（绑定课程资源时可不填，自动从资源取）")
     location: Optional[str] = Field(None, max_length=200, description="课程地点")
     instructor: Optional[str] = Field(None, description="主讲教官名称")
     primary_instructor_id: Optional[int] = Field(None, description="主讲教官ID")
@@ -111,6 +112,7 @@ class TrainingCourseResponse(BaseModel):
 
     id: int
     training_id: int
+    course_id: Optional[int] = None
     course_key: Optional[str] = None
     name: str
     location: Optional[str] = None
@@ -122,6 +124,20 @@ class TrainingCourseResponse(BaseModel):
     hours: float = 0
     type: str = "theory"
     schedules: List[TrainingScheduleItem] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CourseResourceItem(BaseModel):
+    """课程资源摘要（用于培训班课程选择）"""
+
+    id: int
+    title: str
+    category: Optional[str] = None
+    file_type: Optional[str] = None
+    instructor_name: Optional[str] = None
+    duration: Optional[int] = None
+    chapter_count: int = 0
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -264,7 +280,6 @@ class EnrollmentCreate(BaseModel):
     """报名"""
 
     note: Optional[str] = Field(None, description="报名备注")
-    phone: Optional[str] = Field(None, description="联系电话")
     need_accommodation: bool = Field(False, description="是否需要住宿")
 
 

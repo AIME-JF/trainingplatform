@@ -241,7 +241,9 @@ AI 运行时配置：
 
 - 培训基地：独立 `TrainingBase` 模型
 - 培训班流程：`发布招生 → 锁定名单 → 开班 → 结班`
-- 培训班报名模式：`enrollment_requires_approval`（`true` = 待审核，`false` = 直接通过）
+- 培训班报名模式：`enrollment_requires_approval`（`true` = 待审核，`false` = 直接通过）；报名不限角色，任何不在班内的用户均可申请
+- 报名提交后自动向班主任（`instructor_id`）发送 `reminder` 类通知（`reminder_type=enrollment_pending`）
+- 培训班详情接口（`can_manage_all=true` 时）会在 `students` 列表中包含 `pending` 状态的报名记录，供前端展示待审核提示
 - 培训班数据归属：`department_id`、`police_type_id`、`training_base_id`、`created_by`
 - 课次状态流：`pending → checkin_open → checkin_closed → checkout_open → completed`（另有 `skipped`、`missed`）
 - 签到签退采用统一出勤二维码：`GET /{training_id}/attendance/qr?action=checkin|checkout` 生成含 `action` 字段的 QR payload，`POST /attendance/qr/{token}` 根据 `action` 自动路由到签到或签退
