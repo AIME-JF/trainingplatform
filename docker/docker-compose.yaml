@@ -90,7 +90,7 @@ services:
   frontend:
     build:
       context: ..
-      dockerfile: frontend/Dockerfile
+      dockerfile: docker/Dockerfile.frontend
     image: police_training_frontend:latest
     container_name: police-training-frontend
     restart: unless-stopped

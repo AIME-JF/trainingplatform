@@ -162,12 +162,11 @@
                   <span class="exam-time">{{ formatDateTime(exam.start_time) }}</span>
                 </div>
                 <a-button
-                  v-if="authStore.isStudent && canTakeExam(exam)"
-                  type="primary"
                   size="small"
-                  @click="goExam(exam.id)"
+                  :type="authStore.isStudent && canTakeExam(exam) ? 'primary' : 'default'"
+                  @click="goExamOverview(exam.id)"
                 >
-                  参加考试
+                  {{ authStore.isStudent && canTakeExam(exam) ? '参加考试' : '查看详情' }}
                 </a-button>
               </div>
             </div>
@@ -530,7 +529,7 @@ async function handleEnroll() {
   }
 }
 function goHistory() { message.info('训历功能即将上线') }
-function goExam(examId: number) { router.push(`/exam/do/${examId}`) }
+function goExamOverview(examId: number) { router.push(`/exam/overview/${examId}?kind=training`) }
 
 function onCheckinSuccess() {
   fetchDetail()
