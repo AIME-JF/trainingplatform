@@ -3,6 +3,44 @@
     <!-- 页头 -->
     <div class="page-header">
       <h1 class="page-title">训练日历</h1>
+      <div class="header-week-nav">
+        <button type="button" class="header-week-arrow" @click="goPrevWeek" aria-label="上一周">
+          <LeftOutlined />
+        </button>
+        <div ref="weekPickerRef" class="header-week-picker">
+          <button
+            type="button"
+            class="header-week-current week-picker-trigger"
+            :aria-expanded="weekPickerOpen"
+            @click="toggleWeekPicker"
+          >
+            <span>{{ currentWeekLabel }}</span>
+            <DownOutlined class="week-picker-caret" :class="{ open: weekPickerOpen }" />
+          </button>
+
+          <div v-if="weekPickerOpen" class="week-picker-panel">
+            <div class="week-picker-panel-head">
+              <span>{{ currentWeekYear }} 年</span>
+              <button type="button" class="week-picker-now" @click="goCurrentWeek">回到本周</button>
+            </div>
+            <div class="week-picker-grid">
+              <button
+                v-for="week in weekNumbers"
+                :key="week"
+                type="button"
+                class="week-picker-item"
+                :class="{ active: week === currentWeekNumber }"
+                @click="selectWeek(week)"
+              >
+                {{ week }}
+              </button>
+            </div>
+          </div>
+        </div>
+        <button type="button" class="header-week-arrow" @click="goNextWeek" aria-label="下一周">
+          <RightOutlined />
+        </button>
+      </div>
       <div class="header-actions">
         <a-select
           v-model:value="selectedTrainingId"
@@ -16,21 +54,6 @@
           @change="fetchCalendar"
         />
       </div>
-    </div>
-
-    <!-- 周切换条（参考图二） -->
-    <div class="week-switcher">
-      <button class="week-arrow" @click="goPrevWeek">&lt;</button>
-      <div
-        v-for="day in weekDays"
-        :key="day.dateKey"
-        class="week-day-cell"
-        :class="{ today: day.isToday }"
-      >
-        <strong class="week-day-num">{{ day.dayNum }}</strong>
-        <span class="week-day-label">{{ day.label }}</span>
-      </div>
-      <button class="week-arrow" @click="goNextWeek">&gt;</button>
     </div>
 
     <!-- 加载 -->
@@ -48,7 +71,7 @@
           :class="{ today: day.isToday }"
         >
           <span class="col-head-name">{{ day.label }}</span>
-          <strong class="col-head-date">{{ day.displayDate }}</strong>
+          <span class="col-head-date">{{ day.displayDate }}</span>
         </div>
 
         <!-- 时间行 -->
@@ -71,11 +94,28 @@
           class="cal-event"
           :class="`type-${ev.data.course_type}`"
           :style="ev.style"
+          :title="getEventTitle(ev.data)"
           @dblclick="openDetail(ev.data)"
         >
-          <strong class="ev-title">{{ ev.data.course_name }}</strong>
-          <span class="ev-meta">{{ ev.timeLabel }}{{ ev.data.location ? ' · ' + ev.data.location : '' }}</span>
-          <span class="ev-meta">{{ ev.data.instructor || '' }}</span>
+          <strong class="ev-title">{{ getEventTitle(ev.data) }}</strong>
+          <div class="ev-meta-list">
+            <span class="ev-meta-row">
+              <ClockCircleOutlined class="ev-meta-icon" />
+              <span>{{ ev.timeLabel }}</span>
+            </span>
+            <span v-if="ev.data.location" class="ev-meta-row">
+              <EnvironmentOutlined class="ev-meta-icon" />
+              <span>{{ ev.data.location }}</span>
+            </span>
+            <span v-if="ev.data.instructor" class="ev-meta-row">
+              <UserOutlined class="ev-meta-icon" />
+              <span>{{ ev.data.instructor }}</span>
+            </span>
+            <span class="ev-meta-row">
+              <TeamOutlined class="ev-meta-icon" />
+              <span>{{ ev.data.training_name || '未指定班级' }}</span>
+            </span>
+          </div>
         </div>
       </div>
     </div>
@@ -109,11 +149,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, type CSSProperties } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, type CSSProperties } from 'vue'
 import { useRouter } from 'vue-router'
 import dayjs from 'dayjs'
+import isoWeek from 'dayjs/plugin/isoWeek'
 import { message } from 'ant-design-vue'
+import {
+  ClockCircleOutlined,
+  DownOutlined,
+  EnvironmentOutlined,
+  LeftOutlined,
+  RightOutlined,
+  TeamOutlined,
+  UserOutlined,
+} from '@ant-design/icons-vue'
 import axiosInstance from '@/api/custom-instance'
+
+dayjs.extend(isoWeek)
 
 const router = useRouter()
 
@@ -122,6 +174,8 @@ const trainingLoading = ref(false)
 const selectedTrainingId = ref<number | undefined>(undefined)
 const trainingOptions = ref<{ value: number; label: string }[]>([])
 const weekOffset = ref(0)
+const weekPickerOpen = ref(false)
+const weekPickerRef = ref<HTMLElement | null>(null)
 
 interface CalendarEvent {
   training_id: number
@@ -153,14 +207,25 @@ const statusLabels: Record<string, string> = {
 // 时间网格配置
 const HOUR_START = 8
 const HOUR_END = 19
-const HOUR_HEIGHT = 60 // px per hour
-const HEADER_HEIGHT = 50 // col header row height
+const HOUR_HEIGHT = 54 // px per hour
+const HEADER_HEIGHT = 52 // col header row height
+const TIME_GUTTER = 60 // left time-label gutter width
+const END_GUTTER = 12 // right gutter to balance calendar spacing
+const DISPLAY_START_MIN = HOUR_START * 60
+const DISPLAY_END_MIN = HOUR_END * 60
 const timeSlots = Array.from({ length: HOUR_END - HOUR_START }, (_, i) => HOUR_START + i)
 
 // 当前周周一
-const currentWeekStart = computed(() =>
-  dayjs().startOf('week').add(1, 'day').add(weekOffset.value, 'week'),
-)
+const baseWeekStart = dayjs().startOf('isoWeek')
+const currentWeekStart = computed(() => baseWeekStart.add(weekOffset.value, 'week'))
+
+const currentWeekLabel = computed(() => `第 ${currentWeekStart.value.isoWeek()} 周`)
+const currentWeekNumber = computed(() => currentWeekStart.value.isoWeek())
+const currentWeekYear = computed(() => currentWeekStart.value.year())
+const weekNumbers = computed(() => {
+  const lastWeek = dayjs().year(currentWeekYear.value).month(11).date(28).isoWeek()
+  return Array.from({ length: lastWeek }, (_, index) => index + 1)
+})
 
 const weekDays = computed(() =>
   Array.from({ length: 7 }, (_, i) => {
@@ -168,7 +233,7 @@ const weekDays = computed(() =>
     return {
       label: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][i],
       dateKey: d.format('YYYY-MM-DD'),
-      displayDate: d.format('MM/DD'),
+      displayDate: d.format('MM-DD'),
       dayNum: d.date(),
       colIndex: i,
       isToday: d.isSame(dayjs(), 'day'),
@@ -189,6 +254,15 @@ interface PositionedEvent {
   timeLabel: string
 }
 
+const eventPalettes = [
+  { border: '#4B6EF5', background: 'rgba(219, 234, 254, 0.84)', icon: '#4B6EF5' },
+  { border: '#24A148', background: 'rgba(220, 252, 231, 0.84)', icon: '#24A148' },
+  { border: '#F59E0B', background: 'rgba(254, 243, 199, 0.88)', icon: '#D97706' },
+  { border: '#A855F7', background: 'rgba(243, 232, 255, 0.84)', icon: '#9333EA' },
+  { border: '#EC4899', background: 'rgba(252, 231, 243, 0.86)', icon: '#DB2777' },
+  { border: '#0EA5E9', background: 'rgba(224, 242, 254, 0.86)', icon: '#0284C7' },
+]
+
 const positionedEvents = computed<PositionedEvent[]>(() => {
   const dateToCol = new Map(weekDays.value.map((d) => [d.dateKey, d.colIndex]))
   const colCount = 7
@@ -198,41 +272,65 @@ const positionedEvents = computed<PositionedEvent[]>(() => {
     const col = dateToCol.get(ev.date)
     if (col === undefined) continue
 
-    const { startMin, endMin, startLabel } = parseTimeRange(ev.time_range)
-    if (startMin < 0) continue
+    const { startMin, endMin, timeLabel } = parseTimeRange(ev.time_range)
+    if (startMin < 0 || endMin <= startMin) continue
+    if (endMin <= DISPLAY_START_MIN || startMin >= DISPLAY_END_MIN) continue
 
-    const topPx = (startMin - HOUR_START * 60) / 60 * HOUR_HEIGHT + HEADER_HEIGHT
-    const heightPx = Math.max((endMin - startMin) / 60 * HOUR_HEIGHT, 24)
+    const visibleStartMin = Math.max(startMin, DISPLAY_START_MIN)
+    const visibleEndMin = Math.min(endMin, DISPLAY_END_MIN)
+    const topPx = (visibleStartMin - DISPLAY_START_MIN) / 60 * HOUR_HEIGHT + HEADER_HEIGHT
+    const heightPx = Math.max((visibleEndMin - visibleStartMin) / 60 * HOUR_HEIGHT, 24)
 
-    // Position within the 7-column area (after the 60px time-label gutter)
-    const colWidthCalc = `(100% - 60px) / ${colCount}`
-    const leftCalc = `calc(60px + ${col} * ${colWidthCalc})`
+    // Position within the 7-column area (after the time-label gutter)
+    const colWidthCalc = `(100% - ${TIME_GUTTER + END_GUTTER}px) / ${colCount}`
+    const leftCalc = `calc(${TIME_GUTTER}px + ${col} * ${colWidthCalc})`
     const widthCalc = `calc(${colWidthCalc})`
+    const theme = getEventPalette(ev)
 
     result.push({
       key: ev.session_id || `${ev.training_id}-${ev.course_name}-${ev.time_range}-${ev.date}`,
       data: ev,
-      timeLabel: startLabel,
+      timeLabel,
       style: {
         position: 'absolute',
         top: `${topPx}px`,
         height: `${heightPx}px`,
         left: leftCalc,
         width: widthCalc,
+        '--event-border-color': theme.border,
+        '--event-bg-color': theme.background,
+        '--event-icon-color': theme.icon,
       },
     })
   }
   return result
 })
 
-function parseTimeRange(tr: string): { startMin: number; endMin: number; startLabel: string } {
-  if (!tr || !tr.includes('~')) return { startMin: -1, endMin: -1, startLabel: '' }
+function parseTimeRange(tr: string): { startMin: number; endMin: number; timeLabel: string } {
+  if (!tr || !tr.includes('~')) return { startMin: -1, endMin: -1, timeLabel: '' }
   const [s, e] = tr.split('~').map((p) => p.trim())
   const toMin = (t: string) => {
     const [h, m] = t.split(':').map(Number)
     return h * 60 + (m || 0)
   }
-  return { startMin: toMin(s), endMin: toMin(e), startLabel: s.slice(0, 5) }
+  return {
+    startMin: toMin(s),
+    endMin: toMin(e),
+    timeLabel: `${s.slice(0, 5)} - ${e.slice(0, 5)}`,
+  }
+}
+
+function getEventPalette(event: CalendarEvent) {
+  const seed = `${event.course_name || ''}-${event.training_name || ''}-${event.course_type || ''}`
+  let hash = 0
+  for (let i = 0; i < seed.length; i += 1) {
+    hash = (hash * 31 + seed.charCodeAt(i)) >>> 0
+  }
+  return eventPalettes[hash % eventPalettes.length]
+}
+
+function getEventTitle(event: CalendarEvent) {
+  return event.course_name?.trim() || event.training_name?.trim() || '未命名课程'
 }
 
 function openDetail(item: CalendarEvent) {
@@ -247,6 +345,34 @@ function goToClass(id: number) {
 
 function goPrevWeek() { weekOffset.value -= 1 }
 function goNextWeek() { weekOffset.value += 1 }
+function goCurrentWeek() {
+  weekOffset.value = 0
+  weekPickerOpen.value = false
+}
+
+function toggleWeekPicker() {
+  weekPickerOpen.value = !weekPickerOpen.value
+}
+
+function selectWeek(week: number) {
+  const targetWeekStart = dayjs()
+    .year(currentWeekYear.value)
+    .month(0)
+    .date(4)
+    .startOf('isoWeek')
+    .isoWeek(week)
+
+  weekOffset.value = targetWeekStart.diff(baseWeekStart, 'week')
+  weekPickerOpen.value = false
+}
+
+function handleDocumentPointerDown(event: MouseEvent) {
+  const target = event.target
+  if (!weekPickerOpen.value || !(target instanceof Node)) return
+  if (!weekPickerRef.value?.contains(target)) {
+    weekPickerOpen.value = false
+  }
+}
 
 async function fetchTrainings() {
   trainingLoading.value = true
@@ -277,8 +403,13 @@ async function fetchCalendar() {
 }
 
 onMounted(async () => {
+  document.addEventListener('mousedown', handleDocumentPointerDown)
   await fetchTrainings()
   await fetchCalendar()
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', handleDocumentPointerDown)
 })
 </script>
 
@@ -286,92 +417,190 @@ onMounted(async () => {
 .schedule-page {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 10px;
+  width: auto;
+  max-width: none;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 /* -- 页头 -- */
 .page-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: max-content 1fr max-content;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .page-title {
   font-size: 22px;
   font-weight: 700;
   color: var(--v2-text-primary);
+  line-height: 1;
 }
 
-.header-actions { display: flex; gap: 12px; }
-.training-select { width: 220px; max-width: 100%; }
-
-/* ====== 周切换条（图二样式） ====== */
-.week-switcher {
-  display: flex;
-  align-items: center;
-  background: var(--v2-bg-card);
-  border-radius: var(--v2-radius);
-  padding: 10px 6px;
-  box-shadow: var(--v2-shadow-sm);
-}
-
-.week-arrow {
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: none;
-  font-size: 16px;
-  color: var(--v2-text-muted);
-  cursor: pointer;
-  border-radius: var(--v2-radius-sm);
+.header-week-nav {
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
-  transition: background 0.15s, color 0.15s;
+  gap: 8px;
 }
 
-.week-arrow:hover {
-  background: var(--v2-bg);
+.header-week-picker {
+  position: relative;
+}
+
+.header-week-arrow,
+.header-week-current {
+  border: none;
+  background: transparent;
   color: var(--v2-text-primary);
 }
 
-.week-day-cell {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
+.header-week-arrow {
+  display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 6px 0;
-  border-radius: var(--v2-radius-sm);
-  cursor: default;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 999px;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease;
 }
 
-.week-day-num {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--v2-text-primary);
+.header-week-arrow:hover {
+  background: rgba(75, 110, 245, 0.08);
+  color: var(--v2-primary);
+}
+
+.header-week-current {
+  padding: 0 8px;
+  font-size: 16px;
+  font-weight: 700;
   line-height: 1.2;
+  cursor: pointer;
 }
 
-.week-day-label {
+.header-week-current:hover {
+  color: var(--v2-primary);
+}
+
+.week-picker-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 128px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(229, 229, 234, 0.9);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+}
+
+.week-picker-caret {
   font-size: 11px;
   color: var(--v2-text-muted);
+  transition: transform 0.2s ease;
 }
 
-.week-day-cell.today {
+.week-picker-caret.open {
+  transform: rotate(180deg);
+}
+
+.week-picker-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 50%;
+  z-index: 30;
+  width: 420px;
+  max-width: min(420px, calc(100vw - 64px));
+  padding: 16px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(229, 229, 234, 0.92);
+  box-shadow: 0 18px 36px rgba(15, 23, 42, 0.12);
+  transform: translateX(-50%);
+}
+
+.week-picker-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--v2-text-primary);
+}
+
+.week-picker-now {
+  border: none;
+  background: rgba(75, 110, 245, 0.08);
+  color: var(--v2-primary);
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.week-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.week-picker-item {
+  border: none;
+  background: transparent;
+  color: var(--v2-text-secondary);
+  border-radius: 14px;
+  min-height: 50px;
+  font-size: 15px;
+  cursor: pointer;
+  transition: background 0.18s ease, color 0.18s ease, transform 0.18s ease;
+}
+
+.week-picker-item:hover {
+  background: rgba(75, 110, 245, 0.08);
+  color: var(--v2-primary);
+  transform: translateY(-1px);
+}
+
+.week-picker-item.active {
   background: var(--v2-primary);
-  border-radius: var(--v2-radius);
-}
-
-.week-day-cell.today .week-day-num {
   color: #fff;
+  box-shadow: 0 10px 18px rgba(75, 110, 245, 0.22);
 }
 
-.week-day-cell.today .week-day-label {
-  color: rgba(255, 255, 255, 0.7);
+.header-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.training-select {
+  width: 196px;
+  max-width: 100%;
+}
+
+.training-select :deep(.ant-select-selector) {
+  min-height: 40px;
+  padding: 0 12px !important;
+  border-radius: 12px !important;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+}
+
+.training-select :deep(.ant-select-selection-item),
+.training-select :deep(.ant-select-selection-placeholder),
+.training-select :deep(.ant-select-selection-search-input) {
+  line-height: 36px !important;
+}
+
+.training-select :deep(.ant-select-arrow) {
+  font-size: 13px;
 }
 
 /* ====== 时间网格日历（图一样式） ====== */
@@ -379,22 +608,26 @@ onMounted(async () => {
 
 .cal-wrapper {
   position: relative;
+  width: 100%;
+  max-width: none;
+  margin: 0 auto;
   background: var(--v2-bg-card);
-  border-radius: var(--v2-radius);
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: var(--v2-shadow-sm);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
 }
 
 .cal-grid {
   display: grid;
-  /* 60px for time label + 7 equal columns */
-  grid-template-columns: 60px repeat(7, 1fr);
+  grid-template-columns: 60px repeat(7, minmax(0, 1fr));
+  padding-right: 12px;
+  box-sizing: border-box;
 }
 
 /* -- 左上角空格 -- */
 .cal-corner {
-  height: 50px;
-  border-bottom: 2px solid var(--v2-primary);
+  height: 52px;
+  border-bottom: 1px solid rgba(75, 110, 245, 0.38);
   background: var(--v2-bg-card);
   position: sticky;
   top: 0;
@@ -403,13 +636,13 @@ onMounted(async () => {
 
 /* -- 列头 -- */
 .cal-col-head {
-  height: 50px;
+  height: 52px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 1px;
-  border-bottom: 2px solid var(--v2-primary);
+  gap: 2px;
+  border-bottom: 1px solid rgba(75, 110, 245, 0.38);
   background: var(--v2-bg-card);
   position: sticky;
   top: 0;
@@ -422,42 +655,43 @@ onMounted(async () => {
 
 .col-head-name {
   font-size: 12px;
-  color: var(--v2-text-secondary);
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  font-weight: 700;
+  color: var(--v2-text-primary);
+  line-height: 1;
 }
 
 .cal-col-head.today .col-head-name {
   color: var(--v2-primary);
-  font-weight: 600;
 }
 
 .col-head-date {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--v2-text-primary);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--v2-text-secondary);
+  line-height: 1;
 }
 
 .cal-col-head.today .col-head-date {
-  color: var(--v2-primary);
+  color: rgba(75, 110, 245, 0.72);
 }
 
 /* -- 时间标签 -- */
 .cal-time-label {
-  height: 60px;
+  height: 54px;
   display: flex;
-  align-items: flex-start;
-  justify-content: flex-end;
-  padding: 0 8px;
-  font-size: 11px;
-  color: var(--v2-text-muted);
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--v2-text-primary);
   border-top: 1px solid var(--v2-border-light);
-  transform: translateY(-7px);
+  line-height: 1;
 }
 
 /* -- 单元格 -- */
 .cal-cell {
-  height: 60px;
+  height: 54px;
   border-top: 1px solid var(--v2-border-light);
   border-left: 1px solid var(--v2-border-light);
 }
@@ -480,58 +714,178 @@ onMounted(async () => {
   position: absolute;
   /* left/top/width/height set by inline style */
   pointer-events: auto;
-  border-radius: 4px;
-  padding: 4px 6px;
+  border-radius: 24px;
+  padding: 8px 11px 7px;
   overflow: hidden;
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  border-left: 3px solid var(--v2-primary);
-  background: rgba(219, 234, 254, 0.7);
-  transition: box-shadow 0.15s;
-  margin: 0 2px;
+  gap: 4px;
+  border-left: 3px solid var(--event-border-color, var(--v2-primary));
+  background: var(--event-bg-color, rgba(219, 234, 254, 0.82));
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.05);
+  transition: box-shadow 0.15s, transform 0.15s;
+  box-sizing: border-box;
 }
 
 .cal-event:hover {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 16px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
   z-index: 5;
-}
-
-.cal-event.type-theory {
-  border-left-color: var(--v2-primary);
-  background: rgba(219, 234, 254, 0.7);
-}
-
-.cal-event.type-practice,
-.cal-event.type-skill {
-  border-left-color: var(--v2-success);
-  background: rgba(209, 250, 229, 0.7);
 }
 
 .ev-title {
   font-size: 12px;
   font-weight: 600;
   color: var(--v2-text-primary);
-  line-height: 1.3;
+  line-height: 1.2;
+  flex-shrink: 0;
+  min-height: 16px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.ev-meta {
-  font-size: 10px;
+.ev-meta-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ev-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  font-size: 9px;
   color: var(--v2-text-secondary);
+  line-height: 1.15;
+}
+
+.ev-meta-icon {
+  flex-shrink: 0;
+  font-size: 9px;
+  color: var(--event-icon-color, var(--v2-primary));
+}
+
+.ev-meta-row span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 /* ====== 响应式 ====== */
+@media (max-width: 1280px) {
+  .page-header {
+    grid-template-columns: 1fr;
+    justify-items: stretch;
+  }
+
+  .page-title,
+  .header-actions {
+    justify-self: start;
+    width: 100%;
+  }
+
+  .header-actions {
+    justify-content: flex-start;
+  }
+
+  .header-week-nav {
+    justify-content: flex-start;
+  }
+
+  .week-picker-panel {
+    left: 0;
+    transform: none;
+  }
+
+  .training-select {
+    width: 100%;
+  }
+}
+
+@media (min-width: 769px) {
+  .schedule-page {
+    margin-left: 0;
+    padding: 12px 24px 16px;
+    overflow-x: hidden;
+  }
+}
+
 @media (max-width: 768px) {
-  .training-select { width: 100%; }
-  .cal-grid { grid-template-columns: 40px repeat(7, 1fr); }
-  .cal-time-label { padding: 0 4px; font-size: 10px; }
-  .week-day-num { font-size: 15px; }
+  .schedule-page {
+    gap: 14px;
+  }
+
+  .page-title {
+    font-size: 20px;
+  }
+
+  .header-week-current {
+    font-size: 16px;
+  }
+
+  .week-picker-trigger {
+    min-width: 112px;
+    padding: 6px 12px;
+  }
+
+  .week-picker-panel {
+    width: min(360px, calc(100vw - 48px));
+    padding: 14px;
+  }
+
+  .week-picker-grid {
+    gap: 8px;
+  }
+
+  .week-picker-item {
+    min-height: 44px;
+    font-size: 14px;
+  }
+
+  .training-select :deep(.ant-select-selector) {
+    min-height: 40px;
+    font-size: 14px;
+  }
+
+  .training-select :deep(.ant-select-selection-item),
+  .training-select :deep(.ant-select-selection-placeholder),
+  .training-select :deep(.ant-select-selection-search-input) {
+    line-height: 36px !important;
+  }
+
+  .week-switcher {
+    padding: 8px 6px;
+  }
+
+  .week-day-label {
+    font-size: 14px;
+  }
+
+  .cal-time-label {
+    font-size: 11px;
+    padding: 7px 6px 0 4px;
+  }
+
+  .col-head-name {
+    font-size: 12px;
+  }
+
+  .col-head-date {
+    font-size: 13px;
+  }
+
+  .ev-title {
+    font-size: 13px;
+  }
+
+  .ev-meta-row,
+  .ev-meta-icon {
+    font-size: 10px;
+  }
 }
 </style>

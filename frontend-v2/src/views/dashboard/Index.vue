@@ -3,24 +3,22 @@
     <template v-if="isDashboardRoute">
       <section class="hero-card">
         <div class="hero-copy">
-          <span class="hero-badge">{{ greetingText }}</span>
-          <h1 class="hero-title">欢迎回来，{{ displayName }}</h1>
-          <p class="hero-subtitle">{{ heroSubtitle }}</p>
-
-          <div class="hero-pills">
-            <span class="hero-pill">
-              <TeamOutlined />
-              {{ roleLabel }}
-            </span>
-            <span class="hero-pill">
+          <div class="hero-topline">
+            <span class="hero-badge">{{ greetingText }}</span>
+            <span class="hero-date-pill">
               <CalendarOutlined />
               {{ todayText }}
             </span>
-            <span v-if="authStore.currentUser?.unit" class="hero-pill">
-              <HomeOutlined />
-              {{ authStore.currentUser.unit }}
-            </span>
           </div>
+          <h1 class="hero-title">欢迎回来，{{ displayName }}</h1>
+          <div class="hero-profile-list">
+            <strong>{{ identityCode }}</strong>
+            <span class="hero-profile-divider">·</span>
+            <span>{{ roleLabel }}</span>
+            <span class="hero-profile-divider">·</span>
+            <span>{{ authStore.currentUser?.unit || '未设置单位' }}</span>
+          </div>
+          <p class="hero-subtitle">{{ heroSubtitle }}</p>
         </div>
 
         <div class="hero-summary">
@@ -34,8 +32,64 @@
         </div>
       </section>
 
-      <section class="dashboard-grid">
-        <article class="surface-card">
+      <section class="dashboard-workbench">
+        <article class="surface-card mini-schedule-card">
+          <div class="section-head">
+            <div>
+              <h2>日历课表</h2>
+              <p>查看本周课程安排与时间提醒。</p>
+            </div>
+            <button type="button" class="section-link" @click="navigateTo('/classes/schedule')">
+              完整日历
+              <RightOutlined />
+            </button>
+          </div>
+
+          <div class="mini-week-strip">
+            <div
+              v-for="day in previewWeekDays"
+              :key="day.dateKey"
+              class="mini-day-pill"
+              :class="{ today: day.isToday, active: day.hasEvent }"
+            >
+              <span>{{ day.label }}</span>
+              <strong>{{ day.displayDate }}</strong>
+            </div>
+          </div>
+
+          <div v-if="calendarLoading" class="mini-state">
+            <a-spin size="small" />
+            <span>课表加载中...</span>
+          </div>
+          <div v-else-if="calendarPreviewItems.length" class="mini-event-list">
+            <button
+              v-for="item in calendarPreviewItems"
+              :key="item.key"
+              type="button"
+              class="mini-event-item"
+              :style="{
+                '--mini-event-border': item.palette.border,
+                '--mini-event-bg': item.palette.background,
+              }"
+              @click="navigateTo('/classes/schedule')"
+            >
+              <div class="mini-event-main">
+                <strong>{{ item.title }}</strong>
+                <span>{{ item.timeLabel }}</span>
+              </div>
+              <div class="mini-event-meta">
+                <span>{{ item.dayLabel }}</span>
+                <span>{{ item.trainingName }}</span>
+              </div>
+            </button>
+          </div>
+          <div v-else class="mini-state mini-empty">
+            <CalendarOutlined />
+            <span>{{ calendarError || '本周暂无课程安排' }}</span>
+          </div>
+        </article>
+
+        <article class="surface-card quick-surface">
           <div class="section-head">
             <div>
               <h2>快捷入口</h2>
@@ -43,7 +97,7 @@
             </div>
           </div>
 
-          <div class="quick-grid">
+          <div class="quick-grid quick-grid-compact">
             <button
               v-for="action in quickActions"
               :key="action.path"
@@ -60,64 +114,6 @@
               </span>
               <RightOutlined class="quick-arrow" />
             </button>
-          </div>
-        </article>
-
-        <article class="surface-card">
-          <div class="section-head">
-            <div>
-              <h2>账号概览</h2>
-              <p>当前登录账号的基础信息。</p>
-            </div>
-          </div>
-
-          <div class="info-list">
-            <div v-for="item in profileItems" :key="item.label" class="info-row">
-              <span>{{ item.label }}</span>
-              <strong>{{ item.value }}</strong>
-            </div>
-          </div>
-        </article>
-      </section>
-
-      <section class="dashboard-grid dashboard-grid-secondary">
-        <article class="surface-card">
-          <div class="section-head">
-            <div>
-              <h2>当前可用模块</h2>
-              <p>和侧边栏保持一致的模块入口视图。</p>
-            </div>
-          </div>
-
-          <div class="module-list">
-            <div v-for="item in quickActions" :key="`${item.path}-module`" class="module-item">
-              <span class="module-icon" :style="{ background: item.background }">
-                <component :is="item.icon" />
-              </span>
-              <div class="module-copy">
-                <strong>{{ item.title }}</strong>
-                <span>{{ item.description }}</span>
-              </div>
-            </div>
-          </div>
-        </article>
-
-        <article class="surface-card tips-card">
-          <div class="section-head">
-            <div>
-              <h2>使用提示</h2>
-              <p>首页只展示工作台，其他占位页面不再复用这一版面。</p>
-            </div>
-          </div>
-
-          <div class="tips-list">
-            <div v-for="tip in tips" :key="tip.title" class="tip-item">
-              <span class="tip-index">{{ tip.index }}</span>
-              <div class="tip-copy">
-                <strong>{{ tip.title }}</strong>
-                <span>{{ tip.description }}</span>
-              </div>
-            </div>
           </div>
         </article>
       </section>
@@ -140,17 +136,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, type Component } from 'vue'
+import { computed, ref, watch, type Component } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import dayjs from 'dayjs'
+import isoWeek from 'dayjs/plugin/isoWeek'
 import {
   CalendarOutlined,
   DatabaseOutlined,
-  HomeOutlined,
   ReadOutlined,
   RightOutlined,
-  TeamOutlined,
   UserOutlined,
 } from '@ant-design/icons-vue'
+import axiosInstance from '@/api/custom-instance'
+import type { CalendarEventResponse } from '@/api/generated/model/calendarEventResponse'
 import { useAuthStore } from '@/stores/auth'
 import {
   COURSE_PERMISSIONS,
@@ -158,6 +156,8 @@ import {
   TRAINING_PERMISSIONS,
   TRAINING_SCHEDULE_PERMISSIONS,
 } from '@/constants/permissions'
+
+dayjs.extend(isoWeek)
 
 interface MetricItem {
   label: string
@@ -174,9 +174,19 @@ interface QuickAction {
   permissions: string[]
 }
 
+const previewPalette = [
+  { border: '#4B6EF5', background: 'rgba(228, 236, 255, 0.92)' },
+  { border: '#22C55E', background: 'rgba(226, 251, 237, 0.92)' },
+  { border: '#A855F7', background: 'rgba(245, 235, 255, 0.92)' },
+  { border: '#F97316', background: 'rgba(255, 237, 221, 0.94)' },
+]
+
 const router = useRouter()
 const currentRoute = useRoute()
 const authStore = useAuthStore()
+const calendarLoading = ref(false)
+const calendarError = ref('')
+const calendarEvents = ref<CalendarEventResponse[]>([])
 
 const displayName = computed(() => authStore.currentUser?.name || authStore.currentUser?.username || '用户')
 const isDashboardRoute = computed(() => currentRoute.path === '/')
@@ -191,11 +201,8 @@ const roleLabel = computed(() => {
 const now = new Date()
 const hour = now.getHours()
 const greetingText = hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好'
-const todayText = new Intl.DateTimeFormat('zh-CN', {
-  month: 'long',
-  day: 'numeric',
-  weekday: 'long',
-}).format(now)
+const weekdayText = new Intl.DateTimeFormat('zh-CN', { weekday: 'long' }).format(now)
+const todayText = `${now.getMonth() + 1}月${now.getDate()}日 ${weekdayText}`
 
 const heroSubtitle = computed(() => {
   const unit = authStore.currentUser?.unit || '当前单位待完善'
@@ -203,8 +210,8 @@ const heroSubtitle = computed(() => {
 })
 
 const overviewStats = computed<MetricItem[]>(() => [
-  { label: '权限项', value: String(authStore.permissions.length), suffix: '项' },
-  { label: '角色数', value: String(Math.max(authStore.roleCodes.length, authStore.role ? 1 : 0)), suffix: '个' },
+  { label: '培训班级', value: '3', suffix: '个' },
+  { label: '待办事项', value: '0', suffix: '个' },
   { label: '学习时长', value: formatMetric(authStore.currentUser?.study_hours), suffix: 'h' },
   { label: '考试次数', value: formatMetric(authStore.currentUser?.exam_count), suffix: '次' },
 ])
@@ -246,35 +253,122 @@ const quickActionConfigs: QuickAction[] = [
 
 const quickActions = computed(() => quickActionConfigs.filter((item) => authStore.hasAnyPermission(item.permissions)))
 
-const profileItems = computed(() => [
-  { label: '显示名称', value: displayName.value },
-  { label: '登录账号', value: authStore.currentUser?.username || '-' },
-  { label: '当前角色', value: roleLabel.value },
-  { label: '所属单位', value: authStore.currentUser?.unit || '未设置' },
-  { label: '警号', value: authStore.currentUser?.police_id || '未设置' },
-])
+const identityCode = computed(() => authStore.currentUser?.police_id || authStore.currentUser?.username || '未设置警号')
 
-const tips = [
-  { index: '01', title: '首页和占位页解耦', description: '真正的工作台只在 `/` 展示，避免其它页面复用后出现语义错位。' },
-  { index: '02', title: '侧边栏入口统一', description: '日历入口已指向实际存在的周训练计划路由，并保留 `/calendar` 兼容跳转。' },
-  { index: '03', title: '视觉语言保持一致', description: '继续沿用 v2 的低饱和渐变、圆角卡片和轻阴影体系。' },
-]
+const previewWeekDays = computed(() => {
+  const today = dayjs()
+  const weekStart = today.startOf('isoWeek')
+  const datesWithEvents = new Set(calendarEvents.value.map((event) => event.date))
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = weekStart.add(index, 'day')
+    const dateKey = date.format('YYYY-MM-DD')
+
+    return {
+      label: ['周一', '周二', '周三', '周四', '周五', '周六', '周日'][index],
+      dateKey,
+      displayDate: date.format('MM-DD'),
+      isToday: date.isSame(today, 'day'),
+      hasEvent: datesWithEvents.has(dateKey),
+    }
+  })
+})
+
+const calendarPreviewItems = computed(() => {
+  const weekDateKeys = new Set(previewWeekDays.value.map((day) => day.dateKey))
+
+  return calendarEvents.value
+    .filter((event) => weekDateKeys.has(event.date))
+    .slice()
+    .sort((left, right) => {
+      if (left.date !== right.date) return left.date.localeCompare(right.date)
+      return parseTimeRange(left.time_range).startMin - parseTimeRange(right.time_range).startMin
+    })
+    .slice(0, 5)
+    .map((event) => {
+      const day = previewWeekDays.value.find((item) => item.dateKey === event.date)
+      return {
+        key: event.session_id || `${event.training_id}-${event.date}-${event.time_range}-${event.course_name}`,
+        title: getEventTitle(event),
+        timeLabel: parseTimeRange(event.time_range).timeLabel,
+        dayLabel: day ? `${day.label} ${day.displayDate}` : event.date,
+        trainingName: event.training_name || '未指定班级',
+        palette: getPreviewPalette(event),
+      }
+    })
+})
 
 function formatMetric(value: number | undefined) {
   if (typeof value !== 'number' || Number.isNaN(value)) return '0'
   return Number.isInteger(value) ? String(value) : value.toFixed(1)
 }
 
+function parseTimeRange(timeRange: string) {
+  if (!timeRange || !timeRange.includes('~')) {
+    return { startMin: Number.MAX_SAFE_INTEGER, timeLabel: '时间待定' }
+  }
+
+  const [start, end] = timeRange.split('~').map((part) => part.trim())
+  const [startHour = 0, startMinute = 0] = start.split(':').map(Number)
+
+  return {
+    startMin: startHour * 60 + startMinute,
+    timeLabel: `${start.slice(0, 5)} - ${end.slice(0, 5)}`,
+  }
+}
+
+function getPreviewPalette(event: CalendarEventResponse) {
+  const seed = `${event.course_name || ''}-${event.training_name || ''}-${event.course_type || ''}`
+  let hash = 0
+
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0
+  }
+
+  return previewPalette[hash % previewPalette.length]
+}
+
+function getEventTitle(event: CalendarEventResponse) {
+  return event.course_name?.trim() || event.training_name?.trim() || '未命名课程'
+}
+
+async function fetchDashboardCalendar() {
+  if (!isDashboardRoute.value) return
+
+  calendarLoading.value = true
+  calendarError.value = ''
+
+  try {
+    const response = await axiosInstance.get('/trainings/calendar')
+    calendarEvents.value = (response.data as CalendarEventResponse[]) || []
+  } catch (error: unknown) {
+    calendarEvents.value = []
+    calendarError.value = error instanceof Error ? error.message : '课表暂时无法加载'
+  } finally {
+    calendarLoading.value = false
+  }
+}
+
 function navigateTo(path: string) {
   router.push(path)
 }
+
+watch(
+  isDashboardRoute,
+  (active) => {
+    if (active) {
+      void fetchDashboardCalendar()
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <style scoped>
 .dashboard-page {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: 20px;
   background:
     radial-gradient(circle at top right, rgba(75, 110, 245, 0.1), transparent 28%),
     linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(245, 246, 250, 0.92) 100%);
@@ -283,14 +377,16 @@ function navigateTo(path: string) {
 .hero-card {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 1fr);
-  gap: 24px;
-  padding: 28px;
+  grid-template-columns: minmax(0, 1.48fr) minmax(280px, 0.92fr);
+  gap: 20px;
+  padding: 24px 24px 22px;
   border-radius: 28px;
   overflow: hidden;
-  background: var(--v2-bg-header);
+  background:
+    radial-gradient(circle at 18% 22%, rgba(255, 255, 255, 0.24), transparent 18%),
+    linear-gradient(135deg, #1c2a8f 0%, #2548d6 42%, #2b57f8 100%);
   color: var(--v2-text-white);
-  box-shadow: 0 24px 40px rgba(15, 52, 96, 0.18);
+  box-shadow: 0 24px 40px rgba(29, 65, 194, 0.24);
 }
 
 .hero-card::before,
@@ -302,17 +398,17 @@ function navigateTo(path: string) {
 }
 
 .hero-card::before {
-  width: 220px;
-  height: 220px;
-  top: -110px;
+  width: 208px;
+  height: 208px;
+  top: -104px;
   right: -50px;
 }
 
 .hero-card::after {
-  width: 160px;
-  height: 160px;
+  width: 148px;
+  height: 148px;
   right: 180px;
-  bottom: -90px;
+  bottom: -86px;
 }
 
 .hero-copy,
@@ -324,15 +420,22 @@ function navigateTo(path: string) {
 .hero-copy {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 12px;
   justify-content: center;
+}
+
+.hero-topline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 
 .hero-badge {
   display: inline-flex;
   width: fit-content;
   align-items: center;
-  padding: 6px 12px;
+  padding: 5px 12px;
   border-radius: var(--v2-radius-full);
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -341,50 +444,87 @@ function navigateTo(path: string) {
   letter-spacing: 0.08em;
 }
 
+.hero-date-pill {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border-radius: var(--v2-radius-full);
+  background: rgba(133, 164, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.96);
+  font-size: 13px;
+  font-weight: 600;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
 .hero-title {
-  font-size: clamp(28px, 3vw, 40px);
+  font-size: clamp(26px, 2.8vw, 38px);
   line-height: 1.1;
   margin: 0;
 }
 
+.hero-profile-list {
+  display: inline-flex;
+  width: fit-content;
+  max-width: 100%;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 9px 16px;
+  border-radius: 18px;
+  background: rgba(17, 34, 99, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(16px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.hero-profile-list,
+.hero-profile-list span,
+.hero-profile-list strong {
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.98);
+}
+
+.hero-profile-list strong {
+  font-weight: 700;
+}
+
+.hero-profile-divider {
+  color: rgba(255, 255, 255, 0.56);
+  font-weight: 500;
+}
+
+.hero-profile-list span,
+.hero-profile-list strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .hero-subtitle {
-  max-width: 640px;
-  font-size: 15px;
-  line-height: 1.75;
+  max-width: 620px;
+  font-size: 14px;
+  line-height: 1.65;
   color: rgba(255, 255, 255, 0.78);
   margin: 0;
-}
-
-.hero-pills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.hero-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border-radius: var(--v2-radius-full);
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.92);
-  font-size: 13px;
 }
 
 .hero-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
+  gap: 12px;
 }
 
 .summary-card {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  min-height: 116px;
-  padding: 18px;
-  border-radius: 20px;
+  min-height: 102px;
+  padding: 16px 18px;
+  border-radius: 18px;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(16px);
@@ -397,7 +537,7 @@ function navigateTo(path: string) {
 }
 
 .summary-value {
-  font-size: 30px;
+  font-size: 28px;
   line-height: 1;
   font-weight: 700;
 }
@@ -409,14 +549,11 @@ function navigateTo(path: string) {
   font-weight: 500;
 }
 
-.dashboard-grid {
+.dashboard-workbench {
   display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.95fr);
+  grid-template-columns: minmax(0, 1.08fr) minmax(380px, 0.92fr);
   gap: 20px;
-}
-
-.dashboard-grid-secondary {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: stretch;
 }
 
 .surface-card {
@@ -426,6 +563,14 @@ function navigateTo(path: string) {
   padding: 24px;
   box-shadow: var(--v2-shadow);
   backdrop-filter: blur(16px);
+  height: 100%;
+}
+
+.mini-schedule-card,
+.quick-surface {
+  display: flex;
+  flex-direction: column;
+  min-height: 344px;
 }
 
 .section-head {
@@ -447,19 +592,178 @@ function navigateTo(path: string) {
   line-height: 1.7;
 }
 
+.section-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  border-radius: var(--v2-radius-full);
+  background: rgba(75, 110, 245, 0.1);
+  color: var(--v2-primary);
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.2s ease, background 0.2s ease;
+}
+
+.section-link:hover {
+  background: rgba(75, 110, 245, 0.16);
+  transform: translateY(-1px);
+}
+
+.mini-week-strip {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.mini-day-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 8px;
+  border-radius: 16px;
+  border: 1px solid rgba(231, 234, 242, 0.9);
+  background: linear-gradient(180deg, rgba(248, 249, 253, 0.94) 0%, rgba(255, 255, 255, 0.98) 100%);
+}
+
+.mini-day-pill span {
+  font-size: 12px;
+  color: var(--v2-text-secondary);
+}
+
+.mini-day-pill strong {
+  font-size: 14px;
+  color: var(--v2-text-primary);
+}
+
+.mini-day-pill.active {
+  border-color: rgba(75, 110, 245, 0.18);
+}
+
+.mini-day-pill.today {
+  background: linear-gradient(180deg, rgba(75, 110, 245, 0.1) 0%, rgba(255, 255, 255, 0.98) 100%);
+  box-shadow: inset 0 0 0 1px rgba(75, 110, 245, 0.1);
+}
+
+.mini-day-pill.today span,
+.mini-day-pill.today strong {
+  color: var(--v2-primary);
+}
+
+.mini-event-list {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mini-event-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(120px, 0.9fr);
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px 14px 20px;
+  border: 1px solid rgba(233, 236, 243, 0.96);
+  border-radius: 22px;
+  background: var(--mini-event-bg);
+  box-shadow: 0 14px 24px rgba(36, 42, 71, 0.06);
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.mini-event-item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 10px;
+  bottom: 10px;
+  width: 5px;
+  border-radius: 999px;
+  background: var(--mini-event-border);
+}
+
+.mini-event-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 18px 28px rgba(36, 42, 71, 0.08);
+}
+
+.mini-event-main,
+.mini-event-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mini-event-main strong {
+  font-size: 15px;
+  color: var(--v2-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-event-main span,
+.mini-event-meta span {
+  font-size: 13px;
+  color: var(--v2-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mini-event-meta {
+  align-items: flex-end;
+}
+
+.mini-state {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 220px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(248, 249, 253, 0.94) 0%, rgba(255, 255, 255, 0.98) 100%);
+  color: var(--v2-text-secondary);
+}
+
+.mini-empty {
+  font-size: 14px;
+}
+
+.mini-empty :deep(.anticon) {
+  font-size: 18px;
+  color: var(--v2-primary);
+}
+
 .quick-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
 }
 
+.quick-grid-compact {
+  flex: 1;
+  align-content: stretch;
+  grid-auto-rows: minmax(0, 1fr);
+}
+
 .quick-item {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 16px;
+  height: 100%;
+  padding: 15px;
   border: 1px solid rgba(229, 229, 234, 0.9);
-  border-radius: 20px;
+  border-radius: 18px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(245, 246, 250, 0.92) 100%);
   text-align: left;
   cursor: pointer;
@@ -472,17 +776,19 @@ function navigateTo(path: string) {
   border-color: rgba(75, 110, 245, 0.18);
 }
 
-.quick-icon,
-.module-icon {
+.quick-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 16px;
-  color: var(--v2-text-primary);
-  font-size: 22px;
+  width: 46px;
+  height: 46px;
+  border-radius: 15px;
+  color: rgba(255, 255, 255, 0.98);
+  font-size: 21px;
   flex-shrink: 0;
+  box-shadow:
+    0 10px 20px rgba(75, 110, 245, 0.16),
+    0 0 0 1px rgba(255, 255, 255, 0.22) inset;
 }
 
 .quick-text {
@@ -493,16 +799,12 @@ function navigateTo(path: string) {
   min-width: 0;
 }
 
-.quick-text strong,
-.module-copy strong,
-.tip-copy strong {
+.quick-text strong {
   font-size: 15px;
   color: var(--v2-text-primary);
 }
 
-.quick-text span,
-.module-copy span,
-.tip-copy span {
+.quick-text span {
   font-size: 13px;
   color: var(--v2-text-secondary);
   line-height: 1.6;
@@ -512,75 +814,6 @@ function navigateTo(path: string) {
   color: var(--v2-text-muted);
   font-size: 13px;
   flex-shrink: 0;
-}
-
-.info-list,
-.module-list,
-.tips-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.info-row,
-.module-item,
-.tip-item {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 16px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(245, 246, 250, 0.88) 0%, rgba(255, 255, 255, 0.94) 100%);
-}
-
-.info-row {
-  justify-content: space-between;
-  gap: 20px;
-}
-
-.info-row span {
-  color: var(--v2-text-secondary);
-}
-
-.info-row strong {
-  color: var(--v2-text-primary);
-  text-align: right;
-}
-
-.module-copy,
-.tip-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.tip-index {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 14px;
-  background: var(--v2-primary-light);
-  color: var(--v2-primary);
-  font-size: 13px;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
-.tips-card {
-  position: relative;
-  overflow: hidden;
-}
-
-.tips-card::after {
-  content: '';
-  position: absolute;
-  inset: auto -50px -70px auto;
-  width: 180px;
-  height: 180px;
-  border-radius: 999px;
-  background: radial-gradient(circle, rgba(75, 110, 245, 0.12), transparent 65%);
 }
 
 .placeholder-card {
@@ -619,8 +852,7 @@ function navigateTo(path: string) {
 
 @media (max-width: 1200px) {
   .hero-card,
-  .dashboard-grid,
-  .dashboard-grid-secondary {
+  .dashboard-workbench {
     grid-template-columns: 1fr;
   }
 }
@@ -641,20 +873,29 @@ function navigateTo(path: string) {
     grid-template-columns: 1fr;
   }
 
+  .mini-week-strip {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .mini-event-item {
+    grid-template-columns: 1fr;
+  }
+
+  .mini-event-meta {
+    align-items: flex-start;
+  }
+
+  .hero-profile-list {
+    width: 100%;
+  }
+
   .summary-card {
     min-height: 96px;
   }
 
   .quick-item,
-  .info-row,
-  .module-item,
-  .tip-item {
+  .mini-event-item {
     padding: 14px;
-  }
-
-  .info-row {
-    flex-direction: column;
-    align-items: flex-start;
   }
 
   .placeholder-actions {
