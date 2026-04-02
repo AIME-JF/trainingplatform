@@ -1,11 +1,8 @@
 <template>
   <div class="page-content resource-page">
-    <LearningResourceTabs />
-
     <div class="page-header">
       <div>
-        <h1 class="page-title">课程资源</h1>
-        <p class="page-subtitle">围绕课程章节组织学习内容，适合系统化学习与持续跟进。</p>
+        <h1 class="page-title">学习资源</h1>
       </div>
       <a-button v-if="authStore.isInstructor" type="primary" @click="openCreate">创建课程</a-button>
     </div>
@@ -47,18 +44,6 @@
                 <a-select-option value="rating">按评分</a-select-option>
                 <a-select-option value="students">按学员数</a-select-option>
               </a-select>
-            </div>
-
-            <div class="category-tabs">
-              <a-tag
-                v-for="cat in categoryTabs"
-                :key="cat.key"
-                class="cat-tag"
-                :class="{ active: filters.category === cat.key }"
-                @click="selectCategory(cat.key)"
-              >
-                {{ cat.label }}
-              </a-tag>
             </div>
 
             <div class="filter-grid">
@@ -216,10 +201,8 @@ import type { CourseListResponse } from '@/api/learning-resource'
 import { deleteCourse, listCourses, listUsers } from '@/api/learning-resource'
 import { useAuthStore } from '@/stores/auth'
 import CourseEditorModal from '@/components/resource/CourseEditorModal.vue'
-import LearningResourceTabs from '@/components/resource/LearningResourceTabs.vue'
 import ResourceSearchInput from '@/components/resource/ResourceSearchInput.vue'
 import {
-  COURSE_CATEGORIES,
   formatCourseDuration,
   formatDate,
   getCourseCategoryLabel,
@@ -242,7 +225,6 @@ const advancedFiltersVisible = ref(false)
 
 const filters = reactive({
   search: '',
-  category: 'all',
   instructor_id: undefined as number | undefined,
   sort: authStore.isStudent ? 'learning_priority' : 'latest',
   is_required: undefined as boolean | undefined,
@@ -308,13 +290,9 @@ const courseCoverVisualMap: Record<string, CourseCoverVisual> = {
     icon: ThunderboltOutlined,
     background: 'linear-gradient(135deg, #f8efe8 0%, #f0dfd1 100%)',
     accent: '#c19475',
-    glow: 'rgba(193, 148, 117, 0.12)',
+  glow: 'rgba(193, 148, 117, 0.12)',
   },
 }
-
-const categoryTabs = COURSE_CATEGORIES.map((item) => (
-  item.key === 'all' ? { key: 'all', label: '全部' } : item
-))
 
 const completedCount = computed(() => courses.value.filter((course) => course.learning_status === 'completed').length)
 const inProgressCount = computed(() => courses.value.filter((course) => course.learning_status === 'in_progress').length)
@@ -330,7 +308,6 @@ async function fetchCourses() {
       page: 1,
       size: -1,
       search: filters.search || undefined,
-      category: filters.category !== 'all' ? filters.category : undefined,
       sort: filters.sort || undefined,
       instructor_id: filters.instructor_id,
       is_required: filters.is_required,
@@ -367,11 +344,6 @@ function handleDateRangeChange(value: Dayjs[] | null) {
     filters.created_from = undefined
     filters.created_to = undefined
   }
-  void fetchCourses()
-}
-
-function selectCategory(category: string) {
-  filters.category = category
   void fetchCourses()
 }
 
@@ -527,12 +499,6 @@ async function handleDelete(courseId: number) {
   width: 100%;
 }
 
-.category-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
 .advanced-filters-enter-active,
 .advanced-filters-leave-active {
   transition:
@@ -544,33 +510,6 @@ async function handleDelete(courseId: number) {
 .advanced-filters-leave-to {
   opacity: 0;
   transform: translateY(-6px);
-}
-
-:deep(.cat-tag.ant-tag) {
-  cursor: pointer;
-  margin: 0;
-  padding: 7px 14px;
-  border-radius: 999px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--v2-text-secondary);
-  border: 1px solid rgba(75, 110, 245, 0.12);
-  background: rgba(255, 255, 255, 0.92);
-  transition:
-    color 0.2s ease,
-    border-color 0.2s ease,
-    background 0.2s ease,
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-:deep(.cat-tag.ant-tag:hover),
-:deep(.cat-tag.active.ant-tag) {
-  color: var(--v2-primary);
-  border-color: rgba(75, 110, 245, 0.28);
-  background: var(--v2-primary-light);
-  box-shadow: 0 10px 24px rgba(75, 110, 245, 0.12);
-  transform: translateY(-1px);
 }
 
 .course-stats {
