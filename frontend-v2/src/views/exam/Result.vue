@@ -19,7 +19,7 @@
         </div>
         <div class="hero-right">
           <div class="score-big">{{ result.score || 0 }}</div>
-          <div class="score-label">满分 {{ passingScore }} · 及格 {{ result.passing_score || passingScore }}</div>
+          <div class="score-label">及格线 {{ result.passing_score || passingScore }} 分</div>
         </div>
       </div>
 
@@ -29,7 +29,7 @@
       <div class="section-block info-grid">
         <div class="info-item">
           <span class="info-label">提交时间</span>
-          <span class="info-value">{{ formatDateTime(result.submit_time) }}</span>
+          <span class="info-value">{{ formatDateTime(result.end_time) }}</span>
         </div>
         <div class="info-item">
           <span class="info-label">用时</span>
@@ -100,7 +100,7 @@
         <a-button size="large" @click="router.push('/exam/list')">
           <RollbackOutlined /> 返回考试列表
         </a-button>
-        <a-button v-if="!isPassed" type="primary" size="large" @click="router.push(`/exam/do/${examId}`)">
+        <a-button v-if="!isPassed" type="primary" size="large" @click="router.push({ path: `/exam/do/${examId}`, query: { kind: examKind } })">
           <RedoOutlined /> 重新考试
         </a-button>
       </div>
@@ -122,18 +122,19 @@ import {
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import type { ExamRecordResponse } from '@/api/generated/model'
+import type { AdmissionExamRecordResponse, ExamRecordResponse } from '@/api/generated/model'
 import {
   getAdmissionExamResultApiV1ExamsAdmissionExamIdResultGet,
   getExamResultApiV1ExamsExamIdResultGet,
 } from '@/api/generated/exam-management/exam-management'
+import { resolveExamKind, type ExamKind } from './examDisplay'
 
 const route = useRoute()
 const router = useRouter()
 
 const loading = ref(false)
-const result = ref<ExamRecordResponse | null>(null)
-const examKind = ref<'admission' | 'training'>('training')
+const result = ref<ExamRecordResponse | AdmissionExamRecordResponse | null>(null)
+const examKind = ref<ExamKind>(resolveExamKind(route.query.kind, 'training'))
 
 const examId = computed(() => Number(route.params.id))
 
@@ -163,11 +164,14 @@ async function fetchResult() {
   loading.value = true
   try {
     try {
-      result.value = await getExamResultApiV1ExamsExamIdResultGet(examId.value)
-      examKind.value = 'training'
-    } catch {
-      result.value = await getAdmissionExamResultApiV1ExamsAdmissionExamIdResultGet(examId.value)
-      examKind.value = 'admission'
+      result.value = examKind.value === 'admission'
+        ? await getAdmissionExamResultApiV1ExamsAdmissionExamIdResultGet(examId.value)
+        : await getExamResultApiV1ExamsExamIdResultGet(examId.value)
+    } catch (primaryError) {
+      examKind.value = examKind.value === 'admission' ? 'training' : 'admission'
+      result.value = examKind.value === 'admission'
+        ? await getAdmissionExamResultApiV1ExamsAdmissionExamIdResultGet(examId.value)
+        : await getExamResultApiV1ExamsExamIdResultGet(examId.value)
     }
   } catch {
     message.error('加载考试结果失败')
@@ -176,11 +180,9 @@ async function fetchResult() {
   }
 }
 
-function formatDuration(seconds?: number) {
-  if (!seconds) return '-'
-  const m = Math.floor(seconds / 60)
-  const s = seconds % 60
-  return `${m}分${s}秒`
+function formatDuration(minutes?: number) {
+  if (minutes === undefined || minutes === null) return '-'
+  return `${minutes} 分钟`
 }
 
 function formatDateTime(time?: string | null) {
@@ -198,9 +200,9 @@ function formatAnswer(answer?: unknown) {
 
 function getQuestionTypeText(type?: string) {
   switch (type) {
-    case 'single_choice': return '单选题'
-    case 'multiple_choice': return '多选题'
-    case 'true_false': return '判断题'
+    case 'single': return '单选题'
+    case 'multi': return '多选题'
+    case 'judge': return '判断题'
     default: return type || '未知'
   }
 }

@@ -21,7 +21,7 @@
             <a-select v-model:value="filters.sort" class="sort-select" @change="fetchExams">
               <a-select-option value="latest">按最新</a-select-option>
               <a-select-option value="upcoming">即将开始</a-select-option>
-              <a-select-option value="ongoing">进行中</a-select-option>
+              <a-select-option value="active">进行中</a-select-option>
             </a-select>
           </div>
         </div>
@@ -66,9 +66,9 @@
         @click="handleExamClick(exam)"
       >
         <div class="card-cover" :style="{ background: getExamCoverBackground(exam, index) }">
-          <div class="cover-labels">
+            <div class="cover-labels">
             <a-tag class="cover-tag cover-tag-status" :class="getStatusClass(exam.status)">
-              {{ getStatusText(exam.status, exam.can_join) }}
+              {{ getStatusText(exam) }}
             </a-tag>
             <div class="cover-tag-stack">
               <a-tag v-if="exam.can_join" class="cover-tag cover-tag-action">可参加</a-tag>
@@ -120,19 +120,19 @@
           </div>
 
           <div class="action-row">
-            <template v-if="exam.status === 'finished' || exam.latest_result === 'pass'">
-              <a-button type="primary" block @click.stop="router.push(`/exam/result/${exam.id}`)">
+            <template v-if="shouldShowResult(exam)">
+              <a-button type="primary" block @click.stop="goToExamResult(exam)">
                 查看结果
               </a-button>
             </template>
             <template v-else-if="exam.can_join">
-              <a-button type="primary" block @click.stop="router.push({ path: `/exam/overview/${exam.id}`, state: { exam } })">
+              <a-button type="primary" block @click.stop="goToExamOverview(exam)">
                 进入考试
               </a-button>
             </template>
             <template v-else>
               <a-button type="primary" block disabled>
-                {{ getStatusText(exam.status, exam.can_join) }}
+                {{ getStatusText(exam) }}
               </a-button>
             </template>
           </div>
@@ -160,6 +160,13 @@ import {
   getAdmissionExamsApiV1ExamsAdmissionGet,
   getExamsApiV1ExamsGet,
 } from '@/api/generated/exam-management/exam-management'
+import {
+  getExamStatusClass,
+  getExamStatusText,
+  isExamEnded,
+  normalizeExamStatus,
+  resolveExamKind,
+} from './examDisplay'
 
 const router = useRouter()
 const loading = ref(false)
@@ -174,13 +181,13 @@ const filters = reactive({
 
 const statusTabs = [
   { key: 'all', label: '全部' },
-  { key: 'ongoing', label: '进行中' },
+  { key: 'active', label: '进行中' },
   { key: 'upcoming', label: '即将开始' },
-  { key: 'finished', label: '已结束' },
+  { key: 'ended', label: '已结束' },
 ]
 
-const ongoingCount = computed(() => exams.value.filter((e) => e.status === 'ongoing').length)
-const upcomingCount = computed(() => exams.value.filter((e) => e.status === 'upcoming').length)
+const ongoingCount = computed(() => exams.value.filter((e) => normalizeExamStatus(e.status) === 'active').length)
+const upcomingCount = computed(() => exams.value.filter((e) => normalizeExamStatus(e.status) === 'upcoming').length)
 
 onMounted(() => {
   void fetchExams()
@@ -194,21 +201,29 @@ async function fetchExams() {
       ? await getAdmissionExamsApiV1ExamsAdmissionGet(params)
       : await getExamsApiV1ExamsGet(params)
 
-    let items = response.items || []
+    let items = response?.items || []
 
-    // Filter by status
     if (filters.status !== 'all') {
-      items = items.filter((item) => item.status === filters.status)
+      items = items.filter((item) => normalizeExamStatus(item.status) === filters.status)
     }
 
-    // Sort
     if (filters.sort === 'upcoming') {
-      items = items.filter((i) => i.status === 'upcoming')
-    } else if (filters.sort === 'ongoing') {
-      items = items.filter((i) => i.status === 'ongoing')
+      items = items.filter((item) => normalizeExamStatus(item.status) === 'upcoming')
+    } else if (filters.sort === 'active') {
+      items = items.filter((item) => normalizeExamStatus(item.status) === 'active')
     }
 
-    exams.value = items
+    const statusRank = { active: 0, upcoming: 1, ended: 2, unknown: 3 } as const
+    exams.value = [...items].sort((left, right) => {
+      const leftStatus = normalizeExamStatus(left.status)
+      const rightStatus = normalizeExamStatus(right.status)
+      if (filters.sort === 'latest') {
+        const leftTime = left.start_time ? dayjs(left.start_time).valueOf() : 0
+        const rightTime = right.start_time ? dayjs(right.start_time).valueOf() : 0
+        return rightTime - leftTime
+      }
+      return statusRank[leftStatus] - statusRank[rightStatus]
+    })
   } catch (error) {
     message.error(error instanceof Error ? error.message : '考试列表加载失败')
   } finally {
@@ -223,42 +238,41 @@ function selectStatus(status: string) {
 
 function handleExamClick(exam: ExamResponse) {
   if (exam.can_join) {
-    void router.push({ path: `/exam/overview/${exam.id}`, state: { exam } })
-  } else if (exam.status === 'finished' || exam.latest_result === 'pass') {
-    void router.push(`/exam/result/${exam.id}`)
+    void goToExamOverview(exam)
+  } else if (shouldShowResult(exam)) {
+    void goToExamResult(exam)
   }
 }
 
-function getStatusClass(status?: string) {
-  switch (status) {
-    case 'ongoing':
-      return 'status-ongoing'
-    case 'upcoming':
-      return 'status-upcoming'
-    case 'finished':
-      return 'status-finished'
-    default:
-      return ''
-  }
+function getStatusClass(status?: string | null) {
+  return getExamStatusClass(status)
 }
 
-function getStatusText(status?: string, canJoin?: boolean | null) {
-  if (canJoin === false && status !== 'finished') return '暂不可参加'
-  switch (status) {
-    case 'ongoing':
-      return '进行中'
-    case 'upcoming':
-      return '即将开始'
-    case 'finished':
-      return '已结束'
-    default:
-      return '未知'
-  }
+function getStatusText(exam: ExamResponse) {
+  return getExamStatusText(exam)
 }
 
 function formatDate(date?: string | null) {
   if (!date) return ''
   return dayjs(date).format('MM/DD HH:mm')
+}
+
+function shouldShowResult(exam: ExamResponse) {
+  return isExamEnded(exam.status) || Number(exam.attempt_count || 0) > 0
+}
+
+function goToExamOverview(exam: ExamResponse) {
+  return router.push({
+    path: `/exam/overview/${exam.id}`,
+    query: { kind: resolveExamKind(exam.kind, activeTab.value) },
+  })
+}
+
+function goToExamResult(exam: ExamResponse) {
+  return router.push({
+    path: `/exam/result/${exam.id}`,
+    query: { kind: resolveExamKind(exam.kind, activeTab.value) },
+  })
 }
 
 const coverGradients = [
@@ -269,23 +283,24 @@ const coverGradients = [
 ]
 
 const statusAccents: Record<string, string> = {
-  ongoing: '#34C759',
+  active: '#34C759',
   upcoming: '#4B6EF5',
-  finished: '#8E8E93',
+  ended: '#8E8E93',
 }
 
 function getExamAccent(status?: string) {
-  return statusAccents[status || ''] || '#4B6EF5'
+  return statusAccents[normalizeExamStatus(status)] || '#4B6EF5'
 }
 
 function getExamCoverBackground(exam: ExamResponse, index: number) {
-  if (exam.status === 'ongoing') {
+  const normalizedStatus = normalizeExamStatus(exam.status)
+  if (normalizedStatus === 'active') {
     return 'linear-gradient(135deg, #edf7ed 0%, #e3f0e6 100%)'
   }
-  if (exam.status === 'upcoming') {
+  if (normalizedStatus === 'upcoming') {
     return 'linear-gradient(135deg, #edf1fb 0%, #e4eaf5 100%)'
   }
-  if (exam.status === 'finished') {
+  if (normalizedStatus === 'ended') {
     return 'linear-gradient(135deg, #f5f5f7 0%, #ececed 100%)'
   }
   return coverGradients[index % coverGradients.length]

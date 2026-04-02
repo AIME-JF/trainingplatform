@@ -1,146 +1,145 @@
 <template>
   <div class="exam-do-page">
-    <!-- 顶部栏 -->
-    <div class="exam-header">
-      <div class="exam-title">
-        <h1>{{ examDetail?.title || '考试' }}</h1>
-        <div class="exam-time" :class="{ warning: remainingTime < 300 }">
-          <ClockCircleOutlined />
-          <span>{{ formatDuration(remainingTime) }}</span>
-        </div>
-      </div>
-      <div class="exam-progress-info">
-        <span>第 {{ currentIndex + 1 }} / {{ questions.length }} 题</span>
-        <span class="progress-sep">|</span>
-        <span>已答 {{ answeredCount }} 题</span>
-      </div>
-      <a-progress
-        :percent="progressPercent"
-        :show-info="false"
-        class="exam-progress"
-      />
-    </div>
-
     <div v-if="loading" class="loading-wrapper">
       <a-spin size="large" />
     </div>
 
-    <!-- 主体：左侧题目 + 右侧概览 -->
     <template v-else-if="questions.length > 0">
-      <div class="exam-body">
-        <!-- 左侧：题目区域 -->
-        <div class="exam-main">
-          <div class="question-card">
-            <div class="question-header">
-              <a-tag class="type-tag" :color="getQuestionTypeColor(currentQuestion?.type)">
-                {{ getQuestionTypeText(currentQuestion?.type) }}
-              </a-tag>
-              <span class="question-score">{{ currentQuestion?.score || 0 }} 分</span>
-            </div>
-
-            <div class="question-content">
-              {{ currentQuestion?.content }}
-            </div>
-
-            <div class="question-options">
-              <template v-if="currentQuestion?.type === 'multiple_choice'">
-                <div
-                  v-for="(option, index) in currentOptions"
-                  :key="index"
-                  class="option-item multiple"
-                  :class="{ selected: isOptionSelected(option.key) }"
-                  @click="toggleOption(option.key)"
-                >
-                  <div class="option-checkbox">
-                    <CheckOutlined v-if="isOptionSelected(option.key)" />
-                  </div>
-                  <span class="option-label">{{ option.key }}.</span>
-                  <span class="option-text">{{ option.value }}</span>
-                </div>
-              </template>
-              <template v-else>
-                <div
-                  v-for="(option, index) in currentOptions"
-                  :key="index"
-                  class="option-item single"
-                  :class="{ selected: answers[currentQuestion?.id ?? 0] === option.key }"
-                  @click="selectOption(option.key)"
-                >
-                  <div class="option-radio">
-                    <div v-if="answers[currentQuestion?.id ?? 0] === option.key" class="radio-inner" />
-                  </div>
-                  <span class="option-label">{{ option.key }}.</span>
-                  <span class="option-text">{{ option.value }}</span>
-                </div>
-              </template>
-            </div>
-          </div>
-
-          <div v-if="currentQuestion?.explanation" class="question-explanation">
-            <div class="explanation-title">
-              <InfoCircleOutlined /> 解析
-            </div>
-            <p>{{ currentQuestion.explanation }}</p>
-          </div>
-
-          <div class="question-nav">
-            <a-button :disabled="currentIndex === 0" @click="prevQuestion">
-              <LeftOutlined /> 上一题
-            </a-button>
-            <a-button type="primary" @click="showAnswerSheet = !showAnswerSheet">
-              <MenuOutlined /> 答题卡
-            </a-button>
-            <a-button v-if="currentIndex < questions.length - 1" type="primary" @click="nextQuestion">
-              下一题 <RightOutlined />
-            </a-button>
-            <a-button v-else type="primary" @click="showSubmitConfirm">
-              提交试卷
-            </a-button>
+      <!-- 合并为大卡片 -->
+      <div class="exam-card">
+        <!-- 顶部：标题 + 计时器 -->
+        <div class="exam-title-row">
+          <h1 class="exam-title">{{ examDetail?.title || '考试' }}</h1>
+          <div class="exam-time" :class="{ warning: remainingTime < 300 }">
+            <ClockCircleOutlined />
+            <span>{{ formatDuration(remainingTime) }}</span>
           </div>
         </div>
 
-        <!-- 右侧：题目概览 -->
-        <div class="exam-sidebar">
-          <div class="sidebar-card">
-            <div class="sidebar-title">题目概览</div>
-            <div class="sidebar-stats">
-              <div class="stat-item">
-                <span class="stat-num">{{ answeredCount }}</span>
-                <span class="stat-label">已答</span>
-              </div>
-              <div class="stat-divider" />
-              <div class="stat-item">
-                <span class="stat-num">{{ questions.length - answeredCount }}</span>
-                <span class="stat-label">未答</span>
-              </div>
-            </div>
+        <div class="divider"></div>
 
-            <div class="question-grid">
+        <!-- 进度信息 -->
+        <div class="progress-row">
+          <div class="progress-info">
+            <span class="info-text">第 {{ currentIndex + 1 }} / {{ questions.length }} 题</span>
+            <span class="info-sep">|</span>
+            <span class="info-text">已答 {{ answeredCount }} 题</span>
+          </div>
+          <a-progress
+            :percent="progressPercent"
+            :show-info="false"
+            class="exam-progress-bar"
+          />
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- 题目区域 -->
+        <div class="question-section">
+          <div class="question-meta">
+            <a-tag class="type-tag" :color="getQuestionTypeColor(currentQuestion?.type)">
+              {{ getQuestionTypeText(currentQuestion?.type) }}
+            </a-tag>
+            <span class="question-score">{{ currentQuestion?.score || 0 }} 分</span>
+          </div>
+
+          <div class="question-content">
+            {{ currentQuestion?.content }}
+          </div>
+
+          <div class="question-options">
+            <template v-if="currentQuestion?.type === 'multi'">
               <div
-                v-for="(q, index) in questions"
-                :key="q.id"
-                class="q-grid-item"
-                :class="{
-                  current: index === currentIndex,
-                  answered: answers[q.id] !== undefined && answers[q.id] !== '' && answers[q.id] !== null,
-                }"
-                @click="goToQuestion(index)"
+                v-for="(option, index) in currentOptions"
+                :key="index"
+                class="option-item multiple"
+                :class="{ selected: isOptionSelected(option.key) }"
+                @click="toggleOption(option.key)"
               >
-                {{ index + 1 }}
+                <div class="option-checkbox">
+                  <CheckOutlined v-if="isOptionSelected(option.key)" />
+                </div>
+                <span class="option-label">{{ option.key }}.</span>
+                <span class="option-text">{{ option.value }}</span>
               </div>
-            </div>
+            </template>
+            <template v-else>
+              <div
+                v-for="(option, index) in currentOptions"
+                :key="index"
+                class="option-item single"
+                :class="{ selected: answers[currentQuestion?.id ?? 0] === option.key }"
+                @click="selectOption(option.key)"
+              >
+                <div class="option-radio">
+                  <div v-if="answers[currentQuestion?.id ?? 0] === option.key" class="radio-inner" />
+                </div>
+                <span class="option-label">{{ option.key }}.</span>
+                <span class="option-text">{{ option.value }}</span>
+              </div>
+            </template>
+          </div>
+        </div>
 
-            <div class="sidebar-legend">
-              <div class="legend-item">
-                <span class="legend-dot current-dot" />
-                <span>当前题</span>
-              </div>
-              <div class="legend-item">
-                <span class="legend-dot answered-dot" />
-                <span>已作答</span>
-              </div>
+        <div class="divider"></div>
+
+        <!-- 题目概览（桌面端inline，移动端隐藏） -->
+        <div class="overview-section">
+          <div class="overview-stats">
+            <div class="stat-item">
+              <span class="stat-num">{{ answeredCount }}</span>
+              <span class="stat-label">已答</span>
+            </div>
+            <div class="stat-divider" />
+            <div class="stat-item">
+              <span class="stat-num">{{ questions.length - answeredCount }}</span>
+              <span class="stat-label">未答</span>
             </div>
           </div>
+
+          <div class="question-grid">
+            <div
+              v-for="(q, index) in questions"
+              :key="q.id"
+              class="q-grid-item"
+              :class="{
+                current: index === currentIndex,
+                answered: answers[q.id] !== undefined && answers[q.id] !== '' && answers[q.id] !== null,
+              }"
+              @click="goToQuestion(index)"
+            >
+              {{ index + 1 }}
+            </div>
+          </div>
+
+          <div class="overview-legend">
+            <div class="legend-item">
+              <span class="legend-dot current-dot" />
+              <span>当前题</span>
+            </div>
+            <div class="legend-item">
+              <span class="legend-dot answered-dot" />
+              <span>已作答</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- 导航按钮 -->
+        <div class="question-nav">
+          <a-button :disabled="currentIndex === 0" @click="prevQuestion">
+            <LeftOutlined /> 上一题
+          </a-button>
+          <a-button type="primary" @click="showAnswerSheet = !showAnswerSheet">
+            <MenuOutlined /> 答题卡
+          </a-button>
+          <a-button v-if="currentIndex < questions.length - 1" type="primary" @click="nextQuestion">
+            下一题 <RightOutlined />
+          </a-button>
+          <a-button v-else type="primary" @click="showSubmitConfirm">
+            提交试卷
+          </a-button>
         </div>
       </div>
     </template>
@@ -227,6 +226,11 @@ import {
   submitExamApiV1ExamsExamIdSubmitPost,
 } from '@/api/generated/exam-management/exam-management'
 import type { ExamSubmitAnswers } from '@/api/generated/model'
+import {
+  getExamStatusText,
+  resolveExamKind,
+  type ExamKind,
+} from './examDisplay'
 
 const route = useRoute()
 const router = useRouter()
@@ -234,7 +238,7 @@ const router = useRouter()
 const loading = ref(false)
 const submitting = ref(false)
 const examId = computed(() => Number(route.params.id))
-const examKind = ref<'admission' | 'training'>('training')
+const examKind = ref<ExamKind>(resolveExamKind(route.query.kind, 'training'))
 
 const examDetail = ref<ExamDetailResponse | null>(null)
 const questions = ref<ExamQuestionSnapshotResponse[]>([])
@@ -242,6 +246,7 @@ const currentIndex = ref(0)
 const answers = ref<Record<number, string | string[]>>({})
 const showAnswerSheet = ref(false)
 const submitModalVisible = ref(false)
+const startTime = ref(new Date().toISOString())
 
 // 计时器
 const remainingTime = ref(0)
@@ -250,6 +255,12 @@ let timer: ReturnType<typeof setInterval> | null = null
 const currentQuestion = computed(() => questions.value[currentIndex.value])
 
 const currentOptions = computed(() => {
+  if (currentQuestion.value?.type === 'judge') {
+    return [
+      { key: 'A', value: '正确' },
+      { key: 'B', value: '错误' },
+    ]
+  }
   const opts = currentQuestion.value?.options
   if (!opts || !Array.isArray(opts)) return []
   return opts.map((item) => {
@@ -283,30 +294,47 @@ onBeforeUnmount(() => {
 async function fetchExamDetail() {
   loading.value = true
   try {
-    // 判断是准入考试还是培训班考试
     let detail
-    try {
-      detail = await getExamApiV1ExamsExamIdGet(examId.value)
-      examKind.value = 'training'
-    } catch {
+    if (examKind.value === 'admission') {
       detail = await getAdmissionExamApiV1ExamsAdmissionExamIdGet(examId.value)
-      examKind.value = 'admission'
+    } else {
+      detail = await getExamApiV1ExamsExamIdGet(examId.value)
+    }
+    examDetail.value = detail
+  } catch (primaryError) {
+    try {
+      examKind.value = examKind.value === 'admission' ? 'training' : 'admission'
+      examDetail.value = examKind.value === 'admission'
+        ? await getAdmissionExamApiV1ExamsAdmissionExamIdGet(examId.value)
+        : await getExamApiV1ExamsExamIdGet(examId.value)
+    } catch {
+      throw primaryError
+    }
+  }
+
+  try {
+    const detail = examDetail.value
+    if (!detail) {
+      return
     }
 
-    examDetail.value = detail
+    if (!detail.can_join) {
+      message.warning(`当前考试${getExamStatusText(detail)}`)
+      await router.replace({ path: `/exam/overview/${examId.value}`, query: { kind: examKind.value } })
+      return
+    }
 
     if (detail.questions) {
       questions.value = detail.questions
     } else {
-      // 如果没有题目数据，获取题目详情
       message.warning('该考试暂无题目')
     }
 
-    // 设置倒计时
     if (detail.duration) {
       remainingTime.value = detail.duration * 60
       startTimer()
     }
+    startTime.value = new Date().toISOString()
   } catch (error) {
     message.error('加载考试详情失败')
     console.error(error)
@@ -406,7 +434,7 @@ async function handleSubmit() {
 
     const submitData = {
       answers: answersData,
-      start_time: new Date().toISOString(),
+      start_time: startTime.value,
     }
 
     if (examKind.value === 'admission') {
@@ -416,7 +444,7 @@ async function handleSubmit() {
     }
 
     message.success('提交成功')
-    await router.replace(`/exam/result/${examId.value}`)
+    await router.replace({ path: `/exam/result/${examId.value}`, query: { kind: examKind.value } })
   } catch (error) {
     message.error(error instanceof Error ? error.message : '提交失败')
     submitting.value = false
@@ -425,11 +453,11 @@ async function handleSubmit() {
 
 function getQuestionTypeColor(type?: string) {
   switch (type) {
-    case 'single_choice':
+    case 'single':
       return 'blue'
-    case 'multiple_choice':
+    case 'multi':
       return 'purple'
-    case 'true_false':
+    case 'judge':
       return 'green'
     default:
       return 'default'
@@ -438,11 +466,11 @@ function getQuestionTypeColor(type?: string) {
 
 function getQuestionTypeText(type?: string) {
   switch (type) {
-    case 'single_choice':
+    case 'single':
       return '单选题'
-    case 'multiple_choice':
+    case 'multi':
       return '多选题'
-    case 'true_false':
+    case 'judge':
       return '判断题'
     default:
       return type || '未知'
@@ -457,38 +485,54 @@ function getQuestionTypeText(type?: string) {
   padding: 20px;
 }
 
-.exam-header {
-  background: var(--v2-bg-card);
-  border-radius: 20px;
-  padding: 20px;
-  margin-bottom: 20px;
-  box-shadow: 0 8px 24px rgba(24, 39, 75, 0.06);
+.loading-wrapper {
+  padding: 80px 0;
+  text-align: center;
 }
 
-.exam-title {
+/* 合并的大卡片 */
+.exam-card {
+  background: var(--v2-bg-card);
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 8px 24px rgba(24, 39, 75, 0.06);
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.divider {
+  height: 1px;
+  background: rgba(0, 0, 0, 0.06);
+  margin: 16px 0;
+}
+
+/* 标题行 */
+.exam-title-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
+  gap: 12px;
 }
 
-.exam-title h1 {
+.exam-title {
   margin: 0;
-  font-size: 22px;
-  font-weight: 600;
+  font-size: 20px;
+  font-weight: 700;
   color: var(--v2-text-primary);
+  line-height: 1.3;
 }
 
 .exam-time {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 16px;
+  padding: 6px 14px;
   border-radius: 999px;
   background: var(--v2-primary-light);
   color: var(--v2-primary);
   font-weight: 600;
-  font-size: 16px;
+  font-size: 15px;
+  flex-shrink: 0;
 }
 
 .exam-time.warning {
@@ -502,182 +546,44 @@ function getQuestionTypeText(type?: string) {
   50% { opacity: 0.7; }
 }
 
-.exam-progress-info {
+/* 进度行 */
+.progress-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.progress-info {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
-  color: var(--v2-text-secondary);
   font-size: 14px;
 }
 
-.progress-sep {
-  color: rgba(0, 0, 0, 0.2);
+.info-text {
+  color: var(--v2-text-secondary);
 }
 
-.exam-progress :deep(.ant-progress-bg) {
+.info-sep {
+  color: rgba(0, 0, 0, 0.15);
+}
+
+.exam-progress-bar :deep(.ant-progress-bg) {
   background: linear-gradient(90deg, var(--v2-primary) 0%, #6b8cfa 100%);
 }
 
-.loading-wrapper {
-  padding: 80px 0;
-  text-align: center;
-}
-
-/* 主体布局：左侧题目 + 右侧概览 */
-.exam-body {
-  display: flex;
-  gap: 16px;
-  align-items: flex-start;
-}
-
-.exam-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.exam-sidebar {
-  width: 220px;
-  flex-shrink: 0;
-  position: sticky;
-  top: 20px;
-}
-
-.sidebar-card {
-  background: var(--v2-bg-card);
-  border-radius: 20px;
-  padding: 20px;
-  box-shadow: 0 8px 24px rgba(24, 39, 75, 0.06);
-}
-
-.sidebar-title {
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--v2-text-primary);
-  margin-bottom: 16px;
-}
-
-.sidebar-stats {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 20px;
-  margin-bottom: 18px;
-  padding: 14px;
-  background: var(--v2-bg);
-  border-radius: 14px;
-}
-
-.stat-item {
+/* 题目区域 */
+.question-section {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 4px;
+  gap: 0;
 }
 
-.stat-num {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--v2-text-primary);
-  line-height: 1;
-}
-
-.stat-label {
-  font-size: 12px;
-  color: var(--v2-text-secondary);
-}
-
-.stat-divider {
-  width: 1px;
-  height: 32px;
-  background: var(--v2-border);
-}
-
-.question-grid {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 8px;
-  margin-bottom: 16px;
-}
-
-.q-grid-item {
-  aspect-ratio: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  background: var(--v2-bg);
-  color: var(--v2-text-secondary);
-  cursor: pointer;
-  transition: all 0.2s;
-  border: 2px solid transparent;
-}
-
-.q-grid-item:hover {
-  border-color: var(--v2-primary);
-}
-
-.q-grid-item.current {
-  background: var(--v2-primary);
-  color: #fff;
-  border-color: var(--v2-primary);
-}
-
-.q-grid-item.answered {
-  background: rgba(52, 199, 89, 0.12);
-  color: var(--v2-success);
-  border-color: rgba(52, 199, 89, 0.3);
-}
-
-.q-grid-item.answered.current {
-  background: var(--v2-primary);
-  color: #fff;
-  border-color: var(--v2-primary);
-}
-
-.sidebar-legend {
-  display: flex;
-  gap: 16px;
-  justify-content: center;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  color: var(--v2-text-secondary);
-}
-
-.legend-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-}
-
-.current-dot {
-  background: var(--v2-primary);
-}
-
-.answered-dot {
-  background: rgba(52, 199, 89, 0.5);
-}
-
-.question-card {
-  background: var(--v2-bg-card);
-  border-radius: 20px;
-  padding: 24px;
-  margin-bottom: 16px;
-  box-shadow: 0 8px 24px rgba(24, 39, 75, 0.06);
-}
-
-.question-header {
+.question-meta {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
 }
 
 .type-tag {
@@ -694,7 +600,7 @@ function getQuestionTypeText(type?: string) {
   font-size: 17px;
   line-height: 1.8;
   color: var(--v2-text-primary);
-  margin-bottom: 24px;
+  margin-bottom: 20px;
 }
 
 .question-options {
@@ -707,8 +613,8 @@ function getQuestionTypeText(type?: string) {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px;
-  border-radius: 16px;
+  padding: 14px 16px;
+  border-radius: 14px;
   border: 2px solid rgba(0, 0, 0, 0.08);
   cursor: pointer;
   transition: all 0.2s ease;
@@ -766,43 +672,137 @@ function getQuestionTypeText(type?: string) {
   flex: 1;
   color: var(--v2-text-primary);
   line-height: 1.6;
+  font-size: 15px;
 }
 
-.question-explanation {
-  background: rgba(75, 110, 245, 0.06);
-  border-radius: 16px;
-  padding: 16px;
-  margin-bottom: 16px;
+/* 题目概览 */
+.overview-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
 }
 
-.explanation-title {
+.overview-stats {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 24px;
+  padding: 14px;
+  background: var(--v2-bg);
+  border-radius: 14px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.stat-num {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--v2-text-primary);
+  line-height: 1;
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--v2-text-secondary);
+}
+
+.stat-divider {
+  width: 1px;
+  height: 36px;
+  background: var(--v2-border);
+}
+
+.question-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.q-grid-item {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--v2-bg);
+  color: var(--v2-text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 2px solid transparent;
+}
+
+.q-grid-item:hover {
+  border-color: var(--v2-primary);
+}
+
+.q-grid-item.current {
+  background: var(--v2-primary);
+  color: #fff;
+  border-color: var(--v2-primary);
+}
+
+.q-grid-item.answered {
+  background: rgba(52, 199, 89, 0.12);
+  color: var(--v2-success);
+  border-color: rgba(52, 199, 89, 0.3);
+}
+
+.q-grid-item.answered.current {
+  background: var(--v2-primary);
+  color: #fff;
+  border-color: var(--v2-primary);
+}
+
+.overview-legend {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
+
+.legend-item {
   display: flex;
   align-items: center;
   gap: 6px;
-  margin-bottom: 8px;
-  font-weight: 600;
-  color: var(--v2-primary);
-}
-
-.question-explanation p {
-  margin: 0;
+  font-size: 12px;
   color: var(--v2-text-secondary);
-  line-height: 1.7;
 }
 
+.legend-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+
+.current-dot {
+  background: var(--v2-primary);
+}
+
+.answered-dot {
+  background: rgba(52, 199, 89, 0.5);
+}
+
+/* 导航按钮 */
 .question-nav {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   justify-content: center;
-  padding: 20px 0;
 }
 
 .question-nav :deep(.ant-btn) {
   border-radius: 12px;
   height: 44px;
-  padding: 0 24px;
+  padding: 0 20px;
+  font-size: 14px;
 }
 
+/* 答题卡抽屉 */
 .answer-sheet-drawer :deep(.ant-drawer-body) {
   padding: 16px;
 }
@@ -818,7 +818,7 @@ function getQuestionTypeText(type?: string) {
 .answer-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
-  gap: 12px;
+  gap: 10px;
   margin-bottom: 20px;
 }
 
@@ -827,11 +827,13 @@ function getQuestionTypeText(type?: string) {
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
+  border-radius: 10px;
   background: rgba(0, 0, 0, 0.06);
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s;
+  font-size: 13px;
+  color: var(--v2-text-secondary);
 }
 
 .answer-item.current {
@@ -846,6 +848,7 @@ function getQuestionTypeText(type?: string) {
 
 .answer-item.answered.current {
   background: var(--v2-primary);
+  color: #fff;
 }
 
 .answer-sheet-actions {
@@ -876,16 +879,32 @@ function getQuestionTypeText(type?: string) {
   color: var(--v2-text-secondary);
 }
 
-@media (max-width: 768px) {
+/* 移动端适配 */
+@media (max-width: 600px) {
   .exam-do-page {
     padding: 12px;
   }
 
-  .exam-body {
-    flex-direction: column;
+  .exam-card {
+    padding: 18px;
+    border-radius: 16px;
   }
 
-  .exam-sidebar {
+  .exam-title-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .exam-title {
+    font-size: 18px;
+  }
+
+  .exam-time {
+    font-size: 14px;
+  }
+
+  .overview-section {
     display: none;
   }
 
@@ -893,8 +912,22 @@ function getQuestionTypeText(type?: string) {
     flex-wrap: wrap;
   }
 
+  .question-nav :deep(.ant-btn) {
+    flex: 1;
+    min-width: calc(50% - 5px);
+    height: 42px;
+  }
+
   .answer-grid {
     grid-template-columns: repeat(4, 1fr);
+  }
+
+  .option-item {
+    padding: 12px 14px;
+  }
+
+  .option-text {
+    font-size: 14px;
   }
 }
 </style>

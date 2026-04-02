@@ -90,13 +90,13 @@ const router = createRouter({
           path: 'question/repository',
           name: 'QuestionBank',
           component: () => import('../views/exam/QuestionBank.vue'),
-          meta: { title: '题库中心', anyPermissions: QUESTION_BANK_PAGE_PERMISSIONS },
+          meta: { title: '题库中心', anyPermissions: [...QUESTION_BANK_PAGE_PERMISSIONS, ...AI_QUESTION_PAGE_PERMISSIONS, ...KNOWLEDGE_POINT_PAGE_PERMISSIONS] },
         },
         {
           path: 'question/knowledge-points',
           name: 'KnowledgePointManage',
-          component: () => import('../views/exam/KnowledgePointManage.vue'),
-          meta: { title: '知识点', anyPermissions: KNOWLEDGE_POINT_PAGE_PERMISSIONS },
+          component: () => import('../views/exam/QuestionBank.vue'),
+          meta: { title: '知识点', anyPermissions: [...QUESTION_BANK_PAGE_PERMISSIONS, ...AI_QUESTION_PAGE_PERMISSIONS, ...KNOWLEDGE_POINT_PAGE_PERMISSIONS] },
         },
         {
           path: 'exam/do/:id',

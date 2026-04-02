@@ -103,19 +103,14 @@ export const appMenuConfig = [
     icon: EditOutlined,
     children: [
       {
-        key: '/question/knowledge-points',
-        label: '知识点',
-        anyPermissions: KNOWLEDGE_POINT_PAGE_PERMISSIONS,
-      },
-      {
         key: '/question/repository',
         label: '题库中心',
-        anyPermissions: [...QUESTION_BANK_PAGE_PERMISSIONS, ...AI_QUESTION_PAGE_PERMISSIONS],
+        anyPermissions: [...QUESTION_BANK_PAGE_PERMISSIONS, ...AI_QUESTION_PAGE_PERMISSIONS, ...KNOWLEDGE_POINT_PAGE_PERMISSIONS],
       },
       {
-        key: '/question/ai',
-        label: '智能出题',
-        anyPermissions: AI_QUESTION_PAGE_PERMISSIONS,
+        key: '/paper/ai-assemble',
+        label: '智能出卷',
+        anyPermissions: [...AI_PAPER_ASSEMBLE_PAGE_PERMISSIONS, ...AI_PAPER_GENERATE_PAGE_PERMISSIONS],
       },
       {
         key: '/paper/repository',
