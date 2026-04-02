@@ -32,24 +32,6 @@
         </div>
       </div>
     </div>
-    <div class="training-base-info">
-      <div class="info-row">
-        <span class="info-label">培训基地</span>
-        <span class="info-value">{{ trainingData.trainingBaseName || '手动输入地点' }}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">部门</span>
-        <span class="info-value">{{ trainingData.departmentName || '未设置' }}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">警种</span>
-        <span class="info-value">{{ trainingData.policeTypeName || '未设置' }}</span>
-      </div>
-      <div class="info-row">
-        <span class="info-label">准入考试</span>
-        <span class="info-value">{{ trainingData.admissionExamTitle || '无' }}</span>
-      </div>
-    </div>
     <a-divider />
     <div v-if="showOverviewCurrentCourse" ref="currentCourseSectionRef" class="course-schedule">
       <div class="section-header">

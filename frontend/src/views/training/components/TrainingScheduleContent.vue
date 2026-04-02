@@ -11,7 +11,7 @@
         </a-space>
         <div class="section-helper">建议先补课程计划课时。智能排课任务支持排满、排满工作日、按课时排三种方式，其中按课时排会使用计划课时。</div>
       </div>
-      <a-space v-if="!isStudent">
+      <a-space v-if="!isStudent && showActionButtons">
         <permissions-tooltip
           :allowed="canScheduleEdit"
           :tips="scheduleEditTooltip"
@@ -174,6 +174,7 @@ defineProps({
   currentSession: { type: Object, default: null },
   scheduleStatusColorMap: { type: Object, default: () => ({}) },
   scheduleStatusLabelMap: { type: Object, default: () => ({}) },
+  showActionButtons: { type: Boolean, default: true },
 })
 
 defineEmits([

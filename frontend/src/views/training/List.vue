@@ -52,73 +52,94 @@
     </a-card>
 
     <div class="training-cards">
-      <div v-for="training in filteredTrainings" :key="training.id" class="training-card">
-        <div class="card-top">
-          <div class="card-status">
-            <a-tag :color="statusColors[training.status]">{{ statusLabels[training.status] }}</a-tag>
-            <a-tag :color="workflowStepColors[getWorkflowStepKey(training)]">
-              {{ workflowStepLabels[getWorkflowStepKey(training)] }}
-            </a-tag>
-            <a-tag v-if="training.isLocked" color="red">名单已锁定</a-tag>
+      <div v-for="training in filteredTrainings" :key="training.id" class="training-card-h">
+        <div class="card-h-left">
+          <div class="card-h-header">
+            <div class="card-h-title">{{ training.name }}</div>
+            <div class="card-h-tags">
+              <a-tag :color="statusColors[training.status]">{{ statusLabels[training.status] }}</a-tag>
+              <a-tag :color="workflowStepColors[getWorkflowStepKey(training)]">
+                {{ workflowStepLabels[getWorkflowStepKey(training)] }}
+              </a-tag>
+              <a-tag v-if="training.isLocked" color="red">名单已锁定</a-tag>
+              <a-tag>{{ typeLabels[training.type] || training.type }}</a-tag>
+            </div>
           </div>
-          <a-tag>{{ typeLabels[training.type] || training.type }}</a-tag>
+          <div class="card-h-desc">{{ training.description || '暂无培训简介' }}</div>
+          <div class="card-h-meta-row">
+            <span class="card-h-meta"><CalendarOutlined /> {{ training.startDate || '待定' }} 至 {{ training.endDate || '待定' }}</span>
+            <span class="card-h-meta"><EnvironmentOutlined /> {{ training.location || '未设置地点' }}</span>
+            <span class="card-h-meta"><UserOutlined /> {{ training.instructorName || '未指定' }}</span>
+            <span class="card-h-meta"><TeamOutlined /> {{ training.enrolledCount || 0 }}/{{ training.capacity || 0 }} 人</span>
+          </div>
         </div>
 
-        <div class="card-title">{{ training.name }}</div>
-        <div class="card-desc">{{ training.description || '暂无培训简介' }}</div>
-
-        <div class="card-grid">
-          <div class="grid-item"><CalendarOutlined /> {{ training.startDate || '待定' }} 至 {{ training.endDate || '待定' }}</div>
-          <div class="grid-item"><TeamOutlined /> {{ training.enrolledCount || 0 }}/{{ training.capacity || 0 }} 人</div>
-          <div class="grid-item"><UserOutlined /> {{ training.instructorName || '未指定' }}</div>
-          <div class="grid-item"><EnvironmentOutlined /> {{ training.location || '未设置地点' }}</div>
+        <div class="card-h-center">
+          <div class="card-h-detail-grid">
+            <div class="card-h-detail-item">
+              <span class="detail-label">报名窗口</span>
+              <span class="detail-value">{{ formatWindow(training.enrollmentStartAt, training.enrollmentEndAt) }}</span>
+            </div>
+            <div class="card-h-detail-item">
+              <span class="detail-label">报名方式</span>
+              <span class="detail-value">{{ training.enrollmentRequiresApproval === false ? '直接通过' : '申请审核' }}</span>
+            </div>
+            <div class="card-h-detail-item">
+              <span class="detail-label">准入考试</span>
+              <span class="detail-value">{{ training.admissionExamTitle || '无' }}</span>
+            </div>
+            <div class="card-h-detail-item">
+              <span class="detail-label">培训基地</span>
+              <span class="detail-value">{{ training.trainingBaseName || '手动输入地点' }}</span>
+            </div>
+            <div class="card-h-detail-item">
+              <span class="detail-label">数据域</span>
+              <span class="detail-value">{{ [training.departmentName, training.policeTypeName].filter(Boolean).join(' / ') || '未设置' }}</span>
+            </div>
+          </div>
         </div>
 
-        <div class="extra-info">
-          <div>报名窗口：{{ formatWindow(training.enrollmentStartAt, training.enrollmentEndAt) }}</div>
-          <div>报名方式：{{ training.enrollmentRequiresApproval === false ? '直接通过' : '申请审核' }}</div>
-          <div>准入考试：{{ training.admissionExamTitle || '无' }}</div>
-          <div>培训基地：{{ training.trainingBaseName || '手动输入地点' }}</div>
-          <div>数据域：{{ [training.departmentName, training.policeTypeName].filter(Boolean).join(' / ') || '未设置' }}</div>
-        </div>
-
-        <a-progress :percent="Number.isFinite(training.progressPercent) ? training.progressPercent : 0" size="small" style="margin:12px 0 16px" />
-
-        <div class="card-actions">
-          <a-button
-            size="small"
-            type="primary"
-            :disabled="authStore.isStudent && !training.canEnterTraining"
-            @click="goDetail(training)"
-          >
-            进入培训班
-          </a-button>
-          <a-button size="small" @click="goHistory(training)">训历</a-button>
-
-          <template v-if="authStore.isStudent && !isMyTraining(training)">
+        <div class="card-h-right">
+          <div class="card-h-progress">
+            <span class="progress-label">培训进度</span>
+            <a-progress :percent="Number.isFinite(training.progressPercent) ? training.progressPercent : 0" size="small" />
+          </div>
+          <div class="card-h-actions">
             <a-button
-              v-if="training.currentEnrollmentStatus === 'pending'"
               size="small"
-              disabled
+              type="primary"
+              :disabled="authStore.isStudent && !training.canEnterTraining"
+              @click="goDetail(training)"
             >
-              待审核
+              进入培训班
             </a-button>
-            <a-button
-              v-else-if="training.currentEnrollmentStatus === 'rejected'"
-              size="small"
-              disabled
-            >
-              审核未通过
-            </a-button>
-            <a-button
-              v-else-if="training.status !== 'ended' && training.publishStatus === 'published'"
-              size="small"
-              :disabled="training.isLocked"
-              @click="goEnroll(training)"
-            >
-              {{ training.isLocked ? '名单已锁定' : (training.enrollmentRequiresApproval === false ? '加入培训班' : '报名申请') }}
-            </a-button>
-          </template>
+            <a-button size="small" @click="goHistory(training)">训历</a-button>
+
+            <template v-if="authStore.isStudent && !isMyTraining(training)">
+              <a-button
+                v-if="training.currentEnrollmentStatus === 'pending'"
+                size="small"
+                disabled
+              >
+                待审核
+              </a-button>
+              <a-button
+                v-else-if="training.currentEnrollmentStatus === 'rejected'"
+                size="small"
+                disabled
+              >
+                审核未通过
+              </a-button>
+              <a-button
+                v-else-if="training.status !== 'ended' && training.publishStatus === 'published'"
+                size="small"
+                :disabled="training.isLocked"
+                @click="goEnroll(training)"
+              >
+                {{ training.isLocked ? '名单已锁定' : (training.enrollmentRequiresApproval === false ? '加入培训班' : '报名申请') }}
+              </a-button>
+            </template>
+          </div>
         </div>
       </div>
     </div>
@@ -1268,16 +1289,25 @@ watch(
 .stat-card { text-align: center; }
 .stat-value { font-size: 30px; font-weight: 700; }
 .stat-label { font-size: 12px; color: #8c8c8c; }
-.training-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.training-card { background: #fff; border: 1px solid #e8e8e8; border-radius: 10px; padding: 18px; box-shadow: 0 4px 20px rgba(0, 32, 96, 0.06); }
-.card-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
-.card-status { display: flex; flex-wrap: wrap; gap: 4px; }
-.card-title { font-size: 16px; font-weight: 700; color: #1f1f1f; margin-bottom: 8px; }
-.card-desc { font-size: 13px; color: #666; min-height: 40px; }
-.card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
-.grid-item { font-size: 12px; color: #555; background: #f7f9fc; border-radius: 6px; padding: 8px 10px; display: flex; align-items: center; gap: 6px; }
-.extra-info { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: #777; margin-top: 12px; }
-.card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.training-cards { display: flex; flex-direction: column; gap: 12px; }
+.training-card-h { background: #fff; border: 1px solid #e8e8e8; border-radius: 10px; padding: 20px 24px; box-shadow: 0 4px 20px rgba(0, 32, 96, 0.06); display: flex; align-items: stretch; gap: 24px; transition: box-shadow 0.2s, border-color 0.2s; }
+.training-card-h:hover { border-color: #c0d0e8; box-shadow: 0 6px 24px rgba(0, 32, 96, 0.1); }
+.card-h-left { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.card-h-header { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.card-h-title { font-size: 16px; font-weight: 700; color: #1f1f1f; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; }
+.card-h-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.card-h-desc { font-size: 13px; color: #888; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-h-meta-row { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 4px; }
+.card-h-meta { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: #555; background: #f7f9fc; border-radius: 6px; padding: 4px 10px; }
+.card-h-center { width: 360px; flex-shrink: 0; display: flex; align-items: center; border-left: 1px solid #f0f0f0; padding-left: 24px; }
+.card-h-detail-grid { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.card-h-detail-item { display: flex; align-items: baseline; gap: 8px; font-size: 12px; }
+.detail-label { color: #999; white-space: nowrap; min-width: 56px; }
+.detail-value { color: #444; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-h-right { width: 170px; flex-shrink: 0; display: flex; flex-direction: column; justify-content: center; align-items: stretch; gap: 14px; border-left: 1px solid #f0f0f0; padding-left: 24px; }
+.card-h-progress { display: flex; flex-direction: column; gap: 4px; }
+.progress-label { font-size: 11px; color: #999; }
+.card-h-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .import-tip { margin-top: 8px; color: #666; font-size: 12px; }
 .create-training-modal { display: flex; flex-direction: column; gap: 18px; }
 .wizard-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
@@ -1292,12 +1322,16 @@ watch(
 .wizard-footer-tip { color: #64748b; font-size: 12px; line-height: 1.6; }
 
 @media (max-width: 1200px) {
-  .training-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .training-card-h { flex-wrap: wrap; }
+  .card-h-center { width: 100%; border-left: none; padding-left: 0; border-top: 1px solid #f0f0f0; padding-top: 12px; }
+  .card-h-right { width: 100%; border-left: none; padding-left: 0; border-top: 1px solid #f0f0f0; padding-top: 12px; flex-direction: row; align-items: center; justify-content: space-between; }
+  .card-h-progress { flex: 1; min-width: 120px; }
 }
 
 @media (max-width: 768px) {
-  .training-cards { grid-template-columns: 1fr; }
-  .card-grid { grid-template-columns: 1fr; }
+  .training-card-h { padding: 14px 16px; gap: 12px; }
+  .card-h-meta-row { flex-direction: column; gap: 6px; }
+  .card-h-right { flex-direction: column; }
   .page-header { flex-direction: column; }
   .wizard-head,
   .wizard-footer { flex-direction: column; align-items: stretch; }

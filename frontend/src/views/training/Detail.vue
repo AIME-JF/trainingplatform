@@ -16,181 +16,388 @@
       </div>
     </a-card>
 
-    <a-row :gutter="20">
-      <a-col :xs="24" :md="16">
-        <a-card :bordered="false" class="main-card">
-          <div ref="trainingBannerRef" class="training-banner" :class="'status-' + trainingData.status">
-            <div class="banner-content">
-              <a-tag :color="statusColorMap[trainingData.status]" class="status-tag">{{ statusLabels[trainingData.status] }}</a-tag>
-              <h2 class="training-title">{{ trainingData.name }}</h2>
-              <div class="training-meta-row" style="margin-bottom:8px">
-                <span><CalendarOutlined /> {{ trainingData.startDate }} ~ {{ trainingData.endDate }}</span>
-                <span><EnvironmentOutlined /> {{ trainingData.location }}</span>
-                <span><UserOutlined /> 主管/班主任：{{ trainingData.instructorName }}</span>
-              </div>
-              <div class="training-meta-row secondary-meta">
-                <span>培训基地：{{ trainingData.trainingBaseName || '手动输入地点' }}</span>
-                <span>部门：{{ trainingData.departmentName || '未设置' }}</span>
-                <span>警种：{{ trainingData.policeTypeName || '未设置' }}</span>
-              </div>
-              <div class="training-desc" v-if="trainingData.description">
-                {{ trainingData.description }}
-              </div>
+    <!-- Banner with next action on right -->
+    <div class="training-banner-bar">
+      <div ref="trainingBannerRef" class="training-banner" :class="'status-' + trainingData.status">
+        <div class="banner-content">
+          <div class="training-title-row">
+            <h2 class="training-title">{{ trainingData.name }}</h2>
+            <a-tag :color="statusColorMap[trainingData.status]" class="status-tag">{{ statusLabels[trainingData.status] }}</a-tag>
+          </div>
+          <div class="training-meta-row" style="margin-bottom:8px">
+            <span><CalendarOutlined /> {{ trainingData.startDate }} ~ {{ trainingData.endDate }}</span>
+            <span><EnvironmentOutlined /> {{ trainingData.location }}</span>
+            <span><UserOutlined /> 主管/班主任：{{ trainingData.instructorName }}</span>
+          </div>
+          <div class="training-meta-row secondary-meta">
+            <span>培训基地：{{ trainingData.trainingBaseName || '手动输入地点' }}</span>
+            <span>部门：{{ trainingData.departmentName || '未设置' }}</span>
+            <span>警种：{{ trainingData.policeTypeName || '未设置' }}</span>
+          </div>
+          <div class="training-desc" v-if="trainingData.description">
+            {{ trainingData.description }}
+          </div>
+        </div>
+      </div>
+      <div class="banner-action" v-if="recommendedAction" ref="nextStepCardRef">
+        <TrainingNextActionCard :recommended-action="recommendedAction" />
+      </div>
+    </div>
+
+    <!-- Sidebar + Content -->
+    <div class="detail-layout">
+      <div class="detail-sidebar">
+        <a-menu
+          mode="inline"
+          theme="light"
+          v-model:selectedKeys="sidebarSelectedKeys"
+          v-model:openKeys="sidebarOpenKeys"
+          :style="{ border: 'none' }"
+          @click="handleSidebarClick"
+        >
+          <a-menu-item key="overview">
+            <template #icon><AppstoreOutlined /></template>
+            班级概览
+          </a-menu-item>
+          <a-sub-menu key="students-group" v-if="!authStore.isStudent">
+            <template #icon><TeamOutlined /></template>
+            <template #title>学员管理</template>
+            <a-menu-item key="enrollment-applications">
+              <a-badge :dot="pendingEnrollmentCount > 0" :offset="[6, -2]">申请列表</a-badge>
+            </a-menu-item>
+            <a-menu-item key="students">学员名单</a-menu-item>
+          </a-sub-menu>
+          <a-menu-item key="schedule">
+            <template #icon><ReadOutlined /></template>
+            课程管理
+          </a-menu-item>
+          <a-sub-menu key="exams-group">
+            <template #icon><FileTextOutlined /></template>
+            <template #title>考试测评</template>
+            <a-menu-item key="exams">考试安排</a-menu-item>
+          </a-sub-menu>
+          <a-sub-menu key="config-group" v-if="!authStore.isStudent">
+            <template #icon><SettingOutlined /></template>
+            <template #title>班级配置</template>
+            <a-menu-item key="basic-info">基本信息</a-menu-item>
+            <a-menu-item key="scheduleRules">排课规则</a-menu-item>
+            <a-menu-item key="courseChangeLogs" v-if="trainingData.canViewCourseChangeLogs">课程变更记录</a-menu-item>
+          </a-sub-menu>
+        </a-menu>
+      </div>
+      <div class="detail-content">
+        <a-card :bordered="false">
+          <!-- 班级概览 -->
+          <div v-show="activeTab === 'overview'">
+            <TrainingOverviewContent
+              ref="overviewContentRef"
+              :overview-stats="overviewStats"
+              :show-overview-setup-guide="showOverviewSetupGuide"
+              :setup-guide-items="setupGuideItems"
+              :training-data="trainingData"
+              :show-overview-current-course="showOverviewCurrentCourse"
+              :current-session="currentSession"
+              :current-session-status-label="currentSessionStatusLabel"
+              :is-enrolled="isEnrolled"
+              @go-schedule="activeTab = 'schedule'"
+              @start-session-checkout="handleStartSessionCheckout"
+              @end-session-checkout="handleEndSessionCheckout"
+              @go-current-session-checkout="$router.push({ name: 'Checkout', params: { id: trainingData.id, sessionKey: currentSession?.sessionId } })"
+              @skip-current-session="handleSkipCurrentSession"
+            />
+            <div ref="noticeCardRef" style="margin-top:16px">
+              <TrainingNoticeCard
+                :notices="notices"
+                :is-student="authStore.isStudent"
+                :can-manage-notices="canManageNotices"
+                :training-manage-tooltip="trainingManageTooltip"
+                @open-notice-modal="openNoticeModal"
+                @edit-notice="editNotice"
+                @delete-notice="deleteNotice"
+              />
+            </div>
+            <div style="margin-top:16px">
+              <TrainingAttendanceStatsCard :start-checkin-rate="startCheckinRate" :total-course-rate="totalCourseRate" />
             </div>
           </div>
 
-          <a-tabs v-model:activeKey="activeTab" style="margin-top:16px">
-            <!-- ===== 班级概览 + 课程管理 ===== -->
-            <a-tab-pane key="overview" tab="班级概览">
-              <TrainingOverviewContent
-                ref="overviewContentRef"
-                :overview-stats="overviewStats"
-                :show-overview-setup-guide="showOverviewSetupGuide"
-                :setup-guide-items="setupGuideItems"
-                :training-data="trainingData"
-                :show-overview-current-course="showOverviewCurrentCourse"
-                :current-session="currentSession"
-                :current-session-status-label="currentSessionStatusLabel"
-                :is-enrolled="isEnrolled"
-                @go-schedule="activeTab = 'schedule'"
-                @start-session-checkout="handleStartSessionCheckout"
-                @end-session-checkout="handleEndSessionCheckout"
-                @go-current-session-checkout="$router.push({ name: 'Checkout', params: { id: trainingData.id, sessionKey: currentSession?.sessionId } })"
-                @skip-current-session="handleSkipCurrentSession"
-              />
-            </a-tab-pane>
+          <!-- 申请列表 -->
+          <div v-show="activeTab === 'enrollment-applications'" v-if="!authStore.isStudent">
+            <div class="content-section-header">
+              <h3>申请列表</h3>
+              <a-button size="small" @click="loadEnrollmentApplications">刷新</a-button>
+            </div>
+            <div class="page-sub" style="margin-bottom:16px">待审核申请 {{ pendingEnrollmentCount }} 人</div>
+            <a-empty v-if="!pendingEnrollmentApplications.length && !enrollmentApplicationsLoading" description="暂无待审核申请" />
+            <a-table
+              v-else
+              :loading="enrollmentApplicationsLoading"
+              :data-source="pendingEnrollmentApplications"
+              :pagination="{ pageSize: 6 }"
+              row-key="id"
+              size="small"
+            >
+              <a-table-column title="姓名" data-index="userNickname" key="userNickname" />
+              <a-table-column title="身份证号" data-index="idCardNumber" key="idCardNumber" width="180" />
+              <a-table-column title="单位" key="departments" :custom-render="({ record }) => (record.departments || []).join(' / ') || '-'" />
+              <a-table-column title="联系电话" data-index="contactPhone" key="contactPhone" width="140" />
+              <a-table-column title="住宿" key="needAccommodation" width="80" :custom-render="({ record }) => (record.needAccommodation ? '需要' : '无需')" />
+              <a-table-column title="报名备注" key="note" :custom-render="({ record }) => record.note || '-'" />
+              <a-table-column title="操作" key="action" width="180">
+                <template #default="{ record }">
+                  <a-space>
+                    <permissions-tooltip
+                      :allowed="canManageEnrollmentApplications && authStore.hasPermission('APPROVE_ENROLLMENT')"
+                      :tips="approveEnrollmentTooltip"
+                      v-slot="{ disabled }"
+                    >
+                      <a-button type="primary" size="small" :disabled="disabled" @click="handleApproveEnrollment(record)">通过</a-button>
+                    </permissions-tooltip>
+                    <permissions-tooltip
+                      :allowed="canManageEnrollmentApplications && authStore.hasPermission('REJECT_ENROLLMENT')"
+                      :tips="rejectEnrollmentTooltip"
+                      v-slot="{ disabled }"
+                    >
+                      <a-button size="small" danger :disabled="disabled" @click="openRejectEnrollmentModal(record)">拒绝</a-button>
+                    </permissions-tooltip>
+                  </a-space>
+                </template>
+              </a-table-column>
+            </a-table>
+          </div>
 
-            <a-tab-pane key="schedule" tab="课程安排">
-              <TrainingScheduleContent
-                ref="scheduleContentRef"
-                :training-data="trainingData"
-                :is-student="authStore.isStudent"
-                :schedule-view-mode="scheduleViewMode"
-                :can-schedule-edit="canScheduleEdit"
-                :schedule-edit-tooltip="scheduleEditTooltip"
-                :schedule-rows="scheduleRows"
-                :current-session="currentSession"
-                :schedule-status-color-map="scheduleStatusColorMap"
-                :schedule-status-label-map="scheduleStatusLabelMap"
-                @update:scheduleViewMode="scheduleViewMode = $event"
-                @open-ai-schedule="openAiScheduleTask"
-                @open-course-import="openCourseImportModal"
-                @open-schedule-import="openScheduleImportModal"
-                @add-course="openCourseModal()"
-                @edit-course="openCourseModal"
-                @edit-course-sessions="openCourseSessionModal"
-                @remove-course="removeCourse"
-                @edit-schedule="openScheduleModal"
-                @remove-schedule="removeSchedule"
-                @start-session-checkout="handleStartSessionCheckout"
-                @end-session-checkout="handleEndSessionCheckout"
-                @skip-current-session="handleSkipCurrentSession"
-              />
-            </a-tab-pane>
+          <!-- 学员名单 -->
+          <div v-show="activeTab === 'students'" v-if="!authStore.isStudent">
+            <div class="content-section-header">
+              <h3>学员名单</h3>
+              <a-dropdown :trigger="['hover']">
+                <a-button type="primary"><PlusOutlined /> 添加学员 <DownOutlined /></a-button>
+                <template #overlay>
+                  <a-menu>
+                    <a-menu-item @click="openStudentImportModal">导入学员</a-menu-item>
+                    <a-menu-item @click="openStudentModal">添加学员</a-menu-item>
+                  </a-menu>
+                </template>
+              </a-dropdown>
+            </div>
+            <TrainingStudentsContent
+              :student-search="studentSearch"
+              :filtered-students="filteredStudents"
+              :student-columns-with-action="studentColumnsWithAction"
+              :can-manage-enrollment-applications="canManageEnrollmentApplications"
+              :can-manage-students="canManageStudents"
+              :show-action-buttons="false"
+              :training-manage-tooltip="trainingManageTooltip"
+              :pending-enrollment-count="pendingEnrollmentCount"
+              @update:studentSearch="studentSearch = $event"
+              @go-trainee-detail="goTraineeDetail"
+              @remove-student="removeStudent"
+            />
+          </div>
 
-            <a-tab-pane key="scheduleRules" tab="排课规则" v-if="!authStore.isStudent">
-              <TrainingScheduleRuleContent
-                :schedule-rule-config="trainingData.scheduleRuleConfig"
-                :can-edit="canScheduleEdit"
-                :edit-tooltip="scheduleEditTooltip"
-                :saving="scheduleRuleSaving"
-                @save="saveScheduleRuleConfig"
-              />
-            </a-tab-pane>
+          <!-- 课程管理 -->
+          <div v-show="activeTab === 'schedule'">
+            <div class="content-section-header">
+              <h3>课程管理</h3>
+              <a-dropdown :trigger="['hover']">
+                <a-button type="primary"><PlusOutlined /> 添加课程 <DownOutlined /></a-button>
+                <template #overlay>
+                  <a-menu>
+                    <a-menu-item @click="openAiScheduleTask">智能排课</a-menu-item>
+                    <a-menu-item @click="openCourseImportModal">导入课程</a-menu-item>
+                    <a-menu-item @click="openScheduleImportModal">导入课次</a-menu-item>
+                  </a-menu>
+                </template>
+              </a-dropdown>
+            </div>
+            <TrainingScheduleContent
+              ref="scheduleContentRef"
+              :training-data="trainingData"
+              :show-action-buttons="false"
+              :is-student="authStore.isStudent"
+              :schedule-view-mode="scheduleViewMode"
+              :can-schedule-edit="canScheduleEdit"
+              :schedule-edit-tooltip="scheduleEditTooltip"
+              :schedule-rows="scheduleRows"
+              :current-session="currentSession"
+              :schedule-status-color-map="scheduleStatusColorMap"
+              :schedule-status-label-map="scheduleStatusLabelMap"
+              @update:scheduleViewMode="scheduleViewMode = $event"
+              @open-ai-schedule="openAiScheduleTask"
+              @open-course-import="openCourseImportModal"
+              @open-schedule-import="openScheduleImportModal"
+              @add-course="openCourseModal()"
+              @edit-course="openCourseModal"
+              @edit-course-sessions="openCourseSessionModal"
+              @remove-course="removeCourse"
+              @edit-schedule="openScheduleModal"
+              @remove-schedule="removeSchedule"
+              @start-session-checkout="handleStartSessionCheckout"
+              @end-session-checkout="handleEndSessionCheckout"
+              @skip-current-session="handleSkipCurrentSession"
+            />
+          </div>
 
-            <a-tab-pane key="exams" tab="考试安排">
-              <TrainingExamsContent
-                :is-student="authStore.isStudent"
-                :can-quick-create-exam="canQuickCreateExam"
-                :quick-create-exam-tooltip="quickCreateExamTooltip"
-                :training-exam-sessions="trainingExamSessions"
-                :exam-purpose-label-map="examPurposeLabelMap"
-                :exam-status-color-map="examStatusColorMap"
-                :exam-status-label-map="examStatusLabelMap"
-                :format-date-time="formatDateTime"
-                @quick-create="quickCreateTrainingExam"
-                @go-manage="goTrainingExamManage"
-              />
-            </a-tab-pane>
+          <!-- 考试安排 -->
+          <div v-show="activeTab === 'exams'">
+            <TrainingExamsContent
+              :is-student="authStore.isStudent"
+              :can-quick-create-exam="canQuickCreateExam"
+              :quick-create-exam-tooltip="quickCreateExamTooltip"
+              :training-exam-sessions="trainingExamSessions"
+              :exam-purpose-label-map="examPurposeLabelMap"
+              :exam-status-color-map="examStatusColorMap"
+              :exam-status-label-map="examStatusLabelMap"
+              :format-date-time="formatDateTime"
+              @quick-create="quickCreateTrainingExam"
+              @go-manage="goTrainingExamManage"
+            />
+          </div>
 
-            <!-- ===== 学员名单 (Admin/Instructor 可管理) ===== -->
-            <a-tab-pane key="students" v-if="!authStore.isStudent">
-              <template #tab>
-                <a-badge :dot="pendingEnrollmentCount > 0" :offset="[6, -2]">
-                  学员名单
-                </a-badge>
-              </template>
-              <TrainingStudentsContent
-                :student-search="studentSearch"
-                :filtered-students="filteredStudents"
-                :student-columns-with-action="studentColumnsWithAction"
-                :can-manage-enrollment-applications="canManageEnrollmentApplications"
-                :can-manage-students="canManageStudents"
-                :training-manage-tooltip="trainingManageTooltip"
-                :pending-enrollment-count="pendingEnrollmentCount"
-                @update:studentSearch="studentSearch = $event"
-                @open-enrollment-application-modal="openEnrollmentApplicationModal"
-                @open-student-import-modal="openStudentImportModal"
-                @open-student-modal="openStudentModal"
-                @go-trainee-detail="goTraineeDetail"
-                @remove-student="removeStudent"
-              />
-            </a-tab-pane>
+          <!-- 基本信息 -->
+          <div v-show="activeTab === 'basic-info'" v-if="!authStore.isStudent">
+            <h3 style="margin:0 0 16px;font-size:16px;font-weight:600;color:#1f1f1f">基本信息</h3>
+            <a-form layout="vertical" class="basic-info-form">
+              <a-form-item label="培训班名称" required>
+                <a-input v-model:value="editForm.name" />
+              </a-form-item>
+              <a-row :gutter="12">
+                <a-col :span="12">
+                  <a-form-item label="培训类型">
+                    <a-select v-model:value="editForm.type" placeholder="请选择培训类型">
+                      <a-select-option v-for="t in trainingTypeOptions" :key="t.code" :value="t.code">{{ t.name }}</a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="班级容量">
+                    <a-input-number v-model:value="editForm.capacity" :min="1" style="width:100%" />
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="12">
+                <a-col :span="12">
+                  <a-form-item label="开始日期" required>
+                    <a-date-picker
+                      v-model:value="editFormDates[0]"
+                      style="width:100%"
+                      format="YYYY-MM-DD"
+                      @change="(_, s) => editForm.startDate = s"
+                    />
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="结束日期" required>
+                    <a-date-picker
+                      v-model:value="editFormDates[1]"
+                      style="width:100%"
+                      format="YYYY-MM-DD"
+                      @change="(_, s) => editForm.endDate = s"
+                    />
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-form-item label="培训地点">
+                <a-input v-model:value="editForm.location" placeholder="手动输入地点，或下方选择培训基地" />
+              </a-form-item>
+              <a-row :gutter="12">
+                <a-col :span="12">
+                  <a-form-item label="主管/班主任">
+                    <a-select
+                      v-model:value="editForm.instructorId"
+                      placeholder="从教官库选定班主任"
+                      show-search
+                      option-filter-prop="label"
+                      allow-clear
+                      @change="onEditInstructorChange"
+                    >
+                      <a-select-option
+                        v-for="inst in instructorList"
+                        :key="inst.userId"
+                        :value="inst.userId"
+                        :label="inst.name"
+                      >
+                        {{ inst.name }} · {{ inst.title }}
+                      </a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="培训基地">
+                    <a-select v-model:value="editForm.trainingBaseId" placeholder="选择培训基地" allow-clear>
+                      <a-select-option v-for="b in trainingBaseOptions" :key="b.id" :value="b.id">{{ b.name }}</a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-row :gutter="12">
+                <a-col :span="12">
+                  <a-form-item label="所属部门">
+                    <a-select v-model:value="editForm.departmentId" placeholder="选择部门" show-search option-filter-prop="label" allow-clear>
+                      <a-select-option v-for="d in departmentOptions" :key="d.id" :value="d.id" :label="d.name">{{ d.name }}</a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+                <a-col :span="12">
+                  <a-form-item label="警种">
+                    <a-select v-model:value="editForm.policeTypeId" placeholder="选择警种" allow-clear>
+                      <a-select-option v-for="p in policeTypeOptions" :key="p.id" :value="p.id">{{ p.name }}</a-select-option>
+                    </a-select>
+                  </a-form-item>
+                </a-col>
+              </a-row>
+              <a-form-item label="状态">
+                <a-select v-model:value="editForm.status">
+                  <a-select-option value="upcoming">未开始</a-select-option>
+                  <a-select-option value="active">进行中</a-select-option>
+                  <a-select-option value="ended">已结束</a-select-option>
+                </a-select>
+              </a-form-item>
+              <a-form-item label="报名方式">
+                <a-radio-group v-model:value="editForm.enrollmentRequiresApproval">
+                  <a-radio :value="true">申请审核</a-radio>
+                  <a-radio :value="false">直接通过</a-radio>
+                </a-radio-group>
+              </a-form-item>
+              <a-form-item label="培训简介">
+                <a-textarea v-model:value="editForm.description" :rows="3" />
+              </a-form-item>
+              <div style="text-align:right">
+                <a-button type="primary" @click="saveClassInfo">保存</a-button>
+              </div>
+            </a-form>
+          </div>
 
-            <a-tab-pane key="courseChangeLogs" tab="课程变更记录" v-if="!authStore.isStudent && trainingData.canViewCourseChangeLogs">
-              <TrainingCourseChangeLogsContent
-                :course-change-logs="courseChangeLogs"
-                :course-change-logs-loading="courseChangeLogsLoading"
-                :format-date-time="formatDateTime"
-                :course-change-source-label-map="courseChangeSourceLabelMap"
-                :course-change-action-color-map="courseChangeActionColorMap"
-                :course-change-action-label-map="courseChangeActionLabelMap"
-                :course-change-target-label-map="courseChangeTargetLabelMap"
-                @refresh="loadTrainingCourseChangeLogs"
-              />
-            </a-tab-pane>
-          </a-tabs>
+          <!-- 排课规则 -->
+          <div v-show="activeTab === 'scheduleRules'" v-if="!authStore.isStudent">
+            <TrainingScheduleRuleContent
+              :schedule-rule-config="trainingData.scheduleRuleConfig"
+              :can-edit="canScheduleEdit"
+              :edit-tooltip="scheduleEditTooltip"
+              :saving="scheduleRuleSaving"
+              @save="saveScheduleRuleConfig"
+            />
+          </div>
+
+          <!-- 课程变更记录 -->
+          <div v-show="activeTab === 'courseChangeLogs'" v-if="!authStore.isStudent && trainingData.canViewCourseChangeLogs">
+            <TrainingCourseChangeLogsContent
+              :course-change-logs="courseChangeLogs"
+              :course-change-logs-loading="courseChangeLogsLoading"
+              :format-date-time="formatDateTime"
+              :course-change-source-label-map="courseChangeSourceLabelMap"
+              :course-change-action-color-map="courseChangeActionColorMap"
+              :course-change-action-label-map="courseChangeActionLabelMap"
+              :course-change-target-label-map="courseChangeTargetLabelMap"
+              @refresh="loadTrainingCourseChangeLogs"
+            />
+          </div>
         </a-card>
-      </a-col>
+      </div>
+    </div>
 
-      <a-col :xs="24" :md="8">
-        <div v-if="recommendedAction" ref="nextStepCardRef">
-          <TrainingNextActionCard :recommended-action="recommendedAction" />
-        </div>
-
-        <div ref="quickOpsCardRef">
-          <TrainingQuickOpsCard
-            :training-data="trainingData"
-            :is-student="authStore.isStudent"
-            :is-enrolled="isEnrolled"
-            :can-edit="canEdit"
-            :can-ai-schedule="canScheduleEdit"
-            :can-export-students="canExportStudents"
-            :training-manage-tooltip="trainingManageTooltip"
-            :ai-schedule-tooltip="scheduleEditTooltip"
-            @view-schedule="$router.push('/training/schedule/' + trainingData.id)"
-            @open-ai-schedule="openAiScheduleTask"
-            @change-tab="activeTab = $event"
-            @open-edit="openEditModal"
-            @export-students="exportMsg"
-          />
-        </div>
-
-        <div ref="noticeCardRef">
-          <TrainingNoticeCard
-            :notices="notices"
-            :is-student="authStore.isStudent"
-            :can-manage-notices="canManageNotices"
-            :training-manage-tooltip="trainingManageTooltip"
-            @open-notice-modal="openNoticeModal"
-            @edit-notice="editNotice"
-            @delete-notice="deleteNotice"
-          />
-        </div>
-
-        <TrainingAttendanceStatsCard :start-checkin-rate="startCheckinRate" :total-course-rate="totalCourseRate" />
-      </a-col>
-    </a-row>
+    <!-- Keep quickOpsCardRef for tour compatibility (hidden) -->
+    <div ref="quickOpsCardRef" style="display:none"></div>
 
     <a-modal
       v-model:open="showCourseModal"
@@ -746,7 +953,7 @@
 import { ref, computed, reactive, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
-import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QuestionCircleOutlined } from '@ant-design/icons-vue'
+import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QuestionCircleOutlined, AppstoreOutlined, ReadOutlined, FileTextOutlined, SettingOutlined, PlusOutlined, DownOutlined, TeamOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import {
   getTraining,
@@ -1092,6 +1299,15 @@ onMounted(async () => {
 })
 
 const activeTab = ref('overview')
+const sidebarSelectedKeys = computed({
+  get: () => [activeTab.value],
+  set: (keys) => { if (keys.length) activeTab.value = keys[keys.length - 1] }
+})
+const sidebarOpenKeys = ref(['students-group', 'exams-group', 'config-group'])
+
+function handleSidebarClick({ key }) {
+  activeTab.value = key
+}
 const studentSearch = ref('')
 const selectedSchedules = reactive({}) // { courseIdx: scheduleIdx }
 const scheduleViewMode = ref('course')
@@ -1252,6 +1468,12 @@ const scheduleRows = computed(() => (trainingData.courses || []).flatMap((course
 watch(activeTab, (tab) => {
   if (tab === 'courseChangeLogs' && trainingData.canViewCourseChangeLogs && !authStore.isStudent) {
     loadTrainingCourseChangeLogs()
+  }
+  if (tab === 'basic-info' && !authStore.isStudent) {
+    ensureEditLookups()
+  }
+  if (tab === 'enrollment-applications' && !authStore.isStudent) {
+    loadEnrollmentApplications()
   }
 })
 
@@ -2901,14 +3123,41 @@ function exportMsg() {
 .exam-plan-main { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
 .exam-plan-name { font-size: 15px; font-weight: 600; color: #111827; }
 .exam-plan-meta { display: flex; flex-wrap: wrap; gap: 8px 16px; color: #6b7280; font-size: 13px; }
+
+/* Banner bar layout */
+.training-banner-bar { display: flex; gap: 16px; margin-bottom: 16px; align-items: stretch; }
+.training-banner-bar .training-banner { flex: 1; min-width: 0; margin-bottom: 0; }
+.banner-action { width: 320px; flex-shrink: 0; }
+.banner-action :deep(.ant-card) { height: 100%; }
+
 .training-banner { padding: 24px; border-radius: 8px; margin-bottom: 4px; }
 .training-banner.status-active { background: linear-gradient(135deg, #001a50, #003087); }
 .training-banner.status-upcoming { background: linear-gradient(135deg, #78350f, #b45309); }
 .training-banner.status-ended { background: linear-gradient(135deg, #374151, #6b7280); }
-.status-tag { margin-bottom: 8px; }
-.training-title { color: #fff; font-size: 20px; margin: 8px 0; }
+.training-title-row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.status-tag { flex-shrink: 0; }
+.training-title { color: #fff; font-size: 20px; margin: 0; }
 .training-meta-row { display: flex; gap: 20px; color: rgba(255,255,255,0.8); font-size: 13px; flex-wrap: wrap; }
 .secondary-meta { color: rgba(255,255,255,0.92); margin-bottom: 8px; }
+
+/* Sidebar + Content layout */
+.detail-layout { display: flex; gap: 16px; }
+.detail-sidebar { width: 200px; flex-shrink: 0; background: #fff; border-radius: 8px; border: 1px solid #f0f0f0; padding: 8px 0; align-self: flex-start; }
+.detail-sidebar :deep(.ant-menu) { background: transparent !important; color: #333; }
+.detail-sidebar :deep(.ant-menu-item),
+.detail-sidebar :deep(.ant-menu-submenu-title) { margin: 2px 8px; border-radius: 6px; height: 40px; line-height: 40px; color: #333 !important; background: transparent !important; }
+.detail-sidebar :deep(.ant-menu-item:hover),
+.detail-sidebar :deep(.ant-menu-submenu-title:hover) { color: #003087 !important; background: transparent !important; }
+.detail-sidebar :deep(.ant-menu-item-selected) { background: #e6f0ff !important; color: #003087 !important; font-weight: 600; }
+.detail-sidebar :deep(.ant-menu-submenu-selected > .ant-menu-submenu-title) { color: #003087 !important; font-weight: 600; }
+.detail-sidebar :deep(.ant-menu-sub.ant-menu-inline) { background: transparent !important; }
+.detail-sidebar :deep(.ant-menu-submenu-arrow) { color: #333 !important; }
+.detail-sidebar :deep(.ant-menu-item-active:not(.ant-menu-item-selected)) { background: transparent !important; }
+.detail-content { flex: 1; min-width: 0; }
+.content-section-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.content-section-header h3 { margin: 0; font-size: 16px; font-weight: 600; color: #1f1f1f; }
+.basic-info-form { max-width: 800px; }
+
 .overview-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 16px; }
 .ov-stat { text-align: center; padding: 16px; background: #f8f9ff; border-radius: 8px; }
 .ov-num { font-size: 28px; font-weight: 700; }
@@ -3030,6 +3279,21 @@ function exportMsg() {
 }
 
 @media (max-width: 768px) {
+  .training-banner-bar {
+    flex-direction: column;
+  }
+  .banner-action {
+    width: 100%;
+  }
+  .detail-layout {
+    flex-direction: column;
+  }
+  .detail-sidebar {
+    display: none;
+  }
+  .detail-content {
+    width: 100%;
+  }
   .page-header-row {
     align-items: flex-start;
   }
@@ -3044,7 +3308,8 @@ function exportMsg() {
   .training-base-info { grid-template-columns: 1fr; }
   .training-banner { padding: 16px !important; }
   .training-title { font-size: 18px !important; }
-  .section-header {
+  .section-header,
+  .content-section-header {
     flex-wrap: wrap;
     align-items: center;
     gap: 8px;

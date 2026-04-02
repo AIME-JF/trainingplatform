@@ -2,7 +2,7 @@
   <div>
     <div class="section-header" style="margin-bottom:16px">
       <a-input-search :value="studentSearch" placeholder="搜索学员..." class="student-search-input" @update:value="$emit('update:studentSearch', $event)" />
-      <a-space>
+      <a-space v-if="showActionButtons">
         <permissions-tooltip
           :allowed="canManageEnrollmentApplications"
           :tips="trainingManageTooltip"
@@ -73,6 +73,7 @@ defineProps({
   studentColumnsWithAction: { type: Array, default: () => [] },
   canManageEnrollmentApplications: { type: Boolean, default: false },
   canManageStudents: { type: Boolean, default: false },
+  showActionButtons: { type: Boolean, default: true },
   trainingManageTooltip: { type: String, default: '' },
   pendingEnrollmentCount: { type: Number, default: 0 },
 })
