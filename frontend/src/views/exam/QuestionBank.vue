@@ -64,7 +64,7 @@
                 <button class="btn-primary" @click="openCreateFolderModal">
                 添加题库
                 </button>
-                <button v-if="canUseAiQuestion" class="btn-aux" @click="goToAiQuestion">
+                <button v-if="canUseAiQuestion" class="btn-primary" @click="goToAiQuestion">
                   智能出题
                 </button>
                 <div class="search-wrapper">
@@ -305,11 +305,9 @@
         </a-form-item>
         <a-form-item label="题库分类">
           <a-select v-model:value="folderForm.category" placeholder="请选择分类">
-            <a-select-option value="default">默认分类</a-select-option>
-            <a-select-option value="criminal">刑事类</a-select-option>
-            <a-select-option value="public_security">治安类</a-select-option>
-            <a-select-option value="traffic">交通类</a-select-option>
-            <a-select-option value="comprehensive">综合类</a-select-option>
+            <a-select-option value="默认分类">默认分类</a-select-option>
+            <a-select-option value="科目">科目</a-select-option>
+            <a-select-option value="legacy">legacy</a-select-option>
           </a-select>
         </a-form-item>
         <a-form-item v-if="editingFolderId" label="移动到">
@@ -668,6 +666,14 @@ function goToAiQuestion() {
   router.push({ path: '/question/ai' })
 }
 
+function handleCreateClick(key) {
+  if (key === 'manual') {
+    router.push({ path: '/paper/repository' })
+  } else if (key === 'ai') {
+    router.push({ path: '/paper/ai-assemble' })
+  }
+}
+
 function switchNav(target) {
   if (target === activeNav.value) return
   if (target === 'knowledge') {
@@ -702,7 +708,8 @@ async function handleFolderSubmit() {
     const payload = {
       name: folderForm.name,
       category: folderForm.category || null,
-      parentId: folderForm.parentId,
+      parent_id: folderForm.parentId,
+      sort_order: 0,
     }
     if (editingFolderId.value) {
       await updateQuestionFolder(editingFolderId.value, payload)
