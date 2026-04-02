@@ -25,6 +25,10 @@ export interface ExamDetailResponse {
   purpose?: string;
   training_id?: number | null;
   training_name?: string | null;
+  course_id?: number | null;
+  course_name?: string | null;
+  course_ids?: number[];
+  course_names?: string[];
   max_attempts?: number;
   allow_makeup?: boolean;
   start_time?: string | null;

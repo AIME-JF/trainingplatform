@@ -10,13 +10,15 @@ import type { TrainingScheduleItem } from './trainingScheduleItem';
  * 创建培训课程安排
  */
 export interface TrainingCourseCreate {
+  /** 关联课程资源ID（为空则是自定义课程） */
+  course_id?: number | null;
   /** 稳定课程键 */
   course_key?: string | null;
   /**
-     * 课程名称
+     * 课程名称（绑定课程资源时可不填，自动从资源取）
      * @maxLength 200
      */
-  name: string;
+  name?: string;
   /** 课程地点 */
   location?: string | null;
   /** 主讲教官名称 */

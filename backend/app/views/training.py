@@ -27,6 +27,7 @@ from app.schemas import (
     TrainingActivityResponse,
     TrainingAttendanceSummaryResponse,
     TrainingCheckinQrResponse,
+    TrainingCourseResponse,
     TrainingCreate,
     TrainingCourseChangeLogResponse,
     TrainingEvaluationCreate,
@@ -42,7 +43,7 @@ from app.schemas import (
     TrainingWorkflowActionRequest,
 )
 from app.services.training import TrainingService
-from app.utils.authz import can_manage_training, can_update_training, can_view_training, is_admin_user, is_instructor_user
+from app.utils.authz import can_manage_training, can_update_training, can_view_training, is_admin_user, is_instructor_user, is_training_director
 from logger import logger
 
 router = APIRouter(prefix="/trainings", tags=["training_management"])
@@ -349,7 +350,20 @@ def get_students(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _require_training_manager(db, training_id, current_user.user_id)
+    training = _get_training_or_404(db, training_id)
+    user_id = current_user.user_id
+    # Allow admin, training director (班主任), or any course instructor in this training
+    allowed = is_admin_user(db, user_id) or is_training_director(training, user_id)
+    if not allowed:
+        for course in (training.courses or []):
+            if course.primary_instructor_id == user_id:
+                allowed = True
+                break
+            if user_id in (course.assistant_instructor_ids or []):
+                allowed = True
+                break
+    if not allowed:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权查看学员列表")
     controller = TrainingController(db)
     data = controller.get_training_students(training_id, page, size)
     return StandardResponse(data=data)
@@ -364,6 +378,18 @@ def get_schedule(
     _require_training_viewer(db, training_id, current_user.user_id)
     controller = TrainingController(db)
     data = controller.get_schedule(training_id)
+    return StandardResponse(data=data)
+
+
+@router.get("/{training_id}/courses", response_model=StandardResponse[List[TrainingCourseResponse]], summary="课程与课次列表")
+def get_training_courses(
+    training_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """获取培训班课程与课次列表"""
+    controller = TrainingController(db)
+    data = controller.get_training_courses(training_id, current_user.user_id)
     return StandardResponse(data=data)
 
 
@@ -606,14 +632,24 @@ def get_checkin_records(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    training = _get_training_or_404(db, training_id)
+    user_id = current_user.user_id
     controller = TrainingController(db)
-    manager_mode = can_manage_training(db, _get_training_or_404(db, training_id), current_user.user_id)
-    session_operator_mode = bool(session_key) and TrainingService(db).can_user_operate_session(training_id, session_key, current_user.user_id)
+    manager_mode = can_manage_training(db, training, user_id)
+    # Course instructors (primary or assistant) can see all records
+    instructor_mode = False
+    if not manager_mode:
+        for course in (training.courses or []):
+            if course.primary_instructor_id == user_id or user_id in (course.assistant_instructor_ids or []):
+                instructor_mode = True
+                break
+    session_operator_mode = bool(session_key) and TrainingService(db).can_user_operate_session(training_id, session_key, user_id)
+    full_access = manager_mode or instructor_mode or session_operator_mode
     data = controller.get_checkin_records(
         training_id,
         date,
         session_key,
-        None if (manager_mode or session_operator_mode) else current_user.user_id,
+        None if full_access else user_id,
     )
     return StandardResponse(data=data)
 
@@ -643,11 +679,12 @@ def start_session_checkin(
     session_key: str,
     checkin_mode: str = Query("direct", description="签到模式: direct/qr"),
     checkin_duration_minutes: int = Query(15, ge=1, le=120, description="签到限时（分钟）"),
+    checkin_gesture_pattern: Optional[str] = Query(None, description="手势签到图案，JSON数组如[0,1,2,5,8]"),
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     controller = TrainingController(db)
-    result = controller.start_session_checkin(training_id, session_key, current_user.user_id, checkin_mode, checkin_duration_minutes)
+    result = controller.start_session_checkin(training_id, session_key, current_user.user_id, checkin_mode, checkin_duration_minutes, checkin_gesture_pattern=checkin_gesture_pattern)
     return StandardResponse(data=result)
 
 
@@ -669,11 +706,12 @@ def start_session_checkout(
     session_key: str,
     checkout_mode: str = Query("direct", description="签退模式: direct/qr"),
     checkout_duration_minutes: int = Query(15, ge=1, le=120, description="签退限时（分钟）"),
+    checkout_gesture_pattern: Optional[str] = Query(None, description="手势签退图案，JSON数组如[0,1,2,5,8]"),
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     controller = TrainingController(db)
-    result = controller.start_session_checkout(training_id, session_key, current_user.user_id, checkout_mode, checkout_duration_minutes)
+    result = controller.start_session_checkout(training_id, session_key, current_user.user_id, checkout_mode, checkout_duration_minutes, checkout_gesture_pattern=checkout_gesture_pattern)
     return StandardResponse(data=result)
 
 

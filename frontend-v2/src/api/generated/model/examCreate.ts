@@ -29,6 +29,8 @@ export interface ExamCreate {
   purpose?: string;
   /** 关联培训班ID */
   training_id: number;
+  /** 显式绑定课程ID列表 */
+  course_ids?: number[];
   /**
      * 最大作答次数
      * @minimum 1

@@ -30,6 +30,8 @@ export interface AdmissionExamCreate {
   scope_type?: string;
   /** 适用范围目标ID列表 */
   scope_target_ids?: number[];
+  /** 显式绑定课程ID列表 */
+  course_ids?: number[];
   /**
      * 最大作答次数
      * @minimum 1

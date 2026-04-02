@@ -4,7 +4,6 @@
  * 警务训练平台
  * OpenAPI spec version: 1.0.0
  */
-import type { ExamQuestionAnswerDetailResponse } from './examQuestionAnswerDetailResponse';
 import type { ExamRecordResponseDimensionScores } from './examRecordResponseDimensionScores';
 import type { ExamWrongQuestionResponse } from './examWrongQuestionResponse';
 
@@ -33,6 +32,5 @@ export interface ExamRecordResponse {
   wrong_count?: number;
   wrong_questions?: number[];
   wrong_question_details?: ExamWrongQuestionResponse[];
-  question_details?: ExamQuestionAnswerDetailResponse[];
   dimension_scores?: ExamRecordResponseDimensionScores;
 }

@@ -146,6 +146,14 @@ class TrainingController:
     def get_training_students(self, training_id: int, page: int = 1, size: int = 10):
         return self.service.get_training_students(training_id, page, size)
 
+    def get_training_courses(self, training_id: int, user_id: int):
+        try:
+            return self.service.get_training_courses(training_id, user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+        except PermissionError as exc:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+
     def get_schedule(self, training_id: int):
         return self.service.get_schedule(training_id)
 
@@ -263,9 +271,9 @@ class TrainingController:
     def get_user_training_histories(self, user_id: int):
         return self.service.get_user_training_histories(user_id)
 
-    def start_session_checkin(self, training_id: int, session_key: str, user_id: int, checkin_mode: str = "direct", checkin_duration_minutes: int = 15):
+    def start_session_checkin(self, training_id: int, session_key: str, user_id: int, checkin_mode: str = "direct", checkin_duration_minutes: int = 15, checkin_gesture_pattern: str = None):
         try:
-            return self.service.start_session_checkin(training_id, session_key, user_id, checkin_mode, checkin_duration_minutes)
+            return self.service.start_session_checkin(training_id, session_key, user_id, checkin_mode, checkin_duration_minutes, checkin_gesture_pattern=checkin_gesture_pattern)
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
@@ -275,9 +283,9 @@ class TrainingController:
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
-    def start_session_checkout(self, training_id: int, session_key: str, user_id: int, checkout_mode: str = "direct", checkout_duration_minutes: int = 15):
+    def start_session_checkout(self, training_id: int, session_key: str, user_id: int, checkout_mode: str = "direct", checkout_duration_minutes: int = 15, checkout_gesture_pattern: str = None):
         try:
-            return self.service.start_session_checkout(training_id, session_key, user_id, checkout_mode, checkout_duration_minutes)
+            return self.service.start_session_checkout(training_id, session_key, user_id, checkout_mode, checkout_duration_minutes, checkout_gesture_pattern=checkout_gesture_pattern)
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 

@@ -11,8 +11,6 @@
 export interface EnrollmentCreate {
   /** 报名备注 */
   note?: string | null;
-  /** 联系电话 */
-  phone?: string | null;
   /** 是否需要住宿 */
   need_accommodation?: boolean;
 }

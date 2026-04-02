@@ -107,6 +107,8 @@
                 @student-checkin="studentCheckinVisible = true"
                 @student-checkout="studentCheckoutVisible = true"
                 @student-scan-qr="openQrScanner"
+                @gesture-checkin="showGestureCheckin = true"
+                @gesture-checkout="showGestureCheckout = true"
               />
             </div>
 
@@ -129,23 +131,25 @@
                 @student-checkin="studentCheckinVisible = true"
                 @student-checkout="studentCheckoutVisible = true"
                 @student-scan-qr="openQrScanner"
+                @gesture-checkin="showGestureCheckin = true"
+                @gesture-checkout="showGestureCheckout = true"
               />
             </div>
 
             <!-- 公告 -->
             <div v-if="hasFullAccess" class="overview-section">
               <NoticeList
-                :notices="detail.notices || []"
+                :notices="notices"
                 :can-publish="canPublishNotice"
                 :training-id="detail.id"
-                @refresh="fetchDetail"
+                @refresh="fetchNotices"
               />
             </div>
           </div>
 
           <!-- ========== 课程 ========== -->
           <div v-if="activeTab === 'schedule'" class="tab-panel">
-            <CourseScheduleTab :courses="detail.courses || []" />
+            <CourseScheduleTab :courses="courses" />
           </div>
 
           <!-- ========== 考试 ========== -->
@@ -171,7 +175,7 @@
 
           <!-- ========== 学员名单 ========== -->
           <div v-if="activeTab === 'students'" class="tab-panel">
-            <div v-if="detail.students?.length" class="student-toolbar">
+            <div v-if="students.length" class="student-toolbar">
               <a-input-search
                 v-model:value="studentSearch"
                 placeholder="搜索学员姓名"
@@ -180,7 +184,7 @@
               />
               <span class="student-count">共 {{ filteredStudents.length }} 人</span>
             </div>
-            <a-empty v-if="!detail.students?.length" description="暂无学员" />
+            <a-empty v-if="!students.length" description="暂无学员" />
             <div v-else class="student-list">
               <div v-for="s in filteredStudents" :key="s.user_id" class="student-row">
                 <a-avatar :size="32" class="student-avatar">{{ studentDisplayName(s).slice(0, 1) }}</a-avatar>
@@ -205,36 +209,58 @@
         v-model:visible="checkinMgrVisible"
         :training-id="detail.id"
         :session="currentSession"
-        :students="detail.students || []"
-        @detail-updated="applyDetail"
+        :students="students"
+        @detail-updated="onCheckinManagerUpdated"
+        @gesture-pattern-set="fetchDetail"
       />
 
       <CheckoutManager
         v-model:visible="checkoutMgrVisible"
         :training-id="detail.id"
         :session="currentSession"
-        :students="detail.students || []"
-        @detail-updated="applyDetail"
+        :students="students"
+        @detail-updated="onCheckoutManagerUpdated"
       />
 
       <StudentCheckinConfirm
         v-model:visible="studentCheckinVisible"
         :training-id="detail.id"
         :session="currentSession"
-        @refresh="fetchDetail"
+        @refresh="onCheckinSuccess"
       />
 
       <StudentCheckoutConfirm
         v-model:visible="studentCheckoutVisible"
         :training-id="detail.id"
         :session="currentSession"
-        @refresh="fetchDetail"
+        @refresh="onCheckoutSuccess"
       />
 
+      <!-- QrScannerModal hidden: replaced by gesture check-in
       <QrScannerModal
         v-model:visible="qrScannerVisible"
         :action="qrScannerAction"
         @refresh="fetchDetail"
+      />
+      -->
+
+      <StudentGestureCheckin
+        v-model:open="showGestureCheckin"
+        :training-id="detail.id"
+        :training-name="detail?.name || ''"
+        :session="currentSession"
+        :gesture-pattern="checkinGesturePattern"
+        @success="onCheckinSuccess"
+      />
+
+      <StudentGestureCheckin
+        v-model:open="showGestureCheckout"
+        :training-id="detail.id"
+        :training-name="detail?.name || ''"
+        :session="currentSession"
+        :gesture-pattern="checkoutGesturePattern"
+        :is-checkout="true"
+        @success="onCheckoutSuccess"
       />
 
       <!-- 报名弹窗 -->
@@ -268,7 +294,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   UserOutlined,
@@ -283,7 +309,13 @@ import { useAuthStore } from '@/stores/auth'
 import {
   getTrainingApiV1TrainingsTrainingIdGet,
   enrollApiV1TrainingsTrainingIdEnrollPost,
+  getStudentsApiV1TrainingsTrainingIdStudentsGet,
+  getCheckinRecordsApiV1TrainingsTrainingIdCheckinRecordsGet,
+  getTrainingCoursesApiV1TrainingsTrainingIdCoursesGet,
 } from '@/api/generated/training-management/training-management'
+import {
+  getNoticesApiV1NoticesGet,
+} from '@/api/generated/notice-management/notice-management'
 import type { TrainingResponse } from '@/api/generated/model'
 
 import CurrentSessionCard from '@/components/classes/detail/CurrentSessionCard.vue'
@@ -295,6 +327,7 @@ import CheckoutManager from '@/components/classes/detail/CheckoutManager.vue'
 import StudentCheckinConfirm from '@/components/classes/detail/StudentCheckinConfirm.vue'
 import StudentCheckoutConfirm from '@/components/classes/detail/StudentCheckoutConfirm.vue'
 import QrScannerModal from '@/components/classes/detail/QrScannerModal.vue'
+import StudentGestureCheckin from '@/components/classes/detail/StudentGestureCheckin.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -303,6 +336,10 @@ const loading = ref(false)
 const activeTab = ref('overview')
 
 const detail = ref<TrainingResponse | null>(null)
+const students = ref<any[]>([])
+const checkinRecords = ref<any[]>([])
+const notices = ref<any[]>([])
+const courses = ref<any[]>([])
 const studentSearch = ref('')
 
 // 弹窗可见状态
@@ -312,6 +349,8 @@ const studentCheckinVisible = ref(false)
 const studentCheckoutVisible = ref(false)
 const qrScannerVisible = ref(false)
 const qrScannerAction = ref<'checkin' | 'checkout'>('checkin')
+const showGestureCheckin = ref(false)
+const showGestureCheckout = ref(false)
 
 const enrollModalVisible = ref(false)
 const enrollSubmitting = ref(false)
@@ -332,8 +371,16 @@ const statusLabels: Record<string, string> = {
 
 const isEnrolled = computed(() => detail.value?.current_enrollment_status === 'approved')
 
-// 是否是本班教官（班主任、创建人、课程授课教官等，由后端判定）
-const isClassInstructor = computed(() => !!(detail.value?.can_manage_training || detail.value?.can_manage_all))
+// 是否是本班教官（班主任、管理员、或当前课次的任课教官）
+const isClassInstructor = computed(() => {
+  const d = detail.value
+  if (!d) return false
+  if (d.can_manage_all || d.can_manage_training || d.can_edit_training) return true
+  // 当前课次有操作权限，说明是任课教官
+  const perms = currentSession.value?.action_permissions
+  if (perms && (perms.can_start_checkin || perms.can_start_checkout)) return true
+  return false
+})
 
 const canEnroll = computed(() => {
   const d = detail.value
@@ -350,34 +397,44 @@ const canEnroll = computed(() => {
 
 const currentSession = computed(() => detail.value?.current_session || null)
 
+const checkinGesturePattern = computed<number[]>(() => {
+  try {
+    return JSON.parse((currentSession.value as any)?.checkin_gesture_pattern || '[]')
+  } catch { return [] }
+})
+
+const checkoutGesturePattern = computed<number[]>(() => {
+  try {
+    return JSON.parse((currentSession.value as any)?.checkout_gesture_pattern || '[]')
+  } catch { return [] }
+})
+
 const hasActiveCheckin = computed(() => currentSession.value?.status === 'checkin_open')
 const hasActiveCheckout = computed(() => currentSession.value?.status === 'checkout_open')
 
 const hasCheckedIn = computed(() => {
   const sess = currentSession.value
   if (!sess) return false
-  const records = detail.value?.checkin_records || []
-  return records.some((r) => r.session_key === sess.session_id && r.status !== 'absent')
+  return checkinRecords.value.some((r) => r.session_key === sess.session_id && r.status !== 'absent')
 })
 
 const hasCheckedOut = computed(() => {
   const sess = currentSession.value
   if (!sess) return false
-  const records = detail.value?.checkin_records || []
-  return records.some((r) => r.session_key === sess.session_id && r.checkout_status === 'completed')
+  return checkinRecords.value.some((r) => r.session_key === sess.session_id && r.checkout_status === 'completed')
 })
 
 const hasFullAccess = computed(() => {
   const d = detail.value
   if (!d) return false
   if (isEnrolled.value || isClassInstructor.value) return true
-  return !!(d.courses?.length || d.notices?.length || d.exam_sessions?.length)
+  return !!(courses.value.length || notices.value.length || d.exam_sessions?.length)
 })
 
 const canPublishNotice = computed(() => isClassInstructor.value)
 
 const pendingEnrollments = computed(() =>
-  (detail.value?.students || []).filter((s) => s.status === 'pending'),
+  students.value.filter((s) => s.status === 'pending'),
 )
 
 const isSessionActive = computed(() => {
@@ -402,7 +459,7 @@ const visibleTabs = computed(() => {
 })
 
 const filteredStudents = computed(() => {
-  const list = detail.value?.students || []
+  const list = students.value
   const kw = studentSearch.value.trim().toLowerCase()
   if (!kw) return list
   return list.filter((s) => {
@@ -465,6 +522,7 @@ async function handleEnroll() {
     enrollModalVisible.value = false
     enrollForm.value = { note: '', need_accommodation: false }
     fetchDetail()
+    fetchStudents()
   } catch (err: unknown) {
     message.error(err instanceof Error ? err.message : '操作失败')
   } finally {
@@ -474,9 +532,32 @@ async function handleEnroll() {
 function goHistory() { message.info('训历功能即将上线') }
 function goExam(examId: number) { router.push(`/exam/do/${examId}`) }
 
+function onCheckinSuccess() {
+  fetchDetail()
+  fetchCheckinRecords()
+}
+
+function onCheckoutSuccess() {
+  fetchDetail()
+  fetchCheckinRecords()
+}
+
+function onCheckinManagerUpdated(nextDetail: TrainingResponse) {
+  detail.value = nextDetail
+  fetchCheckinRecords()
+  fetchStudents()
+}
+
+function onCheckoutManagerUpdated(nextDetail: TrainingResponse) {
+  detail.value = nextDetail
+  fetchCheckinRecords()
+}
+
 function applyDetail(nextDetail: TrainingResponse) {
   detail.value = nextDetail
 }
+
+const trainingId = computed(() => Number(route.params.id))
 
 async function fetchDetail() {
   const id = route.params.id
@@ -491,8 +572,58 @@ async function fetchDetail() {
   }
 }
 
+async function fetchStudents() {
+  if (!trainingId.value) return
+  try {
+    const res = await getStudentsApiV1TrainingsTrainingIdStudentsGet(trainingId.value, { size: -1 })
+    students.value = (res as any)?.items || res || []
+  } catch {
+    students.value = []
+  }
+}
+
+async function fetchCheckinRecords() {
+  if (!trainingId.value) return
+  try {
+    const res = await getCheckinRecordsApiV1TrainingsTrainingIdCheckinRecordsGet(trainingId.value)
+    checkinRecords.value = (res as any) || []
+  } catch {
+    checkinRecords.value = []
+  }
+}
+
+async function fetchNotices() {
+  if (!trainingId.value) return
+  try {
+    const res = await getNoticesApiV1NoticesGet({ training_id: trainingId.value, size: -1 })
+    notices.value = (res as any)?.items || res || []
+  } catch {
+    notices.value = []
+  }
+}
+
+async function fetchCourses() {
+  if (!trainingId.value) return
+  try {
+    const res = await getTrainingCoursesApiV1TrainingsTrainingIdCoursesGet(trainingId.value)
+    courses.value = (res as any) || []
+  } catch {
+    courses.value = []
+  }
+}
+
 onMounted(() => {
   fetchDetail()
+  fetchCourses()
+  fetchNotices()
+  fetchCheckinRecords()
+})
+
+// Lazy-load students when tab is activated (only instructors have access)
+watch(activeTab, (tab) => {
+  if (tab === 'students' && students.value.length === 0) {
+    fetchStudents()
+  }
 })
 </script>
 
@@ -646,7 +777,7 @@ onMounted(() => {
 
 .tab-item {
   padding: 14px 18px;
-  font-size: 14px;
+  font-size: 16px;
   color: var(--v2-text-muted);
   cursor: pointer;
   border-bottom: 2px solid transparent;
@@ -663,7 +794,7 @@ onMounted(() => {
   border-bottom-color: var(--v2-primary);
 }
 
-.tab-panel { padding: 20px; min-height: 200px; }
+.tab-panel { padding: 20px; }
 
 /* ====== 加入引导 ====== */
 .join-hint-card {

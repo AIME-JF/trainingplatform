@@ -760,6 +760,24 @@ class TrainingService:
             items=[self._enrollment_to_response(record) for record in records],
         )
 
+    def get_training_courses(self, training_id: int, user_id: int) -> List[TrainingCourseResponse]:
+        """获取培训班课程与课次列表"""
+        training = self.db.query(Training).options(
+            joinedload(Training.courses).joinedload(TrainingCourse.primary_instructor),
+        ).filter(Training.id == training_id).first()
+        if not training:
+            raise ValueError("培训班不存在")
+        if not can_view_training(self.db, training, user_id):
+            raise PermissionError("无权查看该培训班")
+        self.course_change_service.ensure_course_keys(training.courses or [])
+        instructor_ids = []
+        for course in training.courses or []:
+            if course.primary_instructor_id:
+                instructor_ids.append(course.primary_instructor_id)
+            instructor_ids.extend(int(item) for item in (course.assistant_instructor_ids or []) if item is not None)
+        user_name_map = self._load_user_name_map(instructor_ids)
+        return [self._build_course_response(training, item, user_name_map) for item in (training.courses or [])]
+
     def get_schedule(self, training_id: int) -> List[ScheduleItemResponse]:
         """获取周计划"""
         items = self.db.query(ScheduleItem).filter(
@@ -1303,7 +1321,7 @@ class TrainingService:
             session_status=self._find_schedule_session(training, session_key)["status"] if training and self._find_schedule_session(training, session_key) else None,
         )
 
-    def start_session_checkin(self, training_id: int, session_key: str, user_id: int, checkin_mode: str = "direct", checkin_duration_minutes: int = 15) -> TrainingResponse:
+    def start_session_checkin(self, training_id: int, session_key: str, user_id: int, checkin_mode: str = "direct", checkin_duration_minutes: int = 15, checkin_gesture_pattern: str = None) -> TrainingResponse:
         training, session = self._load_training_session(training_id, session_key)
         self._assert_training_course_editable(training, "修改课次状态")
         if not self._can_operate_schedule(training, session["course"], session["schedule"], user_id, "start_checkin"):
@@ -1318,6 +1336,7 @@ class TrainingService:
         schedule["checkin_mode"] = checkin_mode
         schedule["checkin_duration_minutes"] = checkin_duration_minutes
         schedule["checkin_deadline"] = (now + timedelta(minutes=checkin_duration_minutes)).isoformat()
+        schedule["checkin_gesture_pattern"] = checkin_gesture_pattern
         flag_modified(session["course"], "schedules")
         if training.status != "ended":
             if training.publish_status != "published":
@@ -1357,7 +1376,7 @@ class TrainingService:
             raise ValueError("培训班不存在")
         return detail
 
-    def start_session_checkout(self, training_id: int, session_key: str, user_id: int, checkout_mode: str = "direct", checkout_duration_minutes: int = 15) -> TrainingResponse:
+    def start_session_checkout(self, training_id: int, session_key: str, user_id: int, checkout_mode: str = "direct", checkout_duration_minutes: int = 15, checkout_gesture_pattern: str = None) -> TrainingResponse:
         training, session = self._load_training_session(training_id, session_key)
         self._assert_training_course_editable(training, "修改课次状态")
         if not self._can_operate_schedule(training, session["course"], session["schedule"], user_id, "start_checkout"):
@@ -1370,6 +1389,7 @@ class TrainingService:
         schedule["checkout_mode"] = checkout_mode
         schedule["checkout_duration_minutes"] = checkout_duration_minutes
         schedule["checkout_deadline"] = (now + timedelta(minutes=checkout_duration_minutes)).isoformat()
+        schedule["checkout_gesture_pattern"] = checkout_gesture_pattern
         flag_modified(session["course"], "schedules")
         self._record_course_entity_changes(training.id, before_course, session["course"], user_id, "start_checkout")
         _user = self.db.query(User).filter(User.id == user_id).first()
@@ -1793,6 +1813,8 @@ class TrainingService:
             "checkout_mode": raw.get("checkout_mode") or raw.get("checkoutMode"),
             "checkout_duration_minutes": raw.get("checkout_duration_minutes") or raw.get("checkoutDurationMinutes"),
             "checkout_deadline": raw.get("checkout_deadline") or raw.get("checkoutDeadline"),
+            "checkin_gesture_pattern": raw.get("checkin_gesture_pattern") or raw.get("checkinGesturePattern"),
+            "checkout_gesture_pattern": raw.get("checkout_gesture_pattern") or raw.get("checkoutGesturePattern"),
         }
 
     def _serialize_dt(self, value: Any) -> Optional[str]:
@@ -2572,6 +2594,8 @@ class TrainingService:
             checkout_mode=sched.get("checkout_mode"),
             checkout_duration_minutes=sched.get("checkout_duration_minutes"),
             checkout_deadline=sched.get("checkout_deadline"),
+            checkin_gesture_pattern=sched.get("checkin_gesture_pattern"),
+            checkout_gesture_pattern=sched.get("checkout_gesture_pattern"),
             action_permissions=self._build_session_action_permissions(training, session, current_user_id),
         )
 
@@ -2631,13 +2655,11 @@ class TrainingService:
                     question_count=len(session.paper.paper_questions or []) if session.paper else 0,
                     passing_score=session.passing_score or 60,
                 ))
-            notices = self._list_training_notices(training.id)
             resources = self.list_training_resources(training.id)
             recent_activities = self.get_training_activities(training.id, limit=5)
         else:
             courses = []
             exam_sessions = []
-            notices = []
             resources = []
             recent_activities = []
 
@@ -2656,35 +2678,13 @@ class TrainingService:
         current_enrollment = self._resolve_current_enrollment(training, current_user_id)
         current_enrollment_status = current_enrollment.status if current_enrollment else None
         current_step_key = self._resolve_current_step_key(training)
-        if can_manage_all:
-            # 计算每个学员的签到率
-            total_sessions = sum(
-                1 for course in (training.courses or [])
-                for sch in (course.schedules or [])
-                if isinstance(sch, dict) and sch.get("status") in ("completed", "checkin_open", "checkin_closed", "checkout_open")
-            )
-            user_checkin_counts: dict[int, int] = {}
-            if total_sessions > 0:
-                checkin_rows = self.db.query(
-                    CheckinRecord.user_id, sa_func.count(CheckinRecord.id)
-                ).filter(
-                    CheckinRecord.training_id == training.id,
-                    CheckinRecord.status.in_(["on_time", "late"]),
-                ).group_by(CheckinRecord.user_id).all()
-                user_checkin_counts = {uid: cnt for uid, cnt in checkin_rows}
-            students = []
-            for item in approved_enrollments:
-                resp = self._enrollment_to_response(item)
-                cnt = user_checkin_counts.get(item.user_id, 0)
-                resp.checkin_rate = round(cnt / total_sessions, 2) if total_sessions > 0 else None
-                students.append(resp)
-            # 班级管理者还能看到待审核的报名
-            pending_enrollments = [item for item in (training.enrollments or []) if item.status == "pending"]
-            for item in pending_enrollments:
-                students.append(self._enrollment_to_response(item))
-        else:
-            students = []
-        checkin_records = self._get_detail_checkin_records(training.id, current_user_id, can_manage_all) if has_full_access else []
+        # Sub-resources are now fetched via dedicated endpoints:
+        # students -> GET /trainings/{id}/students
+        # checkin_records -> GET /trainings/{id}/checkin/records
+        # notices -> GET /notices?training_id={id}
+        students = []
+        checkin_records = []
+        notices = []
         schedule_rule_config = self._resolve_training_schedule_rule_config(training)
 
         return TrainingResponse(

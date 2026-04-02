@@ -13,22 +13,26 @@
     <!-- 签到快捷提示 -->
     <div v-if="isStudent && isEnrolled && hasActiveCheckin && !hasCheckedIn" class="activity-checkin-prompt">
       <span>当前课次正在签到中</span>
-      <a-button v-if="checkinMode === 'qr'" type="primary" size="small" @click="$emit('studentScanQr', 'checkin')">
-        <ScanOutlined /> 扫码签到
-      </a-button>
-      <a-button v-else type="primary" size="small" @click="$emit('studentCheckin')">
-        立即签到
-      </a-button>
+      <div style="display: flex; gap: 8px;">
+        <a-button v-if="checkinMode !== 'qr'" type="primary" size="small" @click="$emit('studentCheckin')">
+          立即签到
+        </a-button>
+        <a-button type="primary" size="small" ghost @click="$emit('gesture-checkin')">
+          手势签到
+        </a-button>
+      </div>
     </div>
     <!-- 签退快捷提示 -->
     <div v-if="isStudent && isEnrolled && hasActiveCheckout && !hasCheckedOut" class="activity-checkin-prompt activity-checkout-prompt">
       <span>当前课次正在签退中</span>
-      <a-button v-if="checkoutMode === 'qr'" type="primary" size="small" @click="$emit('studentScanQr', 'checkout')">
-        <ScanOutlined /> 扫码签退
-      </a-button>
-      <a-button v-else type="primary" size="small" @click="$emit('studentCheckout')">
-        立即签退
-      </a-button>
+      <div style="display: flex; gap: 8px;">
+        <a-button v-if="checkoutMode !== 'qr'" type="primary" size="small" @click="$emit('studentCheckout')">
+          立即签退
+        </a-button>
+        <a-button type="primary" size="small" ghost @click="$emit('gesture-checkout')">
+          手势签退
+        </a-button>
+      </div>
     </div>
     <div v-for="(a, idx) in activityList" :key="a.id ?? idx" class="activity-item">
       <span class="activity-dot" :class="'dot-' + a.action_type" />
@@ -43,7 +47,6 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import { ScanOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import { getTrainingActivitiesApiV1TrainingsTrainingIdActivitiesGet } from '@/api/generated/training-management/training-management'
 import type { TrainingActivityResponse } from '@/api/generated/model'
@@ -76,6 +79,8 @@ defineEmits<{
   (e: 'studentCheckin'): void
   (e: 'studentCheckout'): void
   (e: 'studentScanQr', action: 'checkin' | 'checkout'): void
+  (e: 'gesture-checkin'): void
+  (e: 'gesture-checkout'): void
 }>()
 
 const activityList = ref<TrainingActivityResponse[]>([])

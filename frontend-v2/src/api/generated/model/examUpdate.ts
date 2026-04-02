@@ -19,6 +19,8 @@ export interface ExamUpdate {
   type?: string | null;
   purpose?: string | null;
   training_id?: number | null;
+  /** 显式绑定课程ID列表 */
+  course_ids?: number[] | null;
   max_attempts?: number | null;
   allow_makeup?: boolean | null;
   start_time?: string | null;

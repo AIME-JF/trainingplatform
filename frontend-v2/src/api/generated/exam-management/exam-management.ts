@@ -227,6 +227,17 @@ export const updateAdmissionExamApiV1ExamsAdmissionExamIdPut = (
       );
     }
   /**
+ * @summary 删除准入考试
+ */
+export const deleteAdmissionExamApiV1ExamsAdmissionExamIdDelete = (
+    examId: number,
+ ) => {
+      return customInstance<StandardResponseDict>(
+      {url: `/exams/admission/${examId}`, method: 'DELETE'
+    },
+      );
+    }
+  /**
  * @summary 准入考试详情
  */
 export const getAdmissionExamApiV1ExamsAdmissionExamIdGet = (
@@ -326,6 +337,17 @@ export const updateExamApiV1ExamsExamIdPut = (
       );
     }
   /**
+ * @summary 删除培训班内考试
+ */
+export const deleteExamApiV1ExamsExamIdDelete = (
+    examId: number,
+ ) => {
+      return customInstance<StandardResponseDict>(
+      {url: `/exams/${examId}`, method: 'DELETE'
+    },
+      );
+    }
+  /**
  * @summary 培训班内考试详情
  */
 export const getExamApiV1ExamsExamIdGet = (
@@ -400,6 +422,7 @@ export type MovePaperToFolderApiV1ExamsPapersPaperIdFolderPatchResult = NonNulla
 export type GetAdmissionExamsApiV1ExamsAdmissionGetResult = NonNullable<Awaited<ReturnType<typeof getAdmissionExamsApiV1ExamsAdmissionGet>>>
 export type CreateAdmissionExamApiV1ExamsAdmissionPostResult = NonNullable<Awaited<ReturnType<typeof createAdmissionExamApiV1ExamsAdmissionPost>>>
 export type UpdateAdmissionExamApiV1ExamsAdmissionExamIdPutResult = NonNullable<Awaited<ReturnType<typeof updateAdmissionExamApiV1ExamsAdmissionExamIdPut>>>
+export type DeleteAdmissionExamApiV1ExamsAdmissionExamIdDeleteResult = NonNullable<Awaited<ReturnType<typeof deleteAdmissionExamApiV1ExamsAdmissionExamIdDelete>>>
 export type GetAdmissionExamApiV1ExamsAdmissionExamIdGetResult = NonNullable<Awaited<ReturnType<typeof getAdmissionExamApiV1ExamsAdmissionExamIdGet>>>
 export type SubmitAdmissionExamApiV1ExamsAdmissionExamIdSubmitPostResult = NonNullable<Awaited<ReturnType<typeof submitAdmissionExamApiV1ExamsAdmissionExamIdSubmitPost>>>
 export type GetAdmissionExamResultApiV1ExamsAdmissionExamIdResultGetResult = NonNullable<Awaited<ReturnType<typeof getAdmissionExamResultApiV1ExamsAdmissionExamIdResultGet>>>
@@ -408,6 +431,7 @@ export type GetAdmissionExamAnalysisApiV1ExamsAdmissionExamIdRecordsAnalysisGetR
 export type GetExamsApiV1ExamsGetResult = NonNullable<Awaited<ReturnType<typeof getExamsApiV1ExamsGet>>>
 export type CreateExamApiV1ExamsPostResult = NonNullable<Awaited<ReturnType<typeof createExamApiV1ExamsPost>>>
 export type UpdateExamApiV1ExamsExamIdPutResult = NonNullable<Awaited<ReturnType<typeof updateExamApiV1ExamsExamIdPut>>>
+export type DeleteExamApiV1ExamsExamIdDeleteResult = NonNullable<Awaited<ReturnType<typeof deleteExamApiV1ExamsExamIdDelete>>>
 export type GetExamApiV1ExamsExamIdGetResult = NonNullable<Awaited<ReturnType<typeof getExamApiV1ExamsExamIdGet>>>
 export type SubmitExamApiV1ExamsExamIdSubmitPostResult = NonNullable<Awaited<ReturnType<typeof submitExamApiV1ExamsExamIdSubmitPost>>>
 export type GetExamResultApiV1ExamsExamIdResultGetResult = NonNullable<Awaited<ReturnType<typeof getExamResultApiV1ExamsExamIdResultGet>>>

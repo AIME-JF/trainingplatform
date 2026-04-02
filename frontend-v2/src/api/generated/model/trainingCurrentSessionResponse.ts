@@ -28,5 +28,7 @@ export interface TrainingCurrentSessionResponse {
   checkout_mode?: string | null;
   checkout_duration_minutes?: number | null;
   checkout_deadline?: string | null;
+  checkin_gesture_pattern?: string | null;
+  checkout_gesture_pattern?: string | null;
   action_permissions?: TrainingSessionActionPermissions;
 }

@@ -976,12 +976,15 @@ import {
   downloadTrainingCourseImportTemplate,
   importTrainingSessions,
   downloadTrainingSessionImportTemplate,
+  getStudents,
+  getCheckinRecords,
+  getTrainingCourses,
 } from '@/api/training'
 import { getUsers, getPoliceTypes } from '@/api/user'
 import { getDepartmentList } from '@/api/department'
 import { getTrainingBases } from '@/api/training'
 import { getTrainingTypes } from '@/api/trainingType'
-import { createNotice as apiCreateNotice, updateNotice as apiUpdateNotice, deleteNotice as apiDeleteNotice } from '@/api/notice'
+import { getNotices as apiGetNotices, createNotice as apiCreateNotice, updateNotice as apiUpdateNotice, deleteNotice as apiDeleteNotice } from '@/api/notice'
 import { useAuthStore } from '@/stores/auth'
 import { formatDateTime } from '@/utils/datetime'
 import { downloadBlob } from '@/utils/download'
@@ -1183,6 +1186,70 @@ function applyTrainingDetail(data) {
   syncEditFormFromTraining()
 }
 
+async function fetchSubResources() {
+  const promises = []
+
+  // Fetch students
+  promises.push(
+    getStudents(trainingId, { size: -1 })
+      .then((result) => {
+        const students = result.items || result || []
+        const studentIds = students.map((item) => item.userId).filter((item) => item != null)
+        trainingData.students = students
+        trainingData.studentIds = studentIds
+        trainingData.enrolledCount = studentIds.length
+        trainingData.enrolled = studentIds.length
+        syncTrainingRoster(students, studentIds)
+      })
+      .catch(() => {})
+  )
+
+  // Fetch checkin records
+  promises.push(
+    getCheckinRecords(trainingId)
+      .then((result) => {
+        const records = result.items || result || []
+        trainingData.checkinRecords = normalizeCheckinRecords(records)
+      })
+      .catch(() => {})
+  )
+
+  // Fetch courses
+  promises.push(
+    getTrainingCourses(trainingId)
+      .then((result) => {
+        const courses = result.items || result || []
+        const ruleConfig = trainingData.scheduleRuleConfig || {}
+        trainingData.courses = courses.map((course) => ({
+          ...course,
+          schedules: (course.schedules || []).map((schedule) => ({
+            ...schedule,
+            timeRange: schedule.timeRange || schedule.time_range || '',
+            sessionId: schedule.sessionId || schedule.session_id,
+            hours: calculateScheduleUnitsFromTimeRange(
+              schedule.timeRange || schedule.time_range || '',
+              schedule.hours,
+              ruleConfig
+            ),
+          })),
+        }))
+      })
+      .catch(() => {})
+  )
+
+  // Fetch notices
+  promises.push(
+    apiGetNotices({ training_id: trainingId, size: -1 })
+      .then((result) => {
+        const items = result.items || result || []
+        notices.value = normalizeNotices(items)
+      })
+      .catch(() => {})
+  )
+
+  await Promise.all(promises)
+}
+
 async function loadTrainingDetail() {
   try {
     const data = await getTraining(trainingId)
@@ -1207,6 +1274,7 @@ async function loadTrainingDetail() {
       return
     }
     applyTrainingDetail(data)
+    await fetchSubResources()
     if (authStore.isStudent || !data.canViewCourseChangeLogs) {
       courseChangeLogs.value = []
       if (activeTab.value === 'courseChangeLogs') {

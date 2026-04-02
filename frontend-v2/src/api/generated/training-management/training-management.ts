@@ -18,6 +18,7 @@ import type {
   GetAttendanceSummaryApiV1TrainingsTrainingIdAttendanceSummaryGetParams,
   GetCalendarEventsApiV1TrainingsCalendarGetParams,
   GetCheckinRecordsApiV1TrainingsTrainingIdCheckinRecordsGetParams,
+  GetCourseResourcesForTrainingApiV1TrainingsCourseResourcesGetParams,
   GetEnrollmentsApiV1TrainingsTrainingIdEnrollmentsGetParams,
   GetStudentsApiV1TrainingsTrainingIdStudentsGetParams,
   GetTrainingActivitiesApiV1TrainingsTrainingIdActivitiesGetParams,
@@ -33,7 +34,9 @@ import type {
   StandardResponseListScheduleItemResponse,
   StandardResponseListTrainingActivityResponse,
   StandardResponseListTrainingCourseChangeLogResponse,
+  StandardResponseListTrainingCourseResponse,
   StandardResponseListTrainingHistoryResponse,
+  StandardResponsePaginatedResponse,
   StandardResponsePaginatedResponseEnrollmentResponse,
   StandardResponsePaginatedResponseTrainingListResponse,
   StandardResponseResourceListItemResponse,
@@ -148,6 +151,19 @@ export const attendanceByQrApiV1TrainingsAttendanceQrTokenPost = (
  ) => {
       return customInstance<StandardResponseCheckinResponse>(
       {url: `/trainings/attendance/qr/${token}`, method: 'POST'
+    },
+      );
+    }
+  /**
+ * 获取课程资源列表，供培训班添加课程时选择。需要培训班管理权限（教官或管理员）。
+ * @summary 获取课程资源列表（培训用）
+ */
+export const getCourseResourcesForTrainingApiV1TrainingsCourseResourcesGet = (
+    params?: GetCourseResourcesForTrainingApiV1TrainingsCourseResourcesGetParams,
+ ) => {
+      return customInstance<StandardResponsePaginatedResponse>(
+      {url: `/trainings/course-resources`, method: 'GET',
+        params
     },
       );
     }
@@ -275,6 +291,18 @@ export const getScheduleApiV1TrainingsTrainingIdScheduleGet = (
  ) => {
       return customInstance<StandardResponseListScheduleItemResponse>(
       {url: `/trainings/${trainingId}/schedule`, method: 'GET'
+    },
+      );
+    }
+  /**
+ * 获取培训班课程与课次列表
+ * @summary 课程与课次列表
+ */
+export const getTrainingCoursesApiV1TrainingsTrainingIdCoursesGet = (
+    trainingId: number,
+ ) => {
+      return customInstance<StandardResponseListTrainingCourseResponse>(
+      {url: `/trainings/${trainingId}/courses`, method: 'GET'
     },
       );
     }
@@ -720,6 +748,7 @@ export type GetCalendarEventsApiV1TrainingsCalendarGetResult = NonNullable<Await
 export type GetTrainingActivitiesApiV1TrainingsTrainingIdActivitiesGetResult = NonNullable<Awaited<ReturnType<typeof getTrainingActivitiesApiV1TrainingsTrainingIdActivitiesGet>>>
 export type GetAttendanceQrPayloadApiV1TrainingsAttendanceQrTokenGetResult = NonNullable<Awaited<ReturnType<typeof getAttendanceQrPayloadApiV1TrainingsAttendanceQrTokenGet>>>
 export type AttendanceByQrApiV1TrainingsAttendanceQrTokenPostResult = NonNullable<Awaited<ReturnType<typeof attendanceByQrApiV1TrainingsAttendanceQrTokenPost>>>
+export type GetCourseResourcesForTrainingApiV1TrainingsCourseResourcesGetResult = NonNullable<Awaited<ReturnType<typeof getCourseResourcesForTrainingApiV1TrainingsCourseResourcesGet>>>
 export type GetTrainingApiV1TrainingsTrainingIdGetResult = NonNullable<Awaited<ReturnType<typeof getTrainingApiV1TrainingsTrainingIdGet>>>
 export type UpdateTrainingApiV1TrainingsTrainingIdPutResult = NonNullable<Awaited<ReturnType<typeof updateTrainingApiV1TrainingsTrainingIdPut>>>
 export type DeleteTrainingApiV1TrainingsTrainingIdDeleteResult = NonNullable<Awaited<ReturnType<typeof deleteTrainingApiV1TrainingsTrainingIdDelete>>>
@@ -730,6 +759,7 @@ export type StartTrainingApiV1TrainingsTrainingIdStartPostResult = NonNullable<A
 export type EndTrainingApiV1TrainingsTrainingIdEndPostResult = NonNullable<Awaited<ReturnType<typeof endTrainingApiV1TrainingsTrainingIdEndPost>>>
 export type GetStudentsApiV1TrainingsTrainingIdStudentsGetResult = NonNullable<Awaited<ReturnType<typeof getStudentsApiV1TrainingsTrainingIdStudentsGet>>>
 export type GetScheduleApiV1TrainingsTrainingIdScheduleGetResult = NonNullable<Awaited<ReturnType<typeof getScheduleApiV1TrainingsTrainingIdScheduleGet>>>
+export type GetTrainingCoursesApiV1TrainingsTrainingIdCoursesGetResult = NonNullable<Awaited<ReturnType<typeof getTrainingCoursesApiV1TrainingsTrainingIdCoursesGet>>>
 export type DownloadTrainingStudentImportTemplateApiV1TrainingsImportStudentsTemplateGetResult = NonNullable<Awaited<ReturnType<typeof downloadTrainingStudentImportTemplateApiV1TrainingsImportStudentsTemplateGet>>>
 export type DownloadTrainingStudentImportTemplateForTrainingApiV1TrainingsTrainingIdImportStudentsTemplateGetResult = NonNullable<Awaited<ReturnType<typeof downloadTrainingStudentImportTemplateForTrainingApiV1TrainingsTrainingIdImportStudentsTemplateGet>>>
 export type DownloadTrainingInstructorImportTemplateApiV1TrainingsTrainingIdImportInstructorsTemplateGetResult = NonNullable<Awaited<ReturnType<typeof downloadTrainingInstructorImportTemplateApiV1TrainingsTrainingIdImportInstructorsTemplateGet>>>

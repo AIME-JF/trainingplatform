@@ -19,8 +19,21 @@
           @change="(e: any) => { checkoutMode = e.target.value }"
         >
           <a-radio value="direct">直接签退</a-radio>
-          <a-radio value="qr">扫码签退</a-radio>
+          <a-radio value="gesture">手势签退</a-radio>
         </a-radio-group>
+      </div>
+      <!-- 手势签退设置 -->
+      <div v-if="checkoutMode === 'gesture'" class="gesture-setting">
+        <div class="gesture-title">设置签退手势</div>
+        <div class="gesture-card">
+          <GesturePattern theme="light" v-model="gesturePattern" />
+          <div class="gesture-clear-row">
+            <a-button size="small" type="text" class="gesture-clear-btn" @click="gesturePattern = []">
+              <ReloadOutlined /> 清空重绘
+            </a-button>
+          </div>
+        </div>
+        <div class="gesture-hint">学生签退时需要绘制相同的手势</div>
       </div>
       <div class="config-row">
         <span class="config-label">签退限时</span>
@@ -36,9 +49,8 @@
           <a-select-option :value="30">30 分钟</a-select-option>
         </a-select>
       </div>
-      <div v-if="checkoutMode === 'qr' && checkoutQrUrl && isCheckoutOngoing" class="qr-display">
-        <QrcodeVue :value="checkoutQrUrl" :size="200" level="M" />
-        <span class="qr-hint">学员扫描此二维码完成签退</span>
+      <div v-if="checkoutMode === 'gesture' && gesturePattern.length > 0 && isCheckoutOngoing" class="gesture-active-hint">
+        <span>手势签退进行中，学生需绘制相同手势完成签退</span>
       </div>
     </div>
 
@@ -115,7 +127,8 @@
 <script setup lang="ts">
 import { ref, computed, watch, onUnmounted } from 'vue'
 import { message } from 'ant-design-vue'
-import QrcodeVue from 'qrcode.vue'
+import { ReloadOutlined } from '@ant-design/icons-vue'
+import GesturePattern from './GesturePattern.vue'
 import { useAuthStore } from '@/stores/auth'
 import {
   getCheckinRecordsApiV1TrainingsTrainingIdCheckinRecordsGet,
@@ -138,6 +151,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:visible', val: boolean): void
   (e: 'detail-updated', val: TrainingResponse): void
+  (e: 'gesture-pattern-set', pattern: number[]): void
 }>()
 
 const authStore = useAuthStore()
@@ -146,6 +160,7 @@ const sessionActionLoading = ref(false)
 const checkoutTab = ref('checked')
 const checkoutRecords = ref<CheckinResponse[]>([])
 const checkoutToggleLoading = ref<number | null>(null)
+const gesturePattern = ref<number[]>([])
 const isMobile = ref(window.innerWidth <= 768)
 
 function handleResize() {
@@ -225,13 +240,25 @@ async function fetchCheckoutRecords(sessionId = props.session?.session_id) {
 async function doStartCheckout() {
   const sess = props.session
   if (!sess) return
+  if (checkoutMode.value === 'gesture' && gesturePattern.value.length < 3) {
+    message.warning('请至少连接3个点来设置签退手势')
+    return
+  }
   sessionActionLoading.value = true
   try {
+    const apiMode = checkoutMode.value === 'gesture' ? 'direct' : checkoutMode.value
+    const params: Record<string, any> = { checkout_mode: apiMode, checkout_duration_minutes: checkoutDurationMin.value }
+    if (checkoutMode.value === 'gesture') {
+      params.checkout_gesture_pattern = JSON.stringify(gesturePattern.value)
+    }
     const detail = await startSessionCheckoutApiV1TrainingsTrainingIdSessionsSessionKeyCheckoutStartPost(
       Number(props.trainingId),
       sess.session_id,
-      { checkout_mode: checkoutMode.value, checkout_duration_minutes: checkoutDurationMin.value },
+      params,
     )
+    if (checkoutMode.value === 'gesture') {
+      emit('gesture-pattern-set', gesturePattern.value)
+    }
     message.success('签退已开始')
     emit('detail-updated', detail)
     await syncFromSession((detail.current_session as CurrentSession | null) ?? sess)
@@ -296,6 +323,54 @@ async function toggleCheckout(userId: number) {
 }
 
 .config-row:last-child { margin-bottom: 0; }
+
+.gesture-setting {
+  margin: 12px 0;
+}
+
+.gesture-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--v2-text-primary);
+  margin-bottom: 10px;
+}
+
+.gesture-card {
+  background: #fff;
+  border: 1px solid #e8e8e8;
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.gesture-clear-row {
+  margin-top: 12px;
+  text-align: center;
+}
+.gesture-clear-btn {
+  color: #999;
+  font-size: 13px;
+}
+.gesture-clear-btn:hover {
+  color: #1677ff;
+}
+
+.gesture-hint {
+  font-size: 12px;
+  color: var(--v2-text-muted);
+  margin-top: 8px;
+}
+
+.gesture-active-hint {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--v2-bg);
+  border-radius: var(--v2-radius-sm);
+  font-size: 13px;
+  color: var(--v2-text-secondary);
+}
 
 .config-label {
   font-size: 14px;

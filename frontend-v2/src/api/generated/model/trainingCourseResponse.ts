@@ -12,6 +12,7 @@ import type { TrainingScheduleItem } from './trainingScheduleItem';
 export interface TrainingCourseResponse {
   id: number;
   training_id: number;
+  course_id?: number | null;
   course_key?: string | null;
   name: string;
   location?: string | null;
