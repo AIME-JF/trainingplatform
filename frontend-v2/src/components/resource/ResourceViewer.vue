@@ -63,10 +63,10 @@
           v-else-if="currentMedia && currentMediaKind === 'image'"
           :src="currentMedia.file_url || undefined"
           :alt="resource.title"
-          class="media-image"
+          class="media-image static-preview-media"
         />
-        <div v-else-if="currentMedia && currentMediaKind === 'document'" class="media-document full">
-          <iframe :src="currentMedia.file_url || undefined" class="doc-frame" title="资源文档预览" />
+        <div v-else-if="currentMedia && currentMediaKind === 'document'" class="media-document full static-preview-media">
+          <iframe :src="currentMedia.file_url || undefined" class="doc-frame static-preview-frame" title="资源文档预览" />
         </div>
         <a-empty v-else description="暂无可预览文件" />
 
@@ -75,6 +75,7 @@
           <p class="recommend-author">作者：{{ resource.uploader_name || '平台资源' }}</p>
           <p class="recommend-summary">简介：{{ resource.summary || '暂无简介' }}</p>
           <p v-if="resource.tags?.length" class="recommend-tags"># {{ resource.tags.join(' # ') }}</p>
+          <p v-if="recommendPreviewTip" class="recommend-preview-tip">{{ recommendPreviewTip }}</p>
         </div>
 
         <div v-if="mediaList.length > 1" class="recommend-nav">
@@ -111,6 +112,17 @@ const mediaTouch = ref({ startX: 0, startY: 0 })
 const mediaList = computed(() => props.resource?.media_links || [])
 const currentMedia = computed(() => mediaList.value[mediaIndex.value] || null)
 const currentMediaKind = computed(() => detectMediaKind(currentMedia.value?.file_url))
+const recommendPreviewTip = computed(() => {
+  if (props.mode !== 'recommend' || !currentMedia.value || currentMediaKind.value === 'video') {
+    return ''
+  }
+
+  if (currentMediaKind.value === 'document') {
+    return '社区内仅展示单屏课件预览，更多页数请点详情查看'
+  }
+
+  return '社区内仅展示单屏内容预览，完整内容请点详情查看'
+})
 
 watch(() => props.resource?.id, () => {
   mediaIndex.value = 0
@@ -318,6 +330,19 @@ function onMediaTouchEnd(event: TouchEvent) {
   color: rgba(255, 255, 255, 0.84);
 }
 
+.recommend-preview-tip {
+  display: inline-flex;
+  margin-top: 10px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.42);
+  color: rgba(255, 255, 255, 0.96);
+  font-size: 12px;
+  line-height: 1.5;
+  letter-spacing: 0.01em;
+  backdrop-filter: blur(10px);
+}
+
 .recommend-nav {
   position: absolute;
   top: 50%;
@@ -371,6 +396,22 @@ function onMediaTouchEnd(event: TouchEvent) {
   min-height: var(--community-stage-height, 100%);
   height: var(--community-stage-height, 100%);
   width: 100%;
+}
+
+.mode-recommend .static-preview-media,
+.mode-recommend .static-preview-frame {
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.mode-recommend .static-preview-media {
+  touch-action: none;
+}
+
+.mode-recommend .media-document.full.static-preview-media {
+  padding: 0;
+  overflow: hidden;
 }
 
 .mode-recommend .recommend-stage,
