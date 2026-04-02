@@ -441,7 +441,7 @@ async function fetchAllScores() {
 
 function viewStudentDetail(record: ExamRecordResponse | AdmissionExamRecordResponse) {
   selectedRecord.value = record
-  studentQuestionDetails.value = record.question_details || record.wrong_question_details || []
+  studentQuestionDetails.value = (record.question_details || record.wrong_question_details || []) as any
   detailModalVisible.value = true
 }
 

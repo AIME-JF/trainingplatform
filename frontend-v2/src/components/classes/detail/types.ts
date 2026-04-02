@@ -1,9 +1,9 @@
 export interface SessionActionPermissions {
-  can_start_checkin: boolean
-  can_end_checkin: boolean
-  can_start_checkout: boolean
-  can_end_checkout: boolean
-  can_skip: boolean
+  can_start_checkin?: boolean
+  can_end_checkin?: boolean
+  can_start_checkout?: boolean
+  can_end_checkout?: boolean
+  can_skip?: boolean
 }
 
 export interface CurrentSession {
@@ -14,14 +14,14 @@ export interface CurrentSession {
   date: string
   time_range: string
   status: string
-  location?: string
-  primary_instructor_id?: number
-  primary_instructor_name?: string
+  location?: string | null
+  primary_instructor_id?: number | null
+  primary_instructor_name?: string | null
   action_permissions?: SessionActionPermissions
-  checkin_mode?: 'direct' | 'qr' | null
+  checkin_mode?: string | null
   checkin_duration_minutes?: number | null
   checkin_deadline?: string | null
-  checkout_mode?: 'direct' | 'qr' | null
+  checkout_mode?: string | null
   checkout_duration_minutes?: number | null
   checkout_deadline?: string | null
 }

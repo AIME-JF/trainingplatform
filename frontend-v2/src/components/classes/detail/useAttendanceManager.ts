@@ -4,7 +4,7 @@ import type { TrainingCheckinQrResponse } from '@/api/generated/model'
 import type { CurrentSession } from './types'
 
 type AttendanceAction = 'checkin' | 'checkout'
-type AttendanceMode = 'direct' | 'qr'
+type AttendanceMode = 'direct' | 'qr' | 'gesture'
 
 interface UseAttendanceManagerOptions {
   action: AttendanceAction

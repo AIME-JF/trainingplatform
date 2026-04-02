@@ -246,9 +246,9 @@ const selectedSource = computed(() => (
   currentSources.value.find((item) => String(item.id) === String(selectedSourceId.value))
 ))
 
-const selectedPoliceTypeName = computed(() => (
-  policeTypes.value.find((item) => String(item.id) === String(selectedPoliceTypeId.value)))?.name || ''
-))
+const selectedPoliceTypeName = computed(() =>
+  policeTypes.value.find((item) => String(item.id) === String(selectedPoliceTypeId.value))?.name || ''
+)
 
 const resolvedQuestionLimit = computed(() => {
   if (questionLimitMode.value === 'all') {

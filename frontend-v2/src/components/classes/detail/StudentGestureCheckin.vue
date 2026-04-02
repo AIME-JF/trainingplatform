@@ -109,12 +109,12 @@ async function handleSubmit() {
   submitting.value = true
   try {
     if (props.isCheckout) {
-      await checkoutApiV1TrainingsTrainingIdCheckoutPost(props.trainingId, {
-        session_key: props.session.session_id,
+      await checkoutApiV1TrainingsTrainingIdCheckoutPost(Number(props.trainingId), {
+        session_key: String(props.session.session_id),
       })
     } else {
-      await checkinApiV1TrainingsTrainingIdCheckinPost(props.trainingId, {
-        session_key: props.session.session_id,
+      await checkinApiV1TrainingsTrainingIdCheckinPost(Number(props.trainingId), {
+        session_key: String(props.session.session_id),
       })
     }
     message.success(props.isCheckout ? '签退成功' : '签到成功')

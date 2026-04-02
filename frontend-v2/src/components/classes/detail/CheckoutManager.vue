@@ -260,8 +260,8 @@ async function doStartCheckout() {
       emit('gesture-pattern-set', gesturePattern.value)
     }
     message.success('签退已开始')
-    emit('detail-updated', detail)
-    await syncFromSession((detail.current_session as CurrentSession | null) ?? sess)
+    if (detail) emit('detail-updated', detail)
+    await syncFromSession((detail?.current_session as CurrentSession | null) ?? sess)
     await fetchCheckoutRecords(sess.session_id)
   } catch (err: unknown) {
     message.error(err instanceof Error ? err.message : '操作失败')
@@ -280,8 +280,8 @@ async function doEndCheckout() {
       sess.session_id,
     )
     message.success('签退已结束')
-    emit('detail-updated', detail)
-    await syncFromSession((detail.current_session as CurrentSession | null) ?? null)
+    if (detail) emit('detail-updated', detail)
+    await syncFromSession((detail?.current_session as CurrentSession | null) ?? null)
   } catch (err: unknown) {
     message.error(err instanceof Error ? err.message : '操作失败')
   } finally {

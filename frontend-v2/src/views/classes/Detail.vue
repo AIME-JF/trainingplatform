@@ -31,7 +31,7 @@
             <div class="info-card info-card--status">
               <div class="info-card-top">
                 <span class="info-card-label">班级状态</span>
-                <span class="info-card-badge" :class="'badge-' + detail.status">{{ statusLabels[detail.status] || detail.status }}</span>
+                <span class="info-card-badge" :class="'badge-' + detail.status">{{ statusLabels[detail.status!] || detail.status }}</span>
               </div>
               <div class="info-card-num">{{ detail.training_type_name || detail.type || '-' }}</div>
               <div class="info-card-extra">
@@ -158,7 +158,7 @@
             <div v-else class="exam-list">
               <div v-for="exam in detail.exam_sessions" :key="exam.id" class="exam-row">
                 <div class="exam-info">
-                  <span class="exam-title">{{ exam.title || exam.paper_title || '考试' }}</span>
+                  <span class="exam-title">{{ exam.title || '考试' }}</span>
                   <span class="exam-time">{{ formatDateTime(exam.start_time) }}</span>
                 </div>
                 <a-button
