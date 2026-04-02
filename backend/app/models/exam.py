@@ -85,6 +85,7 @@ class QuestionFolder(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String(100), nullable=False, comment="文件夹名称")
+    category = Column(String(50), nullable=True, comment="题库分类")
     parent_id = Column(Integer, ForeignKey("question_folders.id"), nullable=True, comment="父文件夹ID")
     sort_order = Column(Integer, default=0, comment="排序")
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True, comment="创建人ID")

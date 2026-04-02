@@ -779,12 +779,38 @@ class ResourceService:
         ).all()
         return {int(resource_id) for (resource_id,) in rows if resource_id}
 
-    def _can_edit_resource(self, resource: Resource, user_id: int, user_permissions: List[str]) -> bool:
-        return (
-            resource.uploader_id == user_id
-            or 'UPDATE_RESOURCE' in (user_permissions or [])
-            or 'VIEW_RESOURCE_ALL' in (user_permissions or [])
+    def _can_manage_any_resource(self, user_permissions: List[str]) -> bool:
+        perms = set(user_permissions or [])
+        return 'UPDATE_RESOURCE' in perms or 'VIEW_RESOURCE_ALL' in perms
+
+    def _is_student_only_user(self, user_id: int) -> bool:
+        if not user_id:
+            return False
+
+        rows = (
+            self.db.query(Role.code)
+            .join(User.roles)
+            .filter(
+                User.id == user_id,
+                Role.is_active == True,
+            )
+            .all()
         )
+        role_codes = {
+            str(role_code).strip()
+            for (role_code,) in rows
+            if role_code
+        }
+        return bool(role_codes) and role_codes == {'student'}
+
+    def _can_edit_resource(self, resource: Resource, user_id: int, user_permissions: List[str]) -> bool:
+        if resource.uploader_id == user_id:
+            return True
+
+        if self._is_student_only_user(user_id):
+            return False
+
+        return self._can_manage_any_resource(user_permissions)
 
     def _can_view_resource(
         self,

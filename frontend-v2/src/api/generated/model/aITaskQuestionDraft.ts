@@ -14,7 +14,7 @@ export interface AITaskQuestionDraft {
   temp_id: string;
   /** 来源题目 ID，编辑原题时用于复用 */
   source_question_id?: number | null;
-  /** 题目来源: generated/existing/manual */
+  /** 题目来源: generated/existing/manual/ai_generated */
   origin?: string;
   /** 题目类型: single/multi/judge */
   type: string;

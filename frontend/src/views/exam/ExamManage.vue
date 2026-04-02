@@ -1,296 +1,229 @@
 <template>
   <div class="exam-manage-page">
-    <!-- 内容滚动区 -->
-    <div class="content-wrapper">
-      <div class="max-w-[1600px] mx-auto w-full">
+    <!-- 主体内容 -->
+    <main class="main-content">
+      <div class="content-wrapper">
 
-        <!-- 页面标题 -->
-        <div class="page-title-section">
-          <div>
-            <h1 class="page-title">考试管理</h1>
-            <p class="page-subtitle">考试场次已按所属课程进行归档，点击课程行可快速查看该课程下的所有考试记录</p>
+        <!-- 1. 二级导航与快捷操作入口 -->
+        <div class="sub-nav-bar">
+          <div class="sub-nav-left">
+            <span :class="['sub-nav-item', { active: activeNav === 'exam' }]" @click="activeNav = 'exam'">考试中心</span>
+            <span :class="['sub-nav-item', { active: activeNav === 'category' }]" @click="activeNav = 'category'">分类管理</span>
+            <span :class="['sub-nav-item', { active: activeNav === 'archived' }]" @click="activeNav = 'archived'">已归档</span>
           </div>
-          <permissions-tooltip
-            :allowed="canManageExam"
-            tips="需要 CREATE_EXAM 权限"
-            v-slot="{ disabled }"
-          >
-            <a-button
-              type="primary"
-              :disabled="disabled"
-              @click="openCreateDrawer"
-              class="publish-btn"
-            >
-              <template #icon><PlusOutlined /></template>
-              发布新考试
-            </a-button>
-          </permissions-tooltip>
+          <div class="sub-nav-right">
+            <button class="btn-aux">题目反馈</button>
+            <button class="btn-aux">自动归档设置</button>
+          </div>
         </div>
 
-        <!-- 统一的大边框容器 -->
+        <!-- 2. 统一的大边框容器 -->
         <div class="main-container">
 
-          <!-- 第一部分：数据汇总 -->
-          <div class="stats-bar">
-            <div class="stat-item">
-              <div class="stat-label">活跃课程</div>
-              <div class="stat-value">{{ statsData.activeCourses }} <span class="stat-unit">门</span></div>
+          <!-- 第一层：操作与搜索过滤 -->
+          <div class="toolbar-row">
+            <div class="toolbar-left">
+              <button class="btn-primary" @click="openCreateDrawer">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
+                添加考试
+              </button>
+              <div class="search-wrapper">
+                <svg class="search-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                <a-input-search v-model:value="searchText" placeholder="请输入关键字搜索..." allow-clear @search="handleSearch" class="search-input" />
+              </div>
             </div>
-            <div class="stat-item stat-divider">
-              <div class="stat-label stat-label-green">进行中考试</div>
-              <div class="stat-value stat-value-green">{{ statsData.ongoingExams }} <span class="stat-unit">场次</span></div>
-            </div>
-            <div class="stat-item stat-divider">
-              <div class="stat-label stat-label-blue">今日参考人数</div>
-              <div class="stat-value stat-value-blue">{{ statsData.todayParticipants }} <span class="stat-unit">人</span></div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-label stat-label-amber">待批改试卷</div>
-              <div class="stat-value stat-value-amber">{{ statsData.pendingGrading }} <span class="stat-unit">份</span></div>
+
+            <div class="toolbar-right">
+              <select v-model="filterExamType" class="input-minimal filter-select">
+                <option value="">考试类型</option>
+                <option value="admission">准入考试</option>
+                <option value="training">培训班考试</option>
+              </select>
+              <select v-model="filterCategory" class="input-minimal filter-select">
+                <option value="">考试分类 (全部)</option>
+                <option value="default">默认分类</option>
+              </select>
+              <select v-model="filterStatusSelect" class="input-minimal filter-select-sm">
+                <option value="">全部</option>
+                <option value="upcoming">未开始</option>
+                <option value="active">进行中</option>
+                <option value="ended">已结束</option>
+                <option value="draft">草稿</option>
+              </select>
+              <select v-model="filterVisibility" class="input-minimal filter-select-sm">
+                <option value="">可见范围</option>
+                <option value="all">全部</option>
+                <option value="department">本部门</option>
+                <option value="role">本角色</option>
+              </select>
             </div>
           </div>
 
-          <!-- 第二部分：过滤条 -->
-          <div class="filter-bar">
+          <!-- 第二层：状态与评分切换 -->
+          <div class="filter-row">
             <div class="filter-left">
-              <a-input-search
-                v-model:value="searchText"
-                placeholder="搜索考试场次名称..."
-                allow-clear
-                @search="handleSearch"
-                class="search-input"
-              />
-              <a-select
-                v-model:value="filterStatus"
-                style="width: 160px"
-                @change="handleSearch"
-                class="status-select"
-              >
-                <a-select-option value="all">全部状态</a-select-option>
-                <a-select-option value="upcoming">即将开始</a-select-option>
-                <a-select-option value="active">进行中</a-select-option>
-                <a-select-option value="ended">已结束</a-select-option>
-              </a-select>
+              <span class="filter-label">状态:</span>
+              <div class="status-tabs">
+                <span v-for="tab in statusTabs" :key="tab.value" :class="['status-tab', { active: currentStatusTab === tab.value }]" @click="switchStatusTab(tab.value)">{{ tab.label }}</span>
+              </div>
             </div>
             <div class="filter-right">
-              <a-tabs v-model:activeKey="activeKind" @change="handleKindChange" class="kind-tabs">
-                <a-tab-pane key="admission" tab="准入考试" />
-                <a-tab-pane key="training" tab="培训班考试" />
-              </a-tabs>
+              <div class="grade-filter">
+                <span class="filter-label">评分:</span>
+                <span class="grade-link" @click="handleGradeFilter('ungraded')">待阅卷</span>
+                <span class="grade-link" @click="handleGradeFilter('unpublished')">待发布成绩</span>
+              </div>
+              <label class="checkbox-label">
+                <a-checkbox v-model:checked="onlyMine"></a-checkbox>
+                <span>只看我发布的</span>
+              </label>
             </div>
           </div>
 
-          <!-- 第三部分：列表主体 -->
-          <div class="list-container">
+          <!-- 第三层：表格数据 -->
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th class="col-check">
+                    <a-checkbox v-model:checked="selectAll" @change="handleSelectAll" />
+                  </th>
+                  <th class="col-index">序号</th>
+                  <th class="col-name">考试名称</th>
+                  <th class="col-count text-center">考试人员</th>
+                  <th class="col-time text-center">考试开放时间</th>
+                  <th class="col-status text-center">状态</th>
+                  <th class="col-paper">所用试卷</th>
+                  <th class="col-type text-center">类型</th>
+                  <th class="col-category text-center">分类</th>
+                  <th class="col-action text-right">操作</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-50">
+                <tr v-for="(exam, idx) in examList" :key="exam.id" class="table-row">
+                  <td class="col-check">
+                    <a-checkbox :checked="selectedIds.includes(exam.id)" @change="toggleSelect(exam.id, $event)" />
+                  </td>
+                  <td class="col-index text-slate-400">{{ (pagination.current - 1) * pagination.pageSize + idx + 1 }}</td>
+                  <td class="col-name">
+                    <div class="name-cell">
+                      <span class="name-text" @click="openEditDrawer(exam)">{{ exam.title }}</span>
+                      <svg v-if="exam.relatedTrainingId" class="link-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+                    </div>
+                  </td>
+                  <td class="col-count text-center">
+                    <span class="count-actual" :class="{ 'has-data': exam.actualCount > 0 }">{{ exam.actualCount ?? 0 }}</span>
+                    <span class="count-sep">/</span>
+                    <span class="count-total">{{ exam.expectedCount ?? '-' }}</span>
+                  </td>
+                  <td class="col-time text-center">
+                    <div v-if="exam.startTime && exam.endTime" class="time-cell">
+                      <div class="time-text">{{ formatDateTime(exam.startTime) }}</div>
+                      <div class="time-text">{{ formatDateTime(exam.endTime) }}</div>
+                    </div>
+                    <div v-else class="time-placeholder">~</div>
+                  </td>
+                  <td class="col-status text-center">
+                    <span class="status-pill" :class="getStatusPillClass(exam.status)">{{ statusLabels[exam.status] || exam.status }}</span>
+                  </td>
+                  <td class="col-paper">
+                    <span class="paper-link" @click="goToPaperDetail(exam.paperId)">{{ exam.paperTitle || '-' }}</span>
+                  </td>
+                  <td class="col-type text-center text-slate-600">{{ exam.type === 'formal' ? '线上' : '测验' }}</td>
+                  <td class="col-category text-center text-slate-600">{{ exam.courseName || '默认分类' }}</td>
+                  <td class="col-action text-right">
+                    <button class="btn-action" @click.stop="openEditDrawer(exam)">
+                      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h.01M12 12h.01M19 12h.01"/></svg>
+                    </button>
+                  </td>
+                </tr>
 
-            <!-- 列表头 -->
-            <div class="list-header">
-              <div class="col-course">所属课程 / 场次名称</div>
-              <div class="col-paper">关联试卷</div>
-              <div class="col-status text-center">状态</div>
-              <div class="col-count text-center">实考/应考</div>
-              <div class="col-time">有效时间范围</div>
-              <div class="col-action text-right">操作</div>
-            </div>
-
-            <!-- 课程分组列表 -->
-            <div v-for="course in groupedExamList" :key="course.id" class="course-group">
-              <!-- 课程行 -->
-              <div
-                class="course-row"
-                :class="{ 'is-collapsed': collapsedCourses.includes(course.id) }"
-                @click="toggleCourse(course.id)"
-              >
-                <div class="col-course">
-                  <svg class="chevron-icon" :class="{ 'rotated': collapsedCourses.includes(course.id) }" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/>
-                  </svg>
-                  <svg class="course-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
-                  </svg>
-                  <span class="course-name">{{ course.name }}</span>
-                </div>
-                <div class="col-paper flex-1 text-xs text-slate-400 font-medium italic">
-                  当前课程下共有 {{ course.exams.length }} 场考试任务
-                </div>
-                <div class="col-status"></div>
-                <div class="col-count"></div>
-                <div class="col-time"></div>
-                <div class="col-action text-right">
-                  <span class="course-detail-hint">查看课程详情</span>
-                </div>
-              </div>
-
-              <!-- 场次列表 -->
-              <div class="exam-items" :class="{ 'is-collapsed': collapsedCourses.includes(course.id) }">
-                <div
-                  v-for="exam in course.exams"
-                  :key="exam.id"
-                  class="exam-row"
-                >
-                  <div class="col-course pl-7">
-                    <span class="exam-title">{{ exam.title }}</span>
-                    <span class="exam-id">ID: {{ exam.code }}</span>
-                  </div>
-                  <div class="col-paper flex flex-col">
-                    <span class="text-sm text-slate-600">{{ exam.paperTitle || '-' }}</span>
-                    <span v-if="exam.paperStatus" class="paper-status-badge" :class="'paper-status-' + exam.paperStatus">
-                      {{ paperStatusLabels[exam.paperStatus] || exam.paperStatus }}
-                    </span>
-                  </div>
-                  <div class="col-status flex justify-center">
-                    <span class="status-pill" :class="'status-' + exam.status">
-                      {{ statusLabels[exam.status] }}
-                    </span>
-                  </div>
-                  <div class="col-count text-center">
-                    <span class="font-bold text-slate-700">{{ exam.actualCount }}</span>
-                    <span class="text-slate-300 mx-0.5">/</span>
-                    <span class="text-slate-400">{{ exam.expectedCount }}</span>
-                  </div>
-                  <div class="col-time flex flex-col justify-center">
-                    <span class="text-[11px] font-medium text-slate-600">{{ formatDateTime(exam.startTime) }}</span>
-                    <span class="text-[11px] text-slate-400">{{ formatDateTime(exam.endTime) }}</span>
-                  </div>
-                  <div class="col-action text-right flex justify-end gap-4">
-                    <permissions-tooltip
-                      :allowed="canManageExam"
-                      tips="需要 CREATE_EXAM 权限"
-                      v-slot="{ disabled }"
-                    >
-                      <a-button
-                        type="link"
-                        size="small"
-                        :disabled="disabled"
-                        @click.stop="openEditDrawer(exam)"
-                        class="action-btn"
-                      >
-                        {{ exam.status === 'active' ? '监考' : (exam.status === 'ended' ? '成绩' : '编辑') }}
-                      </a-button>
-                    </permissions-tooltip>
-                    <a-button
-                      type="link"
-                      size="small"
-                      @click.stop="openEditDrawer(exam)"
-                      class="action-btn-secondary"
-                    >
-                      {{ exam.status === 'ended' ? '归档' : '统计' }}
-                    </a-button>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- 空状态 -->
-            <div v-if="groupedExamList.length === 0 && !loading" class="empty-state">
-              <svg class="empty-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-              </svg>
-              <p>暂无考试记录</p>
-            </div>
+                <!-- 空状态 -->
+                <tr v-if="!loading && examList.length === 0">
+                  <td colspan="10" class="empty-cell">
+                    <div class="empty-content">
+                      <svg class="empty-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                      <span class="empty-text">暂无考试记录</span>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
-          <!-- 分页 -->
-          <div class="pagination-bar">
-            <div class="pagination-info">
-              Showing {{ ((pagination.current - 1) * pagination.pageSize) + 1 }} to {{ Math.min(pagination.current * pagination.pageSize, pagination.total) }} of {{ pagination.total }} Courses
+          <!-- 第四层：说明与批量操作 -->
+          <div class="footer-area">
+            <!-- 说明文字 -->
+            <div class="notice-area">
+              <svg class="notice-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
+              <div class="notice-text">
+                <p>说明：此图标表示该考试为关联培训或关联课程考试，培训或课程中添加的考试，请在培训或课程中进行修改或删除操作。</p>
+              </div>
             </div>
-            <div class="pagination-controls">
-              <a-button
-                class="page-btn"
-                :disabled="pagination.current === 1"
-                @click="handlePageChange(pagination.current - 1)"
-              >
-                <LeftOutlined />
-              </a-button>
-              <a-button
-                v-for="page in visiblePages"
-                :key="page"
-                :class="['page-btn', { 'page-btn-active': page === pagination.current }]"
-                @click="handlePageChange(page)"
-              >
-                {{ page }}
-              </a-button>
-              <a-button
-                class="page-btn"
-                :disabled="pagination.current === totalPages"
-                @click="handlePageChange(pagination.current + 1)"
-              >
-                <RightOutlined />
-              </a-button>
+
+            <div class="footer-divider"></div>
+
+            <!-- 批量操作与分页 -->
+            <div class="footer-actions">
+              <div class="footer-left">
+                <label class="checkbox-label">
+                  <a-checkbox v-model:checked="selectAll" @change="handleSelectAll" />
+                  <span>全选</span>
+                </label>
+                <div class="batch-ops">
+                  <span class="batch-label">批量操作:</span>
+                  <button class="btn-batch btn-batch-danger" @click="handleBatchDelete">删除</button>
+                  <button class="btn-batch" @click="handleBatchExport">导出成绩</button>
+                </div>
+              </div>
+
+              <div class="footer-right">
+                <div class="page-info">
+                  共 {{ pagination.total }} 条记录 <span class="page-sep">|</span> 每页 {{ pagination.pageSize }} 条
+                </div>
+                <div class="pagination-btns">
+                  <button class="page-btn" :class="{ disabled: pagination.current === 1 }" :disabled="pagination.current === 1" @click="handlePageChange(pagination.current - 1)">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
+                  </button>
+                  <button v-for="page in visiblePages" :key="page" class="page-btn" :class="{ 'page-btn-active': page === pagination.current }" @click="handlePageChange(page)">{{ page }}</button>
+                  <button class="page-btn" :class="{ disabled: pagination.current === totalPages }" :disabled="pagination.current === totalPages" @click="handlePageChange(pagination.current + 1)">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 
         </div>
 
-        <!-- 辅助脚部 -->
-        <div class="footer-bar">
-          <span>© 2024 警务训练指挥平台 | 考试管理模块</span>
-          <div class="flex items-center gap-2">
-            <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-            数据连接已就绪
+        <!-- 页脚辅助信息 -->
+        <footer class="page-footer">
+          <span>© 2024 警务训练指挥平台 | 考试服务运行中</span>
+          <div class="status-indicator">
+            <span class="status-dot"></span>
+            考试服务运行中
           </div>
-        </div>
+        </footer>
 
       </div>
-    </div>
+    </main>
 
-    <!-- 创建/编辑抽屉 -->
-    <a-drawer
-      v-model:open="drawerVisible"
-      :title="drawerTitle"
-      width="760"
-      @close="resetForm"
-    >
+    <!-- 抽屉 -->
+    <a-drawer v-model:open="drawerVisible" :title="drawerTitle" width="760" @close="resetForm">
       <a-form :model="form" layout="vertical">
         <a-row :gutter="16">
           <a-col :span="24">
-            <a-form-item :label="editingKind === 'admission' ? '准入考试名称' : '场次名称'" required>
-              <a-input v-model:value="form.title" />
+            <a-form-item label="场次名称" required>
+              <a-input v-model:value="form.title" placeholder="请输入考试场次名称" />
             </a-form-item>
           </a-col>
           <a-col :span="18">
             <a-form-item label="关联试卷" required>
-              <a-select
-                v-model:value="form.paperId"
-                placeholder="请选择已发布试卷"
-                :disabled="isEdit"
-                show-search
-                option-filter-prop="label"
-                @change="handlePaperChange"
-              >
-                <a-select-option
-                  v-for="paper in availablePaperOptions"
-                  :key="paper.id"
-                  :value="paper.id"
-                  :label="paper.title"
-                >
-                  {{ paper.title }}（{{ paper.questionCount || 0 }}题 / {{ paper.totalScore || 0 }}分）
-                </a-select-option>
-              </a-select>
-              <div class="paper-action-row">
-                <span class="paper-action-tip">考试只能选择已发布试卷；考试创建后不能再更换试卷</span>
-                <a-button type="link" @click="goToPaperManage">去试卷管理创建试卷</a-button>
+              <a-select v-model:value="form.paperId" placeholder="请选择已发布试卷" :disabled="isEdit" show-search option-filter-prop="label" @change="handlePaperChange" :options="availablePaperOptions.map(p => ({ value: p.id, label: p.title }))" />
+              <div class="paper-hint">
+                <span class="hint-text">考试只能选择已发布试卷；考试创建后不能再更换试卷</span>
+                <a-button type="link" size="small" @click="goToPaperManage">去试卷管理创建试卷</a-button>
               </div>
-            </a-form-item>
-          </a-col>
-          <a-col :span="6" v-if="editingKind === 'training'">
-            <a-form-item label="用途">
-              <a-select v-model:value="form.purpose">
-                <a-select-option value="class_assessment">班内考核</a-select-option>
-                <a-select-option value="final_assessment">结业考核</a-select-option>
-                <a-select-option value="quiz">随堂测验</a-select-option>
-                <a-select-option value="makeup">补考</a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-          <a-col :span="12" v-if="editingKind === 'training'">
-            <a-form-item label="关联培训班">
-              <a-select v-model:value="form.trainingId" placeholder="培训班内考试必须关联培训班">
-                <a-select-option v-for="training in trainingOptions" :key="training.id" :value="training.id">
-                  {{ training.name }}
-                </a-select-option>
-              </a-select>
             </a-form-item>
           </a-col>
           <a-col :span="6">
@@ -304,53 +237,30 @@
           <a-col :span="6">
             <a-form-item label="状态">
               <a-select v-model:value="form.status">
-                <a-select-option value="upcoming">即将开始</a-select-option>
+                <a-select-option value="upcoming">未开始</a-select-option>
                 <a-select-option value="active">进行中</a-select-option>
                 <a-select-option value="ended">已结束</a-select-option>
               </a-select>
             </a-form-item>
           </a-col>
-          <a-col :span="12" v-if="editingKind === 'admission'">
+          <a-col :span="12">
             <a-form-item label="适用范围">
-              <AdmissionScopeSelector
-                v-model:scope-type="form.scopeType"
-                v-model:scope-target-ids="form.scopeTargetIds"
-              />
+              <AdmissionScopeSelector v-model:scope-type="form.scopeType" v-model:scope-target-ids="form.scopeTargetIds" />
             </a-form-item>
           </a-col>
           <a-col :span="12">
             <a-form-item label="考试时间">
-              <a-range-picker
-                v-model:value="dateRange"
-                show-time
-                format="YYYY-MM-DD HH:mm:ss"
-                value-format="YYYY-MM-DD HH:mm:ss"
-                style="width:100%"
-              />
+              <a-range-picker v-model:value="dateRange" show-time format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm" style="width:100%" />
             </a-form-item>
           </a-col>
           <a-col :span="6">
-            <a-form-item label="考试时长">
-              <a-input-number
-                v-model:value="form.duration"
-                :min="10"
-                :max="EXAM_DURATION_LIMIT"
-                style="width:100%"
-              />
+            <a-form-item label="考试时长（分钟）">
+              <a-input-number v-model:value="form.duration" :min="10" :max="300" style="width:100%" />
             </a-form-item>
           </a-col>
           <a-col :span="6">
             <a-form-item label="及格分">
-              <div class="passing-score-field">
-                <a-input-number
-                  v-model:value="form.passingScore"
-                  :min="1"
-                  style="width:100%"
-                />
-                <span class="passing-score-total">
-                  满分 {{ currentPaperTotalScore > 0 ? currentPaperTotalScore : '--' }} 分
-                </span>
-              </div>
+              <a-input-number v-model:value="form.passingScore" :min="1" style="width:100%" />
             </a-form-item>
           </a-col>
           <a-col :span="6">
@@ -358,39 +268,33 @@
               <a-input-number v-model:value="form.maxAttempts" :min="1" :max="10" style="width:100%" />
             </a-form-item>
           </a-col>
-          <a-col :span="6" v-if="editingKind === 'training'">
-            <a-form-item label="允许补考">
-              <a-switch v-model:checked="form.allowMakeup" />
-            </a-form-item>
-          </a-col>
           <a-col :span="24">
             <a-form-item label="考试说明">
-              <a-textarea v-model:value="form.description" :rows="3" />
+              <a-textarea v-model:value="form.description" :rows="3" placeholder="选填" />
             </a-form-item>
           </a-col>
           <a-col :span="24">
             <a-form-item label="试卷预览">
-              <div class="paper-preview-card">
+              <div class="paper-preview">
                 <template v-if="selectedPaperDetail">
-                  <div class="preview-head">
+                  <div class="preview-header">
                     <div>
                       <div class="preview-title">{{ selectedPaperDetail.title }}</div>
-                      <div class="preview-sub">
-                        {{ paperStatusLabels[selectedPaperDetail.status] || '' }} · {{ selectedPaperDetail.questionCount || 0 }} 题 · {{ selectedPaperDetail.totalScore || 0 }} 分
-                      </div>
+                      <div class="preview-meta">{{ paperStatusLabels[selectedPaperDetail.status] }} · {{ selectedPaperDetail.questionCount || 0 }} 题 · {{ selectedPaperDetail.totalScore || 0 }} 分</div>
                     </div>
-                    <div class="preview-meta">
+                    <div class="preview-stats">
                       <span>时长 {{ selectedPaperDetail.duration || 60 }} 分钟</span>
                       <span>及格 {{ selectedPaperDetail.passingScore || 60 }} 分</span>
                     </div>
                   </div>
-                  <div v-if="selectedPaperDetail.questions?.length" class="preview-list">
-                    <div class="preview-item" v-for="(item, index) in selectedPaperDetail.questions" :key="item.id">
-                      <span>{{ index + 1 }}.</span>
-                      <span>[{{ questionTypeLabels[item.type] || item.type }}]</span>
-                      <span class="preview-content">{{ item.content }}</span>
-                      <span>{{ item.score || 0 }}分</span>
+                  <div v-if="selectedPaperDetail.questions?.length" class="preview-questions">
+                    <div v-for="(item, qi) in selectedPaperDetail.questions.slice(0, 20)" :key="item.id || qi" class="question-item">
+                      <span class="question-num">{{ qi + 1 }}.</span>
+                      <span class="question-type">[{{ questionTypeLabels[item.type] || item.type }}]</span>
+                      <span class="question-content">{{ item.content }}</span>
+                      <span class="question-score">{{ item.score || 0 }}分</span>
                     </div>
+                    <div v-if="selectedPaperDetail.questions.length > 20" class="more-questions">还有 {{ selectedPaperDetail.questions.length - 20 }} 道题目...</div>
                   </div>
                   <a-empty v-else description="试卷暂无题目快照" />
                 </template>
@@ -403,13 +307,7 @@
       <template #footer>
         <a-space style="float:right">
           <a-button @click="resetForm">取消</a-button>
-          <permissions-tooltip
-            :allowed="canManageExam"
-            tips="需要 CREATE_EXAM 权限"
-            v-slot="{ disabled }"
-          >
-            <a-button type="primary" :loading="submitting" :disabled="disabled" @click="handleSave">保存</a-button>
-          </permissions-tooltip>
+          <a-button type="primary" :loading="submitting" @click="handleSave">保存</a-button>
         </a-space>
       </template>
     </a-drawer>
@@ -418,742 +316,544 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import dayjs from 'dayjs'
-import { message } from 'ant-design-vue'
-import { PlusOutlined, LeftOutlined, RightOutlined } from '@ant-design/icons-vue'
-import { useRoute, useRouter } from 'vue-router'
+import { message, Modal } from 'ant-design-vue'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
-  createAdmissionExam,
-  createExam,
-  getAdmissionExamDetail,
-  getAdmissionExams,
-  getExamDetail,
-  getExamPaperDetail,
-  getExamPapers,
-  getExams,
-  updateAdmissionExam,
-  updateExam,
+  createExam, createAdmissionExam,
+  getExamDetail, getExamPaperDetail, getExamPapers, getExams,
+  getAdmissionExamDetail, getAdmissionExams,
+  updateExam, updateAdmissionExam,
 } from '@/api/exam'
-import { getTrainings } from '@/api/training'
 import AdmissionScopeSelector from './components/AdmissionScopeSelector.vue'
-import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
-const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
-const statusLabels = { upcoming: '即将开始', active: '进行中', ended: '已结束' }
+const statusLabels = { upcoming: '未开始', active: '进行中', ended: '已结束', draft: '草稿' }
 const paperStatusLabels = { draft: '草稿', published: '已发布', archived: '已归档' }
-const purposeLabels = {
-  class_assessment: '班内考核',
-  final_assessment: '结业考核',
-  quiz: '随堂测验',
-  makeup: '补考',
-}
 const questionTypeLabels = { single: '单选', multi: '多选', judge: '判断' }
-const EXAM_DURATION_LIMIT = 300
-const DEFAULT_EXAM_DURATION = 60
-const DEFAULT_PASSING_RATIO = 0.6
 
-const searchText = ref('')
-const filterStatus = ref('all')
-const activeKind = ref('admission')
+const activeNav = ref('exam')
+
+const statusTabs = [
+  { label: '全部', value: 'all' },
+  { label: '进行中', value: 'active' },
+  { label: '未开始', value: 'upcoming' },
+  { label: '已结束', value: 'ended' },
+  { label: '草稿', value: 'draft' },
+]
+
 const loading = ref(false)
 const submitting = ref(false)
+const searchText = ref('')
+const filterExamType = ref('')
+const filterCategory = ref('')
+const filterStatusSelect = ref('')
+const filterVisibility = ref('')
+const currentStatusTab = ref('all')
+const onlyMine = ref(false)
 const examList = ref([])
-const trainingOptions = ref([])
+const selectedIds = ref([])
 const paperOptions = ref([])
 const selectedPaperDetail = ref(null)
 const drawerVisible = ref(false)
 const isEdit = ref(false)
 const editingId = ref(null)
-const editingKind = ref('admission')
 const dateRange = ref(null)
-const collapsedCourses = ref([])
+const selectAll = ref(false)
 
-const pagination = reactive({ current: 1, pageSize: 10, total: 0 })
-const statsData = reactive({
-  activeCourses: 0,
-  ongoingExams: 0,
-  todayParticipants: 0,
-  pendingGrading: 0
+const pagination = reactive({ current: 1, pageSize: 15, total: 0 })
+
+const form = reactive({
+  title: '', paperId: undefined, description: '',
+  type: 'formal', status: 'upcoming',
+  scopeType: 'all', scopeTargetIds: [],
+  duration: 60, passingScore: 60, maxAttempts: 1,
 })
 
-// 按课程分组的考试列表
-const groupedExamList = computed(() => {
-  const groups = {}
-  examList.value.forEach(exam => {
-    const courseId = exam.courseId || 0
-    const courseName = exam.courseName || '未分类'
-    if (!groups[courseId]) {
-      groups[courseId] = {
-        id: courseId,
-        name: courseName,
-        exams: []
-      }
-    }
-    groups[courseId].exams.push(exam)
-  })
-  return Object.values(groups)
-})
-
-const totalPages = computed(() => Math.ceil(pagination.total / pagination.pageSize))
+const drawerTitle = computed(() => isEdit.value ? '编辑考试' : '添加考试')
+const availablePaperOptions = computed(() => isEdit.value ? paperOptions.value : paperOptions.value.filter(i => i.status === 'published'))
+const totalPages = computed(() => Math.max(1, Math.ceil(pagination.total / pagination.pageSize)))
 const visiblePages = computed(() => {
-  const pages = []
-  const total = totalPages.value
-  const current = pagination.current
-  let start = Math.max(1, current - 2)
-  let end = Math.min(total, start + 4)
-  if (end - start < 4) {
-    start = Math.max(1, end - 4)
-  }
-  for (let i = start; i <= end; i++) {
-    pages.push(i)
-  }
+  const pages = [], total = totalPages.value, cur = pagination.current
+  let start = Math.max(1, cur - 2), end = Math.min(total, start + 4)
+  if (end - start < 4) start = Math.max(1, end - 4)
+  for (let i = start; i <= end; i++) pages.push(i)
   return pages
 })
 
-const form = reactive({
-  title: '',
-  paperId: undefined,
-  description: '',
-  purpose: 'class_assessment',
-  trainingId: undefined,
-  type: 'formal',
-  status: 'upcoming',
-  scopeType: 'all',
-  scopeTargetIds: [],
-  duration: 60,
-  passingScore: 60,
-  maxAttempts: 1,
-  allowMakeup: false,
-})
-
-const drawerTitle = computed(() => {
-  if (isEdit.value) {
-    return editingKind.value === 'admission' ? '编辑准入考试' : '编辑培训班考试'
-  }
-  return activeKind.value === 'admission' ? '发布准入考试' : '发布培训班考试'
-})
-
-const routeKind = computed(() => {
-  const raw = Array.isArray(route.query.kind) ? route.query.kind[0] : route.query.kind
-  return raw === 'training' || raw === 'admission' ? raw : null
-})
-
-const routeTrainingId = computed(() => {
-  const raw = Array.isArray(route.query.trainingId) ? route.query.trainingId[0] : route.query.trainingId
-  const parsed = Number(raw)
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined
-})
-
-const availablePaperOptions = computed(() => {
-  if (isEdit.value) {
-    return paperOptions.value
-  }
-  return paperOptions.value.filter(item => item.status === 'published')
-})
-const canManageExam = computed(() => authStore.hasPermission('CREATE_EXAM'))
-const currentPaperTotalScore = computed(() => {
-  const totalScore = Number(selectedPaperDetail.value?.totalScore || 0)
-  return Number.isFinite(totalScore) ? totalScore : 0
-})
-
-function toggleCourse(courseId) {
-  const index = collapsedCourses.value.indexOf(courseId)
-  if (index > -1) {
-    collapsedCourses.value.splice(index, 1)
-  } else {
-    collapsedCourses.value.push(courseId)
-  }
+function getStatusPillClass(status) {
+  return { upcoming: 'status-pending', active: 'status-ongoing', ended: 'status-ended', draft: 'status-pending' }[status] || 'status-pending'
 }
 
-function handleSearch() {
+function switchStatusTab(tab) {
+  currentStatusTab.value = tab
+  filterStatusSelect.value = tab === 'all' ? '' : tab
   pagination.current = 1
   loadExams()
 }
 
-function handlePageChange(page) {
-  pagination.current = page
-  loadExams()
+function handleSearch() { pagination.current = 1; loadExams() }
+function handlePageChange(page) { if (page < 1 || page > totalPages.value) return; pagination.current = page; loadExams() }
+function handleGradeFilter(type) { message.info(`筛选 ${type === 'ungraded' ? '待阅卷' : '待发布成绩'}（功能开发中）`) }
+
+function toggleSelect(id, e) {
+  if (e.target.checked) { if (!selectedIds.value.includes(id)) selectedIds.value.push(id) }
+  else { selectedIds.value = selectedIds.value.filter(i => i !== id) }
+  selectAll.value = selectedIds.value.length === examList.value.length && examList.value.length > 0
 }
 
-function resetForm() {
-  Object.assign(form, {
-    title: '',
-    paperId: undefined,
-    description: '',
-    purpose: 'class_assessment',
-    trainingId: undefined,
-    type: 'formal',
-    status: 'upcoming',
-    scopeType: 'all',
-    scopeTargetIds: [],
-    duration: 60,
-    passingScore: 60,
-    maxAttempts: 1,
-    allowMakeup: false,
-  })
-  selectedPaperDetail.value = null
-  drawerVisible.value = false
-  isEdit.value = false
-  editingId.value = null
-  editingKind.value = activeKind.value
-  dateRange.value = null
+function handleSelectAll(e) {
+  if (e.target.checked) { selectedIds.value = examList.value.map(ex => ex.id); selectAll.value = true }
+  else { selectedIds.value = []; selectAll.value = false }
 }
 
 async function loadExams() {
   loading.value = true
   try {
-    const loader = activeKind.value === 'admission' ? getAdmissionExams : getExams
-    const result = await loader({
-      page: pagination.current,
-      size: pagination.pageSize,
-      search: searchText.value || undefined,
-      status: filterStatus.value !== 'all' ? filterStatus.value : undefined,
-      trainingId: activeKind.value === 'training' ? routeTrainingId.value : undefined,
-    })
-
-    // 转换数据以适配新布局
+    const params = { page: pagination.current, size: pagination.pageSize, search: searchText.value || undefined, status: filterStatusSelect.value || undefined }
+    const result = filterExamType.value === 'admission' ? await getAdmissionExams(params) : await getExams(params)
     examList.value = (result.items || []).map(item => ({
       ...item,
-      code: item.code || `EXAM-${String(item.id).padStart(4, '0')}`,
+      code: item.code || 'EXAM-' + String(item.id).padStart(4, '0'),
       actualCount: item.actualCount ?? item.joinedCount ?? 0,
       expectedCount: item.expectedCount ?? item.totalCount ?? item.maxParticipants ?? '-',
-      courseId: item.courseId,
-      courseName: item.courseName
+      relatedTrainingId: item.trainingId,
     }))
-
     pagination.total = result.total || 0
-
-    // 计算统计数据
-    statsData.activeCourses = new Set(examList.value.map(e => e.courseId)).size || 1
-    statsData.ongoingExams = examList.value.filter(e => e.status === 'active').length
-    statsData.todayParticipants = examList.value.reduce((sum, e) => sum + (e.actualCount || 0), 0)
-    statsData.pendingGrading = 15 // 这个可能需要从后端获取
-  } catch (error) {
-    message.error(error.message || '加载考试列表失败')
-  } finally {
-    loading.value = false
-  }
-}
-
-async function loadTrainingOptions() {
-  try {
-    const result = await getTrainings({ size: -1 })
-    trainingOptions.value = result.items || []
-  } catch {
-    trainingOptions.value = []
-  }
+    selectedIds.value = []; selectAll.value = false
+  } catch (e) { message.error(e.message || '加载考试列表失败') }
+  finally { loading.value = false }
 }
 
 async function loadPaperOptions() {
-  try {
-    const result = await getExamPapers({ size: -1 })
-    paperOptions.value = result.items || []
-  } catch {
-    paperOptions.value = []
-  }
-}
-
-function openCreateDrawer() {
-  if (!canManageExam.value) return
-  resetForm()
-  editingKind.value = activeKind.value
-  if (activeKind.value === 'training' && routeTrainingId.value) {
-    form.trainingId = routeTrainingId.value
-  }
-  drawerVisible.value = true
+  try { const r = await getExamPapers({ size: -1 }); paperOptions.value = r.items || [] }
+  catch { paperOptions.value = [] }
 }
 
 async function setPaperPreview(paperId, applyDefaults = false) {
-  if (!paperId) {
-    selectedPaperDetail.value = null
-    return
-  }
+  if (!paperId) { selectedPaperDetail.value = null; return }
   try {
     const detail = await getExamPaperDetail(paperId)
     selectedPaperDetail.value = detail
     if (applyDefaults) {
       form.type = detail.type || 'formal'
-      form.duration = resolveDefaultDuration(detail.duration)
-      form.passingScore = resolvePassingScoreSuggestion(detail)
+      form.duration = Math.min(300, Math.max(10, Math.floor(Number(detail.duration) || 60)))
+      const totalScore = Number(detail?.totalScore || 0)
+      const cfg = Number(detail?.passingScore)
+      form.passingScore = (Number.isFinite(cfg) && cfg > 0 && cfg <= totalScore) ? cfg : Math.max(1, Math.ceil(totalScore * 0.6))
     }
-  } catch (error) {
-    selectedPaperDetail.value = null
-  }
+  } catch { selectedPaperDetail.value = null }
 }
 
-function resolvePassingScoreSuggestion(detail) {
-  const totalScore = Number(detail?.totalScore || 0)
-  if (!Number.isFinite(totalScore) || totalScore <= 0) {
-    return 0
-  }
-  const configuredPassingScore = Number(detail?.passingScore)
-  if (Number.isFinite(configuredPassingScore) && configuredPassingScore > 0 && configuredPassingScore <= totalScore) {
-    return configuredPassingScore
-  }
-  return Math.max(1, Math.ceil(totalScore * DEFAULT_PASSING_RATIO))
-}
-
-function resolveDefaultDuration(value) {
-  const numericValue = Number(value)
-  if (!Number.isFinite(numericValue) || numericValue <= 0) {
-    return DEFAULT_EXAM_DURATION
-  }
-  return Math.min(EXAM_DURATION_LIMIT, Math.max(10, Math.floor(numericValue)))
-}
-
-function handlePaperChange(value) {
-  setPaperPreview(value, !isEdit.value)
-}
+function handlePaperChange(val) { setPaperPreview(val, !isEdit.value) }
+function openCreateDrawer() { resetForm(); drawerVisible.value = true }
 
 async function openEditDrawer(record) {
-  if (!canManageExam.value) return
-  resetForm()
-  isEdit.value = true
-  editingId.value = record.id
-  editingKind.value = record.kind || activeKind.value
+  isEdit.value = true; editingId.value = record.id
   try {
-    const detail = editingKind.value === 'admission'
-      ? await getAdmissionExamDetail(record.id)
-      : await getExamDetail(record.id)
+    const detail = (filterExamType.value === 'admission' || record.kind === 'admission')
+      ? await getAdmissionExamDetail(record.id) : await getExamDetail(record.id)
     form.title = detail.title
     form.paperId = detail.paperId
     form.description = detail.description || ''
-    form.purpose = detail.purpose || 'class_assessment'
-    form.trainingId = detail.trainingId
     form.type = detail.type || 'formal'
     form.status = detail.status || 'upcoming'
-    form.scopeType = editingKind.value === 'admission' ? (detail.scopeType || 'all') : 'all'
-    form.scopeTargetIds = editingKind.value === 'admission' ? [...(detail.scopeTargetIds || [])] : []
+    form.scopeType = detail.scopeType || 'all'
+    form.scopeTargetIds = [...(detail.scopeTargetIds || [])]
     form.duration = detail.duration || 60
     form.passingScore = detail.passingScore || 60
     form.maxAttempts = detail.maxAttempts || 1
-    form.allowMakeup = !!detail.allowMakeup
     dateRange.value = detail.startTime && detail.endTime ? [detail.startTime, detail.endTime] : null
     selectedPaperDetail.value = {
-      id: detail.paperId,
-      title: detail.paperTitle || '未命名试卷',
-      status: detail.paperStatus,
-      duration: detail.duration,
-      totalScore: detail.totalScore,
-      passingScore: detail.passingScore,
-      questionCount: detail.questionCount,
+      id: detail.paperId, title: detail.paperTitle || '未命名试卷',
+      status: detail.paperStatus, duration: detail.duration, totalScore: detail.totalScore,
+      passingScore: detail.passingScore, questionCount: detail.questionCount,
       questions: detail.questions || [],
     }
     drawerVisible.value = true
-  } catch (error) {
-    message.error(error.message || '加载考试详情失败')
-  }
+  } catch (e) { message.error(e.message || '加载详情失败') }
 }
 
-function goToPaperManage() {
-  router.push({ path: '/paper/repository', query: { quickCreate: '1' } })
+function resetForm() {
+  Object.assign(form, { title: '', paperId: undefined, description: '', type: 'formal', status: 'upcoming', scopeType: 'all', scopeTargetIds: [], duration: 60, passingScore: 60, maxAttempts: 1 })
+  selectedPaperDetail.value = null; drawerVisible.value = false; isEdit.value = false; editingId.value = null; dateRange.value = null
 }
 
 async function handleSave() {
-  if (!canManageExam.value) return
-  if (!form.title) {
-    message.warning('请输入场次名称')
-    return
-  }
-  if (!form.paperId) {
-    message.warning('请选择试卷')
-    return
-  }
-  if (editingKind.value === 'training' && !form.trainingId) {
-    message.warning('请选择关联培训班')
-    return
-  }
-  if (editingKind.value === 'admission' && form.scopeType !== 'all' && !form.scopeTargetIds.length) {
-    message.warning('请选择适用范围')
-    return
-  }
-  const duration = Number(form.duration)
-  const passingScore = Number(form.passingScore)
-  if (!Number.isFinite(duration) || duration < 10) {
-    message.warning('考试时长不能少于10分钟')
-    return
-  }
-  if (!Number.isFinite(passingScore) || passingScore < 1) {
-    message.warning('及格分不能小于1分')
-    return
-  }
-  if (dateRange.value?.[0] && dateRange.value?.[1]) {
-    const startTime = dayjs(dateRange.value[0])
-    const endTime = dayjs(dateRange.value[1])
-    if (!startTime.isValid() || !endTime.isValid() || !endTime.isAfter(startTime)) {
-      message.warning('考试结束时间必须晚于开始时间')
-      return
-    }
-  }
-  if (currentPaperTotalScore.value <= 0) {
-    message.warning('当前试卷总分无效，请先检查试卷配置')
-    return
-  }
-  if (passingScore > currentPaperTotalScore.value) {
-    message.warning(`及格分不能超过试卷满分（${currentPaperTotalScore.value}分）`)
-    return
-  }
-
-  const payload = {
-    title: form.title,
-    paperId: form.paperId,
-    description: form.description || undefined,
-    type: form.type,
-    status: form.status,
-    duration,
-    passingScore,
-    startTime: dateRange.value?.[0],
-    endTime: dateRange.value?.[1],
-  }
-  if (editingKind.value === 'training') {
-    payload.purpose = form.purpose
-    payload.trainingId = form.trainingId
-    payload.maxAttempts = form.maxAttempts
-    payload.allowMakeup = form.allowMakeup
-  } else {
-    payload.scopeType = form.scopeType
-    payload.scopeTargetIds = form.scopeTargetIds
-    payload.maxAttempts = form.maxAttempts
-  }
-
+  if (!form.title.trim()) { message.warning('请输入场次名称'); return }
+  if (!form.paperId) { message.warning('请选择试卷'); return }
+  if (form.scopeType !== 'all' && !form.scopeTargetIds.length) { message.warning('请选择适用范围'); return }
+  const dur = Number(form.duration), ps = Number(form.passingScore)
+  if (!Number.isFinite(dur) || dur < 10) { message.warning('考试时长不能少于10分钟'); return }
+  if (!Number.isFinite(ps) || ps < 1) { message.warning('及格分不能小于1分'); return }
+  if (selectedPaperDetail.value && ps > selectedPaperDetail.value.totalScore) { message.warning('及格分不能超过试卷满分'); return }
+  const payload = { title: form.title, paperId: form.paperId, description: form.description || undefined, type: form.type, status: form.status, duration: dur, passingScore: ps, startTime: dateRange.value?.[0], endTime: dateRange.value?.[1], maxAttempts: form.maxAttempts, scopeType: form.scopeType, scopeTargetIds: form.scopeTargetIds }
   submitting.value = true
   try {
     if (isEdit.value) {
-      if (editingKind.value === 'admission') {
-        await updateAdmissionExam(editingId.value, payload)
-        message.success('准入考试已更新')
-      } else {
-        await updateExam(editingId.value, payload)
-        message.success('考试场次已更新')
-      }
+      filterExamType.value === 'admission' ? await updateAdmissionExam(editingId.value, payload) : await updateExam(editingId.value, payload)
+      message.success('考试已更新')
     } else {
-      if (activeKind.value === 'admission') {
-        await createAdmissionExam(payload)
-        message.success('准入考试已发布')
-      } else {
-        await createExam(payload)
-        message.success('考试场次已发布')
-      }
+      filterExamType.value === 'admission' ? await createAdmissionExam(payload) : await createExam(payload)
+      message.success('考试已添加')
     }
-    resetForm()
-    loadExams()
-  } catch (error) {
-    message.error(error.message || '保存失败')
-  } finally {
-    submitting.value = false
-  }
+    resetForm(); loadExams()
+  } catch (e) { message.error(e.message || '保存失败') }
+  finally { submitting.value = false }
 }
 
-function formatDateTime(value) {
-  if (!value) return '未设置'
-  return String(value).replace('T', ' ').slice(0, 16)
+async function handleBatchExport() { if (!selectedIds.value.length) return; message.info(`导出 ${selectedIds.value.length} 场考试（功能开发中）`) }
+async function handleBatchDelete() {
+  if (!selectedIds.value.length) return
+  Modal.confirm({ title: `确定删除选中的 ${selectedIds.value.length} 场考试吗？`, okText: '确定删除', okType: 'danger', onOk() { message.info('功能开发中'); selectedIds.value = [] } })
 }
 
-function handleKindChange() {
-  pagination.current = 1
-  resetForm()
-  loadExams()
-}
+function goToPaperManage() { router.push({ path: '/paper/repository' }) }
+function goToPaperDetail(id) { if (id) router.push({ path: `/paper/repository/${id}` }) }
+function formatDateTime(v) { return v ? String(v).replace('T', ' ').slice(0, 16) : '未设置' }
 
-onMounted(() => {
-  loadExams()
-  loadTrainingOptions()
-  loadPaperOptions()
-})
+watch(filterExamType, () => { pagination.current = 1; loadExams() })
+watch(filterStatusSelect, val => { currentStatusTab.value = val || 'all' })
+onMounted(() => { loadExams(); loadPaperOptions() })
 </script>
 
 <style scoped>
 .exam-manage-page {
-  min-height: 100vh;
-  background-color: #F8FAFC;
   display: flex;
   flex-direction: column;
+  height: 100%;
+  background-color: #f8fafc;
+  color: #334155;
+}
+
+.main-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 32px;
 }
 
 .content-wrapper {
-  flex: 1;
-  overflow-y: auto;
-  padding: 32px 40px 0;
+  max-width: 100%;
+  width: 100%;
 }
 
-.page-title-section {
+.sub-nav-bar {
   display: flex;
   justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 32px;
-  gap: 16px;
+  align-items: center;
+  margin-bottom: 24px;
 }
 
-.page-title {
-  font-size: 30px;
-  font-weight: 600;
-  color: #1E293B;
-  margin: 0;
-  letter-spacing: -0.02em;
+.sub-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 24px;
 }
 
-.page-subtitle {
-  margin: 8px 0 0;
+.sub-nav-item {
   font-size: 14px;
-  color: #64748B;
-  line-height: 1.6;
+  font-weight: 600;
+  color: #94a3b8;
+  padding-bottom: 8px;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+  cursor: pointer;
 }
 
-.publish-btn {
-  height: 40px;
-  padding: 0 24px;
-  font-weight: 500;
-  border-radius: 8px;
+.sub-nav-item:hover {
+  color: #64748b;
+}
+
+.sub-nav-item.active {
+  color: #1e293b;
+  border-color: #2563eb;
+}
+
+.sub-nav-right {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
+.btn-aux {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  padding: 6px 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background-color: #ffffff;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.btn-aux:hover {
+  border-color: #cbd5e1;
+  background-color: #f8fafc;
+  color: #1e293b;
+}
+
 .main-container {
   background: white;
-  border: 1px solid #E2E8F0;
-  border-radius: 32px;
+  border: 1px solid #e2e8f0;
+  border-radius: 24px;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  min-height: 640px;
 }
 
-/* 数据汇总条 */
-.stats-bar {
+.toolbar-row {
+  padding: 24px 32px;
+  border-bottom: 1px solid #f1f5f9;
   display: flex;
-  align-items: center;
-  padding: 40px 48px;
-  border-bottom: 1px solid #F1F5F9;
-  background: linear-gradient(to bottom, #F8FAFC, white);
-}
-
-.stat-item {
-  flex: 1;
-  padding: 0 8px;
-}
-
-.stat-divider {
-  border-left: 1px solid #F1F5F9;
-}
-
-.stat-label {
-  font-size: 10px;
-  font-weight: 700;
-  color: #94A3B8;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  margin-bottom: 4px;
-}
-
-.stat-label-green { color: #22C55E; }
-.stat-label-blue { color: #3B82F6; }
-.stat-label-amber { color: #F59E0B; }
-
-.stat-value {
-  font-size: 36px;
-  font-weight: 700;
-  color: #1E293B;
-}
-
-.stat-value-green { color: #16A34A; }
-.stat-value-blue { color: #2563EB; }
-.stat-value-amber { color: #D97706; }
-
-.stat-unit {
-  font-size: 12px;
-  font-weight: 400;
-  color: #CBD5E1;
-  margin-left: 4px;
-}
-
-/* 过滤条 */
-.filter-bar {
-  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
   align-items: center;
   justify-content: space-between;
-  padding: 20px 48px;
-  border-bottom: 1px solid #F1F5F9;
 }
 
-.filter-left {
+.toolbar-left,
+.toolbar-right {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
 }
 
-.search-input {
-  width: 320px;
-}
-
-.status-select {
-  width: 160px;
-}
-
-.kind-tabs :deep(.ant-tabs-nav) {
-  margin-bottom: 0;
-}
-
-.kind-tabs :deep(.ant-tabs-tab) {
-  padding: 8px 0;
+.btn-primary {
+  background: #2563eb;
+  color: white;
   font-size: 14px;
-  font-weight: 500;
-}
-
-/* 列表容器 */
-.list-container {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-/* 列表头 */
-.list-header {
+  font-weight: 700;
+  padding: 8px 24px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
   display: flex;
   align-items: center;
-  padding: 12px 48px;
-  background: #F8FAFC;
-  border-bottom: 1px solid #F1F5F9;
+  gap: 8px;
+  box-shadow: 0 4px 6px rgba(37, 99, 235, 0.1);
+}
+
+.btn-primary:hover {
+  background: #1d4ed8;
+}
+
+.search-wrapper {
+  position: relative;
+  width: 280px;
+}
+
+.search-icon {
+  position: absolute;
+  left: 12px;
+  top: 10px;
+  width: 16px;
+  height: 16px;
+  color: #94a3b8;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.input-minimal {
+  background-color: transparent;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: #1e293b;
+  transition: all 0.2s;
+  outline: none;
+  height: 36px;
+}
+
+.input-minimal:hover {
+  border-color: #cbd5e1;
+}
+
+.filter-select {
+  width: 140px;
+}
+
+.filter-select-sm {
+  width: 120px;
+}
+
+.filter-row {
+  padding: 12px 32px;
+  border-bottom: 1px solid #f1f5f9;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(248, 250, 252, 0.35);
+}
+
+.filter-left,
+.filter-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.filter-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+
+.status-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 2px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.status-tab {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.status-tab:hover {
+  color: #334155;
+}
+
+.status-tab.active {
+  background: white;
+  color: #2563eb;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
+}
+
+.grade-filter {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.grade-link {
+  font-size: 12px;
+  color: #64748b;
+  cursor: pointer;
+}
+
+.grade-link:hover {
+  color: #2563eb;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #64748b;
+}
+
+.table-wrapper {
+  flex: 1;
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  text-align: left;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.data-table thead tr {
+  background: #f8fafc;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.data-table th {
+  padding: 16px;
   font-size: 10px;
   font-weight: 700;
-  color: #94A3B8;
+  color: #94a3b8;
   text-transform: uppercase;
   letter-spacing: 0.1em;
 }
 
-.col-course { width: 288px; }
-.col-paper { flex: 1; }
-.col-status { width: 112px; }
-.col-count { width: 96px; }
-.col-time { width: 192px; }
-.col-action { width: 128px; }
-
-/* 课程分组 */
-.course-group {
-  border-bottom: 1px solid #F1F5F9;
+.data-table td {
+  padding: 16px;
+  vertical-align: middle;
 }
 
-.course-row {
+.table-row {
+  border-bottom: 1px solid #f8fafc;
+}
+
+.table-row:hover {
+  background-color: #f8fafc;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-right {
+  text-align: right;
+}
+
+.col-check { width: 46px; }
+.col-index { width: 56px; }
+.col-name { width: 260px; }
+.col-count { width: 110px; }
+.col-time { width: 160px; }
+.col-status { width: 92px; }
+.col-paper { width: 180px; }
+.col-type { width: 72px; }
+.col-category { width: 88px; }
+.col-action { width: 72px; }
+
+.name-cell {
   display: flex;
   align-items: center;
-  padding: 20px 48px;
-  background: white;
+  gap: 8px;
+}
+
+.name-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: #334155;
   cursor: pointer;
-  transition: background-color 0.15s;
 }
 
-.course-row:hover {
-  background: #F8FAFC;
+.name-text:hover {
+  color: #2563eb;
 }
 
-.course-row > div {
-  display: flex;
-  align-items: center;
+.link-icon {
+  width: 14px;
+  height: 14px;
+  color: #ef4444;
 }
 
-.chevron-icon {
-  width: 16px;
-  height: 16px;
-  color: #CBD5E1;
-  margin-right: 12px;
-  transition: transform 0.3s ease;
+.count-actual { font-size: 13px; color: #94a3b8; font-weight: 700; }
+.count-actual.has-data { color: #ef4444; }
+.count-sep { margin: 0 4px; color: #cbd5e1; }
+.count-total { font-size: 13px; color: #94a3b8; }
+
+.time-cell {
+  font-size: 11px;
+  color: #94a3b8;
+  line-height: 1.4;
 }
 
-.chevron-icon.rotated {
-  transform: rotate(-90deg);
-}
+.time-text { white-space: nowrap; }
+.time-placeholder { color: #94a3b8; }
 
-.course-row:hover .chevron-icon {
-  color: #3B82F6;
-}
-
-.course-icon {
-  width: 16px;
-  height: 16px;
-  color: #3B82F6;
-  margin-right: 8px;
-}
-
-.course-name {
-  font-size: 14px;
-  font-weight: 700;
-  color: #334155;
-}
-
-.course-detail-hint {
-  font-size: 10px;
-  font-weight: 600;
-  color: #3B82F6;
-  background: #EFF6FF;
-  padding: 2px 8px;
-  border-radius: 4px;
-  opacity: 0;
-  transition: opacity 0.2s;
-}
-
-.course-row:hover .course-detail-hint {
-  opacity: 1;
-}
-
-/* 考试场次列表 */
-.exam-items {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  max-height: 2000px;
-  opacity: 1;
-  overflow: hidden;
-}
-
-.exam-items.is-collapsed {
-  max-height: 0;
-  opacity: 0;
-}
-
-.exam-row {
-  display: flex;
-  align-items: center;
-  padding: 20px 48px;
-  border-top: 1px solid #FAFAFA;
-  transition: background-color 0.15s;
-}
-
-.exam-row:hover {
-  background: #F8FAFC;
-}
-
-.exam-row > div {
-  display: flex;
-  align-items: center;
-}
-
-.exam-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #334155;
-}
-
-.exam-id {
-  font-size: 10px;
-  color: #94A3B8;
-  font-family: monospace;
-  margin-top: 2px;
-}
-
-.paper-status-badge {
-  font-size: 10px;
-  font-weight: 600;
-  color: #3B82F6;
-  background: #EFF6FF;
-  padding: 1px 4px;
-  border-radius: 2px;
-  margin-top: 4px;
-  width: fit-content;
-}
-
-/* 状态标签 */
 .status-pill {
   display: inline-flex;
   align-items: center;
@@ -1161,206 +861,293 @@ onMounted(() => {
   border-radius: 9999px;
   font-size: 11px;
   font-weight: 600;
-  text-transform: uppercase;
 }
 
-.status-upcoming,
-.status-pending {
-  background: #FEF3C7;
-  color: #92400E;
+.status-ongoing { background-color: #dcfce7; color: #166534; }
+.status-pending { background-color: #fef3c7; color: #92400e; }
+.status-ended { background-color: #f1f5f9; color: #64748b; }
+
+.paper-link {
+  color: #ef4444;
+  font-size: 12px;
+  cursor: pointer;
 }
 
-.status-active,
-.status-ongoing {
-  background: #DCFCE7;
-  color: #166534;
+.paper-link:hover {
+  text-decoration: underline;
 }
 
-.status-ended {
-  background: #F1F5F9;
-  color: #64748B;
+.btn-action {
+  background: none;
+  border: none;
+  color: #94a3b8;
+  cursor: pointer;
 }
 
-/* 操作按钮 */
-.action-btn {
-  padding: 0;
-  height: auto;
-  font-size: 14px;
-  font-weight: 600;
+.btn-action:hover {
+  color: #334155;
 }
 
-.action-btn-secondary {
-  padding: 0;
-  height: auto;
-  font-size: 14px;
-  color: #CBD5E1;
-}
-
-.action-btn-secondary:hover {
-  color: #64748B;
-}
-
-/* 空状态 */
-.empty-state {
-  padding: 80px 0;
+.empty-cell {
   text-align: center;
-  color: #94A3B8;
+  padding: 64px 0;
+}
+
+.empty-content {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
 }
 
 .empty-icon {
-  width: 48px;
-  height: 48px;
-  margin: 0 auto 16px;
+  width: 44px;
+  height: 44px;
+  color: #cbd5e1;
 }
 
-/* 分页 */
-.pagination-bar {
+.empty-text {
+  color: #94a3b8;
+  font-size: 14px;
+}
+
+.footer-area {
+  padding: 20px 32px;
+  border-top: 1px solid #f1f5f9;
+  background: rgba(248, 250, 252, 0.1);
+}
+
+.notice-area {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 24px 48px;
-  border-top: 1px solid #F1F5F9;
-  background: white;
+  gap: 8px;
+  align-items: flex-start;
 }
 
-.pagination-info {
-  font-size: 10px;
-  font-weight: 700;
-  color: #94A3B8;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
+.notice-icon {
+  width: 16px;
+  height: 16px;
+  color: #ef4444;
+  margin-top: 2px;
 }
 
-.pagination-controls {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.page-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  border: 1px solid #E2E8F0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.notice-text {
   font-size: 12px;
-  color: #64748B;
-  background: white;
+  color: #94a3b8;
+  line-height: 1.6;
 }
 
-.page-btn:hover:not(:disabled) {
-  background: #F8FAFC;
+.footer-divider {
+  width: 100%;
+  height: 1px;
+  background: #f1f5f9;
+  margin: 16px 0;
 }
 
-.page-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.page-btn-active {
-  background: #2563EB !important;
-  color: white !important;
-  border-color: #2563EB !important;
-}
-
-/* 脚部 */
-.footer-bar {
-  margin-top: 32px;
-  padding: 0 16px 32px;
+.footer-actions {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 10px;
-  font-weight: 500;
-  color: #94A3B8;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
-/* 抽屉内样式 */
-.paper-action-row {
+.footer-left,
+.footer-right {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-top: 6px;
+  gap: 16px;
 }
 
-.paper-action-tip {
-  font-size: 12px;
-  color: #8c8c8c;
-}
-
-.passing-score-field {
+.batch-ops {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 
-.passing-score-total {
-  flex-shrink: 0;
+.batch-label {
   font-size: 12px;
-  color: #8c8c8c;
-  white-space: nowrap;
+  color: #94a3b8;
 }
 
-.paper-preview-card {
-  border: 1px solid #e8e8e8;
+.btn-batch {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748b;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: none;
+  cursor: pointer;
+}
+
+.btn-batch:hover {
+  background: #f1f5f9;
+}
+
+.btn-batch-danger {
+  color: #ef4444;
+}
+
+.btn-batch-danger:hover {
+  background: #fef2f2;
+}
+
+.page-info {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.page-sep {
+  margin: 0 8px;
+  color: #e2e8f0;
+}
+
+.pagination-btns {
+  display: flex;
+  gap: 4px;
+}
+
+.page-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  cursor: pointer;
+  color: #64748b;
+}
+
+.page-btn:hover:not(:disabled) {
+  background: #f1f5f9;
+}
+
+.page-btn:disabled,
+.page-btn.disabled {
+  color: #cbd5e1;
+  cursor: not-allowed;
+}
+
+.page-btn-active {
+  background: #1e293b;
+  color: white;
+  border-color: #1e293b;
+}
+
+.page-footer {
+  margin-top: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+}
+
+.paper-hint {
+  margin-top: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.hint-text {
+  color: #94a3b8;
+  font-size: 12px;
+}
+
+.paper-preview {
+  border: 1px solid #e2e8f0;
   border-radius: 8px;
+  background: #f8fafc;
   padding: 12px;
-  background: #fafafa;
 }
 
-.preview-head {
+.preview-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 16px;
+  gap: 12px;
   margin-bottom: 12px;
 }
 
 .preview-title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
-  color: #001234;
-}
-
-.preview-sub {
-  margin-top: 4px;
-  font-size: 12px;
-  color: #8c8c8c;
+  color: #1e293b;
 }
 
 .preview-meta {
-  display: flex;
-  gap: 16px;
   font-size: 12px;
-  color: #666;
+  color: #94a3b8;
+  margin-top: 2px;
 }
 
-.preview-list {
+.preview-stats {
+  font-size: 12px;
+  color: #64748b;
+  display: flex;
+  gap: 12px;
+}
+
+.preview-questions {
+  max-height: 260px;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-height: 320px;
-  overflow-y: auto;
+  gap: 6px;
 }
 
-.preview-item {
+.question-item {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 12px;
-  background: #fff;
-  border: 1px solid #f0f0f0;
+  padding: 8px;
+  border: 1px solid #e2e8f0;
   border-radius: 6px;
+  background: #ffffff;
+  font-size: 12px;
 }
 
-.preview-content {
+.question-num { color: #94a3b8; }
+.question-type { color: #2563eb; white-space: nowrap; }
+.question-content {
   flex: 1;
+  color: #475569;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+}
+.question-score { color: #94a3b8; white-space: nowrap; }
+.more-questions {
+  font-size: 12px;
+  color: #94a3b8;
+  text-align: center;
+  padding-top: 4px;
+}
+
+:deep(.search-input .ant-input-group .ant-input) {
+  border-radius: 8px;
+  border-color: #e2e8f0;
+  padding-left: 36px;
+  height: 36px;
+}
+
+:deep(.search-input .ant-input-group .ant-input:hover),
+:deep(.search-input .ant-input-group .ant-input:focus) {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 </style>

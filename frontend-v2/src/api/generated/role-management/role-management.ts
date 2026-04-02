@@ -27,7 +27,7 @@ export const createRoleApiV1RolesCreatePost = (
     roleCreate: RoleCreate,
  ) => {
       return customInstance<StandardResponseRoleResponse>(
-      {url: `/api/v1/roles/create`, method: 'POST',
+      {url: `/roles/create`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: roleCreate
     },
@@ -40,7 +40,7 @@ export const createRoleApiV1RolesPost = (
     roleCreate: RoleCreate,
  ) => {
       return customInstance<StandardResponseRoleResponse>(
-      {url: `/api/v1/roles`, method: 'POST',
+      {url: `/roles`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: roleCreate
     },
@@ -53,7 +53,7 @@ export const downloadRoleImportTemplateApiV1RolesImportTemplateGet = (
 
  ) => {
       return customInstance<unknown>(
-      {url: `/api/v1/roles/import/template`, method: 'GET'
+      {url: `/roles/import/template`, method: 'GET'
     },
       );
     }
@@ -64,7 +64,7 @@ export const exportRolesExcelApiV1RolesExportGet = (
     params?: ExportRolesExcelApiV1RolesExportGetParams,
  ) => {
       return customInstance<unknown>(
-      {url: `/api/v1/roles/export`, method: 'GET',
+      {url: `/roles/export`, method: 'GET',
         params
     },
       );
@@ -78,7 +78,7 @@ export const importRolesExcelApiV1RolesImportPost = (
 formData.append(`file`, bodyImportRolesExcelApiV1RolesImportPost.file);
 
       return customInstance<StandardResponse>(
-      {url: `/api/v1/roles/import`, method: 'POST',
+      {url: `/roles/import`, method: 'POST',
        data: formData
     },
       );
@@ -90,7 +90,7 @@ export const getRoleDetailApiV1RolesRoleIdDetailGet = (
     roleId: number,
  ) => {
       return customInstance<StandardResponseRoleResponse>(
-      {url: `/api/v1/roles/${roleId}/detail`, method: 'GET'
+      {url: `/roles/${roleId}/detail`, method: 'GET'
     },
       );
     }
@@ -101,7 +101,7 @@ export const getRoleListApiV1RolesListGet = (
     params?: GetRoleListApiV1RolesListGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseRoleSimpleResponse>(
-      {url: `/api/v1/roles/list`, method: 'GET',
+      {url: `/roles/list`, method: 'GET',
         params
     },
       );
@@ -114,7 +114,7 @@ export const updateRoleApiV1RolesRoleIdPut = (
     roleUpdate: RoleUpdate,
  ) => {
       return customInstance<StandardResponseRoleResponse>(
-      {url: `/api/v1/roles/${roleId}`, method: 'PUT',
+      {url: `/roles/${roleId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: roleUpdate
     },
@@ -127,7 +127,7 @@ export const deleteRoleApiV1RolesRoleIdDelete = (
     roleId: number,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/roles/${roleId}`, method: 'DELETE'
+      {url: `/roles/${roleId}`, method: 'DELETE'
     },
       );
     }
@@ -139,7 +139,7 @@ export const updateRoleApiV1RolesRoleIdUpdatePost = (
     roleUpdate: RoleUpdate,
  ) => {
       return customInstance<StandardResponseRoleResponse>(
-      {url: `/api/v1/roles/${roleId}/update`, method: 'POST',
+      {url: `/roles/${roleId}/update`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: roleUpdate
     },
@@ -152,7 +152,7 @@ export const deleteRoleApiV1RolesRoleIdDeletePost = (
     roleId: number,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/roles/${roleId}/delete`, method: 'POST'
+      {url: `/roles/${roleId}/delete`, method: 'POST'
     },
       );
     }
@@ -164,7 +164,7 @@ export const updateRolePermissionsApiV1RolesRoleIdPermissionsPost = (
     rolePermissionUpdate: RolePermissionUpdate,
  ) => {
       return customInstance<StandardResponseRoleResponse>(
-      {url: `/api/v1/roles/${roleId}/permissions`, method: 'POST',
+      {url: `/roles/${roleId}/permissions`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: rolePermissionUpdate
     },

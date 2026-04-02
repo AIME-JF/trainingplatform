@@ -24,7 +24,7 @@ export const getTrainingBasesApiV1TrainingBasesGet = (
     params?: GetTrainingBasesApiV1TrainingBasesGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseTrainingBaseResponse>(
-      {url: `/api/v1/training-bases`, method: 'GET',
+      {url: `/training-bases`, method: 'GET',
         params
     },
       );
@@ -36,7 +36,7 @@ export const createTrainingBaseApiV1TrainingBasesPost = (
     trainingBaseCreate: TrainingBaseCreate,
  ) => {
       return customInstance<StandardResponseTrainingBaseResponse>(
-      {url: `/api/v1/training-bases`, method: 'POST',
+      {url: `/training-bases`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: trainingBaseCreate
     },
@@ -49,7 +49,7 @@ export const getTrainingBaseApiV1TrainingBasesTrainingBaseIdGet = (
     trainingBaseId: number,
  ) => {
       return customInstance<StandardResponseTrainingBaseResponse>(
-      {url: `/api/v1/training-bases/${trainingBaseId}`, method: 'GET'
+      {url: `/training-bases/${trainingBaseId}`, method: 'GET'
     },
       );
     }
@@ -61,7 +61,7 @@ export const updateTrainingBaseApiV1TrainingBasesTrainingBaseIdPut = (
     trainingBaseUpdate: TrainingBaseUpdate,
  ) => {
       return customInstance<StandardResponseTrainingBaseResponse>(
-      {url: `/api/v1/training-bases/${trainingBaseId}`, method: 'PUT',
+      {url: `/training-bases/${trainingBaseId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: trainingBaseUpdate
     },
@@ -74,7 +74,7 @@ export const deleteTrainingBaseApiV1TrainingBasesTrainingBaseIdDelete = (
     trainingBaseId: number,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/training-bases/${trainingBaseId}`, method: 'DELETE'
+      {url: `/training-bases/${trainingBaseId}`, method: 'DELETE'
     },
       );
     }

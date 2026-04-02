@@ -169,6 +169,15 @@ function onMediaTouchEnd(event: TouchEvent) {
 </script>
 
 <style scoped>
+.resource-viewer.mode-recommend {
+  display: flex;
+  flex: 1 1 auto;
+  width: 100%;
+  height: var(--community-stage-height, 100%);
+  min-width: 0;
+  min-height: var(--community-stage-height, 100%);
+}
+
 .viewer-card {
   border-radius: var(--v2-radius-lg);
 }
@@ -197,6 +206,9 @@ function onMediaTouchEnd(event: TouchEvent) {
   border-radius: var(--v2-radius);
   overflow: hidden;
   background: transparent;
+}
+
+.viewer-stage {
   min-height: 320px;
 }
 
@@ -237,21 +249,32 @@ function onMediaTouchEnd(event: TouchEvent) {
 }
 
 .recommend-shell {
-  min-height: auto;
+  display: flex;
+  flex: 1 1 auto;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
 }
 
 .recommend-stage {
   display: flex;
+  flex: 1 1 auto;
   align-items: stretch;
-  justify-content: center;
-  min-height: clamp(520px, calc(100vh - 260px), 840px);
+  align-self: stretch;
+  justify-content: stretch;
+  height: var(--community-stage-height, 100%);
+  width: 100%;
+  min-width: 0;
+  min-height: var(--community-stage-height, 100%);
+  background: #000;
 }
 
 .recommend-info-card {
   position: absolute;
-  left: 18px;
-  right: 118px;
-  bottom: 18px;
+  left: 16px;
+  right: 110px;
+  bottom: 14px;
   z-index: 12;
   width: min(620px, calc(100% - 168px));
   padding: 0;
@@ -262,7 +285,7 @@ function onMediaTouchEnd(event: TouchEvent) {
 }
 
 .recommend-info-card.is-video {
-  bottom: 92px;
+  bottom: 74px;
 }
 
 .recommend-title {
@@ -321,17 +344,41 @@ function onMediaTouchEnd(event: TouchEvent) {
 
 .mode-recommend .media-video,
 .mode-recommend .media-image {
-  height: 100%;
+  flex: 1;
+  display: block;
+  height: var(--community-stage-height, 100%);
+  width: 100%;
+  align-self: stretch;
+  min-width: 0;
+  min-height: var(--community-stage-height, 100%);
+  max-width: none;
   max-height: none;
+  object-fit: contain;
+  background: #000;
 }
 
 .mode-recommend .media-document.full {
+  display: flex;
+  flex: 1 1 auto;
   width: 100%;
-  height: clamp(520px, calc(100vh - 260px), 840px);
+  height: var(--community-stage-height, 100%);
+  align-self: stretch;
+  min-width: 0;
+  min-height: var(--community-stage-height, 100%);
 }
 
 .mode-recommend .doc-frame {
-  min-height: clamp(520px, calc(100vh - 260px), 840px);
+  min-height: var(--community-stage-height, 100%);
+  height: var(--community-stage-height, 100%);
+  width: 100%;
+}
+
+.mode-recommend .recommend-stage,
+.mode-recommend .media-video,
+.mode-recommend .media-image,
+.mode-recommend .media-document.full,
+.mode-recommend .doc-frame {
+  border-radius: 0;
 }
 
 @media (max-width: 768px) {
@@ -344,18 +391,19 @@ function onMediaTouchEnd(event: TouchEvent) {
 
   .recommend-shell,
   .recommend-stage {
-    min-height: clamp(460px, calc(100vh - 310px), 720px);
+    height: 100%;
+    min-height: 0;
   }
 
   .recommend-info-card {
     left: 14px;
     right: 86px;
-    bottom: 10px;
+    bottom: 8px;
     width: auto;
   }
 
   .recommend-info-card.is-video {
-    bottom: 72px;
+    bottom: 62px;
   }
 
   .recommend-title {

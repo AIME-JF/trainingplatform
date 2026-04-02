@@ -26,6 +26,12 @@ export const routes: RouteRecordRaw[] = [
     ],
   },
   {
+    path: '/attendance/:token/:sessionKey?',
+    name: 'AttendanceScan',
+    component: () => import('@/views/attendance/Scan.vue'),
+    meta: { title: '扫码出勤' },
+  },
+  {
     path: '/',
     component: MobileLayout,
     meta: { requiresAuth: true },

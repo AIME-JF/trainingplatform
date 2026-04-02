@@ -14,6 +14,8 @@ export interface QuestionFolderCreate {
      * @maxLength 100
      */
   name: string;
+  /** 题库分类 */
+  category?: string | null;
   /** 父文件夹ID */
   parent_id?: number | null;
   /** 排序 */

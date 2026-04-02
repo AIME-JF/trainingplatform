@@ -10,6 +10,7 @@
  */
 export interface QuestionFolderUpdate {
   name?: string | null;
+  category?: string | null;
   parent_id?: number | null;
   sort_order?: number | null;
 }

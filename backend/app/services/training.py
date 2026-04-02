@@ -86,8 +86,8 @@ _UNSET = object()
 class TrainingService:
     """培训服务"""
 
-    CHECKIN_QR_PREFIX = "training:checkin:qr:"
-    CHECKIN_QR_TTL_SECONDS = 15 * 60
+    ATTENDANCE_QR_PREFIX = "training:attendance:qr:"
+    ATTENDANCE_QR_TTL_SECONDS = 15 * 60
     SESSION_PENDING = "pending"
     SESSION_CHECKIN_OPEN = "checkin_open"
     SESSION_CHECKIN_CLOSED = "checkin_closed"
@@ -242,11 +242,20 @@ class TrainingService:
             normalized.append(value)
         return normalized
 
+    def _resolve_training_type_id(self, type_code: Optional[str]) -> Optional[int]:
+        """根据 type code 查找 training_type_id"""
+        if not type_code:
+            return None
+        from app.models.training_type import TrainingType
+        tt = self.db.query(TrainingType.id).filter(TrainingType.code == type_code).first()
+        return tt.id if tt else None
+
     def create_training(self, data: TrainingCreate, user_id: int) -> TrainingResponse:
         """创建培训班"""
         training = Training(
             name=data.name,
             type=data.type,
+            training_type_id=data.training_type_id or self._resolve_training_type_id(data.type),
             status=data.status,
             publish_status=data.publish_status or "draft",
             start_date=data.start_date,
@@ -366,6 +375,11 @@ class TrainingService:
 
         for field, value in update_data.items():
             setattr(training, field, value)
+
+        # type 变更时自动同步 training_type_id
+        if "type" in update_data and update_data["type"]:
+            if not training.training_type_id or training.training_type_id != self._resolve_training_type_id(update_data["type"]):
+                training.training_type_id = self._resolve_training_type_id(update_data["type"])
 
         if (training.visibility_scope or "all") == "all":
             training.visibility_department_ids = None
@@ -1083,18 +1097,14 @@ class TrainingService:
 
         record.time = checkin_time
         record.status = status
-        if data.user_id:
+        if data.method:
+            checkin_method = data.method
+        elif data.user_id:
             checkin_method = "manual"
-        elif session["schedule"].get("checkin_mode") == "direct":
-            checkin_method = "direct"
         else:
-            checkin_method = "qr"
+            checkin_method = "direct"
         record.checkin_method = checkin_method
         record.absence_reason = None
-
-        checkin_user = self.db.query(User).filter(User.id == target_user_id).first()
-        checkin_user_name = (checkin_user.nickname or checkin_user.username) if checkin_user else str(target_user_id)
-        self._record_activity(training_id, target_user_id, checkin_user_name, "checkin", f"{checkin_user_name} 已签到")
 
         self._refresh_training_histories(training_id, [target_user_id])
         self.db.commit()
@@ -1140,14 +1150,10 @@ class TrainingService:
 
         record.checkout_time = checkout_time
         record.checkout_status = "completed"
-        record.checkout_method = "manual" if data.user_id else "qr"
+        record.checkout_method = data.method or ("manual" if data.user_id else "direct")
         if record.status == "absent":
             record.status = "on_time"
             record.absence_reason = None
-
-        checkout_user = self.db.query(User).filter(User.id == target_user_id).first()
-        checkout_user_name = (checkout_user.nickname or checkout_user.username) if checkout_user else str(target_user_id)
-        self._record_activity(training_id, target_user_id, checkout_user_name, "checkout", f"{checkout_user_name} 已签退")
 
         self._refresh_training_histories(training_id, [target_user_id])
         self.db.commit()
@@ -1241,9 +1247,6 @@ class TrainingService:
         schedule["checkin_mode"] = checkin_mode
         schedule["checkin_duration_minutes"] = checkin_duration_minutes
         schedule["checkin_deadline"] = (now + timedelta(minutes=checkin_duration_minutes)).isoformat()
-        if checkin_mode == "qr":
-            qr_resp = self.generate_checkin_qr(training_id, session_key)
-            schedule["checkin_qr_token"] = qr_resp.token
         flag_modified(session["course"], "schedules")
         if training.status != "ended":
             if training.publish_status != "published":
@@ -1283,14 +1286,19 @@ class TrainingService:
             raise ValueError("培训班不存在")
         return detail
 
-    def start_session_checkout(self, training_id: int, session_key: str, user_id: int) -> TrainingResponse:
+    def start_session_checkout(self, training_id: int, session_key: str, user_id: int, checkout_mode: str = "direct", checkout_duration_minutes: int = 15) -> TrainingResponse:
         training, session = self._load_training_session(training_id, session_key)
         self._assert_training_course_editable(training, "修改课次状态")
         if not self._can_operate_schedule(training, session["course"], session["schedule"], user_id, "start_checkout"):
             raise ValueError("当前用户无权开始该课次签退，或课次状态不允许")
         before_course = self._snapshot_course_entity(session["course"])
-        session["schedule"]["status"] = self.SESSION_CHECKOUT_OPEN
-        session["schedule"]["checkout_started_at"] = datetime.now().isoformat()
+        now = datetime.now()
+        schedule = session["schedule"]
+        schedule["status"] = self.SESSION_CHECKOUT_OPEN
+        schedule["checkout_started_at"] = now.isoformat()
+        schedule["checkout_mode"] = checkout_mode
+        schedule["checkout_duration_minutes"] = checkout_duration_minutes
+        schedule["checkout_deadline"] = (now + timedelta(minutes=checkout_duration_minutes)).isoformat()
         flag_modified(session["course"], "schedules")
         self._record_course_entity_changes(training.id, before_course, session["course"], user_id, "start_checkout")
         _user = self.db.query(User).filter(User.id == user_id).first()
@@ -1350,14 +1358,15 @@ class TrainingService:
             raise ValueError("培训班不存在")
         return detail
 
-    def generate_checkin_qr(
+    def generate_attendance_qr(
         self,
         training_id: int,
         session_key: str = "start",
         target_date: Optional[date] = None,
         user_id: Optional[int] = None,
+        action: str = "checkin",
     ) -> TrainingCheckinQrResponse:
-        """生成签到二维码"""
+        """生成出勤二维码（签到或签退）"""
         training = self.db.query(Training).options(
             joinedload(Training.courses),
         ).filter(Training.id == training_id).first()
@@ -1368,13 +1377,18 @@ class TrainingService:
         if not session:
             raise ValueError("课次不存在")
         if user_id and not can_operate_training_course(self.db, training, session["course"], user_id):
-            raise ValueError("当前用户无权为该课次生成签到二维码")
-        if (session["schedule"].get("status") or self.SESSION_PENDING) != self.SESSION_CHECKIN_OPEN:
-            raise ValueError("当前课次未开启签到")
+            raise ValueError("当前用户无权为该课次生成二维码")
+        session_status = session["schedule"].get("status") or self.SESSION_PENDING
+        if action == "checkout":
+            if session_status != self.SESSION_CHECKOUT_OPEN:
+                raise ValueError("当前课次未处于签退状态")
+        else:
+            if session_status not in {self.SESSION_CHECKIN_OPEN, self.SESSION_CHECKOUT_OPEN}:
+                raise ValueError("当前课次未处于签到或签退状态")
 
         token = str(uuid.uuid4())
         session_date = target_date or session["date"]
-        expire_at = datetime.now() + timedelta(seconds=self.CHECKIN_QR_TTL_SECONDS)
+        expire_at = datetime.now() + timedelta(seconds=self.ATTENDANCE_QR_TTL_SECONDS)
         payload = {
             "training_id": training_id,
             "training_name": training.name,
@@ -1382,12 +1396,13 @@ class TrainingService:
             "session_label": session["session_label"],
             "date": session_date.isoformat() if session_date else None,
             "expire_at": expire_at.isoformat(),
+            "action": action,
         }
 
         redis_client = self._get_redis_client()
         redis_client.setex(
-            f"{self.CHECKIN_QR_PREFIX}{token}",
-            self.CHECKIN_QR_TTL_SECONDS,
+            f"{self.ATTENDANCE_QR_PREFIX}{token}",
+            self.ATTENDANCE_QR_TTL_SECONDS,
             json.dumps(payload, ensure_ascii=False),
         )
 
@@ -1398,19 +1413,21 @@ class TrainingService:
             session_key=session_key,
             session_label=payload["session_label"],
             date=session_date,
-            url=f"/mobile/checkin/{token}/{session_key}",
+            url=f"/attendance/{token}/{session_key}",
             expire_at=expire_at,
-            expires_in_seconds=self.CHECKIN_QR_TTL_SECONDS,
+            expires_in_seconds=self.ATTENDANCE_QR_TTL_SECONDS,
+            action=action,
         )
 
-    def get_checkin_qr_payload(self, token: str) -> Optional[TrainingCheckinQrResponse]:
-        """获取扫码签到载荷"""
-        payload = self._load_checkin_qr_payload(token)
+    def get_attendance_qr_payload(self, token: str) -> Optional[TrainingCheckinQrResponse]:
+        """获取扫码出勤载荷"""
+        payload = self._load_attendance_qr_payload(token)
         if not payload:
             return None
 
         raw_date = payload.get("date")
         raw_expire_at = payload.get("expire_at")
+        action = payload.get("action", "checkin")
         return TrainingCheckinQrResponse(
             token=token,
             training_id=int(payload["training_id"]),
@@ -1418,26 +1435,44 @@ class TrainingService:
             session_key=str(payload["session_key"]),
             session_label=str(payload["session_label"]),
             date=date.fromisoformat(raw_date) if raw_date else None,
-            url=f"/mobile/checkin/{token}/{payload['session_key']}",
+            url=f"/attendance/{token}/{payload['session_key']}",
             expire_at=datetime.fromisoformat(raw_expire_at) if raw_expire_at else datetime.now(),
-            expires_in_seconds=max(0, self._get_redis_client().ttl(f"{self.CHECKIN_QR_PREFIX}{token}")),
+            expires_in_seconds=max(0, self._get_redis_client().ttl(f"{self.ATTENDANCE_QR_PREFIX}{token}")),
+            action=action,
         )
 
-    def checkin_by_qr(self, token: str, user_id: int) -> CheckinResponse:
-        """通过二维码签到"""
-        payload = self._load_checkin_qr_payload(token)
+    def attendance_by_qr(self, token: str, user_id: int) -> CheckinResponse:
+        """通过二维码进行签到或签退（根据 action 字段自动路由）"""
+        payload = self._load_attendance_qr_payload(token)
         if not payload:
-            raise ValueError("签到二维码不存在或已失效")
+            raise ValueError("二维码不存在或已失效")
 
+        action = payload.get("action", "checkin")
         raw_date = payload.get("date")
-        return self.checkin(
-            int(payload["training_id"]),
-            user_id,
-            CheckinCreate(
-                session_key=str(payload["session_key"]),
-                date=date.fromisoformat(raw_date) if raw_date else None,
-            ),
-        )
+        parsed_date = date.fromisoformat(raw_date) if raw_date else None
+        session_key = str(payload["session_key"])
+        training_id = int(payload["training_id"])
+
+        if action == "checkout":
+            return self.checkout(
+                training_id,
+                user_id,
+                CheckoutCreate(
+                    session_key=session_key,
+                    date=parsed_date,
+                    method="qr",
+                ),
+            )
+        else:
+            return self.checkin(
+                training_id,
+                user_id,
+                CheckinCreate(
+                    session_key=session_key,
+                    date=parsed_date,
+                    method="qr",
+                ),
+            )
 
     def get_training_histories(
         self,
@@ -1669,6 +1704,12 @@ class TrainingService:
             "skipped_at": self._serialize_dt(raw.get("skipped_at") or raw.get("skippedAt")),
             "skipped_by": raw.get("skipped_by") or raw.get("skippedBy"),
             "skip_reason": raw.get("skip_reason") or raw.get("skipReason"),
+            "checkin_mode": raw.get("checkin_mode") or raw.get("checkinMode"),
+            "checkin_duration_minutes": raw.get("checkin_duration_minutes") or raw.get("checkinDurationMinutes"),
+            "checkin_deadline": raw.get("checkin_deadline") or raw.get("checkinDeadline"),
+            "checkout_mode": raw.get("checkout_mode") or raw.get("checkoutMode"),
+            "checkout_duration_minutes": raw.get("checkout_duration_minutes") or raw.get("checkoutDurationMinutes"),
+            "checkout_deadline": raw.get("checkout_deadline") or raw.get("checkoutDeadline"),
         }
 
     def _serialize_dt(self, value: Any) -> Optional[str]:
@@ -1979,11 +2020,11 @@ class TrainingService:
         try:
             return get_redis()
         except Exception as exc:
-            logger.error("获取签到二维码缓存失败: %s", exc)
-            raise ValueError("Redis 不可用，暂时无法处理扫码签到")
+            logger.error("获取出勤二维码缓存失败: %s", exc)
+            raise ValueError("Redis 不可用，暂时无法处理扫码出勤")
 
-    def _load_checkin_qr_payload(self, token: str) -> Optional[Dict[str, Any]]:
-        cache_value = self._get_redis_client().get(f"{self.CHECKIN_QR_PREFIX}{token}")
+    def _load_attendance_qr_payload(self, token: str) -> Optional[Dict[str, Any]]:
+        cache_value = self._get_redis_client().get(f"{self.ATTENDANCE_QR_PREFIX}{token}")
         if not cache_value:
             return None
         return json.loads(cache_value)
@@ -2140,12 +2181,21 @@ class TrainingService:
                 schedule = self._normalize_schedule_item(item)
                 session_date = self._parse_schedule_date(schedule)
                 _, time_end = self._parse_time_range(schedule.get("time_range"))
-                deadline = datetime.combine(session_date, time_end or time(23, 59)) if session_date else None
-                normalized_deadline = self._normalize_datetime(deadline, now.tzinfo)
+                base_deadline = datetime.combine(session_date, time_end or time(23, 59)) if session_date else None
+                status = schedule.get("status")
+                # When a checkin/checkout window is active with a deadline, respect it
+                effective_deadline = base_deadline
+                if status in {self.SESSION_CHECKIN_OPEN, self.SESSION_CHECKOUT_OPEN}:
+                    window_deadline_str = schedule.get("checkin_deadline") if status == self.SESSION_CHECKIN_OPEN else schedule.get("checkout_deadline")
+                    if window_deadline_str:
+                        window_deadline = self._parse_schedule_datetime(window_deadline_str)
+                        if window_deadline and (effective_deadline is None or window_deadline > effective_deadline):
+                            effective_deadline = window_deadline
+                normalized_deadline = self._normalize_datetime(effective_deadline, now.tzinfo)
                 if (
                     normalized_deadline
                     and now > normalized_deadline
-                    and schedule.get("status") in {
+                    and status in {
                         self.SESSION_PENDING,
                         self.SESSION_CHECKIN_OPEN,
                         self.SESSION_CHECKIN_CLOSED,
@@ -2435,7 +2485,9 @@ class TrainingService:
             checkin_mode=sched.get("checkin_mode"),
             checkin_duration_minutes=sched.get("checkin_duration_minutes"),
             checkin_deadline=sched.get("checkin_deadline"),
-            checkin_qr_token=sched.get("checkin_qr_token"),
+            checkout_mode=sched.get("checkout_mode"),
+            checkout_duration_minutes=sched.get("checkout_duration_minutes"),
+            checkout_deadline=sched.get("checkout_deadline"),
             action_permissions=self._build_session_action_permissions(training, session, current_user_id),
         )
 

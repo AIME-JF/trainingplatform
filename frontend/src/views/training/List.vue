@@ -1244,14 +1244,6 @@ function goEnrollManage(training) {
   router.push({ name: 'EnrollManage', params: { id: training.id } })
 }
 
-function goCheckin(training) {
-  router.push({ name: 'Checkin', params: { id: training.id } })
-}
-
-function goCheckout(training) {
-  router.push({ name: 'Checkout', params: { id: training.id } })
-}
-
 function goHistory(training) {
   router.push({ name: 'TrainingHistory', params: { id: training.id } })
 }

@@ -8,4 +8,8 @@
 export type GetCheckinQrApiV1TrainingsTrainingIdCheckinQrGetParams = {
 session_key?: string;
 date?: string | null;
+/**
+ * 出勤动作: checkin/checkout
+ */
+action?: string;
 };

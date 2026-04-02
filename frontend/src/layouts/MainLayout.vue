@@ -1,5 +1,5 @@
 <template>
-  <a-layout class="main-layout">
+  <a-layout class="main-layout" :class="{ immersive: isImmersiveRoute }">
     <!-- 侧边栏 -->
     <a-layout-sider
       v-model:collapsed="collapsed"
@@ -189,17 +189,22 @@ const openKeys = ref([])
 const isMobile = ref(window.innerWidth <= 768)
 const isMounted = ref(false)
 
-const isImmersiveRoute = computed(() => route.path.startsWith('/resource/recommend'))
+const isImmersiveRoute = computed(() => route.meta?.immersive === true)
 const desktopSidebarWidth = computed(() => {
   if (isMobile.value) {
     return 0
   }
   return collapsed.value ? COLLAPSED_SIDEBAR_WIDTH : SIDEBAR_WIDTH
 })
-const mainShellStyle = computed(() => ({
-  marginLeft: `${desktopSidebarWidth.value}px`,
-  width: `calc(100% - ${desktopSidebarWidth.value}px)`,
-}))
+const mainShellStyle = computed(() => {
+  if (isImmersiveRoute.value) {
+    return { marginLeft: '0', width: '100%' }
+  }
+  return {
+    marginLeft: `${desktopSidebarWidth.value}px`,
+    width: `calc(100% - ${desktopSidebarWidth.value}px)`,
+  }
+})
 
 function updateAppVh() {
   const vh = window.innerHeight * 0.01
@@ -548,10 +553,23 @@ function handleLogout() {
 
 .content-area.immersive-content {
   padding: 0;
-  background: #000;
-  height: calc(var(--app-vh, 1vh) * 100 - 64px);
-  min-height: calc(var(--app-vh, 1vh) * 100 - 64px);
-  overflow: hidden;
+  background: #F8FAFC;
+  height: calc(var(--app-vh, 1vh) * 100);
+  min-height: calc(var(--app-vh, 1vh) * 100);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* 沉浸模式：隐藏侧边栏和顶栏 */
+.main-layout.immersive .sidebar {
+  display: none;
+}
+.main-layout.immersive .topbar {
+  display: none;
+}
+.main-layout.immersive .main-shell {
+  margin-left: 0 !important;
+  width: 100% !important;
 }
 
 /* 用户下拉菜单 */

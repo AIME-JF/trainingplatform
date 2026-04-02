@@ -21,6 +21,8 @@ class AIPaperGenerator(BaseAIAgent):
     def generate_paper(
         self,
         request: AIPaperGenerationTaskCreateRequest,
+        *,
+        allow_fallback: bool = True,
     ) -> AITaskPaperDraft:
         """
         根据请求生成完整试卷
@@ -56,7 +58,11 @@ class AIPaperGenerator(BaseAIAgent):
 
             # 调用 AI 生成该题型题目，带重试
             generator = AIQuestionGenerator()
-            drafts = self._generate_with_retry(generator, question_request)
+            drafts = self._generate_with_retry(
+                generator,
+                question_request,
+                allow_fallback=allow_fallback,
+            )
             all_drafts.extend(drafts)
 
             # 题型之间添加延迟，避免 API 限流
@@ -77,6 +83,8 @@ class AIPaperGenerator(BaseAIAgent):
         self,
         generator: AIQuestionGenerator,
         question_request,
+        *,
+        allow_fallback: bool = True,
     ) -> List[AITaskQuestionDraft]:
         """带重试的题目生成"""
         from logger import logger
@@ -95,6 +103,10 @@ class AIPaperGenerator(BaseAIAgent):
                 )
                 if attempt < self.MAX_RETRIES - 1:
                     time.sleep(self.RETRY_DELAY * (attempt + 1))  # 递增延迟
+
+        if not allow_fallback:
+            logger.error("AI 生成题目最终失败，不允许降级: %s", last_error)
+            raise RuntimeError(f"AI 生成题目最终失败: {last_error}") from last_error
 
         # 所有重试都失败了，返回模拟数据作为降级方案
         logger.error("AI 生成题目最终失败，使用模拟数据: %s", last_error)

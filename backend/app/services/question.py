@@ -7,7 +7,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import joinedload, selectinload
 
-from app.models import KnowledgePoint, PoliceType, Question, QuestionFolder
+from app.models import KnowledgePoint, PoliceType, Question, QuestionFolder, User
 from app.schemas import PaginatedResponse
 from app.schemas.exam import QuestionCreate, QuestionUpdate, QuestionResponse, QuestionBatchCreate, QuestionFolderCreate, QuestionFolderUpdate
 from app.schemas.knowledge_point import KnowledgePointSimpleResponse
@@ -36,6 +36,15 @@ class QuestionService:
         self.db = db
         self.knowledge_point_service = KnowledgePointService(db)
 
+    def _get_descendant_folder_ids(self, parent_id: int) -> List[int]:
+        """递归获取所有子文件夹ID"""
+        result = []
+        children = self.db.query(QuestionFolder.id).filter(QuestionFolder.parent_id == parent_id).all()
+        for child_id, in children:
+            result.append(child_id)
+            result.extend(self._get_descendant_folder_ids(child_id))
+        return result
+
     def get_questions(
         self,
         page: int = 1,
@@ -44,6 +53,8 @@ class QuestionService:
         type: Optional[str] = None,
         difficulty: Optional[int] = None,
         knowledge_point: Optional[str] = None,
+        folder_id: Optional[int] = None,
+        recursive: bool = False,
         current_user_id: Optional[int] = None,
     ) -> PaginatedResponse[QuestionResponse]:
         """获取题目列表"""
@@ -64,6 +75,16 @@ class QuestionService:
             query = query.filter(Question.difficulty == difficulty)
         if knowledge_point:
             query = query.filter(KnowledgePoint.name.contains(knowledge_point))
+
+        # 文件夹筛选，支持递归
+        if folder_id is not None:
+            if recursive:
+                # 递归：获取所有子文件夹ID
+                folder_ids = self._get_descendant_folder_ids(folder_id)
+                folder_ids.append(folder_id)
+                query = query.filter(Question.folder_id.in_(folder_ids))
+            else:
+                query = query.filter(Question.folder_id == folder_id)
 
         query = query.order_by(Question.created_at.desc(), Question.id.desc())
         questions = deduplicate_questions(query.all())
@@ -151,18 +172,110 @@ class QuestionService:
 
     # ============== 文件夹管理 ==============
 
+    def _build_folder_response(self, folder: QuestionFolder, question_count: int = 0, paper_count: int = 0) -> dict:
+        creator_name = None
+        if folder.created_by:
+            user = self.db.query(User).filter(User.id == folder.created_by).first()
+            if user:
+                creator_name = user.name or user.username
+
+        if question_count > 0 or paper_count > 0:
+            status = "使用中"
+        else:
+            status = "未使用"
+
+        return {
+            "id": folder.id,
+            "name": folder.name,
+            "category": folder.category or "默认分类",
+            "parent_id": folder.parent_id,
+            "sort_order": folder.sort_order,
+            "question_count": question_count,
+            "paper_count": paper_count,
+            "exercise_count": 0,
+            "status": status,
+            "created_by": folder.created_by,
+            "created_by_name": creator_name,
+            "created_at": folder.created_at,
+            "updated_at": folder.updated_at,
+            "children": [],
+        }
+
     def get_question_folders(self) -> List:
         """获取试题文件夹树"""
         folders = self.db.query(QuestionFolder).order_by(QuestionFolder.sort_order, QuestionFolder.id).all()
+
+        creator_ids = {f.created_by for f in folders if f.created_by}
+        creators = {u.id: u for u in self.db.query(User).filter(User.id.in_(creator_ids)).all()} if creator_ids else {}
+
+        folder_ids = [f.id for f in folders]
+        question_counts = {}
+        if folder_ids:
+            from sqlalchemy import func as sa_func
+            counts = self.db.query(Question.folder_id, sa_func.count(Question.id)).filter(
+                Question.folder_id.in_(folder_ids)
+            ).group_by(Question.folder_id).all()
+            question_counts = {row[0]: row[1] for row in counts}
+
+        # 预构建文件夹ID到子文件夹ID列表的映射
+        folder_children_map = {}
+        for folder in folders:
+            if folder.parent_id:
+                if folder.parent_id not in folder_children_map:
+                    folder_children_map[folder.parent_id] = []
+                folder_children_map[folder.parent_id].append(folder.id)
+
+        # 递归计算每个文件夹的题目总数（包括子文件夹）
+        def get_recursive_question_count(folder_id):
+            count = question_counts.get(folder_id, 0)
+            children_ids = folder_children_map.get(folder_id, [])
+            for child_id in children_ids:
+                count += get_recursive_question_count(child_id)
+            return count
+
+        # 计算每个文件夹的递归题目总数
+        recursive_question_counts = {fid: get_recursive_question_count(fid) for fid in folder_ids}
+
+        paper_counts = {}
+        if folder_ids:
+            from sqlalchemy import func as sa_func
+            from app.models.exam import ExamPaperQuestion
+            counts = self.db.query(
+                Question.folder_id,
+                sa_func.count(sa_func.distinct(ExamPaperQuestion.paper_id))
+            ).join(
+                ExamPaperQuestion, ExamPaperQuestion.question_id == Question.id
+            ).filter(
+                Question.folder_id.in_(folder_ids)
+            ).group_by(Question.folder_id).all()
+            paper_counts = {row[0]: row[1] for row in counts}
+
         folder_responses = []
         for folder in folders:
-            question_count = self.db.query(Question).filter(Question.folder_id == folder.id).count()
+            q_count = recursive_question_counts.get(folder.id, 0)
+            p_count = paper_counts.get(folder.id, 0)
+            creator = creators.get(folder.created_by)
+            creator_name = creator.name if creator and creator.name else (creator.username if creator else None)
+
+            if q_count > 0 or p_count > 0:
+                status = "使用中"
+            else:
+                status = "未使用"
+
             folder_responses.append({
                 "id": folder.id,
                 "name": folder.name,
+                "category": folder.category or "默认分类",
                 "parent_id": folder.parent_id,
                 "sort_order": folder.sort_order,
-                "question_count": question_count,
+                "question_count": q_count,
+                "paper_count": p_count,
+                "exercise_count": 0,
+                "status": status,
+                "created_by": folder.created_by,
+                "created_by_name": creator_name,
+                "created_at": folder.created_at,
+                "updated_at": folder.updated_at,
                 "children": [],
             })
         return self._build_folder_tree(folder_responses)
@@ -179,36 +292,29 @@ class QuestionService:
         return root_folders
 
     def create_question_folder(self, data: QuestionFolderCreate, user_id: int):
-        """创建文件夹"""
         if data.parent_id:
             parent = self.db.query(QuestionFolder).filter(QuestionFolder.id == data.parent_id).first()
             if not parent:
                 raise ValueError("父文件夹不存在")
         folder = QuestionFolder(
             name=data.name,
+            category=data.category,
             parent_id=data.parent_id,
             sort_order=data.sort_order,
             created_by=user_id,
         )
         self.db.add(folder)
         self.db.commit()
-        question_count = self.db.query(Question).filter(Question.folder_id == folder.id).count()
-        return {
-            "id": folder.id,
-            "name": folder.name,
-            "parent_id": folder.parent_id,
-            "sort_order": folder.sort_order,
-            "question_count": question_count,
-            "children": [],
-        }
+        return self._build_folder_response(folder)
 
     def update_question_folder(self, folder_id: int, data: QuestionFolderUpdate):
-        """更新文件夹"""
         folder = self.db.query(QuestionFolder).filter(QuestionFolder.id == folder_id).first()
         if not folder:
             raise ValueError("文件夹不存在")
         if data.name is not None:
             folder.name = data.name
+        if data.category is not None:
+            folder.category = data.category
         if data.parent_id is not None:
             if data.parent_id == folder_id:
                 raise ValueError("不能将文件夹设置为自己的子文件夹")
@@ -219,15 +325,9 @@ class QuestionService:
         if data.sort_order is not None:
             folder.sort_order = data.sort_order
         self.db.commit()
-        question_count = self.db.query(Question).filter(Question.folder_id == folder.id).count()
-        return {
-            "id": folder.id,
-            "name": folder.name,
-            "parent_id": folder.parent_id,
-            "sort_order": folder.sort_order,
-            "question_count": question_count,
-            "children": [],
-        }
+
+        q_count = self.db.query(Question).filter(Question.folder_id == folder_id).count()
+        return self._build_folder_response(folder, question_count=q_count)
 
     def delete_question_folder(self, folder_id: int) -> None:
         """删除文件夹"""

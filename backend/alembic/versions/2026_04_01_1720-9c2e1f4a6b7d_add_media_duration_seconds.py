@@ -1,7 +1,7 @@
 """add media duration seconds
 
 Revision ID: 9c2e1f4a6b7d
-Revises: 3654902f12cf
+Revises: 819162486835
 Create Date: 2026-04-01 17:20:00.000000
 """
 
@@ -14,7 +14,7 @@ from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
 revision: str = "9c2e1f4a6b7d"
-down_revision: Union[str, None] = "3654902f12cf"
+down_revision: Union[str, None] = "819162486835"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

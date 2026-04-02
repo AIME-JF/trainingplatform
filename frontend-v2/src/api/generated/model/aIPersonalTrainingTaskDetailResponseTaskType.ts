@@ -12,6 +12,7 @@ export const AIPersonalTrainingTaskDetailResponseTaskType = {
   question_generation: 'question_generation',
   paper_assembly: 'paper_assembly',
   paper_generation: 'paper_generation',
+  paper_document_generation: 'paper_document_generation',
   resource_generation: 'resource_generation',
   schedule_generation: 'schedule_generation',
   personal_training_plan_generation: 'personal_training_plan_generation',

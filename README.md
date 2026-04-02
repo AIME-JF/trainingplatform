@@ -49,6 +49,9 @@
 - 可通过 `enrollment_requires_approval` 配置报名后是"待审核"还是"直接通过"
 - 培训班详情页围绕"步骤条 + 详情页操作"组织，而不是把重操作堆在列表页
 - 培训开班后，课程 / 课次变更、签到状态流转都会写入 `TrainingCourseChangeLog`
+- 签到签退采用统一出勤二维码链路：后端通过 `action` 参数区分签到和签退，前端统一扫码页 `/attendance/:token/:sessionKey?` 根据 `action` 渲染对应确认界面
+- 签到 / 签退模式（`direct` / `qr`）、截止时间等字段在课次 JSON 中持久保存，刷新详情不会丢失
+- 自动状态刷新优先尊重签到 / 签退窗口截止时间，不会在窗口有效期内将课次标记为 `missed`
 - 培训班支持 `schedule_rule_config` 排课规则，AI 排课和手工排课都按同一套规则计算课时
 
 #### 课程域
@@ -442,6 +445,13 @@ pnpm api:generate
 
 执行前提：后端服务正在运行（Orval 需要访问 `http://127.0.0.1:8001/api/v1/openapi.json`）。
 
+注意：
+
+- `pnpm api:generate` 读取的是 `frontend-v2/orval.config.ts` 中的 `input.target`，不是 `VITE_API_BASE_URL`
+- 可以通过环境变量 `ORVAL_INPUT_TARGET` 临时覆盖 OpenAPI 输入地址
+- `frontend-v2/src/api/generated/**` 是自动生成目录，禁止手改
+- 如果重新生成后仍看到旧接口命名，先检查当前 OpenAPI 源是否真的是这份仓库对应的后端实例
+
 | 需要执行 | 不需要执行 |
 | --- | --- |
 | 新增 / 修改 / 删除 `backend/app/views/` 下的 API 端点 | 仅修改 service / controller 内部逻辑 |
@@ -450,6 +460,13 @@ pnpm api:generate
 | 新增路由模块并在 `views/__init__.py` 注册 | |
 
 生成的文件位于 `frontend-v2/src/api/generated/`，按后端 tag 拆分，提交到仓库。
+
+**前端代码规范：**
+
+- 默认优先使用 `frontend-v2/src/api/generated/` 下 Orval 生成的函数
+- 不要直接手改 `frontend-v2/src/api/generated/**`
+- `axiosInstance`（`src/api/custom-instance.ts`）仅作为 Orval mutator 底层使用
+- 当前统一出勤二维码接口是临时例外，使用 `frontend-v2/src/services/attendance.ts` 作为手写适配层，避免通过手改 generated 文件追接口变更
 
 ## 文档索引
 

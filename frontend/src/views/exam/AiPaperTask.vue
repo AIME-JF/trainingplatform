@@ -930,7 +930,13 @@ async function handleCreateTask() {
 
     message.success('任务已创建')
     resetForm()
+    viewMode.value = 'list'
     await loadTasks()
+    // 直接跳转到刚创建的任务详情
+    if (result?.id) {
+      await loadTaskDetail(result.id, result.taskType)
+      detailDrawerVisible.value = true
+    }
   } catch (error) {
     message.error(error.message || '创建任务失败')
   } finally {
@@ -939,6 +945,24 @@ async function handleCreateTask() {
 }
 
 const fileParsing = ref(false)
+const SOURCE_TEXT_MAX_LENGTH = 60000
+
+function appendSourceText(chunk) {
+  const textChunk = String(chunk || '')
+  if (!textChunk) return
+  const nextText = formData.sourceText
+    ? `${formData.sourceText}\n\n${textChunk}`
+    : textChunk
+  if (nextText.length <= SOURCE_TEXT_MAX_LENGTH) {
+    formData.sourceText = nextText
+    return
+  }
+
+  const half = Math.floor(SOURCE_TEXT_MAX_LENGTH / 2)
+  const omitted = nextText.length - half * 2
+  formData.sourceText = `${nextText.slice(0, half)}\n\n[内容过长，已截断省略 ${omitted} 个字符]\n\n${nextText.slice(-half)}`
+  message.warning(`解析内容过长，已自动截断到 ${SOURCE_TEXT_MAX_LENGTH} 字符`)
+}
 
 // 文件上传
 function triggerUpload() {
@@ -962,7 +986,7 @@ async function handleFileChange(e) {
           reader.onload = (ev) => resolve(ev.target?.result || '')
           reader.readAsText(file)
         })
-        formData.sourceText = formData.sourceText ? formData.sourceText + '\n\n' + text : text
+        appendSourceText(text)
       } else {
         const fd = new FormData()
         fd.append('file', file)
@@ -973,9 +997,7 @@ async function handleFileChange(e) {
         })
         const json = await resp.json()
         if (json.code === 200 && json.data?.text) {
-          formData.sourceText = formData.sourceText
-            ? formData.sourceText + '\n\n' + json.data.text
-            : json.data.text
+          appendSourceText(json.data.text)
         } else {
           message.error(json.message || `${file.name} 解析失败`)
         }

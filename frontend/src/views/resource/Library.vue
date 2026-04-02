@@ -5,7 +5,7 @@
       <a-space>
         <a-button @click="$router.push('/resource/my')">我的空间</a-button>
         <permissions-tooltip
-          v-if="!authStore.isStudent"
+          v-if="!isStudentOnly"
           :allowed="canUploadResource"
           tips="需要 CREATE_RESOURCE 或 VIEW_RESOURCE_ALL 权限"
           v-slot="{ disabled }"
@@ -33,7 +33,16 @@
 
     <a-row :gutter="16">
       <a-col :span="8" v-for="item in resources" :key="item.id">
-        <a-card class="resource-card" :bordered="false" style="margin-bottom:16px">
+        <a-card
+          class="resource-card"
+          :bordered="false"
+          style="margin-bottom:16px"
+          role="link"
+          tabindex="0"
+          @click="goDetail(item.id)"
+          @keydown.enter.prevent="goDetail(item.id)"
+          @keydown.space.prevent="goDetail(item.id)"
+        >
           <template #title>
             <div class="title-line">
               <span class="title-text">{{ item.title }}</span>
@@ -42,18 +51,31 @@
           <p class="summary">{{ item.summary || '暂无摘要' }}</p>
           <div class="meta">类型：{{ contentTypeLabel(item.contentType) }} · 上传者：{{ item.uploaderName || '-' }}</div>
           <div class="meta">标签：{{ (item.tags || []).join(' / ') || '-' }}</div>
-          <div class="actions">
-            <a-space>
-              <a-button size="small" @click="goDetail(item.id)">查看</a-button>
-              <permissions-tooltip
-                v-if="showOffline(item)"
-                :allowed="canOffline(item)"
-                tips="仅资源上传者或具备 UPDATE_RESOURCE / VIEW_RESOURCE_ALL 权限可执行该操作"
-                v-slot="{ disabled }"
+          <div v-if="canManage(item)" class="actions" @click.stop>
+            <permissions-tooltip
+              v-if="item.status === 'published'"
+              :allowed="canManage(item)"
+              tips="仅资源上传者或具备 UPDATE_RESOURCE / VIEW_RESOURCE_ALL 权限可执行该操作"
+              v-slot="{ disabled }"
+            >
+              <a-button size="small" danger ghost :disabled="disabled" @click="offline(item.id)">下线</a-button>
+            </permissions-tooltip>
+            <permissions-tooltip
+              :allowed="canManage(item)"
+              tips="仅资源上传者或具备 UPDATE_RESOURCE / VIEW_RESOURCE_ALL 权限可执行该操作"
+              v-slot="{ disabled }"
+            >
+              <a-popconfirm
+                v-if="!disabled"
+                title="确认删除该资源吗？"
+                ok-text="删除"
+                cancel-text="取消"
+                @confirm="removeResource(item.id)"
               >
-                <a-button size="small" danger ghost :disabled="disabled" @click="offline(item.id)">下线</a-button>
-              </permissions-tooltip>
-            </a-space>
+                <a-button size="small" danger>删除</a-button>
+              </a-popconfirm>
+              <a-button v-else size="small" danger :disabled="disabled">删除</a-button>
+            </permissions-tooltip>
           </div>
         </a-card>
       </a-col>
@@ -81,7 +103,7 @@ import { computed, ref, reactive, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { getResources, offlineResource } from '@/api/resource'
+import { getResources, offlineResource, deleteResource } from '@/api/resource'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 import ResourceUploadModal from './components/ResourceUploadModal.vue'
 
@@ -95,6 +117,12 @@ const loading = ref(false)
 const uploadModalOpen = ref(false)
 const canUploadResource = computed(() => authStore.hasAnyPermission(['CREATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
 const canManageAnyResource = computed(() => authStore.hasAnyPermission(['UPDATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
+const isStudentOnly = computed(() => {
+  const roleCodes = (authStore.currentUser?.roleCodes || []).length
+    ? authStore.currentUser.roleCodes
+    : [authStore.role].filter(Boolean)
+  return roleCodes.length > 0 && roleCodes.every((code) => code === 'student')
+})
 
 onMounted(async () => {
   await fetchResources()
@@ -123,27 +151,28 @@ async function fetchResources() {
   }
 }
 
-function canEditResource(item) {
+function canManage(item) {
+  if (isStudentOnly.value) return false
   return item?.uploaderId === authStore.currentUser?.id || canManageAnyResource.value
 }
 
-function showOffline(item) {
-  return item.status === 'published' && canEditResource(item)
-}
-
-function canOffline(item) {
-  return showOffline(item)
-}
-
 async function offline(id) {
-  const item = resources.value.find((resource) => resource.id === id)
-  if (item && !canOffline(item)) return
   try {
     await offlineResource(id)
     message.success('下线成功')
     fetchResources()
   } catch (e) {
     message.error(e.message || '下线失败')
+  }
+}
+
+async function removeResource(id) {
+  try {
+    await deleteResource(id)
+    message.success('删除成功')
+    fetchResources()
+  } catch (e) {
+    message.error(e.message || '删除失败')
   }
 }
 
@@ -172,9 +201,11 @@ function handleUploadSuccess() {
 <style scoped>
 .resource-library-page { padding: 0; }
 .page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+.resource-card { cursor:pointer; }
+.resource-card:focus-visible { outline:2px solid rgba(22, 119, 255, 0.45); outline-offset:2px; }
 .title-line { display:flex; justify-content:space-between; align-items:center; gap:8px; }
 .title-text { font-weight:600; }
 .summary { color:#666; min-height:40px; }
 .meta { font-size:12px; color:#888; margin-bottom:6px; }
-.actions { margin-top:10px; }
+.actions { margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; }
 </style>

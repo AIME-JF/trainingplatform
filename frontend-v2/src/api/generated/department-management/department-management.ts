@@ -29,7 +29,7 @@ export const createDepartmentApiV1DepartmentsCreatePost = (
     departmentCreate: DepartmentCreate,
  ) => {
       return customInstance<StandardResponseDepartmentSimpleResponse>(
-      {url: `/api/v1/departments/create`, method: 'POST',
+      {url: `/departments/create`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: departmentCreate
     },
@@ -42,7 +42,7 @@ export const createDepartmentApiV1DepartmentsPost = (
     departmentCreate: DepartmentCreate,
  ) => {
       return customInstance<StandardResponseDepartmentSimpleResponse>(
-      {url: `/api/v1/departments`, method: 'POST',
+      {url: `/departments`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: departmentCreate
     },
@@ -55,7 +55,7 @@ export const downloadDepartmentImportTemplateApiV1DepartmentsImportTemplateGet =
 
  ) => {
       return customInstance<unknown>(
-      {url: `/api/v1/departments/import/template`, method: 'GET'
+      {url: `/departments/import/template`, method: 'GET'
     },
       );
     }
@@ -66,7 +66,7 @@ export const exportDepartmentsExcelApiV1DepartmentsExportGet = (
     params?: ExportDepartmentsExcelApiV1DepartmentsExportGetParams,
  ) => {
       return customInstance<unknown>(
-      {url: `/api/v1/departments/export`, method: 'GET',
+      {url: `/departments/export`, method: 'GET',
         params
     },
       );
@@ -80,7 +80,7 @@ export const importDepartmentsExcelApiV1DepartmentsImportPost = (
 formData.append(`file`, bodyImportDepartmentsExcelApiV1DepartmentsImportPost.file);
 
       return customInstance<StandardResponse>(
-      {url: `/api/v1/departments/import`, method: 'POST',
+      {url: `/departments/import`, method: 'POST',
        data: formData
     },
       );
@@ -92,7 +92,7 @@ export const getDepartmentDetailApiV1DepartmentsDepartmentIdDetailGet = (
     departmentId: number,
  ) => {
       return customInstance<StandardResponseDepartmentResponse>(
-      {url: `/api/v1/departments/${departmentId}/detail`, method: 'GET'
+      {url: `/departments/${departmentId}/detail`, method: 'GET'
     },
       );
     }
@@ -103,7 +103,7 @@ export const getDepartmentListApiV1DepartmentsListGet = (
     params?: GetDepartmentListApiV1DepartmentsListGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseDepartmentSimpleResponse>(
-      {url: `/api/v1/departments/list`, method: 'GET',
+      {url: `/departments/list`, method: 'GET',
         params
     },
       );
@@ -115,7 +115,7 @@ export const getDepartmentTreeApiV1DepartmentsTreeGet = (
 
  ) => {
       return customInstance<StandardResponseListDepartmentResponse>(
-      {url: `/api/v1/departments/tree`, method: 'GET'
+      {url: `/departments/tree`, method: 'GET'
     },
       );
     }
@@ -127,7 +127,7 @@ export const updateDepartmentApiV1DepartmentsDepartmentIdPut = (
     departmentUpdate: DepartmentUpdate,
  ) => {
       return customInstance<StandardResponseDepartmentSimpleResponse>(
-      {url: `/api/v1/departments/${departmentId}`, method: 'PUT',
+      {url: `/departments/${departmentId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: departmentUpdate
     },
@@ -140,7 +140,7 @@ export const deleteDepartmentApiV1DepartmentsDepartmentIdDelete = (
     departmentId: number,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/departments/${departmentId}`, method: 'DELETE'
+      {url: `/departments/${departmentId}`, method: 'DELETE'
     },
       );
     }
@@ -152,7 +152,7 @@ export const updateDepartmentApiV1DepartmentsDepartmentIdUpdatePost = (
     departmentUpdate: DepartmentUpdate,
  ) => {
       return customInstance<StandardResponseDepartmentSimpleResponse>(
-      {url: `/api/v1/departments/${departmentId}/update`, method: 'POST',
+      {url: `/departments/${departmentId}/update`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: departmentUpdate
     },
@@ -165,7 +165,7 @@ export const deleteDepartmentApiV1DepartmentsDepartmentIdDeletePost = (
     departmentId: number,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/departments/${departmentId}/delete`, method: 'POST'
+      {url: `/departments/${departmentId}/delete`, method: 'POST'
     },
       );
     }
@@ -177,7 +177,7 @@ export const updateDepartmentPermissionsApiV1DepartmentsDepartmentIdPermissionsP
     departmentPermissionUpdate: DepartmentPermissionUpdate,
  ) => {
       return customInstance<StandardResponseDepartmentResponse>(
-      {url: `/api/v1/departments/${departmentId}/permissions`, method: 'POST',
+      {url: `/departments/${departmentId}/permissions`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: departmentPermissionUpdate
     },

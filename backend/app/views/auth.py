@@ -18,7 +18,7 @@ def login(data: UserLogin, db: Session = Depends(get_db)):
     """账号密码登录"""
     user = auth_service.authenticate_user(db, data.username, data.password)
     token = auth_service.create_user_token(db, user)
-    user_response = UserResponse.model_validate(user)
+    user_response = UserService(db).get_user_by_id(user.id)
     return StandardResponse(
         data=LoginResponse(access_token=token, user=user_response)
     )
@@ -34,7 +34,7 @@ def login_phone(phone: str, code: str, db: Session = Depends(get_db)):
         return StandardResponse(code=400, message="用户不存在")
 
     token = auth_service.create_user_token(db, user)
-    user_response = UserResponse.model_validate(user)
+    user_response = UserService(db).get_user_by_id(user.id)
     return StandardResponse(
         data=LoginResponse(access_token=token, user=user_response)
     )

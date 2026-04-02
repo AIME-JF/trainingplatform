@@ -13,6 +13,7 @@ celery_app = Celery(
         "app.tasks.ai_question",
         "app.tasks.ai_schedule",
         "app.tasks.ai_paper_assembly",
+        "app.tasks.ai_paper_generation",
         "app.tasks.teaching_resource_generation",
     ]
 )

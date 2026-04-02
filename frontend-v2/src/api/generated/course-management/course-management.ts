@@ -41,7 +41,7 @@ export const getCoursesApiV1CoursesGet = (
     params?: GetCoursesApiV1CoursesGetParams,
  ) => {
       return customInstance<StandardResponsePaginatedResponseCourseListResponse>(
-      {url: `/api/v1/courses`, method: 'GET',
+      {url: `/courses`, method: 'GET',
         params
     },
       );
@@ -54,7 +54,7 @@ export const createCourseApiV1CoursesPost = (
     courseCreate: CourseCreate,
  ) => {
       return customInstance<StandardResponseCourseResponse>(
-      {url: `/api/v1/courses`, method: 'POST',
+      {url: `/courses`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: courseCreate
     },
@@ -68,7 +68,7 @@ export const getCourseTagsApiV1CoursesTagsGet = (
     params?: GetCourseTagsApiV1CoursesTagsGetParams,
  ) => {
       return customInstance<StandardResponseListCourseTagResponse>(
-      {url: `/api/v1/courses/tags`, method: 'GET',
+      {url: `/courses/tags`, method: 'GET',
         params
     },
       );
@@ -81,7 +81,7 @@ export const createCourseTagApiV1CoursesTagsPost = (
     courseTagCreate: CourseTagCreate,
  ) => {
       return customInstance<StandardResponseCourseTagResponse>(
-      {url: `/api/v1/courses/tags`, method: 'POST',
+      {url: `/courses/tags`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: courseTagCreate
     },
@@ -95,7 +95,7 @@ export const getProgressApiV1CoursesProgressGet = (
 
  ) => {
       return customInstance<StandardResponseListCourseProgressResponse>(
-      {url: `/api/v1/courses/progress`, method: 'GET'
+      {url: `/courses/progress`, method: 'GET'
     },
       );
     }
@@ -107,7 +107,7 @@ export const getCourseApiV1CoursesCourseIdGet = (
     courseId: number,
  ) => {
       return customInstance<StandardResponseCourseResponse>(
-      {url: `/api/v1/courses/${courseId}`, method: 'GET'
+      {url: `/courses/${courseId}`, method: 'GET'
     },
       );
     }
@@ -120,7 +120,7 @@ export const updateCourseApiV1CoursesCourseIdPut = (
     courseUpdate: CourseUpdate,
  ) => {
       return customInstance<StandardResponseCourseResponse>(
-      {url: `/api/v1/courses/${courseId}`, method: 'PUT',
+      {url: `/courses/${courseId}`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: courseUpdate
     },
@@ -134,7 +134,7 @@ export const deleteCourseApiV1CoursesCourseIdDelete = (
     courseId: number,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/courses/${courseId}`, method: 'DELETE'
+      {url: `/courses/${courseId}`, method: 'DELETE'
     },
       );
     }
@@ -148,7 +148,7 @@ export const updateChapterProgressApiV1CoursesCourseIdChaptersChapterIdProgressP
     courseProgressUpdate: CourseProgressUpdate,
  ) => {
       return customInstance<StandardResponseCourseProgressResponse>(
-      {url: `/api/v1/courses/${courseId}/chapters/${chapterId}/progress`, method: 'PUT',
+      {url: `/courses/${courseId}/chapters/${chapterId}/progress`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: courseProgressUpdate
     },
@@ -162,7 +162,7 @@ export const getCourseNoteApiV1CoursesCourseIdNoteGet = (
     courseId: number,
  ) => {
       return customInstance<StandardResponseCourseNoteResponse>(
-      {url: `/api/v1/courses/${courseId}/note`, method: 'GET'
+      {url: `/courses/${courseId}/note`, method: 'GET'
     },
       );
     }
@@ -175,7 +175,7 @@ export const updateCourseNoteApiV1CoursesCourseIdNotePut = (
     courseNoteUpdate: CourseNoteUpdate,
  ) => {
       return customInstance<StandardResponseCourseNoteResponse>(
-      {url: `/api/v1/courses/${courseId}/note`, method: 'PUT',
+      {url: `/courses/${courseId}/note`, method: 'PUT',
       headers: {'Content-Type': 'application/json', },
       data: courseNoteUpdate
     },
@@ -189,7 +189,7 @@ export const getCourseQaApiV1CoursesCourseIdQaGet = (
     courseId: number,
  ) => {
       return customInstance<StandardResponseListCourseQAResponse>(
-      {url: `/api/v1/courses/${courseId}/qa`, method: 'GET'
+      {url: `/courses/${courseId}/qa`, method: 'GET'
     },
       );
     }
@@ -202,7 +202,7 @@ export const createCourseQaApiV1CoursesCourseIdQaPost = (
     courseQACreate: CourseQACreate,
  ) => {
       return customInstance<StandardResponseCourseQAResponse>(
-      {url: `/api/v1/courses/${courseId}/qa`, method: 'POST',
+      {url: `/courses/${courseId}/qa`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: courseQACreate
     },
@@ -216,7 +216,7 @@ export const getCourseLearningStatusApiV1CoursesCourseIdLearningStatusGet = (
     courseId: number,
  ) => {
       return customInstance<StandardResponseListCourseLearningStatusResponse>(
-      {url: `/api/v1/courses/${courseId}/learning-status`, method: 'GET'
+      {url: `/courses/${courseId}/learning-status`, method: 'GET'
     },
       );
     }
@@ -228,7 +228,7 @@ export const addCourseResourceApiV1CoursesCourseIdResourcesPost = (
     courseResourceBindRequest: CourseResourceBindRequest,
  ) => {
       return customInstance<StandardResponseResourceListItemResponse>(
-      {url: `/api/v1/courses/${courseId}/resources`, method: 'POST',
+      {url: `/courses/${courseId}/resources`, method: 'POST',
       headers: {'Content-Type': 'application/json', },
       data: courseResourceBindRequest
     },
@@ -241,7 +241,7 @@ export const listCourseResourcesApiV1CoursesCourseIdResourcesGet = (
     courseId: number,
  ) => {
       return customInstance<StandardResponseListResourceListItemResponse>(
-      {url: `/api/v1/courses/${courseId}/resources`, method: 'GET'
+      {url: `/courses/${courseId}/resources`, method: 'GET'
     },
       );
     }
@@ -253,7 +253,7 @@ export const removeCourseResourceApiV1CoursesCourseIdResourcesResourceIdDelete =
     resourceId: number,
  ) => {
       return customInstance<StandardResponse>(
-      {url: `/api/v1/courses/${courseId}/resources/${resourceId}`, method: 'DELETE'
+      {url: `/courses/${courseId}/resources/${resourceId}`, method: 'DELETE'
     },
       );
     }
