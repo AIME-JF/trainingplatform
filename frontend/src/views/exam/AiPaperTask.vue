@@ -613,7 +613,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
 import {
   confirmAiPaperAssemblyTask,
@@ -634,6 +634,7 @@ import {
   updateAiPaperDocumentGenerationTaskResult,
   confirmAiPaperDocumentGenerationTask,
   deleteAiPaperDocumentGenerationTask,
+  parseAiDocumentFile,
 } from '@/api/ai'
 import { getPoliceTypes } from '@/api/user'
 import AiTaskTimeline from './components/AiTaskTimeline.vue'
@@ -988,19 +989,12 @@ async function handleFileChange(e) {
         })
         appendSourceText(text)
       } else {
-        const fd = new FormData()
-        fd.append('file', file)
-        const resp = await fetch('/api/v1/ai/files/parse', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${authStore.token}` },
-          body: fd,
-        })
-        const json = await resp.json()
-        if (json.code === 200 && json.data?.text) {
-          appendSourceText(json.data.text)
-        } else {
-          message.error(json.message || `${file.name} 解析失败`)
+        const parsed = await parseAiDocumentFile(file)
+        if (parsed?.text) {
+          appendSourceText(parsed.text)
+          continue
         }
+        message.error(`${file.name} 解析失败`)
       }
     }
   } catch (err) {
@@ -1090,12 +1084,18 @@ function toggleSelect(taskId, event) {
 // 批量删除
 async function handleBatchDelete() {
   if (!selectedTaskIds.value.length) return
-  try {
-    await new Promise((resolve, reject) => {
-      window.$message?.warning?.('确定要删除选中的任务吗？此操作不可恢复。')
-      resolve()
+  const shouldDelete = await new Promise(resolve => {
+    Modal.confirm({
+      title: '确认删除任务',
+      content: `确定删除选中的 ${selectedTaskIds.value.length} 个任务吗？此操作不可恢复。`,
+      okText: '确定删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: () => resolve(true),
+      onCancel: () => resolve(false),
     })
-  } catch {}
+  })
+  if (!shouldDelete) return
   
   batchDeleting.value = true
   let successCount = 0
@@ -1172,13 +1172,18 @@ async function handleBatchConfirm() {
 
 // 单个删除
 async function handleDeleteSingleTask(task) {
-  try {
-    await new Promise((resolve, reject) => {
-      const modal = window.$antdModal || message
-      message.warning({ content: `确定删除任务"${task.taskName}"吗？`, duration: 0 })
-      setTimeout(resolve, 0)
+  const shouldDelete = await new Promise(resolve => {
+    Modal.confirm({
+      title: '确认删除任务',
+      content: `确定删除任务"${task.taskName}"吗？`,
+      okText: '确定删除',
+      okType: 'danger',
+      cancelText: '取消',
+      onOk: () => resolve(true),
+      onCancel: () => resolve(false),
     })
-  } catch {}
+  })
+  if (!shouldDelete) return
   
   try {
     if (task.taskType === 'paper_assembly') {

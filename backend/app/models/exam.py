@@ -240,6 +240,7 @@ class Exam(Base):
     exam_questions = relationship(
         "ExamQuestion",
         foreign_keys="ExamQuestion.exam_id",
+        back_populates="exam",
         cascade="all, delete-orphan",
     )
 
@@ -264,7 +265,7 @@ class ExamQuestion(Base):
     score = Column(Integer, default=1, comment="分值快照")
     knowledge_points = Column(JSON, nullable=True, comment="知识点快照")
 
-    exam = relationship("Exam", foreign_keys=[exam_id])
+    exam = relationship("Exam", foreign_keys=[exam_id], back_populates="exam_questions")
 
 
 class AdmissionExamRecord(Base):

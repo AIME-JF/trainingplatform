@@ -90,6 +90,7 @@ class AIService:
         status: Optional[str],
         current_user_id: int,
     ) -> PaginatedResponse[AITaskSummaryResponse]:
+        self._try_schedule_ai_paper_generation_task()
         return self._list_tasks(self.PAPER_GENERATION_TASK_TYPE, page, size, status, current_user_id)
 
     def list_paper_document_generation_tasks(
@@ -99,6 +100,7 @@ class AIService:
         status: Optional[str],
         current_user_id: int,
     ) -> PaginatedResponse[AITaskSummaryResponse]:
+        self._try_schedule_ai_paper_generation_task()
         return self._list_tasks(self.PAPER_DOCUMENT_GENERATION_TASK_TYPE, page, size, status, current_user_id)
 
     def get_question_task_detail(self, task_id: int, current_user_id: int) -> AIQuestionTaskDetailResponse:
@@ -1564,6 +1566,15 @@ class AIService:
         if answer is None:
             return None
         return str(answer)
+
+    @staticmethod
+    def _try_schedule_ai_paper_generation_task() -> None:
+        try:
+            from app.tasks.ai_paper_generation import schedule_ai_paper_generation_task
+
+            schedule_ai_paper_generation_task()
+        except Exception as exc:
+            logger.warning("触发 AI 自动生成试卷类任务调度失败: %s", exc)
 
     @staticmethod
     def _build_knowledge_point_like_pattern(keyword: str) -> str:

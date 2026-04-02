@@ -566,6 +566,35 @@ class ExamService:
             raise ValueError("准入考试不存在")
         return detail
 
+    def delete_exam(self, exam_id: int) -> None:
+        """删除培训班内考试"""
+        exam = self.db.query(Exam).options(
+            joinedload(Exam.records),
+        ).filter(Exam.id == exam_id).first()
+        if not exam:
+            raise ValueError("考试不存在")
+        if exam.records:
+            raise ValueError("考试已有作答记录，不能删除")
+
+        self.db.delete(exam)
+        self.db.commit()
+
+    def delete_admission_exam(self, exam_id: int) -> None:
+        """删除独立准入考试"""
+        exam = self.db.query(AdmissionExam).options(
+            joinedload(AdmissionExam.records),
+            joinedload(AdmissionExam.linked_trainings),
+        ).filter(AdmissionExam.id == exam_id).first()
+        if not exam:
+            raise ValueError("准入考试不存在")
+        if exam.records:
+            raise ValueError("准入考试已有作答记录，不能删除")
+        if exam.linked_trainings:
+            raise ValueError("准入考试已关联培训班，不能删除")
+
+        self.db.delete(exam)
+        self.db.commit()
+
     def get_exam_detail(
         self,
         exam_id: int,

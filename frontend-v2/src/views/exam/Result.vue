@@ -5,71 +5,104 @@
     </div>
 
     <template v-else-if="result">
-      <div class="result-card" :class="{ passed: isPassed, failed: !isPassed }">
-        <div class="result-icon">
-          <CheckCircleOutlined v-if="isPassed" />
-          <CloseCircleOutlined v-else />
+      <!-- 结果头部 -->
+      <div class="section-block result-hero" :class="{ passed: isPassed, failed: !isPassed }">
+        <div class="hero-left">
+          <div class="hero-icon">
+            <CheckCircleOutlined v-if="isPassed" />
+            <CloseCircleOutlined v-else />
+          </div>
+          <div class="hero-text">
+            <div class="hero-title">{{ isPassed ? '考试通过' : '未通过' }}</div>
+            <div class="hero-exam">{{ result.exam_title || '考试成绩' }}</div>
+          </div>
         </div>
-        <div class="result-status">
-          {{ isPassed ? '考试通过' : '未通过' }}
-        </div>
-        <div class="result-score">
-          <span class="score-value">{{ result.score || 0 }}</span>
-          <span class="score-total">满分 {{ passingScore }}</span>
-        </div>
-      </div>
-
-      <div class="stats-card">
-        <div class="stat-item">
-          <div class="stat-value correct">{{ result.correct_count || 0 }}</div>
-          <div class="stat-label">答对</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-value wrong">{{ result.wrong_count || 0 }}</div>
-          <div class="stat-label">答错</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-value duration">{{ formatDuration(result.duration) }}</div>
-          <div class="stat-label">用时</div>
-        </div>
-        <div class="stat-item">
-          <div class="stat-value">{{ result.attempt_no || 1 }}</div>
-          <div class="stat-label">第几次</div>
+        <div class="hero-right">
+          <div class="score-big">{{ result.score || 0 }}</div>
+          <div class="score-label">满分 {{ passingScore }} · 及格 {{ result.passing_score || passingScore }}</div>
         </div>
       </div>
 
-      <a-collapse v-if="wrongQuestionDetails.length > 0" class="wrong-questions" ghost>
-        <a-collapse-panel key="wrong" header="错题回顾">
-          <div class="wrong-list">
-            <div v-for="(q, index) in wrongQuestionDetails" :key="q.question_id" class="wrong-item">
-              <div class="wrong-header">
-                <span class="wrong-index">{{ index + 1 }}</span>
-                <a-tag class="type-tag">{{ getQuestionTypeText(q.type) }}</a-tag>
-                <span class="wrong-score">{{ q.score || 0 }} 分</span>
+      <div class="divider" />
+
+      <!-- 基本信息 -->
+      <div class="section-block info-grid">
+        <div class="info-item">
+          <span class="info-label">提交时间</span>
+          <span class="info-value">{{ formatDateTime(result.submit_time) }}</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">用时</span>
+          <span class="info-value">{{ formatDuration(result.duration) }}</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">答题情况</span>
+          <span class="info-value">{{ result.correct_count || 0 }} 答对 / {{ result.wrong_count || 0 }} 答错</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">正确率</span>
+          <span class="info-value">{{ accuracyPercent }}%</span>
+        </div>
+        <div class="info-item">
+          <span class="info-label">考试次数</span>
+          <span class="info-value">第 {{ result.attempt_no || 1 }} 次</span>
+        </div>
+      </div>
+
+      <div class="divider" />
+
+      <!-- 错题回顾 -->
+      <div v-if="wrongQuestionDetails.length > 0" class="section-block wrong-section">
+        <div class="section-header">
+          <WarningOutlined /> 错题回顾 · {{ wrongQuestionDetails.length }} 题
+        </div>
+
+        <div
+          v-for="(q, index) in wrongQuestionDetails"
+          :key="q.question_id"
+          class="wrong-block"
+        >
+          <div class="wrong-top">
+            <span class="wrong-num">{{ index + 1 }}</span>
+            <a-tag class="type-tag">{{ getQuestionTypeText(q.type) }}</a-tag>
+            <span class="wrong-score">-{{ q.score || 0 }} 分</span>
+          </div>
+
+          <div class="wrong-body">
+            <div class="wrong-question">{{ q.content }}</div>
+
+            <div class="answer-rows">
+              <div class="answer-row">
+                <span class="answer-key">你的答案</span>
+                <span class="answer-val wrong-val">{{ formatAnswer(q.my_answer) }}</span>
               </div>
-              <div class="wrong-content">
-                {{ q.content }}
-              </div>
-              <div class="wrong-answers">
-                <div class="wrong-answer">
-                  <span class="answer-label">你的答案：</span>
-                  <span class="answer-value wrong-value">{{ formatAnswer(q.my_answer) }}</span>
-                </div>
-                <div class="wrong-answer">
-                  <span class="answer-label">正确答案：</span>
-                  <span class="answer-value correct-value">{{ formatAnswer(q.answer) }}</span>
-                </div>
-              </div>
-              <div v-if="q.explanation" class="wrong-explanation">
-                <InfoCircleOutlined /> {{ q.explanation }}
+              <div class="answer-row">
+                <span class="answer-key">正确答案</span>
+                <span class="answer-val correct-val">{{ formatAnswer(q.answer) }}</span>
               </div>
             </div>
-          </div>
-        </a-collapse-panel>
-      </a-collapse>
 
-      <div class="action-bar">
-        <a-button type="primary" long @click="router.push('/exam/list')">返回考试列表</a-button>
+            <div v-if="q.explanation" class="explanation-row">
+              <BulbOutlined /> {{ q.explanation }}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <a-empty v-else-if="isPassed" class="all-correct">
+        <template #description><span>恭喜您全部答对，继续保持！</span></template>
+      </a-empty>
+
+      <div class="divider" />
+
+      <!-- 操作 -->
+      <div class="section-block action-row">
+        <a-button size="large" @click="router.push('/exam/list')">
+          <RollbackOutlined /> 返回考试列表
+        </a-button>
+        <a-button v-if="!isPassed" type="primary" size="large" @click="router.push(`/exam/do/${examId}`)">
+          <RedoOutlined /> 重新考试
+        </a-button>
       </div>
     </template>
 
@@ -79,14 +112,17 @@
 
 <script setup lang="ts">
 import {
+  BulbOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
-  InfoCircleOutlined,
+  RedoOutlined,
+  RollbackOutlined,
+  WarningOutlined,
 } from '@ant-design/icons-vue'
 import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import type { ExamRecordResponse, ExamWrongQuestionResponse } from '@/api/generated/model'
+import type { ExamRecordResponse } from '@/api/generated/model'
 import {
   getAdmissionExamResultApiV1ExamsAdmissionExamIdResultGet,
   getExamResultApiV1ExamsExamIdResultGet,
@@ -106,13 +142,18 @@ const isPassed = computed(() => {
   return result.value.result === 'pass' || result.value.score! >= (result.value.passing_score || 0)
 })
 
-const passingScore = computed(() => {
-  return result.value?.passing_score || 60
+const passingScore = computed(() => result.value?.passing_score || 60)
+
+const accuracyPercent = computed(() => {
+  if (!result.value) return 0
+  const correct = result.value.correct_count || 0
+  const wrong = result.value.wrong_count || 0
+  const total = correct + wrong
+  if (total === 0) return 0
+  return Math.round((correct / total) * 100)
 })
 
-const wrongQuestionDetails = computed(() => {
-  return result.value?.wrong_question_details || []
-})
+const wrongQuestionDetails = computed(() => result.value?.wrong_question_details || [])
 
 onMounted(async () => {
   await fetchResult()
@@ -121,7 +162,6 @@ onMounted(async () => {
 async function fetchResult() {
   loading.value = true
   try {
-    // 判断是准入考试还是培训班考试，尝试获取结果
     try {
       result.value = await getExamResultApiV1ExamsExamIdResultGet(examId.value)
       examKind.value = 'training'
@@ -129,9 +169,8 @@ async function fetchResult() {
       result.value = await getAdmissionExamResultApiV1ExamsAdmissionExamIdResultGet(examId.value)
       examKind.value = 'admission'
     }
-  } catch (error) {
+  } catch {
     message.error('加载考试结果失败')
-    console.error(error)
   } finally {
     loading.value = false
   }
@@ -144,6 +183,13 @@ function formatDuration(seconds?: number) {
   return `${m}分${s}秒`
 }
 
+function formatDateTime(time?: string | null) {
+  if (!time) return '-'
+  return new Date(time).toLocaleString('zh-CN', {
+    month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
+  })
+}
+
 function formatAnswer(answer?: unknown) {
   if (answer === undefined || answer === null) return '未作答'
   if (Array.isArray(answer)) return answer.join('、')
@@ -152,14 +198,10 @@ function formatAnswer(answer?: unknown) {
 
 function getQuestionTypeText(type?: string) {
   switch (type) {
-    case 'single_choice':
-      return '单选题'
-    case 'multiple_choice':
-      return '多选题'
-    case 'true_false':
-      return '判断题'
-    default:
-      return type || '未知'
+    case 'single_choice': return '单选题'
+    case 'multiple_choice': return '多选题'
+    case 'true_false': return '判断题'
+    default: return type || '未知'
   }
 }
 </script>
@@ -167,6 +209,7 @@ function getQuestionTypeText(type?: string) {
 <style scoped>
 .result-page {
   padding: 20px;
+  max-width: 100%;
 }
 
 .loading-wrapper {
@@ -174,115 +217,147 @@ function getQuestionTypeText(type?: string) {
   text-align: center;
 }
 
-.result-card {
-  background: linear-gradient(135deg, var(--v2-danger) 0%, #d42a1f 100%);
-  border-radius: 24px;
-  padding: 32px;
-  text-align: center;
-  color: #fff;
-  margin-bottom: 20px;
+.divider {
+  height: 1px;
+  background: var(--v2-border);
+  margin: 0;
 }
 
-.result-card.passed {
-  background: linear-gradient(135deg, var(--v2-success) 0%, #248a3d 100%);
+.section-block {
+  padding: 24px 28px;
+  background: var(--v2-bg-card);
 }
 
-.result-icon {
-  font-size: 56px;
-  margin-bottom: 12px;
+.section-block:first-child {
+  border-radius: 20px 20px 0 0;
 }
 
-.result-status {
-  font-size: 22px;
-  font-weight: 600;
-  margin-bottom: 16px;
+.section-block:last-child {
+  border-radius: 0 0 20px 20px;
 }
 
-.result-score {
+.info-grid {
+  display: flex;
+  gap: 0;
+}
+
+.info-item {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
+  padding: 0 16px;
+  border-right: 1px solid var(--v2-border);
 }
 
-.score-value {
+.info-item:first-child {
+  padding-left: 0;
+}
+
+.info-item:last-child {
+  border-right: none;
+}
+
+.info-label {
+  font-size: 13px;
+  color: var(--v2-text-secondary);
+}
+
+.info-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--v2-text-primary);
+}
+
+/* 结果头部 */
+.result-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #fff;
+}
+
+.result-hero.passed {
+  background: linear-gradient(135deg, #2DA44E 0%, #1a7a37 100%);
+}
+
+.result-hero.failed {
+  background: linear-gradient(135deg, #FF3B30 0%, #d42a1f 100%);
+}
+
+.hero-left {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.hero-icon {
+  font-size: 52px;
+}
+
+.hero-title {
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.hero-exam {
+  font-size: 14px;
+  opacity: 0.85;
+  margin-top: 4px;
+}
+
+.hero-right {
+  text-align: right;
+}
+
+.score-big {
   font-size: 64px;
   font-weight: 700;
   line-height: 1;
 }
 
-.score-total {
-  font-size: 16px;
+.score-label {
+  font-size: 14px;
   opacity: 0.85;
+  margin-top: 6px;
 }
 
-.stats-card {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  background: var(--v2-bg-card);
-  border-radius: 20px;
-  padding: 20px;
-  margin-bottom: 20px;
-  box-shadow: 0 8px 24px rgba(24, 39, 75, 0.06);
-}
-
-.stat-item {
-  text-align: center;
-}
-
-.stat-value {
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--v2-text-primary);
-  margin-bottom: 4px;
-}
-
-.stat-value.correct {
-  color: var(--v2-success);
-}
-
-.stat-value.wrong {
-  color: var(--v2-danger);
-}
-
-.stat-value.duration {
-  font-size: 22px;
-}
-
-.stat-label {
-  font-size: 13px;
-  color: var(--v2-text-secondary);
-}
-
-.wrong-questions {
-  margin-bottom: 20px;
-}
-
-.wrong-questions :deep(.ant-collapse-header) {
-  font-weight: 600;
-  font-size: 16px;
-}
-
-.wrong-list {
+/* 错题回顾 */
+.wrong-section {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 0;
 }
 
-.wrong-item {
-  background: rgba(255, 59, 48, 0.06);
-  border-radius: 16px;
-  padding: 16px;
+.section-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--v2-danger);
+  margin-bottom: 18px;
 }
 
-.wrong-header {
+.wrong-block {
+  padding: 16px 0;
+  border-top: 1px solid var(--v2-border);
+}
+
+.wrong-block:first-of-type {
+  border-top: none;
+  padding-top: 0;
+}
+
+.wrong-top {
   display: flex;
   align-items: center;
   gap: 10px;
   margin-bottom: 12px;
 }
 
-.wrong-index {
+.wrong-num {
   width: 24px;
   height: 24px;
   border-radius: 50%;
@@ -291,90 +366,129 @@ function getQuestionTypeText(type?: string) {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
 }
 
 .type-tag {
   border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .wrong-score {
   margin-left: auto;
   color: var(--v2-danger);
-  font-weight: 600;
+  font-weight: 700;
+  font-size: 14px;
 }
 
-.wrong-content {
+.wrong-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.wrong-question {
+  font-size: 15px;
+  line-height: 1.8;
   color: var(--v2-text-primary);
-  line-height: 1.7;
-  margin-bottom: 12px;
 }
 
-.wrong-answers {
+.answer-rows {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 12px;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 10px;
+  padding: 12px 16px;
 }
 
-.wrong-answer {
+.answer-row {
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
+  align-items: center;
+  gap: 10px;
 }
 
-.answer-label {
+.answer-key {
+  font-size: 13px;
   color: var(--v2-text-secondary);
-  font-size: 14px;
+  width: 68px;
   flex-shrink: 0;
 }
 
-.answer-value {
-  font-weight: 600;
-}
-
-.wrong-value {
-  color: var(--v2-danger);
-}
-
-.correct-value {
-  color: var(--v2-success);
-}
-
-.wrong-explanation {
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-  padding: 12px;
-  background: rgba(75, 110, 245, 0.06);
-  border-radius: 10px;
-  color: var(--v2-primary);
+.answer-val {
   font-size: 14px;
+  font-weight: 600;
   line-height: 1.6;
 }
 
-.action-bar {
-  margin-top: 20px;
+.wrong-val {
+  color: var(--v2-danger);
 }
 
-.action-bar :deep(.ant-btn) {
+.correct-val {
+  color: var(--v2-success);
+}
+
+.explanation-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 14px;
+  background: rgba(75, 110, 245, 0.06);
+  border-radius: 10px;
+  font-size: 14px;
+  color: var(--v2-primary);
+  line-height: 1.8;
+}
+
+.all-correct {
+  background: var(--v2-bg-card);
+  border-radius: 20px;
+  padding: 40px 0;
+}
+
+/* 操作 */
+.action-row {
+  display: flex;
+  gap: 14px;
+  justify-content: center;
+}
+
+.action-row :deep(.ant-btn) {
   border-radius: 12px;
-  height: 48px;
-  font-size: 16px;
+  height: 44px;
+  padding: 0 28px;
+  font-size: 14px;
+  font-weight: 600;
 }
 
 @media (max-width: 768px) {
-  .stats-card {
-    grid-template-columns: repeat(2, 1fr);
+  .result-hero {
+    flex-direction: column;
+    text-align: center;
+    gap: 16px;
   }
 
-  .result-card {
-    padding: 24px;
+  .hero-right {
+    text-align: center;
   }
 
-  .score-value {
-    font-size: 48px;
+  .info-grid {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .info-item {
+    flex: 0 0 calc(50% - 8px);
+    border-right: none;
+    padding: 0;
+  }
+
+  .action-row {
+    flex-direction: column;
   }
 }
 </style>

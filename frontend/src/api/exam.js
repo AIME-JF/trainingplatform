@@ -80,6 +80,14 @@ export function updateAdmissionExam(id, data) {
     return request.put(`/exams/admission/${id}`, data)
 }
 
+export function deleteExam(id) {
+    return request.delete(`/exams/${id}`)
+}
+
+export function deleteAdmissionExam(id) {
+    return request.delete(`/exams/admission/${id}`)
+}
+
 export function getExamDetail(id) {
     return request.get(`/exams/${id}`)
 }

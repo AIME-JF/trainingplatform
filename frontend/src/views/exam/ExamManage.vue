@@ -8,12 +8,6 @@
         <div class="sub-nav-bar">
           <div class="sub-nav-left">
             <span :class="['sub-nav-item', { active: activeNav === 'exam' }]" @click="activeNav = 'exam'">考试中心</span>
-            <span :class="['sub-nav-item', { active: activeNav === 'category' }]" @click="activeNav = 'category'">分类管理</span>
-            <span :class="['sub-nav-item', { active: activeNav === 'archived' }]" @click="activeNav = 'archived'">已归档</span>
-          </div>
-          <div class="sub-nav-right">
-            <button class="btn-aux">题目反馈</button>
-            <button class="btn-aux">自动归档设置</button>
           </div>
         </div>
 
@@ -25,7 +19,7 @@
             <div class="toolbar-left">
               <button class="btn-primary" @click="openCreateDrawer">
                 <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/></svg>
-                添加考试
+                添加准入考试
               </button>
               <div class="search-wrapper">
                 <svg class="search-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
@@ -35,13 +29,8 @@
 
             <div class="toolbar-right">
               <select v-model="filterExamType" class="input-minimal filter-select">
-                <option value="">考试类型</option>
                 <option value="admission">准入考试</option>
                 <option value="training">培训班考试</option>
-              </select>
-              <select v-model="filterCategory" class="input-minimal filter-select">
-                <option value="">考试分类 (全部)</option>
-                <option value="default">默认分类</option>
               </select>
               <select v-model="filterStatusSelect" class="input-minimal filter-select-sm">
                 <option value="">全部</option>
@@ -49,12 +38,6 @@
                 <option value="active">进行中</option>
                 <option value="ended">已结束</option>
                 <option value="draft">草稿</option>
-              </select>
-              <select v-model="filterVisibility" class="input-minimal filter-select-sm">
-                <option value="">可见范围</option>
-                <option value="all">全部</option>
-                <option value="department">本部门</option>
-                <option value="role">本角色</option>
               </select>
             </div>
           </div>
@@ -66,17 +49,6 @@
               <div class="status-tabs">
                 <span v-for="tab in statusTabs" :key="tab.value" :class="['status-tab', { active: currentStatusTab === tab.value }]" @click="switchStatusTab(tab.value)">{{ tab.label }}</span>
               </div>
-            </div>
-            <div class="filter-right">
-              <div class="grade-filter">
-                <span class="filter-label">评分:</span>
-                <span class="grade-link" @click="handleGradeFilter('ungraded')">待阅卷</span>
-                <span class="grade-link" @click="handleGradeFilter('unpublished')">待发布成绩</span>
-              </div>
-              <label class="checkbox-label">
-                <a-checkbox v-model:checked="onlyMine"></a-checkbox>
-                <span>只看我发布的</span>
-              </label>
             </div>
           </div>
 
@@ -173,7 +145,6 @@
                 <div class="batch-ops">
                   <span class="batch-label">批量操作:</span>
                   <button class="btn-batch btn-batch-danger" @click="handleBatchDelete">删除</button>
-                  <button class="btn-batch" @click="handleBatchExport">导出成绩</button>
                 </div>
               </div>
 
@@ -321,6 +292,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
   createExam, createAdmissionExam,
+  deleteAdmissionExam, deleteExam,
   getExamDetail, getExamPaperDetail, getExamPapers, getExams,
   getAdmissionExamDetail, getAdmissionExams,
   updateExam, updateAdmissionExam,
@@ -347,12 +319,9 @@ const statusTabs = [
 const loading = ref(false)
 const submitting = ref(false)
 const searchText = ref('')
-const filterExamType = ref('')
-const filterCategory = ref('')
+const filterExamType = ref('admission')
 const filterStatusSelect = ref('')
-const filterVisibility = ref('')
 const currentStatusTab = ref('all')
-const onlyMine = ref(false)
 const examList = ref([])
 const selectedIds = ref([])
 const paperOptions = ref([])
@@ -396,7 +365,6 @@ function switchStatusTab(tab) {
 
 function handleSearch() { pagination.current = 1; loadExams() }
 function handlePageChange(page) { if (page < 1 || page > totalPages.value) return; pagination.current = page; loadExams() }
-function handleGradeFilter(type) { message.info(`筛选 ${type === 'ungraded' ? '待阅卷' : '待发布成绩'}（功能开发中）`) }
 
 function toggleSelect(id, e) {
   if (e.target.checked) { if (!selectedIds.value.includes(id)) selectedIds.value.push(id) }
@@ -448,7 +416,14 @@ async function setPaperPreview(paperId, applyDefaults = false) {
 }
 
 function handlePaperChange(val) { setPaperPreview(val, !isEdit.value) }
-function openCreateDrawer() { resetForm(); drawerVisible.value = true }
+function openCreateDrawer() {
+  if (filterExamType.value !== 'admission') {
+    message.warning('培训班考试请在培训班详情中创建；此处仅支持独立准入考试')
+    return
+  }
+  resetForm()
+  drawerVisible.value = true
+}
 
 async function openEditDrawer(record) {
   isEdit.value = true; editingId.value = record.id
@@ -496,6 +471,10 @@ async function handleSave() {
       filterExamType.value === 'admission' ? await updateAdmissionExam(editingId.value, payload) : await updateExam(editingId.value, payload)
       message.success('考试已更新')
     } else {
+      if (filterExamType.value !== 'admission') {
+        message.warning('培训班考试请在培训班详情中创建')
+        return
+      }
       filterExamType.value === 'admission' ? await createAdmissionExam(payload) : await createExam(payload)
       message.success('考试已添加')
     }
@@ -504,10 +483,39 @@ async function handleSave() {
   finally { submitting.value = false }
 }
 
-async function handleBatchExport() { if (!selectedIds.value.length) return; message.info(`导出 ${selectedIds.value.length} 场考试（功能开发中）`) }
 async function handleBatchDelete() {
   if (!selectedIds.value.length) return
-  Modal.confirm({ title: `确定删除选中的 ${selectedIds.value.length} 场考试吗？`, okText: '确定删除', okType: 'danger', onOk() { message.info('功能开发中'); selectedIds.value = [] } })
+  Modal.confirm({
+    title: `确定删除选中的 ${selectedIds.value.length} 场考试吗？`,
+    content: '已有作答记录或已关联培训班的考试不能删除。',
+    okText: '确定删除',
+    okType: 'danger',
+    async onOk() {
+      let successCount = 0
+      let failCount = 0
+      for (const id of selectedIds.value) {
+        const exam = examList.value.find(item => item.id === id)
+        if (!exam) continue
+        try {
+          if ((exam.kind || filterExamType.value) === 'admission') {
+            await deleteAdmissionExam(id)
+          } else {
+            await deleteExam(id)
+          }
+          successCount += 1
+        } catch {
+          failCount += 1
+        }
+      }
+      selectedIds.value = []
+      await loadExams()
+      if (failCount === 0) {
+        message.success(`成功删除 ${successCount} 场考试`)
+      } else {
+        message.warning(`成功删除 ${successCount} 场，${failCount} 场删除失败`)
+      }
+    },
+  })
 }
 
 function goToPaperManage() { router.push({ path: '/paper/repository' }) }
