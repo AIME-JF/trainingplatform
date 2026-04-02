@@ -119,7 +119,7 @@ import {
   RollbackOutlined,
   WarningOutlined,
 } from '@ant-design/icons-vue'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import type { AdmissionExamRecordResponse, ExamRecordResponse } from '@/api/generated/model'
@@ -134,7 +134,22 @@ const router = useRouter()
 
 const loading = ref(false)
 const result = ref<ExamRecordResponse | AdmissionExamRecordResponse | null>(null)
-const examKind = ref<ExamKind>(resolveExamKind(route.query.kind, 'training'))
+
+// 修复：确保 kind 是字符串类型，Vue Router 有时会将 query 参数解析为数组
+function getKindFromQuery(): ExamKind {
+  const kind = route.query.kind
+  if (Array.isArray(kind)) {
+    return resolveExamKind(kind[0], 'training')
+  }
+  return resolveExamKind(kind, 'training')
+}
+
+const examKind = ref<ExamKind>(getKindFromQuery())
+
+// 监听路由 query 变化，保持 examKind 同步
+watch(() => route.query.kind, () => {
+  examKind.value = getKindFromQuery()
+})
 
 const examId = computed(() => Number(route.params.id))
 
@@ -163,18 +178,29 @@ onMounted(async () => {
 async function fetchResult() {
   loading.value = true
   try {
+    // 优先使用 URL 中的 kind 参数调用对应接口
+    const currentKind = examKind.value
     try {
-      result.value = examKind.value === 'admission'
+      result.value = currentKind === 'admission'
         ? await getAdmissionExamResultApiV1ExamsAdmissionExamIdResultGet(examId.value)
         : await getExamResultApiV1ExamsExamIdResultGet(examId.value)
     } catch (primaryError) {
-      examKind.value = examKind.value === 'admission' ? 'training' : 'admission'
-      result.value = examKind.value === 'admission'
-        ? await getAdmissionExamResultApiV1ExamsAdmissionExamIdResultGet(examId.value)
-        : await getExamResultApiV1ExamsExamIdResultGet(examId.value)
+      // 如果首选接口失败，尝试另一个接口（可能是考试类型判断错误）
+      const fallbackKind = currentKind === 'admission' ? 'training' : 'admission'
+      try {
+        result.value = fallbackKind === 'admission'
+          ? await getAdmissionExamResultApiV1ExamsAdmissionExamIdResultGet(examId.value)
+          : await getExamResultApiV1ExamsExamIdResultGet(examId.value)
+        // 备用接口成功，更新 kind 并提示用户
+        examKind.value = fallbackKind
+        void message.warning(`检测到考试类型不匹配，已为您切换到正确的考试记录`)
+      } catch {
+        // 另一个接口也失败，说明真的没有考试记录
+        throw primaryError
+      }
     }
   } catch {
-    message.error('加载考试结果失败')
+    message.error('考试记录不存在，请确认您已完成考试')
   } finally {
     loading.value = false
   }
