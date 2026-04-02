@@ -18,7 +18,6 @@
             <span class="hero-profile-divider">·</span>
             <span>{{ authStore.currentUser?.unit || '未设置单位' }}</span>
           </div>
-          <p class="hero-subtitle">{{ heroSubtitle }}</p>
         </div>
 
         <div class="hero-summary">
@@ -36,8 +35,8 @@
         <article class="surface-card mini-schedule-card">
           <div class="section-head">
             <div>
-              <h2>日历课表</h2>
-              <p>查看本周课程安排与时间提醒。</p>
+              <h2>今日安排</h2>
+              <p>点击日期查看当天课程安排</p>
             </div>
             <button type="button" class="section-link" @click="navigateTo('/classes/schedule')">
               完整日历
@@ -46,15 +45,22 @@
           </div>
 
           <div class="mini-week-strip">
-            <div
+            <button
               v-for="day in previewWeekDays"
               :key="day.dateKey"
+              type="button"
               class="mini-day-pill"
-              :class="{ today: day.isToday, active: day.hasEvent }"
+              :class="{
+                today: day.isToday,
+                selected: day.dateKey === selectedPreviewDate,
+                'has-event': day.hasEvent,
+              }"
+              :aria-pressed="day.dateKey === selectedPreviewDate"
+              @click="selectedPreviewDate = day.dateKey"
             >
               <span>{{ day.label }}</span>
               <strong>{{ day.displayDate }}</strong>
-            </div>
+            </button>
           </div>
 
           <div v-if="calendarLoading" class="mini-state">
@@ -69,23 +75,30 @@
               class="mini-event-item"
               :style="{
                 '--mini-event-border': item.palette.border,
-                '--mini-event-bg': item.palette.background,
+                '--mini-event-bg-start': item.palette.backgroundStart,
+                '--mini-event-bg-end': item.palette.backgroundEnd,
               }"
-              @click="navigateTo('/classes/schedule')"
+              @click="navigateTo(item.path)"
             >
               <div class="mini-event-main">
                 <strong>{{ item.title }}</strong>
                 <span>{{ item.timeLabel }}</span>
               </div>
               <div class="mini-event-meta">
-                <span>{{ item.dayLabel }}</span>
-                <span>{{ item.trainingName }}</span>
+                <span class="mini-event-meta-row">
+                  <EnvironmentOutlined class="mini-event-meta-icon" />
+                  <span>{{ item.primaryMeta }}</span>
+                </span>
+                <span class="mini-event-meta-row">
+                  <UserOutlined class="mini-event-meta-icon" />
+                  <span>{{ item.secondaryMeta }}</span>
+                </span>
               </div>
             </button>
           </div>
           <div v-else class="mini-state mini-empty">
             <CalendarOutlined />
-            <span>{{ calendarError || '本周暂无课程安排' }}</span>
+            <span>{{ calendarError || '所选日期暂无安排' }}</span>
           </div>
         </article>
 
@@ -93,7 +106,7 @@
           <div class="section-head">
             <div>
               <h2>快捷入口</h2>
-              <p>按当前权限进入常用功能模块。</p>
+              <p>按当前权限进入常用功能模块</p>
             </div>
           </div>
 
@@ -143,15 +156,18 @@ import isoWeek from 'dayjs/plugin/isoWeek'
 import {
   CalendarOutlined,
   DatabaseOutlined,
+  EnvironmentOutlined,
   ReadOutlined,
   RightOutlined,
   UserOutlined,
 } from '@ant-design/icons-vue'
 import axiosInstance from '@/api/custom-instance'
 import type { CalendarEventResponse } from '@/api/generated/model/calendarEventResponse'
+import type { ExamResponse } from '@/api/generated/model/examResponse'
 import { useAuthStore } from '@/stores/auth'
 import {
   COURSE_PERMISSIONS,
+  EXAM_LIST_PERMISSIONS,
   PROFILE_PERMISSIONS,
   TRAINING_PERMISSIONS,
   TRAINING_SCHEDULE_PERMISSIONS,
@@ -174,11 +190,44 @@ interface QuickAction {
   permissions: string[]
 }
 
-const previewPalette = [
-  { border: '#4B6EF5', background: 'rgba(228, 236, 255, 0.92)' },
-  { border: '#22C55E', background: 'rgba(226, 251, 237, 0.92)' },
-  { border: '#A855F7', background: 'rgba(245, 235, 255, 0.92)' },
-  { border: '#F97316', background: 'rgba(255, 237, 221, 0.94)' },
+interface PreviewPalette {
+  border: string
+  backgroundStart: string
+  backgroundEnd: string
+}
+
+interface DashboardPreviewItem {
+  key: string
+  title: string
+  timeLabel: string
+  primaryMeta: string
+  secondaryMeta: string
+  sortMin: number
+  palette: PreviewPalette
+  path: string
+}
+
+const previewPalette: PreviewPalette[] = [
+  {
+    border: '#7A90FF',
+    backgroundStart: 'rgba(249, 251, 255, 0.99)',
+    backgroundEnd: 'rgba(240, 245, 255, 0.96)',
+  },
+  {
+    border: '#47C97A',
+    backgroundStart: 'rgba(248, 255, 250, 0.99)',
+    backgroundEnd: 'rgba(238, 251, 243, 0.96)',
+  },
+  {
+    border: '#B67AF8',
+    backgroundStart: 'rgba(252, 249, 255, 0.99)',
+    backgroundEnd: 'rgba(245, 239, 255, 0.96)',
+  },
+  {
+    border: '#FF9F57',
+    backgroundStart: 'rgba(255, 251, 246, 0.99)',
+    backgroundEnd: 'rgba(255, 244, 231, 0.96)',
+  },
 ]
 
 const router = useRouter()
@@ -187,6 +236,8 @@ const authStore = useAuthStore()
 const calendarLoading = ref(false)
 const calendarError = ref('')
 const calendarEvents = ref<CalendarEventResponse[]>([])
+const examEvents = ref<ExamResponse[]>([])
+const selectedPreviewDate = ref(dayjs().format('YYYY-MM-DD'))
 
 const displayName = computed(() => authStore.currentUser?.name || authStore.currentUser?.username || '用户')
 const isDashboardRoute = computed(() => currentRoute.path === '/')
@@ -204,11 +255,6 @@ const greetingText = hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上
 const weekdayText = new Intl.DateTimeFormat('zh-CN', { weekday: 'long' }).format(now)
 const todayText = `${now.getMonth() + 1}月${now.getDate()}日 ${weekdayText}`
 
-const heroSubtitle = computed(() => {
-  const unit = authStore.currentUser?.unit || '当前单位待完善'
-  return `当前以${roleLabel.value}身份登录，已接入班级、日历与资源模块。所属单位：${unit}。`
-})
-
 const overviewStats = computed<MetricItem[]>(() => [
   { label: '培训班级', value: '3', suffix: '个' },
   { label: '待办事项', value: '0', suffix: '个' },
@@ -219,7 +265,7 @@ const overviewStats = computed<MetricItem[]>(() => [
 const quickActionConfigs: QuickAction[] = [
   {
     title: '班级列表',
-    description: '查看训练班、时间安排与详情。',
+    description: '查看训练班、时间安排与详情',
     path: '/classes',
     icon: ReadOutlined,
     background: 'var(--v2-cover-blue)',
@@ -227,7 +273,7 @@ const quickActionConfigs: QuickAction[] = [
   },
   {
     title: '训练日历',
-    description: '进入周训练计划与课程排期。',
+    description: '进入周训练计划与课程排期',
     path: '/classes/schedule',
     icon: CalendarOutlined,
     background: 'var(--v2-cover-green)',
@@ -235,7 +281,7 @@ const quickActionConfigs: QuickAction[] = [
   },
   {
     title: '学习资源',
-    description: '继续课程学习与资源浏览。',
+    description: '继续课程学习与资源浏览',
     path: '/resource/courses',
     icon: DatabaseOutlined,
     background: 'var(--v2-cover-purple)',
@@ -243,7 +289,7 @@ const quickActionConfigs: QuickAction[] = [
   },
   {
     title: '个人中心',
-    description: '查看和维护当前登录账号信息。',
+    description: '查看和维护当前登录账号信息',
     path: '/profile',
     icon: UserOutlined,
     background: 'var(--v2-cover-orange)',
@@ -258,7 +304,12 @@ const identityCode = computed(() => authStore.currentUser?.police_id || authStor
 const previewWeekDays = computed(() => {
   const today = dayjs()
   const weekStart = today.startOf('isoWeek')
-  const datesWithEvents = new Set(calendarEvents.value.map((event) => event.date))
+  const datesWithEvents = new Set([
+    ...calendarEvents.value.map((event) => event.date),
+    ...examEvents.value
+      .map((exam) => getExamDateKey(exam))
+      .filter((dateKey): dateKey is string => Boolean(dateKey)),
+  ])
 
   return Array.from({ length: 7 }, (_, index) => {
     const date = weekStart.add(index, 'day')
@@ -274,28 +325,42 @@ const previewWeekDays = computed(() => {
   })
 })
 
-const calendarPreviewItems = computed(() => {
-  const weekDateKeys = new Set(previewWeekDays.value.map((day) => day.dateKey))
-
-  return calendarEvents.value
-    .filter((event) => weekDateKeys.has(event.date))
-    .slice()
-    .sort((left, right) => {
-      if (left.date !== right.date) return left.date.localeCompare(right.date)
-      return parseTimeRange(left.time_range).startMin - parseTimeRange(right.time_range).startMin
-    })
-    .slice(0, 5)
+const calendarPreviewItems = computed<DashboardPreviewItem[]>(() => {
+  const courseItems = calendarEvents.value
+    .filter((event) => event.date === selectedPreviewDate.value)
     .map((event) => {
-      const day = previewWeekDays.value.find((item) => item.dateKey === event.date)
+      const parsedRange = parseTimeRange(event.time_range)
       return {
         key: event.session_id || `${event.training_id}-${event.date}-${event.time_range}-${event.course_name}`,
         title: getEventTitle(event),
-        timeLabel: parseTimeRange(event.time_range).timeLabel,
-        dayLabel: day ? `${day.label} ${day.displayDate}` : event.date,
-        trainingName: event.training_name || '未指定班级',
+        timeLabel: parsedRange.timeLabel,
+        primaryMeta: event.location || '地点待定',
+        secondaryMeta: event.instructor || '教师待定',
+        sortMin: parsedRange.startMin,
         palette: getPreviewPalette(event),
+        path: '/classes/schedule',
       }
     })
+
+  const examItems = examEvents.value
+    .filter((exam) => getExamDateKey(exam) === selectedPreviewDate.value)
+    .map((exam) => {
+      const parsedRange = parseExamTime(exam)
+      return {
+        key: `exam-${exam.id}`,
+        title: `考试：${exam.title || exam.paper_title || '未命名考试'}`,
+        timeLabel: parsedRange.timeLabel,
+        primaryMeta: '考试地点待定',
+        secondaryMeta: '监考信息待定',
+        sortMin: parsedRange.startMin,
+        palette: getExamPalette(exam),
+        path: '/exam/list',
+      }
+    })
+
+  return [...courseItems, ...examItems]
+    .sort((left, right) => left.sortMin - right.sortMin)
+    .slice(0, 6)
 })
 
 function formatMetric(value: number | undefined) {
@@ -317,6 +382,24 @@ function parseTimeRange(timeRange: string) {
   }
 }
 
+function getExamDateKey(exam: ExamResponse) {
+  return exam.start_time ? dayjs(exam.start_time).format('YYYY-MM-DD') : ''
+}
+
+function parseExamTime(exam: ExamResponse) {
+  if (!exam.start_time) {
+    return { startMin: Number.MAX_SAFE_INTEGER, timeLabel: '考试时间待定' }
+  }
+
+  const start = dayjs(exam.start_time)
+  const end = exam.end_time ? dayjs(exam.end_time) : start.add(exam.duration || 120, 'minute')
+
+  return {
+    startMin: start.hour() * 60 + start.minute(),
+    timeLabel: `${start.format('HH:mm')} - ${end.format('HH:mm')}`,
+  }
+}
+
 function getPreviewPalette(event: CalendarEventResponse) {
   const seed = `${event.course_name || ''}-${event.training_name || ''}-${event.course_type || ''}`
   let hash = 0
@@ -326,6 +409,17 @@ function getPreviewPalette(event: CalendarEventResponse) {
   }
 
   return previewPalette[hash % previewPalette.length]
+}
+
+function getExamPalette(exam: ExamResponse) {
+  const seed = `${exam.title || ''}-${exam.training_name || ''}-${exam.type || ''}`
+  let hash = 0
+
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) >>> 0
+  }
+
+  return previewPalette[(hash + 1) % previewPalette.length]
 }
 
 function getEventTitle(event: CalendarEventResponse) {
@@ -339,10 +433,33 @@ async function fetchDashboardCalendar() {
   calendarError.value = ''
 
   try {
-    const response = await axiosInstance.get('/trainings/calendar')
-    calendarEvents.value = (response.data as CalendarEventResponse[]) || []
+    const shouldLoadExams = authStore.hasAnyPermission(EXAM_LIST_PERMISSIONS)
+    const calendarRequest = axiosInstance.get('/trainings/calendar')
+    const examRequest = shouldLoadExams
+      ? axiosInstance.get('/exams', { params: { page: 1, size: -1 } })
+      : null
+
+    const [calendarResult, examsResult] = await Promise.allSettled([
+      calendarRequest,
+      ...(examRequest ? [examRequest] : []),
+    ])
+
+    if (calendarResult.status === 'fulfilled') {
+      calendarEvents.value = (calendarResult.value.data as CalendarEventResponse[]) || []
+    } else {
+      calendarEvents.value = []
+      calendarError.value = calendarResult.reason instanceof Error ? calendarResult.reason.message : '课表暂时无法加载'
+    }
+
+    if (shouldLoadExams && examsResult?.status === 'fulfilled') {
+      const examData = examsResult.value.data as { items?: ExamResponse[] }
+      examEvents.value = examData.items || []
+    } else {
+      examEvents.value = []
+    }
   } catch (error: unknown) {
     calendarEvents.value = []
+    examEvents.value = []
     calendarError.value = error instanceof Error ? error.message : '课表暂时无法加载'
   } finally {
     calendarLoading.value = false
@@ -352,6 +469,19 @@ async function fetchDashboardCalendar() {
 function navigateTo(path: string) {
   router.push(path)
 }
+
+watch(
+  previewWeekDays,
+  (days) => {
+    if (!days.some((day) => day.dateKey === selectedPreviewDate.value)) {
+      const fallbackDay = days.find((day) => day.isToday) || days[0]
+      if (fallbackDay) {
+        selectedPreviewDate.value = fallbackDay.dateKey
+      }
+    }
+  },
+  { immediate: true },
+)
 
 watch(
   isDashboardRoute,
@@ -504,14 +634,6 @@ watch(
   white-space: nowrap;
 }
 
-.hero-subtitle {
-  max-width: 620px;
-  font-size: 14px;
-  line-height: 1.65;
-  color: rgba(255, 255, 255, 0.78);
-  margin: 0;
-}
-
 .hero-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -583,6 +705,7 @@ watch(
 
 .section-head h2 {
   font-size: 18px;
+  font-weight: 800;
   line-height: 1.2;
   margin-bottom: 6px;
 }
@@ -620,6 +743,7 @@ watch(
 }
 
 .mini-day-pill {
+  appearance: none;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -628,6 +752,13 @@ watch(
   border-radius: 16px;
   border: 1px solid rgba(231, 234, 242, 0.9);
   background: linear-gradient(180deg, rgba(248, 249, 253, 0.94) 0%, rgba(255, 255, 255, 0.98) 100%);
+  cursor: pointer;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.mini-day-pill:hover {
+  transform: translateY(-1px);
+  border-color: rgba(75, 110, 245, 0.24);
 }
 
 .mini-day-pill span {
@@ -640,17 +771,24 @@ watch(
   color: var(--v2-text-primary);
 }
 
-.mini-day-pill.active {
+.mini-day-pill.has-event {
   border-color: rgba(75, 110, 245, 0.18);
 }
 
 .mini-day-pill.today {
   background: linear-gradient(180deg, rgba(75, 110, 245, 0.1) 0%, rgba(255, 255, 255, 0.98) 100%);
-  box-shadow: inset 0 0 0 1px rgba(75, 110, 245, 0.1);
 }
 
-.mini-day-pill.today span,
-.mini-day-pill.today strong {
+.mini-day-pill.selected {
+  border-color: rgba(75, 110, 245, 0.32);
+  background: linear-gradient(180deg, rgba(236, 241, 255, 1) 0%, rgba(248, 250, 255, 0.98) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(75, 110, 245, 0.14),
+    0 10px 18px rgba(75, 110, 245, 0.08);
+}
+
+.mini-day-pill.selected span,
+.mini-day-pill.selected strong {
   color: var(--v2-primary);
 }
 
@@ -669,9 +807,9 @@ watch(
   gap: 12px;
   padding: 14px 16px 14px 20px;
   border: 1px solid rgba(233, 236, 243, 0.96);
-  border-radius: 22px;
-  background: var(--mini-event-bg);
-  box-shadow: 0 14px 24px rgba(36, 42, 71, 0.06);
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--mini-event-bg-start) 0%, var(--mini-event-bg-end) 100%);
+  box-shadow: 0 12px 22px rgba(36, 42, 71, 0.05);
   text-align: left;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
@@ -681,10 +819,10 @@ watch(
   content: '';
   position: absolute;
   left: 0;
-  top: 10px;
-  bottom: 10px;
+  top: 12px;
+  bottom: 12px;
   width: 5px;
-  border-radius: 999px;
+  border-radius: 10px;
   background: var(--mini-event-border);
 }
 
@@ -709,8 +847,8 @@ watch(
   white-space: nowrap;
 }
 
-.mini-event-main span,
-.mini-event-meta span {
+.mini-event-main > span,
+.mini-event-meta-row > span {
   font-size: 13px;
   color: var(--v2-text-secondary);
   overflow: hidden;
@@ -720,6 +858,20 @@ watch(
 
 .mini-event-meta {
   align-items: flex-end;
+}
+
+.mini-event-meta-row {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+}
+
+.mini-event-meta-icon {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: rgba(120, 129, 150, 0.82);
 }
 
 .mini-state {

@@ -206,7 +206,7 @@ const statusLabels: Record<string, string> = {
 
 // 时间网格配置
 const HOUR_START = 8
-const HOUR_END = 19
+const HOUR_END = 24
 const HOUR_HEIGHT = 54 // px per hour
 const HEADER_HEIGHT = 52 // col header row height
 const TIME_GUTTER = 60 // left time-label gutter width
