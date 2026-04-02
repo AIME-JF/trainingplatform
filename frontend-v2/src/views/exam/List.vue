@@ -13,7 +13,7 @@
           <div class="filter-search">
             <a-input-search
               v-model:value="filters.search"
-              placeholder="搜索考试名称..."
+              :placeholder="searchPlaceholder"
               @search="fetchExams"
             />
           </div>
@@ -68,10 +68,10 @@
         <div class="card-cover" :style="{ background: getExamCoverBackground(exam, index) }">
             <div class="cover-labels">
             <a-tag class="cover-tag cover-tag-status" :class="getStatusClass(exam.status)">
-              {{ getStatusText(exam) }}
+              {{ getDisplayStatusText(exam) }}
             </a-tag>
             <div class="cover-tag-stack">
-              <a-tag v-if="exam.can_join" class="cover-tag cover-tag-action">可参加</a-tag>
+              <a-tag v-if="isStudentView && exam.can_join" class="cover-tag cover-tag-action">可参加</a-tag>
               <a-tag v-if="exam.attempt_count && exam.attempt_count > 0" class="cover-tag cover-tag-attempt">
                 已考 {{ exam.attempt_count }} 次
               </a-tag>
@@ -103,8 +103,8 @@
         <div class="card-body">
           <div class="card-head">
             <div class="card-head-main">
-              <div v-if="exam.training_name || exam.course_name" class="course-tag">
-                <BookOutlined /> {{ exam.training_name || exam.course_name }}
+              <div v-if="exam.training_name" class="course-tag">
+                <BookOutlined /> 所属班级：{{ exam.training_name }}
               </div>
               <h3>{{ exam.title }}</h3>
               <p>{{ exam.description || '暂无考试说明' }}</p>
@@ -123,7 +123,12 @@
           </div>
 
           <div class="action-row">
-            <template v-if="shouldShowResult(exam)">
+            <template v-if="!isStudentView">
+              <a-button type="primary" block @click.stop="goToExamOverview(exam)">
+                查看考试情况
+              </a-button>
+            </template>
+            <template v-else-if="shouldShowResult(exam)">
               <a-button type="primary" block @click.stop="goToExamResult(exam)">
                 查看结果
               </a-button>
@@ -135,7 +140,7 @@
             </template>
             <template v-else>
               <a-button type="primary" block disabled>
-                {{ getStatusText(exam) }}
+                {{ getDisplayStatusText(exam) }}
               </a-button>
             </template>
           </div>
@@ -159,6 +164,7 @@ import dayjs from 'dayjs'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import { useAuthStore } from '@/stores/auth'
 import type { ExamResponse } from '@/api/generated/model'
 import {
   getAdmissionExamsApiV1ExamsAdmissionGet,
@@ -167,15 +173,19 @@ import {
 import {
   getExamStatusClass,
   getExamStatusText,
-  isExamEnded,
   normalizeExamStatus,
   resolveExamKind,
 } from './examDisplay'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const loading = ref(false)
 const activeTab = ref<'admission' | 'training'>('admission')
 const exams = ref<ExamResponse[]>([])
+const isStudentView = computed(() => authStore.isStudent)
+const searchPlaceholder = computed(() => (
+  activeTab.value === 'training' ? '搜索考试名称或班级名称...' : '搜索考试名称...'
+))
 
 const filters = reactive({
   search: '',
@@ -241,7 +251,9 @@ function selectStatus(status: string) {
 }
 
 function handleExamClick(exam: ExamResponse) {
-  if (exam.can_join) {
+  if (!isStudentView.value) {
+    void goToExamOverview(exam)
+  } else if (exam.can_join) {
     void goToExamOverview(exam)
   } else if (shouldShowResult(exam)) {
     void goToExamResult(exam)
@@ -256,19 +268,37 @@ function getStatusText(exam: ExamResponse) {
   return getExamStatusText(exam)
 }
 
+function getDisplayStatusText(exam: ExamResponse) {
+  if (isStudentView.value) return getStatusText(exam)
+  const normalizedStatus = normalizeExamStatus(exam.status)
+  if (normalizedStatus === 'active') return '进行中'
+  if (normalizedStatus === 'upcoming') return '即将开始'
+  if (normalizedStatus === 'ended') return '已结束'
+  return '状态未知'
+}
+
 function formatDate(date?: string | null) {
   if (!date) return ''
   return dayjs(date).format('MM/DD HH:mm')
 }
 
 function shouldShowResult(exam: ExamResponse) {
-  return isExamEnded(exam.status) || Number(exam.attempt_count || 0) > 0
+  // 只有确实存在考试记录（attempt_count > 0）时才显示结果按钮
+  return Number(exam.attempt_count || 0) > 0
 }
 
 function goToExamOverview(exam: ExamResponse) {
+  const kind = resolveExamKind(exam.kind, activeTab.value)
+  // 教官直接跳转成绩表格页面
+  if (!authStore.isStudent) {
+    return router.push({
+      path: `/exam/result/${exam.id}`,
+      query: { kind },
+    })
+  }
   return router.push({
     path: `/exam/overview/${exam.id}`,
-    query: { kind: resolveExamKind(exam.kind, activeTab.value) },
+    query: { kind },
   })
 }
 
@@ -574,9 +604,10 @@ function getExamCoverBackground(exam: ExamResponse, index: number) {
   font-weight: 600;
   color: var(--v2-primary);
   background: var(--v2-primary-light);
-  padding: 3px 10px;
+  border: 1px solid rgba(75, 110, 245, 0.2);
+  padding: 4px 12px;
   border-radius: 999px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .card-head-main h3 {
