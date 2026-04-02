@@ -326,30 +326,30 @@ function handleUploadSuccess() {
 <style scoped>
 .my-space-page {
   background:
-    radial-gradient(circle at top center, rgba(48, 48, 50, 0.34), transparent 24%),
-    linear-gradient(180deg, #060606 0%, #0b0b0c 36%, #040404 100%);
-  color: #fff;
+    radial-gradient(circle at top center, var(--resource-upload-bg-radial), transparent 34%),
+    linear-gradient(180deg, var(--resource-upload-bg-top) 0%, #17181c 38%, var(--resource-upload-bg-bottom) 100%);
+  color: var(--resource-upload-text-primary);
 }
 
 .my-space-shell {
   display: flex;
   flex-direction: column;
-  gap: 18px;
+  gap: 20px;
   min-height: calc(100vh - var(--v2-bottomnav-height));
 }
 
 .page-header {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 16px;
+  gap: 18px;
 }
 
 .page-header-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 12px;
 }
 
 .page-header-actions :deep(.permission-tooltip-wrapper) {
@@ -362,54 +362,68 @@ function handleUploadSuccess() {
   line-height: 1.08;
   font-weight: 800;
   letter-spacing: -0.03em;
-  color: #fff;
+  color: var(--resource-upload-text-primary);
 }
 
 .page-subtitle {
   margin: 0;
-  color: rgba(255, 255, 255, 0.62);
+  color: var(--resource-upload-text-secondary);
   font-size: 15px;
+  line-height: 1.6;
 }
 
 .header-btn {
-  height: 44px !important;
-  padding: 0 18px !important;
+  height: 46px !important;
+  padding: 0 20px !important;
   border-radius: 999px !important;
   font-weight: 700 !important;
+  font-size: 15px !important;
+  letter-spacing: -0.01em;
   box-shadow: none !important;
 }
 
 .secondary-btn {
-  border-color: rgba(255, 255, 255, 0.14) !important;
-  background: rgba(255, 255, 255, 0.05) !important;
-  color: rgba(255, 255, 255, 0.92) !important;
+  border-color: var(--resource-upload-border) !important;
+  background: var(--resource-upload-surface-soft) !important;
+  color: var(--resource-upload-text-primary) !important;
 }
 
 .secondary-btn:hover:not(:disabled),
 .secondary-btn:focus:not(:disabled) {
-  border-color: rgba(255, 255, 255, 0.2) !important;
-  background: rgba(255, 255, 255, 0.1) !important;
-  color: #fff !important;
+  border-color: var(--resource-upload-border-strong) !important;
+  background: var(--resource-upload-surface-hover) !important;
+  color: var(--resource-upload-text-primary) !important;
 }
 
 .upload-btn {
-  border: none !important;
-  background: linear-gradient(135deg, #4b6ef5 0%, #6c82ff 100%) !important;
-  box-shadow: 0 16px 34px rgba(76, 110, 245, 0.22) !important;
+  border-color: rgba(255, 255, 255, 0.24) !important;
+  background: var(--resource-upload-primary-bg) !important;
+  color: var(--resource-upload-primary-text) !important;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16) !important;
+}
+
+.upload-btn:hover:not(:disabled),
+.upload-btn:focus:not(:disabled) {
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  background: var(--resource-upload-primary-bg-hover) !important;
+  color: var(--resource-upload-primary-text) !important;
 }
 
 .filter-card,
 .content-card {
-  border-radius: 28px;
-  background: linear-gradient(180deg, rgba(18, 18, 20, 0.96) 0%, rgba(10, 10, 11, 0.94) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.26);
+  border-radius: 30px;
+  background:
+    linear-gradient(180deg, var(--resource-upload-surface-top) 0%, var(--resource-upload-surface-bottom) 100%);
+  border: 1px solid var(--resource-upload-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    var(--resource-upload-shadow);
 }
 
 .filter-toolbar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 .filter-toolbar.mobile {
@@ -429,7 +443,7 @@ function handleUploadSuccess() {
 
 .mobile-empty-state {
   display: flex;
-  min-height: 240px;
+  min-height: 280px;
   align-items: center;
   justify-content: center;
 }
@@ -443,11 +457,14 @@ function handleUploadSuccess() {
 .mobile-resource-card {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 14px;
-  border-radius: 22px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  gap: 16px;
+  padding: 16px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid var(--resource-upload-border);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 10px 22px rgba(0, 0, 0, 0.16);
 }
 
 .mobile-card-top {
@@ -476,9 +493,9 @@ function handleUploadSuccess() {
 .mobile-card-title {
   margin: 0;
   font-size: 17px;
-  line-height: 1.45;
+  line-height: 1.4;
   font-weight: 700;
-  color: rgba(255, 255, 255, 0.94);
+  color: var(--resource-upload-text-primary);
   word-break: break-word;
 }
 
@@ -487,13 +504,13 @@ function handleUploadSuccess() {
   flex-wrap: wrap;
   gap: 8px 14px;
   margin-top: 10px;
-  color: rgba(255, 255, 255, 0.58);
+  color: var(--resource-upload-text-secondary);
   font-size: 12px;
 }
 
 .mobile-card-summary {
   margin: 10px 0 0;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--resource-upload-text-secondary);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -508,7 +525,7 @@ function handleUploadSuccess() {
 .pagination-wrapper {
   display: flex;
   justify-content: flex-end;
-  margin-top: 2px;
+  margin-top: 4px;
 }
 
 .pagination-wrapper.mobile {
@@ -516,38 +533,56 @@ function handleUploadSuccess() {
 }
 
 .my-space-page :deep(.ant-empty-description) {
-  color: rgba(255, 255, 255, 0.56);
+  color: var(--resource-upload-text-tertiary);
+}
+
+.my-space-page :deep(.ant-empty-image) {
+  opacity: 0.78;
+  filter: grayscale(1);
 }
 
 .my-space-page :deep(.ant-tag) {
   margin: 0;
   border-radius: 999px;
+  border-color: var(--resource-upload-border);
+  background: var(--resource-upload-surface-soft);
+  color: var(--resource-upload-text-secondary);
 }
 
 .my-space-page :deep(.filter-card .ant-card-body),
 .my-space-page :deep(.content-card .ant-card-body) {
-  padding: 18px !important;
+  padding: 20px !important;
 }
 
 .my-space-page :deep(.ant-select-selector),
-.my-space-page :deep(.resource-search-input .ant-input-affix-wrapper) {
-  border-color: rgba(255, 255, 255, 0.1) !important;
+.my-space-page :deep(.resource-search-input.ant-input-affix-wrapper) {
+  border-color: var(--resource-upload-border) !important;
   border-radius: 18px !important;
-  background: rgba(255, 255, 255, 0.04) !important;
-  color: rgba(255, 255, 255, 0.92) !important;
+  background: rgba(12, 13, 16, 0.88) !important;
+  color: var(--resource-upload-text-primary) !important;
   box-shadow: none !important;
+  transition: border-color 0.2s ease, background-color 0.2s ease !important;
 }
 
 .my-space-page :deep(.ant-select-selector) {
-  min-height: 46px !important;
+  min-height: 48px !important;
   padding-top: 6px !important;
   padding-bottom: 6px !important;
+}
+
+.my-space-page :deep(.ant-select-focused .ant-select-selector),
+.my-space-page :deep(.resource-search-input.ant-input-affix-wrapper:hover),
+.my-space-page :deep(.resource-search-input.ant-input-affix-wrapper:focus),
+.my-space-page :deep(.resource-search-input.ant-input-affix-wrapper-focused),
+.my-space-page :deep(.ant-select:not(.ant-select-disabled):hover .ant-select-selector) {
+  border-color: var(--resource-upload-border-strong) !important;
+  background: rgba(16, 18, 22, 0.92) !important;
 }
 
 .my-space-page :deep(.ant-select-selection-placeholder),
 .my-space-page :deep(.resource-search-input .ant-input::placeholder),
 .my-space-page :deep(.resource-search-input .ant-input-prefix) {
-  color: rgba(255, 255, 255, 0.48) !important;
+  color: var(--resource-upload-text-quiet) !important;
 }
 
 .my-space-page :deep(.resource-search-input .ant-input),
@@ -555,58 +590,113 @@ function handleUploadSuccess() {
 .my-space-page :deep(.ant-select-arrow),
 .my-space-page :deep(.resource-search-input .ant-input-prefix .anticon),
 .my-space-page :deep(.resource-search-input .ant-input-clear-icon) {
-  color: rgba(255, 255, 255, 0.88) !important;
+  color: var(--resource-upload-text-primary) !important;
+}
+
+.my-space-page :deep(.resource-search-input .ant-input) {
+  background: transparent !important;
+  color: #fff !important;
+  -webkit-text-fill-color: #fff !important;
+}
+
+.my-space-page :deep(.ant-spin-dot-item) {
+  background-color: rgba(255, 255, 255, 0.72);
 }
 
 .my-space-page :deep(.my-space-table .ant-table) {
   background: transparent !important;
-  color: rgba(255, 255, 255, 0.9);
+  color: var(--resource-upload-text-primary);
 }
 
 .my-space-page :deep(.my-space-table .ant-table-container) {
-  border-inline: 1px solid rgba(255, 255, 255, 0.06);
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 20px;
+  border-inline: 1px solid var(--resource-upload-border);
+  border-top: 1px solid var(--resource-upload-border);
+  border-radius: 24px;
   overflow: hidden;
 }
 
 .my-space-page :deep(.my-space-table .ant-table-thead > tr > th) {
-  background: rgba(255, 255, 255, 0.04) !important;
-  border-bottom-color: rgba(255, 255, 255, 0.08) !important;
-  color: rgba(255, 255, 255, 0.7) !important;
+  background: rgba(255, 255, 255, 0.045) !important;
+  border-bottom-color: var(--resource-upload-border) !important;
+  color: var(--resource-upload-text-secondary) !important;
+  font-weight: 600 !important;
 }
 
 .my-space-page :deep(.my-space-table .ant-table-tbody > tr > td) {
   background: transparent !important;
-  border-bottom-color: rgba(255, 255, 255, 0.06) !important;
-  color: rgba(255, 255, 255, 0.9) !important;
+  border-bottom-color: var(--resource-upload-border) !important;
+  color: var(--resource-upload-text-primary) !important;
 }
 
 .my-space-page :deep(.my-space-table .ant-table-tbody > tr.ant-table-row:hover > td) {
-  background: rgba(255, 255, 255, 0.03) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+.my-space-page :deep(.resource-action-group .action-btn) {
+  border-color: var(--resource-upload-border) !important;
+  background: var(--resource-upload-surface-soft) !important;
+  color: var(--resource-upload-text-primary) !important;
+}
+
+.my-space-page :deep(.resource-action-group .action-btn:hover:not(:disabled)),
+.my-space-page :deep(.resource-action-group .action-btn:focus:not(:disabled)) {
+  border-color: var(--resource-upload-border-strong) !important;
+  background: var(--resource-upload-surface-hover) !important;
+  color: var(--resource-upload-text-primary) !important;
+}
+
+.my-space-page :deep(.resource-action-group .primary-btn) {
+  border-color: rgba(255, 255, 255, 0.24) !important;
+  background: var(--resource-upload-primary-bg) !important;
+  color: var(--resource-upload-primary-text) !important;
+}
+
+.my-space-page :deep(.resource-action-group .primary-btn:hover:not(:disabled)),
+.my-space-page :deep(.resource-action-group .primary-btn:focus:not(:disabled)) {
+  border-color: rgba(255, 255, 255, 0.3) !important;
+  background: var(--resource-upload-primary-bg-hover) !important;
+  color: var(--resource-upload-primary-text) !important;
+}
+
+.my-space-page :deep(.resource-action-group .danger-btn) {
+  border-color: rgba(255, 113, 113, 0.22) !important;
+  background: rgba(255, 113, 113, 0.08) !important;
+  color: #ffb5b5 !important;
+}
+
+.my-space-page :deep(.resource-action-group .danger-btn:hover:not(:disabled)),
+.my-space-page :deep(.resource-action-group .danger-btn:focus:not(:disabled)) {
+  border-color: rgba(255, 132, 132, 0.3) !important;
+  background: rgba(255, 113, 113, 0.14) !important;
+  color: #ffd0d0 !important;
 }
 
 .my-space-page :deep(.ant-pagination .ant-pagination-item),
 .my-space-page :deep(.ant-pagination .ant-pagination-prev),
 .my-space-page :deep(.ant-pagination .ant-pagination-next) {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 255, 255, 0.1);
+  background: var(--resource-upload-surface-soft);
+  border-color: var(--resource-upload-border);
+  border-radius: 12px;
 }
 
 .my-space-page :deep(.ant-pagination .ant-pagination-item a),
 .my-space-page :deep(.ant-pagination .ant-pagination-prev .anticon),
 .my-space-page :deep(.ant-pagination .ant-pagination-next .anticon) {
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--resource-upload-text-primary);
 }
 
 .my-space-page :deep(.ant-pagination .ant-pagination-item-active) {
-  border-color: rgba(108, 130, 255, 0.42);
-  background: rgba(108, 130, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.24);
+  background: var(--resource-upload-primary-bg);
+}
+
+.my-space-page :deep(.ant-pagination .ant-pagination-item-active a) {
+  color: var(--resource-upload-primary-text) !important;
 }
 
 @media (max-width: 768px) {
   .my-space-shell {
-    gap: 14px;
+    gap: 16px;
     min-height: calc(100vh - var(--v2-bottomnav-height) - 8px);
   }
 
@@ -620,6 +710,14 @@ function handleUploadSuccess() {
     justify-content: stretch;
   }
 
+  .page-title {
+    font-size: 32px;
+  }
+
+  .page-subtitle {
+    font-size: 14px;
+  }
+
   .page-header-actions :deep(.permission-tooltip-wrapper) {
     flex: 1 1 0;
     width: 100%;
@@ -627,13 +725,18 @@ function handleUploadSuccess() {
 
   .header-btn {
     width: 100%;
-    height: 42px !important;
+    height: 44px !important;
   }
 
   .status-select,
   .search-input {
     width: 100%;
     flex: 1 1 auto;
+  }
+
+  .filter-card,
+  .content-card {
+    border-radius: 24px;
   }
 
   .mobile-card-top {

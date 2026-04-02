@@ -1,3 +1,24 @@
+:root {
+  --resource-upload-bg-top: #1c1d21;
+  --resource-upload-bg-bottom: #121318;
+  --resource-upload-bg-radial: rgba(255, 255, 255, 0.06);
+  --resource-upload-surface-top: rgba(35, 36, 41, 0.96);
+  --resource-upload-surface-bottom: rgba(24, 25, 29, 0.96);
+  --resource-upload-surface-soft: rgba(255, 255, 255, 0.045);
+  --resource-upload-surface-hover: rgba(255, 255, 255, 0.075);
+  --resource-upload-border: rgba(255, 255, 255, 0.12);
+  --resource-upload-border-strong: rgba(255, 255, 255, 0.2);
+  --resource-upload-text-primary: rgba(255, 255, 255, 0.9);
+  --resource-upload-text-secondary: rgba(255, 255, 255, 0.68);
+  --resource-upload-text-tertiary: rgba(255, 255, 255, 0.5);
+  --resource-upload-text-quiet: rgba(255, 255, 255, 0.42);
+  --resource-upload-primary-bg: #e6e8ec;
+  --resource-upload-primary-bg-hover: #eef0f3;
+  --resource-upload-primary-text: #17191d;
+  --resource-upload-shadow: 0 18px 40px rgba(0, 0, 0, 0.2);
+  --resource-upload-shadow-strong: 0 26px 64px rgba(0, 0, 0, 0.28);
+}
+
 .page-content.resource-page,
 .detail-page.resource-page {
   --resource-title-size: 30px;
