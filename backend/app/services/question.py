@@ -205,9 +205,6 @@ class QuestionService:
         """获取试题文件夹树"""
         folders = self.db.query(QuestionFolder).order_by(QuestionFolder.sort_order, QuestionFolder.id).all()
 
-        creator_ids = {f.created_by for f in folders if f.created_by}
-        creators = {u.id: u for u in self.db.query(User).filter(User.id.in_(creator_ids)).all()} if creator_ids else {}
-
         folder_ids = [f.id for f in folders]
         question_counts = {}
         if folder_ids:
@@ -240,22 +237,26 @@ class QuestionService:
         if folder_ids:
             from sqlalchemy import func as sa_func
             from app.models.exam import ExamPaperQuestion
-            counts = self.db.query(
-                Question.folder_id,
-                sa_func.count(sa_func.distinct(ExamPaperQuestion.paper_id))
-            ).join(
-                ExamPaperQuestion, ExamPaperQuestion.question_id == Question.id
-            ).filter(
-                Question.folder_id.in_(folder_ids)
-            ).group_by(Question.folder_id).all()
-            paper_counts = {row[0]: row[1] for row in counts}
+            try:
+                counts = self.db.query(
+                    Question.folder_id,
+                    sa_func.count(sa_func.distinct(ExamPaperQuestion.paper_id))
+                ).join(
+                    ExamPaperQuestion, ExamPaperQuestion.question_id == Question.id
+                ).filter(
+                    Question.folder_id.in_(folder_ids)
+                ).group_by(Question.folder_id).all()
+                paper_counts = {row[0]: row[1] for row in counts}
+            except Exception as e:
+                logger.error(f"paper_counts query error: {e}")
+                paper_counts = {}
 
         folder_responses = []
         for folder in folders:
             q_count = recursive_question_counts.get(folder.id, 0)
             p_count = paper_counts.get(folder.id, 0)
             creator = creators.get(folder.created_by)
-            creator_name = creator.name if creator and creator.name else (creator.username if creator else None)
+            creator_name = creator.nickname if creator and creator.nickname else (creator.username if creator else None)
 
             if q_count > 0 or p_count > 0:
                 status = "使用中"

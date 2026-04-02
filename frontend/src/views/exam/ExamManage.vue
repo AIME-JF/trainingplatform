@@ -17,9 +17,18 @@
           <!-- 第一层：操作与搜索过滤 -->
           <div class="toolbar-row">
             <div class="toolbar-left">
-              <button class="btn-primary" @click="openCreateDrawer">
-                添加{{ filterExamType === 'admission' ? '准入' : '培训' }}考试
-              </button>
+              <a-dropdown>
+                <button class="btn-primary">
+                  {{ createExamType === 'admission' ? '添加准入考试' : '添加培训班考试' }}
+                  <svg style="width:12px;height:12px;margin-left:4px" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+                <template #overlay>
+                  <a-menu @click="({ key }) => { createExamType = key; openCreateDrawer() }">
+                    <a-menu-item key="admission">添加准入考试</a-menu-item>
+                    <a-menu-item key="training">添加培训班考试</a-menu-item>
+                  </a-menu>
+                </template>
+              </a-dropdown>
               <div class="search-wrapper">
                 <svg class="search-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                 <a-input-search v-model:value="searchText" placeholder="请输入关键字搜索..." allow-clear @search="handleSearch" class="search-input" />
@@ -313,6 +322,7 @@ const loading = ref(false)
 const submitting = ref(false)
 const searchText = ref('')
 const filterExamType = ref('admission')
+const createExamType = ref('admission')
 const filterStatusSelect = ref('')
 const currentStatusTab = ref('all')
 const examList = ref([])
@@ -474,7 +484,7 @@ async function handleSave() {
       filterExamType.value === 'admission' ? await updateAdmissionExam(editingId.value, payload) : await updateExam(editingId.value, payload)
       message.success('考试已更新')
     } else {
-      filterExamType.value === 'admission' ? await createAdmissionExam(payload) : await createExam(payload)
+      createExamType.value === 'admission' ? await createAdmissionExam(payload) : await createExam(payload)
       message.success('考试已添加')
     }
     resetForm(); loadExams()
