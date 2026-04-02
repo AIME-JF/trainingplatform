@@ -1367,11 +1367,31 @@ const setupGuideItems = computed(() => ([
   },
 ]))
 const canSuggestPreparationActions = computed(() => workflowProcessIndex.value <= workflowStageOrder.indexOf('published'))
+const dismissedPreparationSteps = ref(new Set())
+function skipPreparationStep(stepKey) {
+  dismissedPreparationSteps.value.add(stepKey)
+}
 const preparationAction = computed(() => {
   if (!canSuggestPreparationActions.value || authStore.isStudent) {
     return null
   }
-  if ((trainingData.enrolledCount || 0) === 0) {
+  if ((trainingData.enrolledCount || 0) === 0 && !dismissedPreparationSteps.value.has('students')) {
+    const secondaryActions = []
+    if (showPublishWorkflowAction.value) {
+      secondaryActions.push({
+        key: 'publish-without-students',
+        buttonText: '跳过，先发布培训班',
+        onClick: handlePublish,
+        allowed: canPublishWorkflowAction.value,
+        tooltip: trainingManageTooltip.value,
+      })
+    }
+    secondaryActions.push({
+      key: 'skip-students',
+      buttonText: '跳过',
+      onClick: () => skipPreparationStep('students'),
+      allowed: true,
+    })
     return {
       title: '先补充学员名单',
       description: `当前班级还没有学员，建议先导入或添加学员；如果想先开放报名，也可以先发布培训班，让学员${trainingData.enrollmentRequiresApproval ? '通过申请进入' : '直接报名进入'}。`,
@@ -1380,21 +1400,10 @@ const preparationAction = computed(() => {
       type: 'primary',
       allowed: canManageStudents.value,
       tooltip: trainingManageTooltip.value,
-      secondaryActions: showPublishWorkflowAction.value
-        ? [
-            {
-              key: 'publish-without-students',
-              buttonText: '跳过，先发布培训班',
-              onClick: handlePublish,
-              ghost: true,
-              allowed: canPublishWorkflowAction.value,
-              tooltip: trainingManageTooltip.value,
-            },
-          ]
-        : [],
+      secondaryActions,
     }
   }
-  if (courseCount.value === 0) {
+  if (courseCount.value === 0 && !dismissedPreparationSteps.value.has('courses')) {
     return {
       title: '先添加课程',
       description: '培训班还没有课程，建议先把课程清单建起来。',
@@ -1406,9 +1415,15 @@ const preparationAction = computed(() => {
       type: 'primary',
       allowed: canScheduleEdit.value,
       tooltip: scheduleEditTooltip.value,
+      secondaryActions: [{
+        key: 'skip-courses',
+        buttonText: '跳过',
+        onClick: () => skipPreparationStep('courses'),
+        allowed: true,
+      }],
     }
   }
-  if (coursesWithoutSessionsCount.value > 0) {
+  if (coursesWithoutSessionsCount.value > 0 && !dismissedPreparationSteps.value.has('sessions')) {
     return {
       title: '继续安排课次',
       description: coursesWithoutSessionsCount.value === courseCount.value
@@ -1419,6 +1434,12 @@ const preparationAction = computed(() => {
       type: 'primary',
       allowed: canScheduleEdit.value,
       tooltip: scheduleEditTooltip.value,
+      secondaryActions: [{
+        key: 'skip-sessions',
+        buttonText: '跳过',
+        onClick: () => skipPreparationStep('sessions'),
+        allowed: true,
+      }],
     }
   }
   return null

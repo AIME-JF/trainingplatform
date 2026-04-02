@@ -74,6 +74,12 @@ def can_view_training_with_context(context: DataScopeContext, training: Optional
     owner_ids = {uid for uid in [training.created_by, training.instructor_id] if uid is not None}
     if context.user_id in owner_ids:
         return True
+    # 班内课程的授课教官（主讲/助教）始终可见
+    for course in (training.courses or []):
+        if course.primary_instructor_id == context.user_id:
+            return True
+        if context.user_id in (course.assistant_instructor_ids or []):
+            return True
     # 根据培训班的可见范围配置判断
     scope = getattr(training, "visibility_scope", None) or "all"
     scope_dept_ids = set(getattr(training, "visibility_department_ids", None) or [])

@@ -301,29 +301,29 @@ onMounted(() => {
   padding: 80px 0;
 }
 
-/* -- 网格：桌面端一行 4 张，偏方正比例 -- */
+/* -- 网格 -- */
 .class-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 20px;
 }
 
 @media (min-width: 1100px) {
   .class-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
   }
 }
 
 @media (min-width: 1500px) {
   .class-grid {
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(4, 1fr);
   }
 }
 
 @media (max-width: 768px) {
   .class-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
+    grid-template-columns: 1fr;
+    gap: 14px;
   }
 }
 
@@ -341,9 +341,9 @@ onMounted(() => {
   transform: translateY(-3px);
 }
 
-/* -- 封面区：与信息区约 1:1.2 -- */
+/* -- 封面区 -- */
 .card-cover {
-  height: 130px;
+  height: 150px;
   position: relative;
   display: flex;
   align-items: center;
@@ -351,33 +351,32 @@ onMounted(() => {
 }
 
 .cover-icon {
-  width: 52px;
-  height: 52px;
+  width: 56px;
+  height: 56px;
 }
 
-/* -- 状态标签：柔和半透明底色 + 深色文字 -- */
+/* -- 状态标签：白色半透明底 -- */
 .status-tag {
   position: absolute;
   left: 10px;
   bottom: 10px;
-  font-size: 11px;
+  font-size: 12px;
   padding: 3px 10px;
-  border-radius: var(--v2-radius-full);
+  border-radius: var(--v2-radius-xs);
   font-weight: 500;
   letter-spacing: 0.2px;
+  background: rgba(255, 255, 255, 0.72);
+  backdrop-filter: blur(4px);
 }
 
 .status-upcoming {
-  background: var(--v2-tag-upcoming-bg);
-  color: var(--v2-tag-upcoming-text);
+  color: var(--v2-text-secondary);
 }
 .status-active {
-  background: var(--v2-tag-active-bg);
-  color: var(--v2-tag-active-text);
+  color: var(--v2-text-secondary);
 }
 .status-ended {
-  background: var(--v2-tag-ended-bg);
-  color: var(--v2-tag-ended-text);
+  color: var(--v2-text-muted);
 }
 
 .type-tag {
@@ -386,33 +385,33 @@ onMounted(() => {
   top: 10px;
   background: rgba(255, 255, 255, 0.72);
   color: var(--v2-text-secondary);
-  font-size: 11px;
-  padding: 2px 8px;
+  font-size: 12px;
+  padding: 3px 10px;
   border-radius: var(--v2-radius-xs);
   backdrop-filter: blur(4px);
 }
 
-/* -- 信息区：加大内边距、拉开行间距 -- */
+/* -- 信息区 -- */
 .card-body {
-  padding: 16px 18px 18px;
+  padding: 18px 20px 20px;
 }
 
 .card-title {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--v2-text-primary);
   margin-bottom: 12px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  line-height: 1.3;
+  line-height: 1.4;
 }
 
 .card-detail-row {
   display: flex;
   align-items: center;
-  gap: 5px;
-  font-size: 12px;
+  gap: 6px;
+  font-size: 13px;
   color: var(--v2-text-muted);
   line-height: 1;
   margin-bottom: 8px;
@@ -423,7 +422,7 @@ onMounted(() => {
 }
 
 .detail-icon {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--v2-text-muted);
   flex-shrink: 0;
 }

@@ -48,10 +48,10 @@
   --v2-bottomnav-height: 64px;
 
   /* ===== 卡片封面渐变（莫兰迪低饱和色系） ===== */
-  --v2-cover-blue:   linear-gradient(135deg, #5D6EF7 0%, #7C63E8 100%);
-  --v2-cover-green:  linear-gradient(135deg, #39A7FF 0%, #1FD0EC 100%);
-  --v2-cover-purple: linear-gradient(135deg, #F07AD7 0%, #FF6B85 100%);
-  --v2-cover-orange: linear-gradient(135deg, #37E97D 0%, #32E4D1 100%);
+  --v2-cover-blue:   linear-gradient(150deg, #B3BFD8 0%, #C5CFDF 50%, #ADB9D2 100%);
+  --v2-cover-green:  linear-gradient(150deg, #B5CCCA 0%, #C8DCDA 50%, #AFCAC7 100%);
+  --v2-cover-purple: linear-gradient(150deg, #C8BDD5 0%, #D8CFE2 50%, #C2B7CF 100%);
+  --v2-cover-orange: linear-gradient(150deg, #C9CCB5 0%, #D9DCCA 50%, #C3C6AF 100%);
   --v2-cover-teal:   linear-gradient(150deg, #B8CDD0 0%, #CEDEE0 50%, #B5C8CC 100%);
   --v2-cover-pink:   linear-gradient(150deg, #D8C3C8 0%, #E5D5D9 50%, #D2BDC3 100%);
   --v2-cover-yellow: linear-gradient(150deg, #D8D3BC 0%, #E4E0CF 50%, #D2CDB6 100%);

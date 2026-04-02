@@ -248,7 +248,10 @@ import {
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
-import { getTrainingApiV1TrainingsTrainingIdGet } from '@/api/generated/training-management/training-management'
+import {
+  getTrainingApiV1TrainingsTrainingIdGet,
+  enrollApiV1TrainingsTrainingIdEnrollPost,
+} from '@/api/generated/training-management/training-management'
 import type { TrainingResponse } from '@/api/generated/model'
 
 import CurrentSessionCard from '@/components/classes/detail/CurrentSessionCard.vue'
@@ -293,14 +296,14 @@ const statusLabels: Record<string, string> = {
 
 const isEnrolled = computed(() => detail.value?.current_enrollment_status === 'approved')
 
+// 是否是本班教官（班主任、创建人、课程授课教官等，由后端判定）
+const isClassInstructor = computed(() => !!(detail.value?.can_manage_training || detail.value?.can_manage_all))
+
 const canEnroll = computed(() => {
   const d = detail.value
   if (!d) return false
   if (d.current_enrollment_status) return false
-  if (d.status === 'ended') return false
-  if (d.publish_status !== 'published') return false
-  if (d.is_locked) return false
-  return true
+  return !!d.can_enter_training
 })
 
 const currentSession = computed(() => detail.value?.current_session || null)
@@ -325,7 +328,8 @@ const hasCheckedOut = computed(() => {
 const hasFullAccess = computed(() => {
   const d = detail.value
   if (!d) return false
-  return !!(d.courses?.length || d.notices?.length || d.exam_sessions?.length || isEnrolled.value)
+  if (isEnrolled.value || isClassInstructor.value) return true
+  return !!(d.courses?.length || d.notices?.length || d.exam_sessions?.length)
 })
 
 const canPublishNotice = computed(() => authStore.isInstructor && hasFullAccess.value)
@@ -402,7 +406,17 @@ function formatDateTime(val: string | null | undefined): string {
   return String(val).slice(0, 16).replace('T', ' ')
 }
 
-function handleEnroll() { router.push(`/classes/${route.params.id}/enroll`) }
+async function handleEnroll() {
+  const d = detail.value
+  if (!d) return
+  try {
+    await enrollApiV1TrainingsTrainingIdEnrollPost(d.id, null)
+    message.success(d.enrollment_requires_approval ? '报名申请已提交，等待审核' : '加入成功')
+    fetchDetail()
+  } catch (err: unknown) {
+    message.error(err instanceof Error ? err.message : '操作失败')
+  }
+}
 function goHistory() { message.info('训历功能即将上线') }
 function goExam(examId: number) { router.push(`/exam/do/${examId}`) }
 
