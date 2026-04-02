@@ -52,6 +52,7 @@ class QuestionService:
         search: Optional[str] = None,
         type: Optional[str] = None,
         difficulty: Optional[int] = None,
+        police_type_id: Optional[int] = None,
         knowledge_point: Optional[str] = None,
         knowledge_point_id: Optional[int] = None,
         folder_id: Optional[int] = None,
@@ -74,6 +75,8 @@ class QuestionService:
             query = query.filter(Question.type == type)
         if difficulty:
             query = query.filter(Question.difficulty == difficulty)
+        if police_type_id is not None:
+            query = query.filter(Question.police_type_id == police_type_id)
         if knowledge_point:
             query = query.filter(KnowledgePoint.name.contains(knowledge_point))
         if knowledge_point_id is not None:

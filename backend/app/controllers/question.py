@@ -19,6 +19,7 @@ class QuestionController:
 
     def get_questions(self, page: int = 1, size: int = 10, search: Optional[str] = None,
                       type: Optional[str] = None, difficulty: Optional[int] = None,
+                      police_type_id: Optional[int] = None,
                       knowledge_point: Optional[str] = None, knowledge_point_id: Optional[int] = None,
                       folder_id: Optional[int] = None,
                       recursive: bool = False, current_user_id: Optional[int] = None):
@@ -29,6 +30,7 @@ class QuestionController:
                 search,
                 type,
                 difficulty,
+                police_type_id,
                 knowledge_point,
                 knowledge_point_id,
                 folder_id,

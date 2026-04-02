@@ -1,8 +1,26 @@
 import axios from 'axios'
 import type { AxiosRequestConfig, InternalAxiosRequestConfig } from 'axios'
 
+function normalizeApiBaseUrl(baseUrl: string): string {
+  if (typeof window === 'undefined') {
+    return baseUrl
+  }
+
+  try {
+    const resolvedUrl = new URL(baseUrl, window.location.origin)
+    if (resolvedUrl.hostname !== '0.0.0.0') {
+      return baseUrl
+    }
+
+    resolvedUrl.hostname = window.location.hostname || '127.0.0.1'
+    return resolvedUrl.toString().replace(/\/$/, '')
+  } catch {
+    return baseUrl
+  }
+}
+
 const axiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
+  baseURL: normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL || '/api/v1'),
   timeout: 15000,
 })
 

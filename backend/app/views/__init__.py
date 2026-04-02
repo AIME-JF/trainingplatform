@@ -14,6 +14,7 @@ from .media import router as media_router
 from .notice import router as notice_router
 from .permission import router as permission_router
 from .police_type import router as police_type_router
+from .practice import router as practice_router
 from .profile import router as profile_router
 from .question import router as question_router
 from .recommendation import router as recommendation_router
@@ -45,6 +46,7 @@ all_routers = [
     ai_router,
     talent_router,
     police_type_router,
+    practice_router,
     media_router,
     user_router,
     notice_router,
@@ -75,6 +77,7 @@ __all__ = [
     "ai_router",
     "talent_router",
     "police_type_router",
+    "practice_router",
     "media_router",
     "user_router",
     "notice_router",
