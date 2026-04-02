@@ -3,7 +3,6 @@ import {
   DASHBOARD_PERMISSIONS,
   TRAINING_PERMISSIONS,
   TRAINING_SCHEDULE_PERMISSIONS,
-  EXAM_LIST_PERMISSIONS,
   COURSE_PERMISSIONS,
   MY_RESOURCE_PERMISSIONS,
   TEACHING_RESOURCE_GENERATION_PERMISSIONS,
@@ -89,7 +88,7 @@ export const routes: RouteRecordRaw[] = [
         path: 'exam/list',
         name: 'ExamList',
         component: () => import('@/views/exam/List.vue'),
-        meta: { title: '在线考试', anyPermissions: EXAM_LIST_PERMISSIONS },
+        meta: { title: '在线考试' },
       },
       {
         path: 'exam/do/:id',
