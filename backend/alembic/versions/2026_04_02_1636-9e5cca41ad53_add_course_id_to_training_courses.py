@@ -1,7 +1,7 @@
 """add course_id to training_courses
 
 Revision ID: 9e5cca41ad53
-Revises: c4d5e6f7a8b9
+Revises: d5e6f7a8b9c0
 Create Date: 2026-04-02 16:36:39.845528
 
 """
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = '9e5cca41ad53'
-down_revision: Union[str, None] = 'c4d5e6f7a8b9'
+down_revision: Union[str, None] = 'd5e6f7a8b9c0'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
