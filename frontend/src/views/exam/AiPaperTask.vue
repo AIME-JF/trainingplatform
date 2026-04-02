@@ -613,6 +613,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -645,6 +646,7 @@ import { formatPaperTypeConfigs } from './utils/paperTypeConfig'
 import { sortQuestionsByType } from './utils/questionSort'
 
 const authStore = useAuthStore()
+const route = useRoute()
 
 // 状态
 const activeMode = ref('assemble')
@@ -1255,6 +1257,9 @@ watch(activeTab, (val) => {
 })
 
 onMounted(() => {
+  if (route.query.mode === 'list') {
+    viewMode.value = 'list'
+  }
   loadPoliceTypeOptions()
   loadTasks()
 })

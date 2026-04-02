@@ -1,13 +1,17 @@
 <template>
   <div class="scores-page">
-    <!-- 页头 -->
     <div class="page-header-bar">
       <div>
-        <h2 class="page-h2">成绩管理</h2>
-        <p class="page-sub">查看考试场次成绩汇总与能力分析</p>
+        <h2 class="page-h2">考试成绩</h2>
+        <p class="page-sub">教官可查看本场所有学员成绩，并进入完整答卷详情</p>
       </div>
       <div class="header-actions">
-        <a-select v-model:value="selectedExam" style="width: 300px" @change="loadExamData">
+        <a-select
+          v-model:value="selectedExam"
+          style="width: 320px"
+          placeholder="请选择考试场次"
+          @change="loadScores"
+        >
           <a-select-option v-for="exam in examList" :key="exam.id" :value="exam.id">
             {{ exam.title }}
           </a-select-option>
@@ -17,309 +21,437 @@
           tips="需要 GET_EXAM_SCORES 权限"
           v-slot="{ disabled }"
         >
-          <a-button type="primary" ghost :disabled="disabled" @click="exportCSV"><DownloadOutlined /> 导出成绩</a-button>
+          <a-button type="primary" ghost :disabled="disabled" @click="exportCSV">
+            <DownloadOutlined /> 导出成绩
+          </a-button>
         </permissions-tooltip>
       </div>
     </div>
 
-    <!-- KPI 卡片 -->
     <div class="score-kpis">
-      <div class="skpi-card" v-for="kpi in kpiCards" :key="kpi.label">
-        <div class="skpi-value" :style="{ color: kpi.color }">{{ kpi.value }}<span class="skpi-unit">{{ kpi.unit }}</span></div>
-        <div class="skpi-label">{{ kpi.label }}</div>
+      <div class="skpi-card">
+        <div class="skpi-value">{{ filteredRecords.length }}<span class="skpi-unit">人</span></div>
+        <div class="skpi-label">参考人数</div>
+      </div>
+      <div class="skpi-card">
+        <div class="skpi-value">{{ avgScore }}<span class="skpi-unit">分</span></div>
+        <div class="skpi-label">平均分</div>
+      </div>
+      <div class="skpi-card">
+        <div class="skpi-value">{{ bestScore }}<span class="skpi-unit">分</span></div>
+        <div class="skpi-label">最高分</div>
+      </div>
+      <div class="skpi-card">
+        <div class="skpi-value">{{ passRate }}<span class="skpi-unit">%</span></div>
+        <div class="skpi-label">通过率</div>
       </div>
     </div>
 
-    <!-- 图表区 -->
-    <div class="chart-row">
-      <!-- 成绩分布 -->
-      <div class="chart-card">
-        <div class="chart-title">成绩分布</div>
-        <v-chart class="chart-mid" :option="barOption" autoresize />
-      </div>
-      <!-- 能力维度雷达 -->
-      <div class="chart-card">
-        <div class="chart-title">班级平均能力画像（五维）</div>
-        <v-chart class="chart-mid" :option="radarOption" autoresize />
-      </div>
-    </div>
-
-    <!-- 薄弱点提示 -->
-    <div class="weak-alert">
-      <ExclamationCircleOutlined style="color:#fa8c16;margin-right:8px" />
-      <span>本场薄弱环节：<b>证据规则</b>（班级均分 68分）和<b>执法程序</b>（72分）低于合格线，建议增加专项训练</span>
-    </div>
-
-    <!-- 明细表 -->
     <div class="detail-table-card">
       <div class="table-header">
-        <h3 class="table-title">学员成绩明细</h3>
-        <a-input-search v-model:value="searchText" placeholder="搜索姓名" style="width:200px" allow-clear />
+        <h3 class="table-title">学员成绩总表</h3>
+        <a-input-search
+          v-model:value="searchText"
+          allow-clear
+          placeholder="搜索姓名/账号"
+          style="width: 260px"
+        />
       </div>
       <a-table
         :columns="columns"
-        :data-source="filteredStudents"
+        :data-source="filteredRecords"
+        :loading="loading"
         row-key="id"
         :pagination="{ pageSize: 10 }"
         size="middle"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'score'">
-            <span :class="record.score >= 80 ? 'score-good' : record.score >= 60 ? 'score-ok' : 'score-fail'">
-              {{ record.score }}
-            </span>
+          <template v-if="column.key === 'student'">
+            {{ record.userNickname || record.userName || `学员#${record.userId}` }}
           </template>
-          <template v-if="column.key === 'pass'">
-            <a-tag :color="record.score >= 60 ? 'green' : 'red'">
-              {{ record.score >= 60 ? '通过' : '不合格' }}
+          <template v-if="column.key === 'score'">
+            <span :class="scoreClass(record.score)">{{ record.score }}</span>
+          </template>
+          <template v-if="column.key === 'accuracy'">
+            {{ accuracy(record) }}%
+          </template>
+          <template v-if="column.key === 'result'">
+            <a-tag :color="record.result === 'pass' ? 'green' : 'red'">
+              {{ record.result === 'pass' ? '通过' : '未通过' }}
             </a-tag>
           </template>
+          <template v-if="column.key === 'endTime'">
+            {{ formatDateTime(record.endTime) }}
+          </template>
+          <template v-if="column.key === 'duration'">
+            {{ record.duration || 0 }} 分钟
+          </template>
           <template v-if="column.key === 'action'">
-            <a-button type="link" size="small" @click.stop="showDetail(record)">查看详情</a-button>
+            <a-button type="link" size="small" @click="openDetail(record)">查看答卷</a-button>
           </template>
         </template>
       </a-table>
     </div>
 
-    <!-- 学员详情弹窗 -->
-    <a-modal v-model:open="detailVisible" :title="detailStudent ? detailStudent.name + '·成绩详情' : ''" :footer="null" :width="480">
-      <div v-if="detailStudent" style="padding:8px 0">
-        <a-descriptions :column="2" bordered size="small">
-          <a-descriptions-item label="姓名">{{ detailStudent.name }}</a-descriptions-item>
-          <a-descriptions-item label="身份证号">{{ detailStudent.idCardNumber }}</a-descriptions-item>
-          <a-descriptions-item label="单位" :span="2">{{ detailStudent.unit }}</a-descriptions-item>
-          <a-descriptions-item label="总分"><span style="font-size:18px;font-weight:700" :style="{color: detailStudent.score >= 80 ? '#52c41a' : detailStudent.score >= 60 ? '#fa8c16' : '#ff4d4f'}">{{ detailStudent.score }}</span></a-descriptions-item>
-          <a-descriptions-item label="用时">{{ detailStudent.time }}</a-descriptions-item>
-          <a-descriptions-item label="法律法规">{{ detailStudent.law }}分</a-descriptions-item>
-          <a-descriptions-item label="执法程序">{{ detailStudent.enforce }}分</a-descriptions-item>
-          <a-descriptions-item label="证据规则">{{ detailStudent.evidence }}分</a-descriptions-item>
-          <a-descriptions-item label="体能技能">{{ detailStudent.physical }}分</a-descriptions-item>
-          <a-descriptions-item label="职业道德">{{ detailStudent.ethic }}分</a-descriptions-item>
-          <a-descriptions-item label="结果"><a-tag :color="detailStudent.score >= 60 ? 'green' : 'red'">{{ detailStudent.score >= 60 ? '通过' : '不合格' }}</a-tag></a-descriptions-item>
+    <a-modal
+      v-model:open="detailVisible"
+      :title="detailTitle"
+      :footer="null"
+      :width="980"
+      destroy-on-close
+    >
+      <div v-if="detailRecord">
+        <a-descriptions :column="4" bordered size="small" style="margin-bottom: 12px">
+          <a-descriptions-item label="学员">
+            {{ detailRecord.userNickname || detailRecord.userName || `学员#${detailRecord.userId}` }}
+          </a-descriptions-item>
+          <a-descriptions-item label="成绩">{{ detailRecord.score }} 分</a-descriptions-item>
+          <a-descriptions-item label="结果">
+            {{ detailRecord.result === 'pass' ? '通过' : '未通过' }}
+          </a-descriptions-item>
+          <a-descriptions-item label="用时">{{ detailRecord.duration || 0 }} 分钟</a-descriptions-item>
+          <a-descriptions-item label="作答情况">
+            {{ detailRecord.correctCount || 0 }} 对 / {{ detailRecord.wrongCount || 0 }} 错
+          </a-descriptions-item>
+          <a-descriptions-item label="提交时间" :span="3">
+            {{ formatDateTime(detailRecord.endTime) }}
+          </a-descriptions-item>
         </a-descriptions>
+
+        <a-table
+          :columns="questionColumns"
+          :data-source="detailQuestionRows"
+          row-key="questionId"
+          size="small"
+          :pagination="{ pageSize: 8 }"
+        >
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'type'">
+              {{ questionTypeText(record.type) }}
+            </template>
+            <template v-if="column.key === 'isCorrect'">
+              <a-tag :color="record.isCorrect ? 'green' : 'red'">
+                {{ record.isCorrect ? '正确' : '错误' }}
+              </a-tag>
+            </template>
+            <template v-if="column.key === 'myAnswer'">
+              {{ formatAnswer(record.myAnswer) }}
+            </template>
+            <template v-if="column.key === 'answer'">
+              {{ formatAnswer(record.answer) }}
+            </template>
+          </template>
+        </a-table>
       </div>
     </a-modal>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
-import { use } from 'echarts/core'
-import { CanvasRenderer } from 'echarts/renderers'
-import { BarChart, RadarChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, RadarComponent, LegendComponent } from 'echarts/components'
-import VChart from 'vue-echarts'
-import { DownloadOutlined, ExclamationCircleOutlined } from '@ant-design/icons-vue'
-import { getExams, getExamRecordsAnalysis } from '@/api/exam'
+import { DownloadOutlined } from '@ant-design/icons-vue'
+import { getExams, getExamScores } from '@/api/exam'
 import { useAuthStore } from '@/stores/auth'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
-use([CanvasRenderer, BarChart, RadarChart, GridComponent, TooltipComponent, RadarComponent, LegendComponent])
-
 const authStore = useAuthStore()
-const selectedExam = ref(null)
-const searchText = ref('')
-const examList = ref([])
-const students = ref([])
 const canExportScores = computed(() => authStore.hasPermission('GET_EXAM_SCORES'))
 
-const kpiCards = computed(() => {
-  const list = filteredStudents.value
-  const count = list.length
-  if (!count) return [
-    { label: '参考人数', value: 0, unit: '人', color: '#003087' },
-    { label: '班级平均分', value: 0, unit: '分', color: '#52c41a' },
-    { label: '最高分', value: 0, unit: '分', color: '#c8a84b' },
-    { label: '通过率', value: 0, unit: '%', color: '#fa8c16' },
-  ]
-  const avg = (list.reduce((s, x) => s + (x.score || 0), 0) / count).toFixed(1)
-  const max = Math.max(...list.map(s => s.score || 0))
-  const passRate = ((list.filter(s => (s.score || 0) >= 60).length / count) * 100).toFixed(1)
-  return [
-    { label: '参考人数', value: count, unit: '人', color: '#003087' },
-    { label: '班级平均分', value: avg, unit: '分', color: '#52c41a' },
-    { label: '最高分', value: max, unit: '分', color: '#c8a84b' },
-    { label: '通过率', value: passRate, unit: '%', color: '#fa8c16' },
-  ]
-})
+const loading = ref(false)
+const examList = ref([])
+const selectedExam = ref(null)
+const records = ref([])
+const searchText = ref('')
 
-const barOption = ref({})
-const radarOption = ref({})
-const updateCharts = () => {
-  const data = students.value
-  let c1=0, c2=0, c3=0, c4=0, c5=0
-  let sLaw=0, sEnf=0, sEvi=0, sPhy=0, sEth=0
-
-  data.forEach(s => {
-    if (s.score < 60) c1++
-    else if (s.score < 70) c2++
-    else if (s.score < 80) c3++
-    else if (s.score < 90) c4++
-    else c5++
-
-    sLaw += s.law || 0
-    sEnf += s.enforce || 0
-    sEvi += s.evidence || 0
-    sPhy += s.physical || 0
-    sEth += s.ethic || 0
-  })
-
-  barOption.value = {
-    tooltip: { trigger: 'axis' },
-    grid: { left: 40, right: 20, top: 20, bottom: 30 },
-    xAxis: { type: 'category', data: ['60分以下', '60-69', '70-79', '80-89', '90分以上'] },
-    yAxis: { type: 'value', name: '人数' },
-    series: [{
-      type: 'bar', data: [c1, c2, c3, c4, c5],
-      itemStyle: { color: (p) => ['#ff4d4f','#fa8c16','#1677ff','#52c41a','#c8a84b'][p.dataIndex], borderRadius: [4,4,0,0] },
-      barMaxWidth: 48,
-      label: { show: true, position: 'top', formatter: '{c}人' },
-    }],
-  }
-
-  const count = data.length || 1
-  radarOption.value = {
-    tooltip: {},
-    radar: {
-      indicator: [
-        { name: '法律法规', max: 100 },
-        { name: '执法程序', max: 100 },
-        { name: '证据规则', max: 100 },
-        { name: '体能技能', max: 100 },
-        { name: '职业道德', max: 100 },
-      ],
-      shape: 'polygon',
-      splitNumber: 4,
-      axisName: { color: '#595959', fontSize: 12 },
-      splitArea: { areaStyle: { color: ['rgba(0,48,135,0.04)', 'rgba(0,48,135,0.02)'] } },
-    },
-    series: [{
-      type: 'radar',
-      data: [{
-        value: [
-          Math.round(sLaw/count), Math.round(sEnf/count),
-          Math.round(sEvi/count), Math.round(sPhy/count),
-          Math.round(sEth/count)
-        ],
-        name: '班级平均',
-        itemStyle: { color: '#003087' },
-        areaStyle: { color: 'rgba(0,48,135,0.15)' },
-        lineStyle: { color: '#003087', width: 2 },
-      }],
-    }],
-  }
-}
-
-
+const detailVisible = ref(false)
+const detailRecord = ref(null)
 
 const columns = [
-  { title: '姓名', dataIndex: 'name', key: 'name', width: 80, sorter: (a, b) => a.name.localeCompare(b.name) },
-  { title: '身份证号', dataIndex: 'idCardNumber', key: 'idCardNumber', width: 180 },
-  { title: '所属单位', dataIndex: 'unit', key: 'unit' },
-  { title: '总分', key: 'score', width: 80, sorter: (a, b) => a.score - b.score },
-  { title: '法律法规', dataIndex: 'law', key: 'law', width: 90 },
-  { title: '执法程序', dataIndex: 'enforce', key: 'enforce', width: 90 },
-  { title: '证据规则', dataIndex: 'evidence', key: 'evidence', width: 90 },
-  { title: '体能技能', dataIndex: 'physical', key: 'physical', width: 90 },
-  { title: '用时', dataIndex: 'time', key: 'time', width: 100 },
-  { title: '结果', key: 'pass', width: 80 },
-  { title: '操作', key: 'action', width: 90, fixed: 'right' },
+  { title: '学员', key: 'student', width: 120 },
+  { title: '成绩', key: 'score', width: 80, sorter: (a, b) => (a.score || 0) - (b.score || 0) },
+  { title: '及格线', dataIndex: 'passingScore', key: 'passingScore', width: 90 },
+  { title: '正确率', key: 'accuracy', width: 90 },
+  { title: '考试次数', dataIndex: 'attemptNo', key: 'attemptNo', width: 90 },
+  { title: '提交时间', key: 'endTime', width: 150 },
+  { title: '用时', key: 'duration', width: 90 },
+  { title: '结果', key: 'result', width: 90 },
+  { title: '操作', key: 'action', width: 100, fixed: 'right' },
 ]
 
-const filteredStudents = computed(() => {
-  if (!searchText.value) return students.value
-  return students.value.filter(s => s.name.includes(searchText.value) || (s.idCardNumber || '').includes(searchText.value))
+const questionColumns = [
+  { title: '题号', dataIndex: 'questionId', key: 'questionId', width: 80 },
+  { title: '题型', key: 'type', width: 90 },
+  { title: '题目', dataIndex: 'content', key: 'content', ellipsis: true },
+  { title: '我的答案', key: 'myAnswer', width: 120 },
+  { title: '正确答案', key: 'answer', width: 120 },
+  { title: '判定', key: 'isCorrect', width: 90 },
+]
+
+const filteredRecords = computed(() => {
+  const keyword = searchText.value?.trim()
+  if (!keyword) return records.value
+  return records.value.filter((row) => {
+    const name = row.userNickname || row.userName || ''
+    const account = row.userName || ''
+    return name.includes(keyword) || account.includes(keyword)
+  })
 })
+
+const avgScore = computed(() => {
+  const list = filteredRecords.value
+  if (!list.length) return 0
+  return (list.reduce((sum, row) => sum + (row.score || 0), 0) / list.length).toFixed(1)
+})
+
+const bestScore = computed(() => {
+  if (!filteredRecords.value.length) return 0
+  return Math.max(...filteredRecords.value.map((row) => row.score || 0))
+})
+
+const passRate = computed(() => {
+  const list = filteredRecords.value
+  if (!list.length) return 0
+  const passCount = list.filter((row) => row.result === 'pass').length
+  return ((passCount / list.length) * 100).toFixed(1)
+})
+
+const detailTitle = computed(() => {
+  if (!detailRecord.value) return '学员答卷详情'
+  const name = detailRecord.value.userNickname || detailRecord.value.userName || `学员#${detailRecord.value.userId}`
+  return `${name} · 完整答卷`
+})
+
+const detailQuestionRows = computed(() => {
+  return (detailRecord.value?.questionDetails || []).map((item) => ({
+    questionId: item.questionId,
+    type: item.type,
+    content: item.content,
+    myAnswer: item.myAnswer,
+    answer: item.answer,
+    isCorrect: item.isCorrect,
+  }))
+})
+
+function accuracy(record) {
+  const correct = record.correctCount || 0
+  const wrong = record.wrongCount || 0
+  const total = correct + wrong
+  if (!total) return 0
+  return Math.round((correct / total) * 100)
+}
+
+function scoreClass(score) {
+  if (score >= 80) return 'score-good'
+  if (score >= 60) return 'score-ok'
+  return 'score-fail'
+}
+
+function questionTypeText(type) {
+  return {
+    single: '单选题',
+    multi: '多选题',
+    judge: '判断题',
+  }[type] || type
+}
+
+function formatAnswer(answer) {
+  if (answer === undefined || answer === null || answer === '') return '未作答'
+  if (Array.isArray(answer)) return answer.join('、')
+  return String(answer)
+}
+
+function formatDateTime(value) {
+  if (!value) return '-'
+  return new Date(value).toLocaleString('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
 
 async function loadExamList() {
   try {
     const res = await getExams({ size: 100 })
     examList.value = res.items || []
-    if (examList.value.length > 0) {
+    if (examList.value.length && !selectedExam.value) {
       selectedExam.value = examList.value[0].id
-      loadExamData()
+      await loadScores()
     }
-  } catch (e) {
-    message.error('加载考试列表失败')
+  } catch {
+    message.error('加载考试场次失败')
   }
 }
 
-async function loadExamData() {
+function normalizeRecord(item) {
+  return {
+    id: item.id,
+    examId: item.examId,
+    userId: item.userId,
+    userName: item.userName,
+    userNickname: item.userNickname,
+    score: item.score || 0,
+    result: item.result || 'fail',
+    passingScore: item.passingScore || 60,
+    attemptNo: item.attemptNo || 1,
+    correctCount: item.correctCount || 0,
+    wrongCount: item.wrongCount || 0,
+    duration: item.duration || 0,
+    endTime: item.endTime,
+    questionDetails: item.questionDetails || [],
+  }
+}
+
+async function loadScores() {
   if (!selectedExam.value) return
-  const msg = message.loading('加载成绩数据...', 0)
+  loading.value = true
   try {
-    const res = await getExamRecordsAnalysis(selectedExam.value)
-    students.value = res.students || []
-    updateCharts()
-  } catch (e) {
+    const res = await getExamScores(selectedExam.value, { size: -1 })
+    records.value = (res.items || []).map(normalizeRecord)
+  } catch {
     message.error('加载成绩失败')
   } finally {
-    msg()
+    loading.value = false
   }
+}
+
+function openDetail(record) {
+  detailRecord.value = record
+  detailVisible.value = true
+}
+
+function exportCSV() {
+  if (!canExportScores.value) return
+  const header = ['学员', '成绩', '及格线', '正确率', '结果', '考试次数', '提交时间', '用时(分钟)']
+  const rows = filteredRecords.value.map((row) => [
+    row.userNickname || row.userName || `学员#${row.userId}`,
+    row.score,
+    row.passingScore,
+    `${accuracy(row)}%`,
+    row.result === 'pass' ? '通过' : '未通过',
+    row.attemptNo,
+    formatDateTime(row.endTime),
+    row.duration || 0,
+  ])
+  const csv = '\uFEFF' + [header, ...rows].map((line) => line.join(',')).join('\n')
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `考试成绩_${new Date().toLocaleDateString('zh-CN')}.csv`
+  link.click()
+  URL.revokeObjectURL(url)
 }
 
 onMounted(() => {
   loadExamList()
 })
-
-// 导出 CSV
-function exportCSV() {
-  if (!canExportScores.value) return
-  const header = ['姓名', '身份证号', '所属单位', '总分', '法律法规', '执法程序', '证据规则', '体能技能', '职业道德', '用时', '结果']
-  const rows = filteredStudents.value.map(s => [
-    s.name, s.idCardNumber, s.unit, s.score, s.law, s.enforce, s.evidence, s.physical, s.ethic, s.time, s.score >= 60 ? '通过' : '不合格'
-  ])
-  const csv = '\uFEFF' + [header, ...rows].map(r => r.join(',')).join('\n')
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `成绩导出_${new Date().toLocaleDateString('zh-CN')}.csv`
-  a.click()
-  URL.revokeObjectURL(url)
-  message.success('成绩已导出！')
-}
-
-// 查看详情
-const detailVisible = ref(false)
-const detailStudent = ref(null)
-function showDetail(record) {
-  detailStudent.value = record
-  detailVisible.value = true
-}
 </script>
 
 <style scoped>
-.scores-page { }
-.page-header-bar { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
-.page-h2 { font-size: 20px; font-weight: 700; color: #001234; margin: 0 0 4px; }
-.page-sub { font-size: 13px; color: #8c8c8c; margin: 0; }
-.header-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.scores-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
 
-.score-kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 20px; }
-.skpi-card { background: white; border-radius: 10px; padding: 20px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-.skpi-value { font-size: 32px; font-weight: 700; }
-.skpi-unit { font-size: 14px; margin-left: 2px; }
-.skpi-label { font-size: 12px; color: #8c8c8c; margin-top: 6px; }
+.page-header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: 12px;
+}
 
-.chart-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
-.chart-card { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-.chart-title { font-size: 14px; font-weight: 600; color: #001234; margin-bottom: 12px; }
-.chart-mid { height: 260px; }
+.page-h2 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 700;
+}
 
-.weak-alert { background: #fffbe6; border: 1px solid #ffe58f; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 13px; color: #595959; display: flex; align-items: flex-start; }
-.weak-alert b { color: #d46b08; }
+.page-sub {
+  margin: 0;
+  color: #8c8c8c;
+  font-size: 13px;
+}
 
-.detail-table-card { background: white; border-radius: 10px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
-.table-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
-.table-title { font-size: 15px; font-weight: 600; margin: 0; color: #001234; }
-.score-good { color: #52c41a; font-weight: 700; font-size: 16px; }
-.score-ok { color: #fa8c16; font-weight: 700; font-size: 16px; }
-.score-fail { color: #ff4d4f; font-weight: 700; font-size: 16px; }
+.header-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
 
-@media (max-width: 768px) {
-  .score-kpis { grid-template-columns: 1fr 1fr; }
-  .chart-row { grid-template-columns: 1fr; }
+.score-kpis {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.skpi-card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  padding: 18px 12px;
+  text-align: center;
+}
+
+.skpi-value {
+  font-size: 30px;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #003087;
+}
+
+.skpi-unit {
+  font-size: 14px;
+  margin-left: 2px;
+}
+
+.skpi-label {
+  margin-top: 6px;
+  color: #8c8c8c;
+  font-size: 13px;
+}
+
+.detail-table-card {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  padding: 16px;
+}
+
+.table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.table-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.score-good {
+  color: #52c41a;
+  font-weight: 700;
+}
+
+.score-ok {
+  color: #fa8c16;
+  font-weight: 700;
+}
+
+.score-fail {
+  color: #ff4d4f;
+  font-weight: 700;
+}
+
+@media (max-width: 992px) {
+  .score-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 </style>
