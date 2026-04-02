@@ -182,6 +182,7 @@ class AdmissionExam(Base):
     scope = Column(String(200), nullable=True, comment="适用范围摘要")
     scope_type = Column(String(30), default="all", comment="适用范围类型: all/user/department/role")
     scope_target_ids = Column(JSON, nullable=True, comment="适用范围目标ID列表")
+    course_ids = Column(JSON, nullable=True, comment="显式绑定课程ID列表")
     max_attempts = Column(Integer, default=1, comment="最大作答次数")
     start_time = Column(DateTime(timezone=True), nullable=True, comment="开始时间")
     end_time = Column(DateTime(timezone=True), nullable=True, comment="结束时间")
@@ -220,6 +221,7 @@ class Exam(Base):
         comment="用途: class_assessment/final_assessment/quiz/makeup",
     )
     training_id = Column(Integer, ForeignKey("trainings.id"), nullable=False, comment="关联培训班ID")
+    course_ids = Column(JSON, nullable=True, comment="显式绑定课程ID列表")
     max_attempts = Column(Integer, default=1, comment="最大作答次数")
     allow_makeup = Column(Boolean, default=False, comment="是否允许补考")
     start_time = Column(DateTime(timezone=True), nullable=True, comment="开始时间")

@@ -101,7 +101,7 @@
                     <span class="paper-link" @click="goToPaperDetail(exam.paperId)">{{ exam.paperTitle || '-' }}</span>
                   </td>
                   <td class="col-type text-center text-slate-600">{{ exam.type === 'formal' ? '线上' : '测验' }}</td>
-                  <td class="col-category text-center text-slate-600">{{ exam.courseName || '默认分类' }}</td>
+                  <td class="col-category text-center text-slate-600">{{ exam.courseNames?.length ? exam.courseNames.join('、') : (exam.courseName || '默认分类') }}</td>
                   <td class="col-action text-right">
                     <button class="btn-action" @click.stop="openEditDrawer(exam)">
                       <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h.01M12 12h.01M19 12h.01"/></svg>
@@ -214,6 +214,22 @@
               <a-range-picker v-model:value="dateRange" show-time format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm" style="width:100%" />
             </a-form-item>
           </a-col>
+          <a-col :span="24">
+            <a-form-item label="绑定课程">
+              <a-select
+                v-model:value="form.courseIds"
+                mode="multiple"
+                allow-clear
+                show-search
+                option-filter-prop="label"
+                placeholder="可显式绑定课程；不选时按试卷题目关联课程自动识别"
+                :options="courseOptions"
+              />
+              <div class="paper-hint">
+                <span class="hint-text">显式绑定后，学生端优先展示这里选择的课程</span>
+              </div>
+            </a-form-item>
+          </a-col>
           <a-col :span="6">
             <a-form-item label="考试时长（分钟）">
               <a-input-number v-model:value="form.duration" :min="10" :max="300" style="width:100%" />
@@ -287,6 +303,7 @@ import {
   getAdmissionExamDetail, getAdmissionExams,
   updateExam, updateAdmissionExam,
 } from '@/api/exam'
+import { getCourses } from '@/api/course'
 import AdmissionScopeSelector from './components/AdmissionScopeSelector.vue'
 
 const router = useRouter()
@@ -315,6 +332,7 @@ const currentStatusTab = ref('all')
 const examList = ref([])
 const selectedIds = ref([])
 const paperOptions = ref([])
+const courseOptions = ref([])
 const selectedPaperDetail = ref(null)
 const drawerVisible = ref(false)
 const isEdit = ref(false)
@@ -327,7 +345,7 @@ const pagination = reactive({ current: 1, pageSize: 15, total: 0 })
 const form = reactive({
   title: '', paperId: undefined, description: '',
   type: 'formal', status: 'upcoming',
-  scopeType: 'all', scopeTargetIds: [],
+  scopeType: 'all', scopeTargetIds: [], courseIds: [],
   duration: 60, passingScore: 60, maxAttempts: 1,
 })
 
@@ -390,6 +408,18 @@ async function loadPaperOptions() {
   catch { paperOptions.value = [] }
 }
 
+async function loadCourseOptions() {
+  try {
+    const result = await getCourses({ size: -1 })
+    courseOptions.value = (result.items || []).map(item => ({
+      value: item.id,
+      label: item.title,
+    }))
+  } catch {
+    courseOptions.value = []
+  }
+}
+
 async function setPaperPreview(paperId, applyDefaults = false) {
   if (!paperId) { selectedPaperDetail.value = null; return }
   try {
@@ -427,6 +457,7 @@ async function openEditDrawer(record) {
     form.status = detail.status || 'upcoming'
     form.scopeType = detail.scopeType || 'all'
     form.scopeTargetIds = [...(detail.scopeTargetIds || [])]
+    form.courseIds = [...(detail.courseIds || [])]
     form.duration = detail.duration || 60
     form.passingScore = detail.passingScore || 60
     form.maxAttempts = detail.maxAttempts || 1
@@ -442,7 +473,7 @@ async function openEditDrawer(record) {
 }
 
 function resetForm() {
-  Object.assign(form, { title: '', paperId: undefined, description: '', type: 'formal', status: 'upcoming', scopeType: 'all', scopeTargetIds: [], duration: 60, passingScore: 60, maxAttempts: 1 })
+  Object.assign(form, { title: '', paperId: undefined, description: '', type: 'formal', status: 'upcoming', scopeType: 'all', scopeTargetIds: [], courseIds: [], duration: 60, passingScore: 60, maxAttempts: 1 })
   selectedPaperDetail.value = null; drawerVisible.value = false; isEdit.value = false; editingId.value = null; dateRange.value = null
 }
 
@@ -454,7 +485,7 @@ async function handleSave() {
   if (!Number.isFinite(dur) || dur < 10) { message.warning('考试时长不能少于10分钟'); return }
   if (!Number.isFinite(ps) || ps < 1) { message.warning('及格分不能小于1分'); return }
   if (selectedPaperDetail.value && ps > selectedPaperDetail.value.totalScore) { message.warning('及格分不能超过试卷满分'); return }
-  const payload = { title: form.title, paperId: form.paperId, description: form.description || undefined, type: form.type, status: form.status, duration: dur, passingScore: ps, startTime: dateRange.value?.[0], endTime: dateRange.value?.[1], maxAttempts: form.maxAttempts, scopeType: form.scopeType, scopeTargetIds: form.scopeTargetIds }
+  const payload = { title: form.title, paperId: form.paperId, description: form.description || undefined, type: form.type, status: form.status, duration: dur, passingScore: ps, startTime: dateRange.value?.[0], endTime: dateRange.value?.[1], maxAttempts: form.maxAttempts, scopeType: form.scopeType, scopeTargetIds: form.scopeTargetIds, courseIds: form.courseIds }
   submitting.value = true
   try {
     if (isEdit.value) {
@@ -514,7 +545,7 @@ function formatDateTime(v) { return v ? String(v).replace('T', ' ').slice(0, 16)
 
 watch(filterExamType, () => { pagination.current = 1; loadExams() })
 watch(filterStatusSelect, val => { currentStatusTab.value = val || 'all' })
-onMounted(() => { loadExams(); loadPaperOptions() })
+onMounted(() => { loadExams(); loadPaperOptions(); loadCourseOptions() })
 </script>
 
 <style scoped>

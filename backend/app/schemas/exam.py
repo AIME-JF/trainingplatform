@@ -294,6 +294,8 @@ class ExamPaperResponse(BaseModel):
     police_type_name: Optional[str] = None
     course_id: Optional[int] = None
     course_name: Optional[str] = None
+    course_ids: List[int] = Field(default_factory=list)
+    course_names: List[str] = Field(default_factory=list)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -319,6 +321,7 @@ class AdmissionExamCreate(BaseModel):
     scope: Optional[str] = None
     scope_type: str = Field(ADMISSION_SCOPE_ALL, description="适用范围类型: all/user/department/role")
     scope_target_ids: List[int] = Field(default_factory=list, description="适用范围目标ID列表")
+    course_ids: List[int] = Field(default_factory=list, description="显式绑定课程ID列表")
     max_attempts: int = Field(1, ge=1, le=10, description="最大作答次数")
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
@@ -331,6 +334,11 @@ class AdmissionExamCreate(BaseModel):
     @field_validator("scope_target_ids", mode="before")
     @classmethod
     def validate_scope_target_ids(cls, value: Any) -> List[int]:
+        return _normalize_admission_scope_target_ids(value) or []
+
+    @field_validator("course_ids", mode="before")
+    @classmethod
+    def validate_course_ids(cls, value: Any) -> List[int]:
         return _normalize_admission_scope_target_ids(value) or []
 
 
@@ -347,6 +355,7 @@ class AdmissionExamUpdate(BaseModel):
     scope: Optional[str] = None
     scope_type: Optional[str] = Field(None, description="适用范围类型: all/user/department/role")
     scope_target_ids: Optional[List[int]] = Field(None, description="适用范围目标ID列表")
+    course_ids: Optional[List[int]] = Field(None, description="显式绑定课程ID列表")
     max_attempts: Optional[int] = Field(None, ge=1, le=10)
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
@@ -359,6 +368,11 @@ class AdmissionExamUpdate(BaseModel):
     @field_validator("scope_target_ids", mode="before")
     @classmethod
     def validate_scope_target_ids(cls, value: Any) -> Optional[List[int]]:
+        return _normalize_admission_scope_target_ids(value, allow_none=True)
+
+    @field_validator("course_ids", mode="before")
+    @classmethod
+    def validate_course_ids(cls, value: Any) -> Optional[List[int]]:
         return _normalize_admission_scope_target_ids(value, allow_none=True)
 
 
@@ -382,6 +396,10 @@ class AdmissionExamResponse(BaseModel):
     scope_target_ids: List[int] = Field(default_factory=list)
     max_attempts: int = 1
     linked_training_count: int = 0
+    course_id: Optional[int] = None
+    course_name: Optional[str] = None
+    course_ids: List[int] = Field(default_factory=list)
+    course_names: List[str] = Field(default_factory=list)
     attempt_count: int = 0
     latest_result: Optional[str] = None
     can_join: Optional[bool] = None
@@ -413,10 +431,16 @@ class ExamCreate(BaseModel):
     type: Optional[str] = Field(None, description="展示类型: formal/quiz")
     purpose: str = Field("class_assessment", description="用途")
     training_id: int = Field(..., description="关联培训班ID")
+    course_ids: List[int] = Field(default_factory=list, description="显式绑定课程ID列表")
     max_attempts: int = Field(1, ge=1, le=10, description="最大作答次数")
     allow_makeup: bool = Field(False, description="是否允许补考")
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
+
+    @field_validator("course_ids", mode="before")
+    @classmethod
+    def validate_course_ids(cls, value: Any) -> List[int]:
+        return _normalize_admission_scope_target_ids(value) or []
 
 
 class ExamUpdate(BaseModel):
@@ -431,10 +455,16 @@ class ExamUpdate(BaseModel):
     type: Optional[str] = None
     purpose: Optional[str] = None
     training_id: Optional[int] = None
+    course_ids: Optional[List[int]] = Field(None, description="显式绑定课程ID列表")
     max_attempts: Optional[int] = Field(None, ge=1, le=10)
     allow_makeup: Optional[bool] = None
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
+
+    @field_validator("course_ids", mode="before")
+    @classmethod
+    def validate_course_ids(cls, value: Any) -> Optional[List[int]]:
+        return _normalize_admission_scope_target_ids(value, allow_none=True)
 
 
 class ExamResponse(BaseModel):
@@ -455,6 +485,10 @@ class ExamResponse(BaseModel):
     purpose: str = "class_assessment"
     training_id: Optional[int] = None
     training_name: Optional[str] = None
+    course_id: Optional[int] = None
+    course_name: Optional[str] = None
+    course_ids: List[int] = Field(default_factory=list)
+    course_names: List[str] = Field(default_factory=list)
     max_attempts: int = 1
     allow_makeup: bool = False
     start_time: Optional[datetime] = None

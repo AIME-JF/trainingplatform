@@ -26,6 +26,7 @@ export interface AdmissionExamResponse {
   scope_target_ids?: number[];
   max_attempts?: number;
   linked_training_count?: number;
+  course_name?: string | null;
   attempt_count?: number;
   latest_result?: string | null;
   can_join?: boolean | null;

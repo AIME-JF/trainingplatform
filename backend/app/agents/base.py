@@ -37,15 +37,32 @@ class BaseAIAgent:
         return self._call_provider(config, messages)
 
     def _generate_json_payload(self, *, system_prompt: str, user_prompt: str) -> dict[str, Any]:
-        raw_content = self._generate_text(system_prompt=system_prompt, user_prompt=user_prompt)
+        config = self._load_runtime_config()
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+        raw_content = self._call_provider(config, messages, expect_json=True)
         return self._parse_json_payload(raw_content)
 
-    def _call_provider(self, config: AIRuntimeConfig, messages: list[dict[str, str]]) -> str:
+    def _call_provider(
+        self,
+        config: AIRuntimeConfig,
+        messages: list[dict[str, str]],
+        *,
+        expect_json: bool = False,
+    ) -> str:
         if config.provider == "ollama":
             return self._call_ollama(config, messages)
-        return self._call_openai(config, messages)
+        return self._call_openai(config, messages, expect_json=expect_json)
 
-    def _call_openai(self, config: AIRuntimeConfig, messages: list[dict[str, str]]) -> str:
+    def _call_openai(
+        self,
+        config: AIRuntimeConfig,
+        messages: list[dict[str, str]],
+        *,
+        expect_json: bool = False,
+    ) -> str:
         from logger import logger as _base_logger
         _base_logger.debug(f"[BaseAIAgent] timeout=%s, max_tokens=%s, temperature=%s", config.timeout, config.max_tokens, config.temperature)
         # 使用 httpx.Timeout 显式设置所有超时类别，避免个别操作超时
@@ -65,9 +82,19 @@ class BaseAIAgent:
             request_kwargs["max_tokens"] = config.max_tokens
         if config.temperature is not None:
             request_kwargs["temperature"] = config.temperature
+        if expect_json:
+            request_kwargs["response_format"] = {"type": "json_object"}
 
         _base_logger.debug(f"[BaseAIAgent] calling {config.base_url} model={config.model} messages_count={len(messages)}")
-        response = client.chat.completions.create(**request_kwargs)
+        try:
+            response = client.chat.completions.create(**request_kwargs)
+        except Exception as exc:
+            if expect_json:
+                request_kwargs.pop("response_format", None)
+                _base_logger.warning("[BaseAIAgent] JSON response_format 调用失败，降级普通模式重试: %s", exc)
+                response = client.chat.completions.create(**request_kwargs)
+            else:
+                raise
         choices_count = len(response.choices) if response.choices else 0
         content = response.choices[0].message.content if response.choices else ""
         finish_reason = response.choices[0].finish_reason if response.choices else "N/A"

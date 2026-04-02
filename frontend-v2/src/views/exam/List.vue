@@ -103,6 +103,9 @@
         <div class="card-body">
           <div class="card-head">
             <div class="card-head-main">
+              <div v-if="exam.training_name || exam.course_name" class="course-tag">
+                <BookOutlined /> {{ exam.training_name || exam.course_name }}
+              </div>
               <h3>{{ exam.title }}</h3>
               <p>{{ exam.description || '暂无考试说明' }}</p>
             </div>
@@ -144,6 +147,7 @@
 
 <script setup lang="ts">
 import {
+  BookOutlined,
   CalendarOutlined,
   ClockCircleOutlined,
   FileTextOutlined,
@@ -560,6 +564,19 @@ function getExamCoverBackground(exam: ExamResponse, index: number) {
 
 .card-head {
   margin-bottom: 16px;
+}
+
+.card-head-main .course-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--v2-primary);
+  background: var(--v2-primary-light);
+  padding: 3px 10px;
+  border-radius: 999px;
+  margin-bottom: 8px;
 }
 
 .card-head-main h3 {
