@@ -100,6 +100,7 @@
               :current-session-status-label="currentSessionStatusLabel"
               :is-enrolled="isEnrolled"
               @go-schedule="activeTab = 'schedule'"
+              @guide-click="handleGuideClick"
               @start-session-checkout="handleStartSessionCheckout"
               @end-session-checkout="handleEndSessionCheckout"
               @go-current-session-checkout="$router.push({ name: 'Checkout', params: { id: trainingData.id, sessionKey: currentSession?.sessionId } })"
@@ -925,6 +926,12 @@
       </a-form>
     </a-modal>
 
+    <QuickCreateExamModal
+      v-model:open="showQuickExamModal"
+      :training-id="trainingId"
+      @success="onQuickExamSuccess"
+    />
+
     <a-tour
       v-model:current="detailTourCurrent"
       :open="detailTourOpen"
@@ -985,6 +992,7 @@ import TrainingOverviewContent from './components/TrainingOverviewContent.vue'
 import TrainingScheduleContent from './components/TrainingScheduleContent.vue'
 import TrainingScheduleRuleContent from './components/TrainingScheduleRuleContent.vue'
 import TrainingExamsContent from './components/TrainingExamsContent.vue'
+import QuickCreateExamModal from './components/QuickCreateExamModal.vue'
 import TrainingStudentsContent from './components/TrainingStudentsContent.vue'
 import CourseResourcePicker from './components/CourseResourcePicker.vue'
 import TrainingCourseChangeLogsContent from './components/TrainingCourseChangeLogsContent.vue'
@@ -1998,6 +2006,18 @@ function goTrainingExamManage() {
   })
 }
 
+function handleGuideClick(key) {
+  const guideActionMap = {
+    basic: () => { activeTab.value = 'basic-info' },
+    students: () => { activeTab.value = 'students' },
+    courses: () => { activeTab.value = 'schedule' },
+    sessions: () => { openAiScheduleTask() },
+    workflow: () => { /* 已在概览页，无需跳转 */ },
+  }
+  const action = guideActionMap[key]
+  if (action) action()
+}
+
 function openAiScheduleTask(options = {}) {
   if (!canScheduleEdit.value) {
     message.warning(scheduleEditTooltip.value)
@@ -2007,16 +2027,15 @@ function openAiScheduleTask(options = {}) {
   router.push({ name: 'AiScheduleTask', params: { id: trainingData.id }, query })
 }
 
+const showQuickExamModal = ref(false)
+
 function quickCreateTrainingExam() {
   if (!canQuickCreateExam.value) return
-  router.push({
-    name: 'ExamManage',
-    query: {
-      kind: 'training',
-      trainingId: String(trainingData.id),
-      quickCreate: '1',
-    },
-  })
+  showQuickExamModal.value = true
+}
+
+function onQuickExamSuccess() {
+  loadTrainingDetail()
 }
 
 function getWorkflowMissingSteps(action) {
@@ -3223,7 +3242,9 @@ function exportMsg() {
 .ov-label { font-size: 12px; color: #888; margin-top: 4px; }
 .setup-guide-card { margin-bottom: 16px; padding: 16px; border: 1px solid #e2e8f0; border-radius: 12px; background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%); }
 .setup-guide-list { display: flex; flex-direction: column; gap: 10px; }
-.setup-guide-item { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 10px; border: 1px solid #e5e7eb; background: #fff; }
+.setup-guide-item { display: flex; justify-content: space-between; gap: 12px; align-items: flex-start; padding: 12px 14px; border-radius: 10px; border: 1px solid #e5e7eb; background: #fff; transition: box-shadow 0.2s, border-color 0.2s; }
+.setup-guide-item.clickable { cursor: pointer; }
+.setup-guide-item.clickable:hover { border-color: #b0c4de; box-shadow: 0 2px 8px rgba(0, 48, 135, 0.08); }
 .setup-guide-item.status-done { border-color: #d1fae5; background: #f0fdf4; }
 .setup-guide-item.status-progress { border-color: #fde68a; background: #fffbeb; }
 .setup-guide-main { min-width: 0; }

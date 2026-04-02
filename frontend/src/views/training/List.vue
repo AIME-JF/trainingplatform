@@ -344,45 +344,118 @@
 
           <div v-show="createWizardStep === 1">
             <div class="wizard-section-title">配置招生规则，这一步决定学员如何进入培训班</div>
-            <a-row :gutter="16">
-              <a-col :span="12">
-                <a-form-item label="报名方式">
-                  <a-radio-group v-model:value="trainingForm.enrollmentRequiresApproval">
-                    <a-radio :value="true">申请审核</a-radio>
-                    <a-radio :value="false">直接通过</a-radio>
-                  </a-radio-group>
+
+            <!-- 准入考试 -->
+            <div class="wizard-section-block">
+              <div class="wizard-block-label">准入考试</div>
+              <a-form-item label="是否需要准入考试" style="margin-bottom: 12px">
+                <a-radio-group v-model:value="needAdmissionExam" @change="() => { if (!needAdmissionExam) trainingForm.admissionExamId = undefined }">
+                  <a-radio :value="false">不需要</a-radio>
+                  <a-radio :value="true">需要</a-radio>
+                </a-radio-group>
+              </a-form-item>
+              <template v-if="needAdmissionExam">
+                <a-form-item label="已选准入考试">
+                  <div v-if="trainingForm.admissionExamId" class="selected-exam-tag">
+                    <span>{{ selectedAdmissionExamTitle }}</span>
+                    <a-button type="link" size="small" @click="trainingForm.admissionExamId = undefined">移除</a-button>
+                    <a-button type="link" size="small" @click="openAdmissionExamPicker">更换</a-button>
+                  </div>
+                  <a-button v-else @click="openAdmissionExamPicker">选择准入考试</a-button>
                 </a-form-item>
-              </a-col>
-              <a-col :span="12">
-                <a-form-item label="准入考试">
-                  <a-select v-model:value="trainingForm.admissionExamId" allow-clear placeholder="可选，报名需先通过">
-                    <a-select-option v-for="exam in admissionExamOptions" :key="exam.id" :value="exam.id">
-                      {{ exam.title }}
-                    </a-select-option>
-                  </a-select>
-                </a-form-item>
-              </a-col>
-              <a-col :span="24">
-                <a-form-item label="报名窗口">
-                  <a-range-picker
-                    v-model:value="enrollmentWindow"
-                    show-time
-                    format="YYYY-MM-DD HH:mm:ss"
-                    value-format="YYYY-MM-DD HH:mm:ss"
-                    style="width:100%"
-                    @change="handleWindowChange"
-                  />
-                </a-form-item>
-              </a-col>
-              <a-col :span="24">
-                <a-alert
-                  type="info"
-                  show-icon
-                  message="这些配置后续仍可在培训班详情里修改，不需要一次性想全。"
+              </template>
+            </div>
+
+            <a-divider style="margin: 16px 0" />
+
+            <!-- 报名方式 -->
+            <div class="wizard-section-block">
+              <div class="wizard-block-label">报名方式</div>
+              <a-form-item label="报名审核">
+                <a-radio-group v-model:value="trainingForm.enrollmentRequiresApproval">
+                  <a-radio :value="true">申请审核</a-radio>
+                  <a-radio :value="false">直接通过</a-radio>
+                </a-radio-group>
+              </a-form-item>
+            </div>
+
+            <a-divider style="margin: 16px 0" />
+
+            <!-- 报名窗口 -->
+            <div class="wizard-section-block">
+              <div class="wizard-block-label">报名窗口</div>
+              <a-form-item label="报名开放时间">
+                <a-range-picker
+                  v-model:value="enrollmentWindow"
+                  show-time
+                  format="YYYY-MM-DD HH:mm:ss"
+                  value-format="YYYY-MM-DD HH:mm:ss"
+                  style="width:100%"
+                  @change="handleWindowChange"
                 />
-              </a-col>
-            </a-row>
+              </a-form-item>
+            </div>
+
+            <a-alert
+              type="info"
+              show-icon
+              style="margin-top: 12px"
+              message="这些配置后续仍可在培训班详情里修改，不需要一次性想全。"
+            />
           </div>
+
+          <!-- 准入考试选择弹窗 -->
+          <a-modal
+            v-model:open="showAdmissionExamPicker"
+            title="选择准入考试"
+            width="700px"
+            :footer="null"
+          >
+            <div style="display: flex; gap: 12px; margin-bottom: 12px">
+              <a-input-search v-model:value="admissionExamSearchText" placeholder="搜索考试名称..." style="flex: 1" allow-clear />
+              <a-button type="primary" @click="showQuickCreateAdmissionExam = true">快捷创建准入考试</a-button>
+            </div>
+            <a-table
+              :data-source="filteredAdmissionExams"
+              :columns="admissionExamPickerColumns"
+              size="small"
+              :loading="admissionExamPickerLoading"
+              :pagination="{ pageSize: 8 }"
+              row-key="id"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'title'">
+                  <span style="font-weight: 500">{{ record.title }}</span>
+                </template>
+                <template v-if="column.key === 'status'">
+                  <a-tag :color="record.status === 'active' ? 'green' : record.status === 'upcoming' ? 'orange' : 'default'">
+                    {{ { upcoming: '未开始', active: '进行中', ended: '已结束' }[record.status] || record.status }}
+                  </a-tag>
+                </template>
+                <template v-if="column.key === 'action'">
+                  <a-button
+                    v-if="trainingForm.admissionExamId === record.id"
+                    size="small"
+                    disabled
+                  >已选择</a-button>
+                  <a-button
+                    v-else
+                    type="link"
+                    size="small"
+                    @click="selectAdmissionExam(record)"
+                  >选择</a-button>
+                </template>
+              </template>
+            </a-table>
+          </a-modal>
+
+          <!-- 快捷创建准入考试（复用 QuickCreateExamModal） -->
+          <QuickCreateExamModal
+            v-model:open="showQuickCreateAdmissionExam"
+            :training-id="0"
+            :is-admission="true"
+            @success="onQuickAdmissionExamCreated"
+          />
 
           <div v-show="createWizardStep === 2">
             <div class="wizard-section-title">补充扩展信息，创建完成后即可去详情页继续排课和导入学员</div>
@@ -509,9 +582,10 @@ import {
 } from '@/api/training'
 import { getDepartmentList } from '@/api/department'
 import { getUsers, getPoliceTypes } from '@/api/user'
-import { getAdmissionExams } from '@/api/exam'
+import { getAdmissionExams, createAdmissionExam, getExamPapers } from '@/api/exam'
 import { getTrainingTypes } from '@/api/trainingType'
 import { downloadBlob } from '@/utils/download'
+import QuickCreateExamModal from './components/QuickCreateExamModal.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -571,9 +645,24 @@ const studentImportFileName = ref('')
 const submitTrainingLoading = ref(false)
 const trainingFormDates = ref([null, null])
 const enrollmentWindow = ref([])
-const locationSourceMode = ref('manual')
+const locationSourceMode = ref('base')
 const createWizardStep = ref(0)
 const canCreateTraining = computed(() => authStore.hasPermission('CREATE_TRAINING'))
+const needAdmissionExam = ref(false)
+const showAdmissionExamPicker = ref(false)
+const admissionExamSearchText = ref('')
+const admissionExamPickerLoading = ref(false)
+const showQuickCreateAdmissionExam = ref(false)
+const selectedAdmissionExamTitle = computed(() => {
+  if (!trainingForm.admissionExamId) return ''
+  const exam = admissionExamOptions.value.find(e => e.id === trainingForm.admissionExamId)
+  return exam?.title || ''
+})
+const filteredAdmissionExams = computed(() => {
+  const kw = admissionExamSearchText.value.trim().toLowerCase()
+  if (!kw) return admissionExamOptions.value
+  return admissionExamOptions.value.filter(e => (e.title || '').toLowerCase().includes(kw))
+})
 
 // ===== 智能创建对话 =====
 const createModalTab = ref('ai')
@@ -924,7 +1013,9 @@ function resetForm() {
     enrollmentRequiresApproval: true,
     admissionExamId: undefined,
   })
-  locationSourceMode.value = 'manual'
+  locationSourceMode.value = 'base'
+  needAdmissionExam.value = false
+  showAdmissionExamPicker.value = false
   trainingFormDates.value = [null, null]
   enrollmentWindow.value = []
   editingTraining.value = null
@@ -1006,6 +1097,35 @@ function goNextCreateStep() {
     return
   }
   createWizardStep.value += 1
+}
+
+// ===== 准入考试选择 =====
+const admissionExamPickerColumns = [
+  { title: '考试名称', key: 'title', ellipsis: true },
+  { title: '状态', key: 'status', width: 100 },
+  { title: '操作', key: 'action', width: 100, align: 'center' },
+]
+
+async function openAdmissionExamPicker() {
+  showAdmissionExamPicker.value = true
+  admissionExamSearchText.value = ''
+  admissionExamPickerLoading.value = true
+  try {
+    await fetchAdmissionExams()
+  } finally {
+    admissionExamPickerLoading.value = false
+  }
+}
+
+function selectAdmissionExam(record) {
+  trainingForm.admissionExamId = record.id
+  showAdmissionExamPicker.value = false
+}
+
+async function onQuickAdmissionExamCreated() {
+  showQuickCreateAdmissionExam.value = false
+  await fetchAdmissionExams()
+  message.success('准入考试创建成功，请从列表中选择')
 }
 
 async function fetchTrainings() {
@@ -1317,6 +1437,9 @@ watch(
 .wizard-steps { margin-bottom: 4px; }
 .wizard-form { margin-top: 4px; }
 .wizard-section-title { margin-bottom: 16px; font-size: 14px; font-weight: 600; color: #334155; }
+.wizard-section-block { }
+.wizard-block-label { font-size: 13px; font-weight: 600; color: #1f2937; margin-bottom: 10px; }
+.selected-exam-tag { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; background: #f6ffed; border: 1px solid #b7eb8f; border-radius: 6px; }
 .wizard-upload-box { padding: 12px 14px; border: 1px dashed #cbd5e1; border-radius: 10px; background: #f8fafc; }
 .wizard-footer { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding-top: 8px; border-top: 1px solid #f1f5f9; }
 .wizard-footer-tip { color: #64748b; font-size: 12px; line-height: 1.6; }

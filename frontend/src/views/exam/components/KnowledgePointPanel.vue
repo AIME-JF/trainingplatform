@@ -47,7 +47,7 @@
               <span class="desc-text">{{ item.description || '-' }}</span>
             </td>
             <td class="text-center">
-              <span class="count-badge">{{ item.questionCount || 0 }} 题</span>
+              <span class="count-badge clickable" @click="openQuestionList(item)">{{ item.questionCount || 0 }} 题</span>
             </td>
             <td class="text-center">
               <span :class="['status-pill', item.isActive ? 'status-active' : 'status-inactive']">
@@ -123,6 +123,32 @@
         </a-form-item>
       </a-form>
     </a-modal>
+
+    <!-- 题目列表弹窗 -->
+    <a-modal
+      :open="questionModalOpen"
+      :title="`知识点「${selectedKp?.name}」关联题目`"
+      :footer="null"
+      width="800px"
+      @update:open="questionModalOpen = $event"
+      @cancel="questionModalOpen = false"
+    >
+      <div v-if="questionLoading" class="question-loading">
+        <a-spin size="large" />
+      </div>
+      <div v-else-if="kpQuestions.length === 0" class="empty-questions">
+        <span>暂无关联题目</span>
+      </div>
+      <div v-else class="question-list">
+        <div v-for="(q, idx) in kpQuestions" :key="q.id" class="question-item">
+          <div class="question-header">
+            <span class="question-num">{{ idx + 1 }}</span>
+            <span :class="['question-type', `type-${q.type}`]">{{ getTypeText(q.type) }}</span>
+          </div>
+          <div class="question-content">{{ q.content }}</div>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
@@ -135,6 +161,7 @@ import {
   getKnowledgePoints,
   updateKnowledgePoint,
 } from '@/api/knowledgePoint'
+import { getQuestions } from '@/api/question'
 
 const loading = ref(false)
 const modalOpen = ref(false)
@@ -142,6 +169,10 @@ const editingKnowledgePoint = ref(null)
 const knowledgePointList = ref([])
 const searchText = ref('')
 const statusFilter = ref('all')
+const questionModalOpen = ref(false)
+const selectedKp = ref(null)
+const kpQuestions = ref([])
+const questionLoading = ref(false)
 
 const form = reactive({
   name: '',
@@ -293,6 +324,27 @@ function handleDelete(record) {
       }
     },
   })
+}
+
+async function openQuestionList(kp) {
+  selectedKp.value = kp
+  questionModalOpen.value = true
+  questionLoading.value = true
+  kpQuestions.value = []
+  try {
+    const result = await getQuestions({ knowledgePointId: kp.id, size: -1 })
+    kpQuestions.value = result.items || []
+  } catch (error) {
+    message.error(error.message || '加载题目失败')
+    kpQuestions.value = []
+  } finally {
+    questionLoading.value = false
+  }
+}
+
+function getTypeText(type) {
+  const map = { single: '单选', multi: '多选', judge: '判断' }
+  return map[type] || type
 }
 
 onMounted(() => {
@@ -690,5 +742,91 @@ onMounted(() => {
   color: #94A3B8;
   font-size: 16px;
   line-height: 1.5;
+}
+
+.clickable {
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.clickable:hover {
+  background: #DBEAFE;
+  color: #1D4ED8;
+}
+
+.empty-questions {
+  text-align: center;
+  padding: 40px;
+  color: #94A3B8;
+  font-size: 14px;
+}
+
+.question-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 180px;
+}
+
+.question-list {
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.question-item {
+  padding: 12px;
+  border-bottom: 1px solid #F1F5F9;
+}
+
+.question-item:last-child {
+  border-bottom: none;
+}
+
+.question-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.question-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #E2E8F0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748B;
+}
+
+.question-type {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.type-single {
+  background: #EFF6FF;
+  color: #2563EB;
+}
+
+.type-multi {
+  background: #F0FDF4;
+  color: #16A34A;
+}
+
+.type-judge {
+  background: #FEF3C7;
+  color: #D97706;
+}
+
+.question-content {
+  font-size: 14px;
+  color: #334155;
+  line-height: 1.6;
 }
 </style>

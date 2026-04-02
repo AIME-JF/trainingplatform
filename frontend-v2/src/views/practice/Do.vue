@@ -1,27 +1,29 @@
 <template>
   <div class="practice-do-page">
-    <!-- 顶部导航 -->
     <header class="practice-header">
       <div class="header-left">
         <button class="btn-back" @click="goBack">
           <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
       </div>
       <div class="header-title">刷题练习</div>
       <div class="header-right">
-        <span class="progress-text">{{ currentIndex + 1 }}/{{ questions.length }}</span>
+        <span class="progress-text">{{ progressLabel }}</span>
       </div>
     </header>
 
-    <!-- 进度条 -->
     <div class="progress-bar">
       <div class="progress-fill" :style="{ width: progressPercent + '%' }"></div>
     </div>
 
-    <!-- 题目区域 -->
-    <main class="practice-main" v-if="currentQuestion">
+    <div v-if="sourceName" class="source-banner">
+      <span class="source-tag">{{ sourceTypeLabel }}</span>
+      <span class="source-name">{{ sourceName }}</span>
+    </div>
+
+    <main v-if="!finished && currentQuestion" class="practice-main">
       <div class="question-card">
         <div class="question-header">
           <span class="type-tag" :class="getQuestionTypeClass(currentQuestion.type)">
@@ -34,7 +36,6 @@
         </h2>
       </div>
 
-      <!-- 选项区域 -->
       <div class="options-area">
         <template v-if="currentQuestion.type === 'multi'">
           <div
@@ -44,13 +45,13 @@
             :class="{
               selected: isOptionSelected(option.key),
               correct: showAnswer && isCorrectAnswer(option.key),
-              incorrect: showAnswer && isOptionSelected(option.key) && !isCorrectAnswer(option.key)
+              incorrect: showAnswer && isOptionSelected(option.key) && !isCorrectAnswer(option.key),
             }"
             @click="toggleOption(option.key)"
           >
             <div class="option-tag">{{ option.key }}</div>
             <div class="option-text">{{ option.value }}</div>
-            <div class="option-icon" v-if="showAnswer">
+            <div v-if="showAnswer" class="option-icon">
               <span v-if="isCorrectAnswer(option.key)" class="icon-correct">✓</span>
               <span v-else-if="isOptionSelected(option.key)" class="icon-incorrect">✗</span>
             </div>
@@ -64,13 +65,13 @@
             :class="{
               selected: answers[currentQuestion.id] === option.key,
               correct: showAnswer && isCorrectAnswer(option.key),
-              incorrect: showAnswer && answers[currentQuestion.id] === option.key && !isCorrectAnswer(option.key)
+              incorrect: showAnswer && answers[currentQuestion.id] === option.key && !isCorrectAnswer(option.key),
             }"
             @click="selectOption(option.key)"
           >
             <div class="option-tag">{{ option.key }}</div>
             <div class="option-text">{{ option.value }}</div>
-            <div class="option-icon" v-if="showAnswer">
+            <div v-if="showAnswer" class="option-icon">
               <span v-if="isCorrectAnswer(option.key)" class="icon-correct">✓</span>
               <span v-else-if="answers[currentQuestion.id] === option.key" class="icon-incorrect">✗</span>
             </div>
@@ -78,8 +79,7 @@
         </template>
       </div>
 
-      <!-- 答案解析 -->
-      <div class="answer-section" v-if="showAnswer">
+      <div v-if="showAnswer" class="answer-section">
         <div class="answer-result">
           <span class="result-tag" :class="isCurrentCorrect ? 'correct' : 'incorrect'">
             {{ isCurrentCorrect ? '回答正确' : '回答错误' }}
@@ -88,16 +88,15 @@
         <div class="answer-detail">
           <div class="detail-row">
             <span class="detail-label">正确答案：</span>
-            <span class="detail-value correct-text">{{ formatAnswer(currentQuestion.answer) }}</span>
+            <span class="detail-value correct-text">{{ formatAnswer(currentQuestion.answer, currentQuestion) }}</span>
           </div>
-          <div class="detail-row" v-if="currentQuestion.explanation">
+          <div v-if="currentQuestion.explanation" class="detail-row">
             <span class="detail-label">解析：</span>
             <span class="detail-value">{{ currentQuestion.explanation }}</span>
           </div>
         </div>
       </div>
 
-      <!-- 操作按钮 -->
       <div class="action-buttons">
         <button v-if="!showAnswer" class="btn-submit" @click="submitAnswer">
           提交答案
@@ -108,11 +107,11 @@
       </div>
     </main>
 
-    <!-- 完成页面 -->
-    <div class="complete-page" v-else-if="finished">
+    <div v-else-if="finished" class="complete-page">
       <div class="complete-card">
-        <div class="complete-icon">🎉</div>
+        <div class="complete-icon">✓</div>
         <h2 class="complete-title">练习完成</h2>
+        <p v-if="sourceName" class="complete-subtitle">{{ sourceTypeLabel }}：{{ sourceName }}</p>
         <div class="stats-grid">
           <div class="stat-item">
             <span class="stat-value">{{ questions.length }}</span>
@@ -135,16 +134,16 @@
       </div>
     </div>
 
-    <div class="loading-overlay" v-if="loading">
+    <div v-if="loading" class="loading-overlay">
       <a-spin size="large" />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
+import { useRoute, useRouter } from 'vue-router'
 import { getQuestionsApiV1QuestionsGet } from '@/api/generated/question-management/question-management'
 
 const route = useRoute()
@@ -160,33 +159,47 @@ const finished = ref(false)
 const currentQuestion = computed(() => questions.value[currentIndex.value] || null)
 
 const progressPercent = computed(() => {
-  if (questions.value.length === 0) return 0
+  if (questions.value.length === 0) {
+    return 0
+  }
+  if (finished.value) {
+    return 100
+  }
   return ((currentIndex.value + 1) / questions.value.length) * 100
 })
 
+const progressLabel = computed(() => (
+  finished.value ? '已完成' : `${Math.min(currentIndex.value + 1, questions.value.length)}/${questions.value.length || 0}`
+))
+
 const correctCount = computed(() => {
   let count = 0
-  for (const q of questions.value) {
-    const userAnswer = answers.value[q.id]
-    if (isAnswerCorrect(q, userAnswer)) {
-      count++
+  for (const question of questions.value) {
+    if (isAnswerCorrect(question, answers.value[question.id])) {
+      count += 1
     }
   }
   return count
 })
 
 const accuracy = computed(() => {
-  if (questions.value.length === 0) return 0
+  if (questions.value.length === 0) {
+    return 0
+  }
   return Math.round((correctCount.value / questions.value.length) * 100)
 })
 
 const isCurrentCorrect = computed(() => {
-  if (!currentQuestion.value) return false
+  if (!currentQuestion.value) {
+    return false
+  }
   return isAnswerCorrect(currentQuestion.value, answers.value[currentQuestion.value.id])
 })
 
 const currentOptions = computed(() => {
-  if (!currentQuestion.value) return []
+  if (!currentQuestion.value) {
+    return []
+  }
   if (currentQuestion.value.type === 'judge') {
     return [
       { key: 'A', value: '正确' },
@@ -194,20 +207,77 @@ const currentOptions = computed(() => {
     ]
   }
   const options = currentQuestion.value.options || []
+  if (Array.isArray(options)) {
+    return options
+      .map((option) => ({
+        key: String(option?.key ?? ''),
+        value: String(option?.text ?? option?.value ?? ''),
+      }))
+      .filter((option) => option.key && option.value)
+  }
   if (typeof options === 'object' && !Array.isArray(options)) {
     return Object.entries(options).map(([key, value]) => ({ key, value }))
   }
   return []
 })
 
+const practiceSource = computed(() => {
+  const sourceType = normalizeSourceType(getSingleQueryValue(route.query.sourceType))
+  const sourceId = getSingleQueryValue(route.query.sourceId)
+  const sourceName = getSingleQueryValue(route.query.sourceName)
+  const legacyKpId = getSingleQueryValue(route.query.kpId)
+
+  if (sourceType && sourceId) {
+    return { sourceType, sourceId, sourceName }
+  }
+
+  if (legacyKpId) {
+    return {
+      sourceType: 'knowledge-point',
+      sourceId: legacyKpId,
+      sourceName,
+    }
+  }
+
+  return null
+})
+
+const sourceName = computed(() => practiceSource.value?.sourceName || '')
+
+const sourceTypeLabel = computed(() => (
+  practiceSource.value?.sourceType === 'question-folder' ? '题库/科目' : '知识点'
+))
+
+function getSingleQueryValue(value) {
+  if (Array.isArray(value)) {
+    return value[0] || ''
+  }
+  return value ? String(value) : ''
+}
+
+function normalizeSourceType(value) {
+  if (value === 'knowledge-point' || value === 'question-folder') {
+    return value
+  }
+  return ''
+}
+
 function getQuestionTypeClass(type) {
-  const map = { single: 'type-single', multi: 'type-multi', judge: 'type-judge' }
-  return map[type] || 'type-single'
+  const typeClassMap = {
+    single: 'type-single',
+    multi: 'type-multi',
+    judge: 'type-judge',
+  }
+  return typeClassMap[type] || 'type-single'
 }
 
 function getQuestionTypeText(type) {
-  const map = { single: '单选题', multi: '多选题', judge: '判断题' }
-  return map[type] || type
+  const typeTextMap = {
+    single: '单选题',
+    multi: '多选题',
+    judge: '判断题',
+  }
+  return typeTextMap[type] || type
 }
 
 function isOptionSelected(key) {
@@ -218,56 +288,96 @@ function isOptionSelected(key) {
   return answer === key
 }
 
-function isCorrectAnswer(key) {
-  if (!currentQuestion.value?.answer) return false
-  const correct = currentQuestion.value.answer
-  if (Array.isArray(correct)) {
-    return correct.includes(key)
+function normalizeAnswerValue(question, answer) {
+  if (answer === null || answer === undefined) {
+    return null
   }
-  return String(correct) === String(key)
-}
 
-function isAnswerCorrect(question, userAnswer) {
-  if (!question?.answer || userAnswer === undefined) return false
-  const correct = question.answer
-  if (Array.isArray(correct)) {
-    if (!Array.isArray(userAnswer)) return false
-    const sortedCorrect = [...correct].sort()
-    const sortedUser = [...userAnswer].sort()
-    return sortedCorrect.join(',') === sortedUser.join(',')
+  if (question?.type === 'judge') {
+    if (answer === true || answer === 'true' || answer === 1 || answer === '1' || answer === 'A') {
+      return 'A'
+    }
+    if (answer === false || answer === 'false' || answer === 0 || answer === '0' || answer === 'B') {
+      return 'B'
+    }
   }
-  return String(correct) === String(userAnswer)
-}
 
-function formatAnswer(answer) {
-  if (!answer) return '-'
-  if (Array.isArray(answer)) return answer.join('、')
+  if (Array.isArray(answer)) {
+    return answer.map((item) => String(item))
+  }
+
   return String(answer)
 }
 
-function selectOption(key) {
-  if (showAnswer.value) return
-  if (currentQuestion.value) {
-    answers.value[currentQuestion.value.id] = key
+function isCorrectAnswer(key) {
+  if (currentQuestion.value?.answer === undefined || currentQuestion.value?.answer === null) {
+    return false
   }
+  const correctAnswer = normalizeAnswerValue(currentQuestion.value, currentQuestion.value.answer)
+  if (Array.isArray(correctAnswer)) {
+    return correctAnswer.includes(key)
+  }
+  return correctAnswer === String(key)
+}
+
+function isAnswerCorrect(question, userAnswer) {
+  if (question?.answer === undefined || question?.answer === null || userAnswer === undefined) {
+    return false
+  }
+  const correctAnswer = normalizeAnswerValue(question, question.answer)
+  const normalizedUserAnswer = normalizeAnswerValue(question, userAnswer)
+  if (Array.isArray(correctAnswer)) {
+    if (!Array.isArray(normalizedUserAnswer)) {
+      return false
+    }
+    return [...correctAnswer].sort().join(',') === [...normalizedUserAnswer].sort().join(',')
+  }
+  return correctAnswer === normalizedUserAnswer
+}
+
+function formatAnswer(answer, question = currentQuestion.value) {
+  if (answer === undefined || answer === null) {
+    return '-'
+  }
+  const normalizedAnswer = normalizeAnswerValue(question, answer)
+  if (question?.type === 'judge') {
+    return normalizedAnswer === 'A' ? '正确' : '错误'
+  }
+  if (Array.isArray(normalizedAnswer)) {
+    return normalizedAnswer.join('、')
+  }
+  return String(normalizedAnswer)
+}
+
+function selectOption(key) {
+  if (showAnswer.value || !currentQuestion.value) {
+    return
+  }
+  answers.value[currentQuestion.value.id] = key
 }
 
 function toggleOption(key) {
-  if (showAnswer.value) return
-  const qid = currentQuestion.value?.id
-  if (!qid) return
-  const current = answers.value[qid]
-  if (!Array.isArray(current)) {
-    answers.value[qid] = [key]
-  } else {
-    const index = current.indexOf(key)
-    if (index === -1) {
-      current.push(key)
-    } else {
-      current.splice(index, 1)
-    }
-    answers.value[qid] = [...current]
+  if (showAnswer.value) {
+    return
   }
+  const questionId = currentQuestion.value?.id
+  if (!questionId) {
+    return
+  }
+
+  const selected = answers.value[questionId]
+  if (!Array.isArray(selected)) {
+    answers.value[questionId] = [key]
+    return
+  }
+
+  const index = selected.indexOf(key)
+  if (index === -1) {
+    selected.push(key)
+  } else {
+    selected.splice(index, 1)
+  }
+  answers.value[questionId] = [...selected]
 }
 
 function submitAnswer() {
@@ -280,11 +390,11 @@ function submitAnswer() {
 
 function nextQuestion() {
   if (currentIndex.value < questions.value.length - 1) {
-    currentIndex.value++
+    currentIndex.value += 1
     showAnswer.value = false
-  } else {
-    finished.value = true
+    return
   }
+  finished.value = true
 }
 
 function restartPractice() {
@@ -298,33 +408,49 @@ function goBack() {
   router.back()
 }
 
+function returnToPracticeHome() {
+  router.replace({ path: '/practice' })
+}
+
 async function loadQuestions() {
-  const kpId = route.query.kpId
-  if (!kpId) {
-    message.error('缺少知识点参数')
-    router.back()
+  const source = practiceSource.value
+
+  if (!source?.sourceId) {
+    message.error('缺少练习来源参数')
+    returnToPracticeHome()
     return
   }
+
   loading.value = true
   try {
-    const res = await getQuestionsApiV1QuestionsGet({
-      knowledge_point: String(kpId),
-      size: 20
-    })
-    questions.value = res.data?.items || []
-    if (questions.value.length === 0) {
-      message.warning('该知识点暂无题目')
-      router.back()
+    const params = { size: 20 }
+
+    if (source.sourceType === 'knowledge-point') {
+      params.knowledge_point_id = Number(source.sourceId)
+    } else if (source.sourceType === 'question-folder') {
+      params.folder_id = Number(source.sourceId)
+      params.recursive = true
+    } else {
+      throw new Error('暂不支持的练习来源')
     }
-  } catch (e) {
-    message.error('加载题目失败')
+
+    const response = await getQuestionsApiV1QuestionsGet(params)
+    questions.value = response?.items || []
+
+    if (questions.value.length === 0) {
+      message.warning(source.sourceType === 'knowledge-point' ? '该知识点暂无题目' : '该题库暂无题目')
+      returnToPracticeHome()
+    }
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '加载题目失败')
+    returnToPracticeHome()
   } finally {
     loading.value = false
   }
 }
 
 onMounted(() => {
-  loadQuestions()
+  void loadQuestions()
 })
 </script>
 
@@ -345,8 +471,9 @@ onMounted(() => {
   border-bottom: 1px solid #E2E8F0;
 }
 
-.header-left, .header-right {
-  width: 60px;
+.header-left,
+.header-right {
+  width: 72px;
 }
 
 .btn-back {
@@ -364,6 +491,8 @@ onMounted(() => {
 }
 
 .progress-text {
+  display: block;
+  text-align: right;
   font-size: 14px;
   font-weight: 600;
   color: #2563EB;
@@ -378,6 +507,33 @@ onMounted(() => {
   height: 100%;
   background: #2563EB;
   transition: width 0.3s;
+}
+
+.source-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #EFF6FF, #F8FAFC);
+  border-bottom: 1px solid #E2E8F0;
+}
+
+.source-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #DBEAFE;
+  color: #1D4ED8;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.source-name {
+  font-size: 13px;
+  color: #334155;
+  font-weight: 600;
 }
 
 .practice-main {
@@ -585,7 +741,8 @@ onMounted(() => {
   text-align: center;
 }
 
-.btn-submit, .btn-next {
+.btn-submit,
+.btn-next {
   width: 100%;
   height: 48px;
   border: none;
@@ -633,15 +790,30 @@ onMounted(() => {
 }
 
 .complete-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #DCFCE7;
+  color: #16A34A;
+  font-size: 30px;
+  font-weight: 700;
 }
 
 .complete-title {
   font-size: 20px;
   font-weight: 700;
   color: #1E293B;
-  margin: 0 0 24px 0;
+  margin: 0 0 8px 0;
+}
+
+.complete-subtitle {
+  margin: 0 0 24px;
+  font-size: 13px;
+  color: #64748B;
 }
 
 .stats-grid {
