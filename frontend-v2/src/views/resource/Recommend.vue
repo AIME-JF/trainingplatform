@@ -64,14 +64,18 @@
               @mouseleave="handleViewerMouseLeave"
               @mousedown.capture="handleViewerMouseDown"
             >
-              <ResourceViewer
-                class="community-viewer-frame"
-                :resource="currentResource"
-                mode="recommend"
-                @click="recordCurrentEvent('click')"
-                @play="recordCurrentEvent('play')"
-                @complete="recordCurrentEvent('complete')"
-              />
+              <Transition :name="viewerTransitionName || undefined">
+                <div :key="currentResource.id" class="community-viewer-slide">
+                  <ResourceViewer
+                    class="community-viewer-frame"
+                    :resource="currentResource"
+                    mode="recommend"
+                    @click="recordCurrentEvent('click')"
+                    @play="recordCurrentEvent('play')"
+                    @complete="recordCurrentEvent('complete')"
+                  />
+                </div>
+              </Transition>
             </div>
 
             <div class="community-side-actions" :class="{ mobile: isMobile }">
@@ -120,7 +124,7 @@
           </div>
         </template>
 
-        <div v-if="loadingResource || loadingFeed" class="community-loading-overlay">
+        <div v-if="shouldShowCommunityLoading" class="community-loading-overlay">
           <a-spin size="large" />
         </div>
       </div>
@@ -256,7 +260,9 @@ const navigationLockedUntil = ref(0)
 const communityViewerRef = ref<HTMLElement | null>(null)
 const wheelNavigationArmed = ref(false)
 const viewerPointerInside = ref(false)
+const viewerTransitionDirection = ref<'next' | 'prev'>('next')
 const resourceCache = new Map<number, ResourceDetailResponse>()
+const resourcePending = new Map<number, Promise<ResourceDetailResponse>>()
 const impressionRecorded = new Set<number>()
 const gesture = ref({
   startX: 0,
@@ -276,6 +282,13 @@ const currentDisplayTotal = computed(() => {
 const commentDrawerPlacement = computed(() => isMobile.value ? 'bottom' : 'right')
 const commentDrawerWidth = computed(() => isMobile.value ? undefined : 420)
 const commentDrawerHeight = computed(() => isMobile.value ? '56dvh' : undefined)
+const shouldShowCommunityLoading = computed(() => !currentResource.value && (loadingResource.value || loadingFeed.value))
+const viewerTransitionName = computed(() => {
+  if (!isMobile.value) {
+    return ''
+  }
+  return viewerTransitionDirection.value === 'prev' ? 'community-viewer-swipe-prev' : 'community-viewer-swipe-next'
+})
 
 onMounted(() => {
   window.addEventListener('wheel', handleWheel, { passive: false })
@@ -300,6 +313,7 @@ watch(() => currentFeedItem.value?.resource_id, async (resourceId, previousResou
   await loadCurrentResource(resourceId)
   await recordImpression(resourceId)
   void maybePreloadNextPage()
+  void preloadAdjacentResources()
 
   if (commentDrawerOpen.value && resourceId !== previousResourceId) {
     await loadComments(resourceId)
@@ -343,19 +357,44 @@ async function fetchFeedPage(page: number) {
   }
 }
 
-async function loadCurrentResource(resourceId: number) {
-  loadingResource.value = true
-  try {
-    if (!resourceCache.has(resourceId)) {
-      const detail = await getResourceDetail(resourceId)
+async function ensureResourceDetail(resourceId: number) {
+  const cached = resourceCache.get(resourceId)
+  if (cached) {
+    return cached
+  }
+
+  const pending = resourcePending.get(resourceId)
+  if (pending) {
+    return pending
+  }
+
+  const request = getResourceDetail(resourceId)
+    .then((detail) => {
       resourceCache.set(resourceId, detail)
-    }
-    currentResource.value = resourceCache.get(resourceId) || null
+      return detail
+    })
+    .finally(() => {
+      resourcePending.delete(resourceId)
+    })
+
+  resourcePending.set(resourceId, request)
+  return request
+}
+
+async function loadCurrentResource(resourceId: number) {
+  const shouldShowLoading = !resourceCache.has(resourceId) && !resourcePending.has(resourceId)
+  if (shouldShowLoading) {
+    loadingResource.value = true
+  }
+  try {
+    currentResource.value = await ensureResourceDetail(resourceId)
   } catch (error) {
     currentResource.value = null
     message.error(error instanceof Error ? error.message : '加载资源详情失败')
   } finally {
-    loadingResource.value = false
+    if (shouldShowLoading) {
+      loadingResource.value = false
+    }
   }
 }
 
@@ -396,6 +435,21 @@ function maybePreloadNextPage() {
   }
 }
 
+function preloadResource(resourceId?: number | null) {
+  if (!resourceId || resourceCache.has(resourceId) || resourcePending.has(resourceId)) {
+    return
+  }
+
+  void ensureResourceDetail(resourceId).catch(() => {
+    // ignore preload errors
+  })
+}
+
+function preloadAdjacentResources() {
+  preloadResource(feedItems.value[currentIndex.value + 1]?.resource_id)
+  preloadResource(feedItems.value[currentIndex.value - 1]?.resource_id)
+}
+
 function goDetail() {
   if (!currentResource.value?.id) {
     return
@@ -414,10 +468,15 @@ function canNavigate() {
   return Date.now() >= navigationLockedUntil.value
 }
 
+function setViewerTransitionDirection(direction: 'next' | 'prev') {
+  viewerTransitionDirection.value = direction
+}
+
 async function navigateNext() {
   if (!canNavigate()) {
     return
   }
+  setViewerTransitionDirection('next')
   lockNavigation()
   await nextRecommendation()
 }
@@ -426,6 +485,7 @@ function navigatePrev() {
   if (!canNavigate()) {
     return
   }
+  setViewerTransitionDirection('prev')
   lockNavigation()
   prevRecommendation()
 }
@@ -742,6 +802,7 @@ async function handleSearch() {
 
   const matchedIndex = feedItems.value.findIndex((item) => matchesResource(resourceCache.get(item.resource_id), keyword))
   if (matchedIndex >= 0) {
+    setViewerTransitionDirection(matchedIndex >= currentIndex.value ? 'next' : 'prev')
     currentIndex.value = matchedIndex
     message.success('已定位到匹配资源')
     return
@@ -762,19 +823,18 @@ async function handleSearch() {
       return
     }
 
-    if (!resourceCache.has(target.id)) {
-      const detail = await getResourceDetail(target.id)
-      resourceCache.set(target.id, detail)
-    }
+    await ensureResourceDetail(target.id)
 
     const existingIndex = feedItems.value.findIndex((item) => item.resource_id === target.id)
     if (existingIndex >= 0) {
+      setViewerTransitionDirection(existingIndex >= currentIndex.value ? 'next' : 'prev')
       currentIndex.value = existingIndex
     } else {
       const insertIndex = feedItems.value.length ? Math.min(currentIndex.value + 1, feedItems.value.length) : 0
       const inheritedScore = currentFeedItem.value?.score ?? 0
       feedItems.value.splice(insertIndex, 0, { resource_id: target.id, score: inheritedScore })
       total.value = Math.max(total.value, feedItems.value.length)
+      setViewerTransitionDirection(insertIndex >= currentIndex.value ? 'next' : 'prev')
       currentIndex.value = insertIndex
     }
 
@@ -1078,6 +1138,7 @@ function onTouchEnd(event: TouchEvent) {
 }
 
 .community-viewer {
+  position: relative;
   display: flex;
   flex: 1 1 auto;
   align-items: stretch;
@@ -1091,6 +1152,18 @@ function onTouchEnd(event: TouchEvent) {
   box-shadow: none;
   color: #fff;
   overflow: hidden;
+  isolation: isolate;
+}
+
+.community-viewer-slide {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: stretch;
+  justify-content: stretch;
+  width: 100%;
+  height: 100%;
+  will-change: transform, opacity;
 }
 
 .community-viewer-frame,
@@ -1388,6 +1461,45 @@ function onTouchEnd(event: TouchEvent) {
 }
 
 @media (max-width: 768px) {
+  .community-viewer-swipe-next-enter-active,
+  .community-viewer-swipe-next-leave-active,
+  .community-viewer-swipe-prev-enter-active,
+  .community-viewer-swipe-prev-leave-active {
+    transition:
+      transform 0.4s cubic-bezier(0.22, 0.82, 0.24, 1),
+      opacity 0.36s ease;
+  }
+
+  .community-viewer-swipe-next-enter-active,
+  .community-viewer-swipe-prev-enter-active {
+    z-index: 2;
+  }
+
+  .community-viewer-swipe-next-leave-active,
+  .community-viewer-swipe-prev-leave-active {
+    z-index: 1;
+  }
+
+  .community-viewer-swipe-next-enter-from {
+    transform: translate3d(0, 18%, 0);
+    opacity: 0.78;
+  }
+
+  .community-viewer-swipe-next-leave-to {
+    transform: translate3d(0, -14%, 0);
+    opacity: 0;
+  }
+
+  .community-viewer-swipe-prev-enter-from {
+    transform: translate3d(0, -18%, 0);
+    opacity: 0.78;
+  }
+
+  .community-viewer-swipe-prev-leave-to {
+    transform: translate3d(0, 14%, 0);
+    opacity: 0;
+  }
+
   .community-page {
     --community-stage-height: calc(100dvh - var(--v2-bottomnav-height));
     inset: 0 0 var(--v2-bottomnav-height) 0;
