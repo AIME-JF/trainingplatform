@@ -53,6 +53,7 @@ class QuestionService:
         type: Optional[str] = None,
         difficulty: Optional[int] = None,
         knowledge_point: Optional[str] = None,
+        knowledge_point_id: Optional[int] = None,
         folder_id: Optional[int] = None,
         recursive: bool = False,
         current_user_id: Optional[int] = None,
@@ -60,7 +61,7 @@ class QuestionService:
         """获取题目列表"""
         query = self.db.query(Question).options(*self._question_load_options())
 
-        if search or knowledge_point:
+        if search or knowledge_point or knowledge_point_id is not None:
             query = query.outerjoin(Question.knowledge_points)
         if search:
             query = query.filter(
@@ -75,6 +76,8 @@ class QuestionService:
             query = query.filter(Question.difficulty == difficulty)
         if knowledge_point:
             query = query.filter(KnowledgePoint.name.contains(knowledge_point))
+        if knowledge_point_id is not None:
+            query = query.filter(KnowledgePoint.id == knowledge_point_id)
 
         # 文件夹筛选，支持递归
         if folder_id is not None:

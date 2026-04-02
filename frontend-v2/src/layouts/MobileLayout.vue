@@ -87,6 +87,7 @@ import {
   LogoutOutlined,
   FileProtectOutlined,
   BellOutlined,
+  EditOutlined,
 } from '@ant-design/icons-vue'
 import { useMobile } from '@/composables/useMobile'
 import { useNoticeUnreadCount } from '@/composables/useNoticeUnreadCount'
@@ -155,11 +156,18 @@ const sidebarNavConfig: NavItem[] = [
     icon: FileProtectOutlined,
     matchPaths: ['/exam/list', '/exam/do', '/exam/result'],
   },
+  {
+    path: '/practice',
+    label: '练习题目',
+    icon: EditOutlined,
+    matchPaths: ['/practice', '/practice/do'],
+  },
 ]
 
 const bottomNavConfig: NavItem[] = [
   { path: '/', label: '首页', icon: HomeOutlined, permissions: DASHBOARD_PERMISSIONS },
   { path: '/classes', label: '班级', icon: ReadOutlined, permissions: TRAINING_PERMISSIONS },
+  { path: '/practice', label: '练习', icon: EditOutlined },
   {
     path: '/resource/community',
     label: '社区',

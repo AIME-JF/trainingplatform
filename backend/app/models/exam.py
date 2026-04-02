@@ -220,7 +220,7 @@ class Exam(Base):
         default="class_assessment",
         comment="用途: class_assessment/final_assessment/quiz/makeup",
     )
-    training_id = Column(Integer, ForeignKey("trainings.id"), nullable=False, comment="关联培训班ID")
+    training_id = Column(Integer, ForeignKey("trainings.id"), nullable=True, comment="关联培训班ID")
     course_ids = Column(JSON, nullable=True, comment="显式绑定课程ID列表")
     max_attempts = Column(Integer, default=1, comment="最大作答次数")
     allow_makeup = Column(Boolean, default=False, comment="是否允许补考")

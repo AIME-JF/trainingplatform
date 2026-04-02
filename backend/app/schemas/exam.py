@@ -443,7 +443,7 @@ class ExamCreate(BaseModel):
     status: str = Field("upcoming", description="状态")
     type: Optional[str] = Field(None, description="展示类型: formal/quiz")
     purpose: str = Field("class_assessment", description="用途")
-    training_id: int = Field(..., description="关联培训班ID")
+    training_id: Optional[int] = Field(None, description="关联培训班ID，可为空")
     course_ids: List[int] = Field(default_factory=list, description="显式绑定课程ID列表")
     max_attempts: int = Field(1, ge=1, le=10, description="最大作答次数")
     allow_makeup: bool = Field(False, description="是否允许补考")
