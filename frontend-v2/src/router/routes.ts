@@ -114,6 +114,19 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/exam/Result.vue'),
         meta: { title: '考试结果' },
       },
+      // -- 刷题练习 --
+      {
+        path: 'practice',
+        name: 'Practice',
+        component: () => import('@/views/practice/Index.vue'),
+        meta: { title: '刷题练习' },
+      },
+      {
+        path: 'practice/do',
+        name: 'PracticeDo',
+        component: () => import('@/views/practice/Do.vue'),
+        meta: { title: '答题' },
+      },
       // -- 资源 --
       {
         path: 'resource/courses',
