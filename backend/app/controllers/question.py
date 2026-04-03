@@ -22,7 +22,8 @@ class QuestionController:
                       police_type_id: Optional[int] = None,
                       knowledge_point: Optional[str] = None, knowledge_point_id: Optional[int] = None,
                       folder_id: Optional[int] = None,
-                      recursive: bool = False, current_user_id: Optional[int] = None):
+                      recursive: bool = False, current_user_id: Optional[int] = None,
+                      course_id: Optional[int] = None):
         try:
             return self.service.get_questions(
                 page,
@@ -36,6 +37,7 @@ class QuestionController:
                 folder_id,
                 recursive,
                 current_user_id,
+                course_id,
             )
         except Exception as e:
             logger.error(f"获取题目列表异常: {e}")

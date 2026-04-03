@@ -58,11 +58,12 @@ class QuestionService:
         folder_id: Optional[int] = None,
         recursive: bool = False,
         current_user_id: Optional[int] = None,
+        course_id: Optional[int] = None,
     ) -> PaginatedResponse[QuestionResponse]:
         """获取题目列表"""
         query = self.db.query(Question).options(*self._question_load_options())
 
-        if search or knowledge_point or knowledge_point_id is not None:
+        if search or knowledge_point or knowledge_point_id is not None or course_id is not None:
             query = query.outerjoin(Question.knowledge_points)
         if search:
             query = query.filter(
@@ -81,6 +82,8 @@ class QuestionService:
             query = query.filter(KnowledgePoint.name.contains(knowledge_point))
         if knowledge_point_id is not None:
             query = query.filter(KnowledgePoint.id == knowledge_point_id)
+        if course_id is not None:
+            query = query.filter(KnowledgePoint.course_id == course_id)
 
         # 文件夹筛选，支持递归
         if folder_id is not None:
@@ -284,6 +287,8 @@ class QuestionService:
                 "status": status,
                 "created_by": folder.created_by,
                 "created_by_name": creator_name,
+                "course_id": folder.course_id,
+                "course_name": folder.course.title if folder.course else None,
                 "created_at": folder.created_at,
                 "updated_at": folder.updated_at,
                 "children": [],

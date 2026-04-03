@@ -89,12 +89,14 @@ class QuestionFolder(Base):
     parent_id = Column(Integer, ForeignKey("question_folders.id"), nullable=True, comment="父文件夹ID")
     sort_order = Column(Integer, default=0, comment="排序")
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True, comment="创建人ID")
+    course_id = Column(Integer, ForeignKey("courses.id"), nullable=True, comment="关联课程ID")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), comment="更新时间")
 
     creator = relationship("User", foreign_keys=[created_by])
     parent = relationship("QuestionFolder", remote_side=[id], backref="children")
     questions = relationship("Question", back_populates="folder")
+    course = relationship("Course", back_populates="question_folders")
 
 
 class PaperFolder(Base):

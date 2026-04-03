@@ -46,6 +46,11 @@
               {{ item.name }}
             </a-select-option>
           </a-select>
+          <a-select v-model:value="selectedCourseId" placeholder="全部课程" allow-clear class="filter-select">
+            <a-select-option v-for="item in courses" :key="item.id" :value="String(item.id)">
+              {{ item.title }}
+            </a-select-option>
+          </a-select>
         </div>
       </div>
     </a-card>
@@ -210,7 +215,9 @@ import { message } from 'ant-design-vue'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getPracticeSources } from '@/api/practice'
+import { listCourses } from '@/api/learning-resource'
 import type { PoliceTypeSimpleResponse } from '@/api/generated/model'
+import type { CourseListResponse } from '@/api/generated/model'
 
 const router = useRouter()
 
@@ -221,10 +228,12 @@ const questionLimitMode = ref('20')
 const selectedQuestionType = ref(undefined)
 const selectedDifficulty = ref(undefined)
 const selectedPoliceTypeId = ref(undefined)
+const selectedCourseId = ref<string | undefined>(undefined)
 
 const knowledgePoints = ref<any[]>([])
 const questionFolders = ref<any[]>([])
 const policeTypes = ref<PoliceTypeSimpleResponse[]>([])
+const courses = ref<CourseListResponse[]>([])
 
 const settingsVisible = ref(false)
 const selectedPracticeItem = ref<any>(null)
@@ -324,6 +333,10 @@ async function loadPracticeSources() {
     )
 
     policeTypes.value = (sourceResponse?.police_types || []).filter((item: any) => item.is_active !== false)
+
+    // 加载课程列表
+    const courseResponse = await listCourses({ page: 1, size: -1 })
+    courses.value = courseResponse?.items || []
   } catch (error) {
     message.error(error instanceof Error ? error.message : '加载练习来源失败')
   } finally {
@@ -419,6 +432,7 @@ function confirmStartPractice() {
       policeTypeId: selectedPoliceTypeId.value || undefined,
       policeTypeName: getSelectedPoliceTypeName() || undefined,
       keyword: searchKeyword.value.trim() || undefined,
+      courseId: selectedCourseId.value || undefined,
     },
   })
 }

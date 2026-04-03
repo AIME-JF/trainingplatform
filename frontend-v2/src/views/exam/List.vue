@@ -106,6 +106,9 @@
               <div v-if="exam.training_name" class="course-tag">
                 <BookOutlined /> 所属班级：{{ exam.training_name }}
               </div>
+              <div v-if="exam.course_names?.length" class="course-tag">
+                <BookOutlined /> 关联课程：{{ exam.course_names.join('、') }}
+              </div>
               <h3>{{ exam.title }}</h3>
               <p>{{ exam.description || '暂无考试说明' }}</p>
             </div>

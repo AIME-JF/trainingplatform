@@ -352,6 +352,7 @@ const practiceFilters = computed(() => ({
   policeTypeId: parsePositiveInt(getSingleQueryValue(route.query.policeTypeId)),
   policeTypeName: getSingleQueryValue(route.query.policeTypeName),
   keyword: getSingleQueryValue(route.query.keyword).trim(),
+  courseId: parsePositiveInt(getSingleQueryValue(route.query.courseId)),
 }))
 
 const sourceName = computed(() => practiceSource.value?.sourceName || '')
@@ -605,6 +606,7 @@ async function loadQuestions() {
     if (practiceFilters.value.questionType) params.type = practiceFilters.value.questionType
     if (practiceFilters.value.difficulty) params.difficulty = practiceFilters.value.difficulty
     if (practiceFilters.value.policeTypeId) params.police_type_id = practiceFilters.value.policeTypeId
+    if (practiceFilters.value.courseId) params.course_id = practiceFilters.value.courseId
     if (source.sourceType === 'knowledge-point') {
       params.knowledge_point_id = Number(source.sourceId)
     } else if (source.sourceType === 'question-folder') {

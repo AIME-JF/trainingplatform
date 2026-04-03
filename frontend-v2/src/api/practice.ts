@@ -45,6 +45,7 @@ export interface GetPracticeQuestionsParams {
   knowledge_point_id?: number
   folder_id?: number
   recursive?: boolean
+  course_id?: number
 }
 
 export async function getPracticeSources() {

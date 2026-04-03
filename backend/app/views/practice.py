@@ -76,6 +76,7 @@ def get_practice_questions(
     knowledge_point_id: Optional[int] = Query(None, description="按知识点ID筛选"),
     folder_id: Optional[int] = Query(None, description="按文件夹ID筛选"),
     recursive: bool = Query(False, description="是否递归查询子文件夹的题目"),
+    course_id: Optional[int] = Query(None, description="按课程ID筛选"),
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
@@ -92,6 +93,7 @@ def get_practice_questions(
         folder_id,
         recursive,
         current_user.user_id,
+        course_id,
     )
     return StandardResponse(data=data)
 

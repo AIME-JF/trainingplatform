@@ -218,6 +218,7 @@ class QuestionFolderCreate(BaseModel):
     category: Optional[str] = Field(None, max_length=50, description="题库分类")
     parent_id: Optional[int] = Field(None, description="父文件夹ID")
     sort_order: int = Field(0, description="排序")
+    course_id: Optional[int] = Field(None, description="关联课程ID")
 
 
 class QuestionFolderUpdate(BaseModel):
@@ -227,6 +228,7 @@ class QuestionFolderUpdate(BaseModel):
     category: Optional[str] = Field(None, max_length=50)
     parent_id: Optional[int] = None
     sort_order: Optional[int] = None
+    course_id: Optional[int] = None
 
 
 class QuestionFolderResponse(BaseModel):
@@ -243,6 +245,8 @@ class QuestionFolderResponse(BaseModel):
     status: str = "未使用"
     created_by: Optional[int] = None
     created_by_name: Optional[str] = None
+    course_id: Optional[int] = None
+    course_name: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
     children: List["QuestionFolderResponse"] = Field(default_factory=list)
