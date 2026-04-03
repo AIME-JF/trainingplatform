@@ -75,7 +75,7 @@
           <div v-if="activeTab === 'overview'" class="tab-panel">
 
             <!-- 非班级成员引导 -->
-            <div v-if="!hasFullAccess" class="join-hint-card">
+            <div v-if="showEnrollHint" class="join-hint-card">
               <div class="join-hint-icon"><TeamOutlined /></div>
               <p class="join-hint-title">加入班级查看更多内容</p>
               <p class="join-hint-desc">加入后可查看课程安排、课次签到、考试、动态等完整信息</p>
@@ -423,11 +423,21 @@ const hasCheckedOut = computed(() => {
   return checkinRecords.value.some((r) => r.session_key === sess.session_id && r.checkout_status === 'completed')
 })
 
+// 是否可查看班级完整内容（课程、考试等）
 const hasFullAccess = computed(() => {
   const d = detail.value
   if (!d) return false
   if (isEnrolled.value || isClassInstructor.value) return true
-  return !!(courses.value.length || notices.value.length || d.exam_sessions?.length)
+  // 已发布的班级对所有用户开放查看（方便了解后报名）
+  if (d.publish_status === 'published') return true
+  return false
+})
+
+// 是否需要显示报名引导（未加入班级的用户）
+const showEnrollHint = computed(() => {
+  if (!detail.value) return false
+  if (isEnrolled.value || isClassInstructor.value) return false
+  return true
 })
 
 const canPublishNotice = computed(() => isClassInstructor.value)
