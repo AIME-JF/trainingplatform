@@ -92,36 +92,65 @@
       <div class="header-copy">
         <span class="header-kicker">Library</span>
         <h1>资源库</h1>
-        <p>教学文件统一保存在个人资源库，按固定类型和自建文件夹整理，再决定是否共享到公共资源。</p>
       </div>
-      <a-radio-group v-model:value="scopeTab" button-style="solid" @change="handleScopeChange">
-        <a-radio-button value="private">私人资源</a-radio-button>
-        <a-radio-button value="public">公共资源</a-radio-button>
-      </a-radio-group>
     </header>
+
+    <section class="library-controls">
+      <div class="controls-intro">
+
+      </div>
+
+      <div class="controls-actions">
+        <div class="scope-toggle" :class="{ 'is-public': scopeTab === 'public' }">
+          <button
+            type="button"
+            class="scope-option"
+            :class="{ active: scopeTab === 'private' }"
+            @click="setScopeTab('private')"
+          >
+            私人资源
+          </button>
+          <button
+            type="button"
+            class="scope-option"
+            :class="{ active: scopeTab === 'public' }"
+            @click="setScopeTab('public')"
+          >
+            公共资源
+          </button>
+        </div>
+        <a-input-search
+          v-model:value="searchKeyword"
+          allow-clear
+          size="large"
+          placeholder="搜索标题"
+          class="toolbar-search"
+          @search="fetchItems"
+        />
+        <a-button type="primary" size="large" :disabled="scopeTab !== 'private'" @click="openCreateFolder">
+          新建文件夹
+        </a-button>
+      </div>
+    </section>
 
     <div class="library-shell">
       <aside class="library-sidebar">
-        <div class="sidebar-card sidebar-head">
-          <div>
-            <div class="sidebar-title">分类与文件夹</div>
-            <div class="sidebar-sub">固定类型在上，自建文件夹在下。</div>
+        <div class="sidebar-categories">
+          <div class="category-heading">
+            <div class="sidebar-title">分类标签</div>
           </div>
-          <a-button type="primary" size="small" :disabled="scopeTab !== 'private'" @click="openCreateFolder">添加</a-button>
-        </div>
-
-        <div class="sidebar-card category-list">
-          <button
-            v-for="category in categories"
-            :key="category.key"
-            type="button"
-            class="category-button"
-            :class="{ active: selectedCategory === category.key }"
-            @click="handleCategorySelect(category.key)"
-          >
-            <span>{{ category.label }}</span>
-            <small>{{ category.hint }}</small>
-          </button>
+          <div class="category-stack">
+            <button
+              v-for="category in categories"
+              :key="category.key"
+              type="button"
+              class="category-button"
+              :class="{ active: selectedCategory === category.key }"
+              @click="handleCategorySelect(category.key)"
+            >
+              <span>{{ category.label }}</span>
+            </button>
+          </div>
         </div>
 
         <div class="sidebar-card folder-panel" :class="{ disabled: scopeTab !== 'private' }">
@@ -157,21 +186,16 @@
       </aside>
 
       <section class="library-main">
-        <div class="main-toolbar">
-          <div class="toolbar-copy">
-            <h2>{{ scopeTab === 'private' ? '我的资源' : '公共资源' }}</h2>
-            <p>{{ currentFilterDescription }}</p>
-          </div>
-          <div class="toolbar-actions">
-            <a-input-search
-              v-model:value="searchKeyword"
-              allow-clear
-              placeholder="搜索标题"
-              class="toolbar-search"
-              @search="fetchItems"
-            />
-            <a-button v-if="scopeTab === 'private'" type="primary" @click="uploadVisible = true">批量导入</a-button>
-            <a-button v-if="scopeTab === 'private'" @click="openKnowledgeCreate">新建知识点</a-button>
+        <div class="content-meta">
+          <div class="content-meta-head">
+            <div>
+              <h2>{{ scopeTab === 'private' ? '我的资源' : '公共资源' }}</h2>
+              <p>{{ currentFilterDescription }}</p>
+            </div>
+            <div v-if="scopeTab === 'private'" class="content-actions">
+              <a-button type="primary" size="large" @click="uploadVisible = true">批量导入</a-button>
+              <a-button size="large" @click="openKnowledgeCreate">新建知识点</a-button>
+            </div>
           </div>
         </div>
 
@@ -373,6 +397,14 @@ function handleScopeChange() {
   if (scopeTab.value !== 'private') {
     selectedFolderId.value = null
   }
+}
+
+function setScopeTab(nextScope: 'private' | 'public') {
+  if (scopeTab.value === nextScope) {
+    return
+  }
+  scopeTab.value = nextScope
+  handleScopeChange()
 }
 
 function handleCategorySelect(category: string) {
@@ -663,44 +695,45 @@ function getTypeIcon(contentType?: string | null) {
   font-size: 32px;
 }
 
-.header-copy p {
-  margin: 0;
-  max-width: 640px;
-  color: rgba(255, 255, 255, 0.82);
-  line-height: 1.8;
+.library-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+}
+
+.controls-intro {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+}
+
+.controls-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1 1 520px;
+  flex-wrap: wrap;
+  gap: 14px 16px;
 }
 
 .library-shell {
   display: grid;
   grid-template-columns: 300px minmax(0, 1fr);
-  gap: 18px;
+  gap: 16px;
+}
+
+.library-sidebar,
+.library-main {
+  min-width: 0;
 }
 
 .library-sidebar {
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-.sidebar-card,
-.library-main {
-  border-radius: 22px;
-  background: var(--v2-bg-card);
-  box-shadow: var(--v2-shadow-sm);
-}
-
-.sidebar-head,
-.category-list,
-.folder-panel,
-.library-main {
-  padding: 18px;
-}
-
-.sidebar-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
 }
 
 .sidebar-title {
@@ -710,23 +743,34 @@ function getTypeIcon(contentType?: string | null) {
 }
 
 .sidebar-sub {
-  margin-top: 4px;
   color: var(--v2-text-secondary);
   font-size: 12px;
 }
 
-.category-list {
+.sidebar-categories {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+}
+
+.category-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.category-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
 .category-button {
-  width: 100%;
   border: 1px solid var(--v2-border);
   border-radius: 16px;
   background: var(--v2-bg);
-  padding: 12px 14px;
+  padding: 14px 16px;
+  min-height: 50px;
   text-align: left;
   cursor: pointer;
   transition: all 0.2s ease;
@@ -736,42 +780,49 @@ function getTypeIcon(contentType?: string | null) {
   display: block;
   color: var(--v2-text-primary);
   font-weight: 700;
-}
-
-.category-button small {
-  display: block;
-  margin-top: 6px;
-  color: var(--v2-text-secondary);
-  line-height: 1.5;
+  font-size: 14px;
 }
 
 .category-button.active {
   border-color: rgba(75, 110, 245, 0.35);
   background: var(--v2-primary-light);
+  color: var(--v2-primary);
 }
 
-.folder-panel.disabled {
-  opacity: 0.72;
+.sidebar-card {
+  border-radius: 22px;
+  background: var(--v2-bg-card);
+  box-shadow: var(--v2-shadow-sm);
+  padding: 18px;
+}
+
+.folder-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .folder-panel-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 2px;
   color: var(--v2-text-secondary);
   font-size: 13px;
 }
 
 .root-entry {
-  width: 100%;
-  margin-bottom: 10px;
   border: 1px solid var(--v2-border);
   border-radius: 14px;
   background: var(--v2-bg);
   padding: 10px 12px;
   text-align: left;
   cursor: pointer;
+  width: 100%;
+}
+
+.folder-panel.disabled {
+  opacity: 0.72;
 }
 
 .root-entry.active {
@@ -801,35 +852,97 @@ function getTypeIcon(contentType?: string | null) {
   font-size: 12px;
 }
 
-.main-toolbar {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+.library-main {
+  min-height: 200px;
+}
+
+.content-meta {
   margin-bottom: 18px;
 }
 
-.toolbar-copy h2 {
+.content-meta-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 16px 24px;
+  flex-wrap: wrap;
+}
+
+.content-meta h2 {
   margin: 0;
   color: var(--v2-text-primary);
   font-size: 24px;
 }
 
-.toolbar-copy p {
+.content-meta p {
   margin: 8px 0 0;
   color: var(--v2-text-secondary);
 }
 
-.toolbar-actions {
+.content-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  gap: 12px 14px;
+}
+
+.scope-toggle {
+  position: relative;
+  display: inline-grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: center;
+  min-width: 236px;
+  padding: 4px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(75, 110, 245, 0.1), rgba(15, 23, 42, 0.06));
+}
+
+.scope-toggle::before {
+  content: '';
+  position: absolute;
+  top: 4px;
+  bottom: 4px;
+  left: 4px;
+  width: calc((100% - 8px) / 2);
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 10px 20px rgba(15, 23, 42, 0.12);
+  transition: transform 0.24s ease;
+}
+
+.scope-toggle.is-public::before {
+  transform: translateX(100%);
+}
+
+.scope-option {
+  position: relative;
+  z-index: 1;
+  min-width: 0;
+  height: 46px;
+  border: 0;
+  background: transparent;
+  padding: 0 18px;
+  border-radius: 14px;
+  color: var(--v2-text-secondary);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.scope-option.active {
+  color: var(--v2-primary);
+}
+
+.toolbar-search :deep(.ant-input-affix-wrapper),
+.toolbar-search :deep(.ant-input-search-button),
+.content-actions :deep(.ant-btn),
+.controls-actions :deep(.ant-btn) {
+  border-radius: 14px;
 }
 
 .toolbar-search {
-  width: 240px;
+  width: 280px;
 }
 
 .item-grid {
@@ -1011,18 +1124,22 @@ function getTypeIcon(contentType?: string | null) {
 }
 
 @media (max-width: 960px) {
+  .library-controls {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
   .library-shell {
     grid-template-columns: 1fr;
   }
 
-  .library-header,
-  .main-toolbar {
-    flex-direction: column;
-  }
-
-  .toolbar-actions {
+  .controls-actions {
     width: 100%;
     justify-content: flex-start;
+  }
+
+  .content-meta-head {
+    align-items: stretch;
   }
 
   .toolbar-search {
@@ -1036,11 +1153,21 @@ function getTypeIcon(contentType?: string | null) {
   }
 
   .library-header,
-  .sidebar-head,
-  .category-list,
-  .folder-panel,
-  .library-main {
+  .sidebar-card {
     padding: 16px;
+  }
+
+  .library-controls {
+    gap: 12px;
+  }
+
+  .controls-intro,
+  .controls-actions {
+    width: 100%;
+  }
+
+  .content-actions {
+    width: 100%;
   }
 
   .item-grid {
