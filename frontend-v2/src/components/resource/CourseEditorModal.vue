@@ -36,17 +36,12 @@
         </a-form-item>
 
         <a-row :gutter="12">
-          <a-col :span="8">
+          <a-col :span="12">
             <a-form-item label="主讲教官">
               <a-select v-model:value="form.instructor_id" :options="instructorOptions" allow-clear />
             </a-form-item>
           </a-col>
-          <a-col :span="8">
-            <a-form-item label="难度等级">
-              <a-rate v-model:value="form.difficulty" :count="5" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="8">
+          <a-col :span="12">
             <a-form-item label="是否必修">
               <a-switch v-model:checked="form.is_required" />
             </a-form-item>
@@ -118,7 +113,7 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, toRef, watch } from 'vue'
+import { computed, reactive, ref, toRef, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import type { CourseCreate, CourseResponse, CourseUpdate, ResourceDetailResponse, ResourceListItemResponse } from '@/api/learning-resource'
 import {
@@ -132,6 +127,7 @@ import {
   updateCourse,
 } from '@/api/learning-resource'
 import { useCreatableTagSelect } from '@/composables/useCreatableTagSelect'
+import { useAuthStore } from '@/stores/auth'
 import { COURSE_CATEGORIES, getUserDisplayName } from '@/utils/learning-resource'
 import AdmissionScopeSelector from '@/components/common/AdmissionScopeSelector.vue'
 import CourseChapterResourceSelector from '@/components/resource/CourseChapterResourceSelector.vue'
@@ -167,6 +163,9 @@ const emit = defineEmits<{
   success: []
 }>()
 
+const authStore = useAuthStore()
+const canCreateCourse = computed(() => authStore.hasPermission('CREATE_COURSE'))
+const canManageCourse = computed(() => authStore.role === 'admin' || authStore.roleCodes.includes('admin'))
 const categoryOptions = COURSE_CATEGORIES.filter((item) => item.key !== 'all')
 const loading = ref(false)
 const submitting = ref(false)
@@ -183,7 +182,6 @@ const form = reactive({
   category: '',
   description: '',
   instructor_id: undefined as number | undefined,
-  difficulty: 3,
   is_required: false,
   scope_type: 'all',
   scope_target_ids: [] as number[],
@@ -206,6 +204,11 @@ const {
 watch(() => props.open, async (open) => {
   if (!open) {
     resetForm()
+    return
+  }
+  if (props.courseId ? !canManageCourse.value : !canCreateCourse.value) {
+    message.warning(props.courseId ? '仅管理员可编辑课程' : '您没有创建课程权限')
+    emit('update:open', false)
     return
   }
 
@@ -247,7 +250,6 @@ function resetForm() {
   form.category = ''
   form.description = ''
   form.instructor_id = undefined
-  form.difficulty = 3
   form.is_required = false
   form.scope_type = 'all'
   form.scope_target_ids = []
@@ -286,7 +288,6 @@ async function loadCourse(courseId: number) {
   form.category = course.category
   form.description = course.description || ''
   form.instructor_id = course.instructor_id || undefined
-  form.difficulty = course.difficulty || 3
   form.is_required = !!course.is_required
   form.scope_type = course.scope_type || 'all'
   form.scope_target_ids = [...(course.scope_target_ids || [])]
@@ -410,7 +411,6 @@ function buildPayload(): CourseCreate | CourseUpdate | null {
     category: form.category,
     description: form.description || undefined,
     instructor_id: form.instructor_id,
-    difficulty: form.difficulty,
     is_required: form.is_required,
     file_type: computeFileType(),
     scope_type: form.scope_type,
@@ -427,6 +427,10 @@ function buildPayload(): CourseCreate | CourseUpdate | null {
 }
 
 async function submitForm() {
+  if (props.courseId ? !canManageCourse.value : !canCreateCourse.value) {
+    message.warning(props.courseId ? '仅管理员可编辑课程' : '您没有创建课程权限')
+    return
+  }
   const payload = buildPayload()
   if (!payload) {
     return

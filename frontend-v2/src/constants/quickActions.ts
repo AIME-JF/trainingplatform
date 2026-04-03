@@ -65,7 +65,7 @@ export const quickActionConfigs: QuickActionConfig[] = [
     surfaces: ['dashboard', 'profile'],
   },
   {
-    title: '学习资源',
+    title: '课程',
     description: '继续课程学习与资源浏览',
     path: '/resource/courses',
     icon: DatabaseOutlined,

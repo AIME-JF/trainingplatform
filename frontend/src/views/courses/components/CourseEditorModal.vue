@@ -48,12 +48,6 @@
               style="width: 100%"
             />
           </a-form-item>
-          <a-form-item label="难度等级">
-            <div style="display: flex; align-items: center; gap: 12px">
-              <a-rate v-model:value="form.difficulty" :count="5" />
-              <span style="color: #888; font-size: 12px">{{ difficultyLabel }}</span>
-            </div>
-          </a-form-item>
           <a-form-item label="课程标签">
             <a-select
               v-model:value="form.tags"
@@ -208,7 +202,6 @@ const form = reactive({
   category: null,
   description: '',
   instructorId: undefined,
-  difficulty: 3,
   tags: [],
   isRequired: false,
   scopeType: 'all',
@@ -230,10 +223,6 @@ const {
 })
 
 const isEditing = computed(() => props.courseId !== null && props.courseId !== undefined && props.courseId !== '')
-const difficultyLabel = computed(() => {
-  const labels = ['', '初级', '初中级', '中级', '中高级', '高级']
-  return labels[Math.round(form.difficulty)] || ''
-})
 
 function createChapter(overrides = {}) {
   chapterSeed += 1
@@ -264,7 +253,6 @@ function resetForm() {
   form.category = null
   form.description = ''
   form.instructorId = undefined
-  form.difficulty = 3
   form.tags = []
   form.isRequired = false
   form.scopeType = 'all'
@@ -471,7 +459,6 @@ async function loadCourseDetail() {
   form.category = course.category || null
   form.description = course.description || ''
   form.instructorId = course.instructorId ?? undefined
-  form.difficulty = course.difficulty || 3
   form.tags = normalizeTags(course.tags)
   form.isRequired = !!course.isRequired
   form.scopeType = course.scopeType || 'all'
@@ -701,7 +688,6 @@ async function handleSubmit() {
       category: form.category,
       description: form.description?.trim() || '',
       instructorId: form.instructorId ?? null,
-      difficulty: form.difficulty,
       tags: normalizedTags,
       isRequired: form.isRequired,
       scopeType: form.scopeType,

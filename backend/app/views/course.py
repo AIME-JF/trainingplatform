@@ -19,8 +19,23 @@ from app.schemas import (
 )
 from app.controllers import CourseController
 from app.services.course import CourseService
+from app.utils.authz import is_admin_user
 
 router = APIRouter(prefix="/courses", tags=["course_management"])
+
+
+def _require_permission(current_user: TokenData, permission: str):
+    if permission in current_user.permissions:
+        return
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=f"权限不足，需要权限: {permission}",
+    )
+
+
+def _require_admin(db: Session, user_id: int):
+    if not is_admin_user(db, user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅系统管理员可执行该操作")
 
 
 def _require_course_viewer(db: Session, course_id: int, user_id: int):
@@ -30,16 +45,6 @@ def _require_course_viewer(db: Session, course_id: int, user_id: int):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="课程不存在")
     if not service.can_view_course(course, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权查看该课程")
-    return course
-
-
-def _require_course_manager(db: Session, course_id: int, user_id: int):
-    service = CourseService(db)
-    course = service.get_course_entity(course_id)
-    if not course:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="课程不存在")
-    if not service.can_manage_course(course, user_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权管理该课程")
     return course
 
 
@@ -97,6 +102,7 @@ def create_course_tag(
     db: Session = Depends(get_db)
 ):
     """创建课程标签"""
+    _require_permission(current_user, "CREATE_COURSE")
     controller = CourseController(db)
     data = controller.create_course_tag(data)
     return StandardResponse(data=data)
@@ -109,6 +115,7 @@ def create_course(
     db: Session = Depends(get_db)
 ):
     """创建课程"""
+    _require_permission(current_user, "CREATE_COURSE")
     controller = CourseController(db)
     result = controller.create_course(data, current_user.user_id)
     return StandardResponse(data=result)
@@ -150,7 +157,7 @@ def update_course(
     db: Session = Depends(get_db)
 ):
     """更新课程"""
-    _require_course_manager(db, course_id, current_user.user_id)
+    _require_admin(db, current_user.user_id)
     controller = CourseController(db)
     result = controller.update_course(course_id, data, actor_user_id=current_user.user_id)
     return StandardResponse(data=result)
@@ -163,7 +170,7 @@ def delete_course(
     db: Session = Depends(get_db)
 ):
     """删除课程"""
-    _require_course_manager(db, course_id, current_user.user_id)
+    _require_admin(db, current_user.user_id)
     controller = CourseController(db)
     controller.delete_course(course_id)
     return StandardResponse(message="课程已删除")
@@ -267,7 +274,7 @@ def add_course_resource(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    _require_course_manager(db, course_id, current_user.user_id)
+    _require_admin(db, current_user.user_id)
     service = CourseService(db)
     result = service.add_course_resource(course_id, data)
     return StandardResponse(data=result)
@@ -292,7 +299,7 @@ def remove_course_resource(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    _require_course_manager(db, course_id, current_user.user_id)
+    _require_admin(db, current_user.user_id)
     service = CourseService(db)
     ok = service.remove_course_resource(course_id, resource_id)
     if not ok:

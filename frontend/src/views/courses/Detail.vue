@@ -3,16 +3,16 @@
     <div class="top-bar">
         <a-breadcrumb>
         <a-breadcrumb-item @click="$router.push('/courses')" style="cursor: pointer; color: var(--police-primary)">
-          课程资源
+          课程
         </a-breadcrumb-item>
         <a-breadcrumb-item>{{ localCourse.title }}</a-breadcrumb-item>
       </a-breadcrumb>
       <div class="top-actions">
-        <a-button v-if="authStore.isAdmin || authStore.isInstructor" size="small" @click="editorVisible = true">
+        <a-button v-if="canManageCourse" size="small" @click="editorVisible = true">
           <template #icon><EditOutlined /></template>编辑课程
         </a-button>
         <a-popconfirm
-          v-if="authStore.isAdmin || authStore.isInstructor"
+          v-if="canManageCourse"
           title="确定删除此课程吗？删除后不可恢复。"
           ok-text="确认删除"
           cancel-text="取消"
@@ -113,7 +113,7 @@
               </a-spin>
             </a-tab-pane>
 
-            <a-tab-pane key="resources" tab="关联资源" v-if="authStore.isAdmin || authStore.isInstructor">
+            <a-tab-pane key="resources" tab="关联资源" v-if="canManageCourse">
               <div class="resource-bind-toolbar">
                 <a-select
                   v-model:value="selectedResourceId"
@@ -255,6 +255,7 @@ const learningStatus = ref([])
 const learningStatusLoading = ref(false)
 const learningStatusLoaded = ref(false)
 
+const canManageCourse = computed(() => authStore.isAdmin)
 const currentChapter = computed(() => localCourse.value.chapters[currentChapterIdx.value] || {})
 const viewerType = computed(() => {
   if (currentChapter.value.contentType === 'video') {
@@ -437,7 +438,7 @@ async function loadCourseLearningStatus() {
 }
 
 async function loadResourceCandidates() {
-  if (!(authStore.isAdmin || authStore.isInstructor)) {
+  if (!canManageCourse.value) {
     return
   }
   try {
@@ -449,6 +450,10 @@ async function loadResourceCandidates() {
 }
 
 async function bindSelectedResource() {
+  if (!canManageCourse.value) {
+    message.warning('仅系统管理员可绑定课程资源')
+    return
+  }
   if (!selectedResourceId.value) {
     message.warning('请选择资源')
     return
@@ -468,6 +473,10 @@ async function bindSelectedResource() {
 }
 
 async function removeResource(resourceId) {
+  if (!canManageCourse.value) {
+    message.warning('仅系统管理员可解绑课程资源')
+    return
+  }
   try {
     await unbindCourseResource(courseId.value, resourceId)
     await fetchCourse()
@@ -656,6 +665,10 @@ async function markDocProgress() {
 }
 
 async function handleDeleteCourse() {
+  if (!canManageCourse.value) {
+    message.warning('仅系统管理员可删除课程')
+    return
+  }
   try {
     await apiDeleteCourse(courseId.value)
     message.success('课程已删除')
@@ -678,7 +691,7 @@ function handleBeforeUnload() {
 }
 
 watch(activeTab, (tab) => {
-  if (tab === 'resources' && (authStore.isAdmin || authStore.isInstructor)) {
+  if (tab === 'resources' && canManageCourse.value) {
     loadResourceCandidates()
   }
   if (tab === 'learning') {

@@ -132,13 +132,13 @@ export const routes: RouteRecordRaw[] = [
         path: 'resource/courses',
         name: 'LearningCourses',
         component: () => import('@/views/resource/Courses.vue'),
-        meta: { title: '学习资源', anyPermissions: COURSE_PERMISSIONS },
+        meta: { title: '课程', anyPermissions: COURSE_PERMISSIONS },
       },
       {
         path: 'resource/courses/:id',
         name: 'CourseDetail',
         component: () => import('@/views/resource/CourseDetail.vue'),
-        meta: { title: '课程资源详情', anyPermissions: COURSE_PERMISSIONS },
+        meta: { title: '课程详情', anyPermissions: COURSE_PERMISSIONS },
       },
       {
         path: 'resource/library',

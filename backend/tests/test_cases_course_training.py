@@ -18,57 +18,32 @@ def case_course_flow(runner: APITestRunner):
         "description": "自动化测试课程",
         "instructor_id": instructor_id,
         "duration": 120,
-        "difficulty": 3,
         "is_required": True,
         "cover_color": "blue",
         "tags": ["测试", "法学"],
-        "chapters": [
-            {
-                "title": "第一章",
-                "sort_order": 1,
-                "duration": 30,
-                "video_url": "https://example.com/v1.mp4",
-                "doc_url": "https://example.com/d1.pdf",
-            },
-            {
-                "title": "第二章",
-                "sort_order": 2,
-                "duration": 45,
-                "video_url": "https://example.com/v2.mp4",
-            },
-        ],
     }
-    c = runner._request("POST", "/courses", role="instructor", json=payload, expected_code=200)
+    runner._request("POST", "/courses", role="instructor", json=payload, expected_code=403)
+
+    c = runner._request("POST", "/courses", role="admin", json=payload, expected_code=200)
     course = c.get("data") or {}
     course_id = course.get("id")
     if not course_id:
         raise TestFailure("创建课程未返回id")
     runner.runtime["course_id"] = course_id
 
-    chapters = course.get("chapters") or []
-    if not chapters:
-        detail = runner._request("GET", f"/courses/{course_id}", role="student", expected_code=200)
-        chapters = ((detail.get("data") or {}).get("chapters") or [])
-    if not chapters:
-        raise TestFailure("课程无章节，无法测进度")
-    chapter_id = chapters[0].get("id")
-    runner.runtime["chapter_id"] = chapter_id
+    detail = runner._request("GET", f"/courses/{course_id}", role="student", expected_code=200)
+    if (detail.get("data") or {}).get("id") != course_id:
+        raise TestFailure("课程详情不匹配")
 
     clist = runner._request("GET", "/courses?page=1&size=10&sort=newest", role="student", expected_code=200)
     if ((clist.get("data") or {}).get("total")) is None:
         raise TestFailure("课程列表无total")
 
-    upd = runner._request("PUT", f"/courses/{course_id}", role="instructor", json={"difficulty": 4}, expected_code=200)
-    if (upd.get("data") or {}).get("difficulty") != 4:
-        raise TestFailure("更新课程失败")
+    runner._request("PUT", f"/courses/{course_id}", role="instructor", json={"title": "无权修改"}, expected_code=403)
 
-    runner._request(
-        "PUT",
-        f"/courses/{course_id}/chapters/{chapter_id}/progress",
-        role="student",
-        json={"progress": 60},
-        expected_code=200,
-    )
+    upd = runner._request("PUT", f"/courses/{course_id}", role="admin", json={"title": "更新后的课程名称"}, expected_code=200)
+    if (upd.get("data") or {}).get("title") != "更新后的课程名称":
+        raise TestFailure("更新课程失败")
 
     pr = runner._request("GET", "/courses/progress", role="student", expected_code=200)
     if not isinstance(pr.get("data"), list):

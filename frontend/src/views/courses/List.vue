@@ -1,8 +1,8 @@
 <template>
   <div class="course-list-page">
     <div class="page-header">
-      <h2>课程资源</h2>
-      <a-button v-if="authStore.isInstructor || authStore.isAdmin" type="primary" @click="openCreate">
+      <h2>课程</h2>
+      <a-button v-if="canCreateCourse" type="primary" @click="openCreate">
         <template #icon><PlusOutlined /></template>创建课程
       </a-button>
     </div>
@@ -68,7 +68,7 @@
             </a-tag>
             <a-tag v-if="course.isRequired" color="red">必修</a-tag>
           </div>
-          <div v-if="authStore.isAdmin || authStore.isInstructor" class="course-actions" @click.stop>
+          <div v-if="canManageCourse" class="course-actions" @click.stop>
             <a-button size="small" type="text" @click="openEdit(course)">
               <template #icon><EditOutlined /></template>编辑
             </a-button>
@@ -122,7 +122,7 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { DeleteOutlined, EditOutlined, PlusOutlined, StarFilled, TeamOutlined } from '@ant-design/icons-vue'
+import { DeleteOutlined, EditOutlined, PlusOutlined, StarFilled } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { deleteCourse as apiDeleteCourse, getCourses } from '@/api/course'
 import { getUsers } from '@/api/user'
@@ -154,6 +154,8 @@ const instructorOptions = ref([])
 const allCategories = COURSE_CATEGORIES.map((item) => (
   item.key === 'all' ? { key: 'all', label: '全部' } : item
 ))
+const canCreateCourse = computed(() => authStore.hasPermission('CREATE_COURSE'))
+const canManageCourse = computed(() => authStore.isAdmin)
 
 async function fetchCourses() {
   try {
@@ -211,16 +213,28 @@ const inProgressCount = computed(() => courseList.value.filter((course) => {
 }).length)
 
 function openCreate() {
+  if (!canCreateCourse.value) {
+    message.warning('当前账号无权创建课程')
+    return
+  }
   editingCourseId.value = null
   editorVisible.value = true
 }
 
 function openEdit(course) {
+  if (!canManageCourse.value) {
+    message.warning('仅系统管理员可编辑课程')
+    return
+  }
   editingCourseId.value = course.id
   editorVisible.value = true
 }
 
 async function handleDelete(course) {
+  if (!canManageCourse.value) {
+    message.warning('仅系统管理员可删除课程')
+    return
+  }
   try {
     await apiDeleteCourse(course.id)
     message.success(`课程《${course.title}》已删除`)

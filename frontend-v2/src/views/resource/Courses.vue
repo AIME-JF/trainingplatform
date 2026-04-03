@@ -2,9 +2,9 @@
   <div class="page-content resource-page">
     <div class="page-header">
       <div>
-        <h1 class="page-title">学习资源</h1>
+        <h1 class="page-title">课程</h1>
       </div>
-      <a-button v-if="authStore.isInstructor" type="primary" @click="openCreate">创建课程</a-button>
+      <a-button v-if="canCreateCourse" type="primary" @click="openCreate">创建课程</a-button>
     </div>
 
     <CourseEditorModal v-model:open="editorVisible" :course-id="editingCourseId" @success="fetchCourses" />
@@ -150,7 +150,7 @@
               </div>
               <p>{{ course.description || '暂无课程简介' }}</p>
             </div>
-            <div v-if="authStore.isInstructor" class="card-actions" @click.stop>
+            <div v-if="canManageCourse" class="card-actions" @click.stop>
               <a-button size="small" type="text" @click="openEdit(course.id)">编辑</a-button>
               <a-popconfirm title="确定删除此课程吗？" @confirm="handleDelete(course.id)">
                 <a-button size="small" type="text" danger>删除</a-button>
@@ -214,6 +214,8 @@ import {
 
 const router = useRouter()
 const authStore = useAuthStore()
+const canCreateCourse = computed(() => authStore.hasPermission('CREATE_COURSE'))
+const canManageCourse = computed(() => authStore.role === 'admin' || authStore.roleCodes.includes('admin'))
 
 const loading = ref(false)
 const courses = ref<CourseListResponse[]>([])
@@ -364,16 +366,28 @@ function getCourseCoverBackground(course: CourseListResponse, index: number) {
 }
 
 function openCreate() {
+  if (!canCreateCourse.value) {
+    message.warning('您没有创建课程权限')
+    return
+  }
   editingCourseId.value = null
   editorVisible.value = true
 }
 
 function openEdit(courseId: number) {
+  if (!canManageCourse.value) {
+    message.warning('仅管理员可编辑课程')
+    return
+  }
   editingCourseId.value = courseId
   editorVisible.value = true
 }
 
 async function handleDelete(courseId: number) {
+  if (!canManageCourse.value) {
+    message.warning('仅管理员可删除课程')
+    return
+  }
   try {
     await deleteCourse(courseId)
     message.success('课程已删除')

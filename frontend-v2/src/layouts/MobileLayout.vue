@@ -135,7 +135,7 @@ const sidebarNavConfig: NavItem[] = [
   { path: '/classes', label: '班级', icon: ReadOutlined, permissions: TRAINING_PERMISSIONS },
   {
     path: '/resource/courses',
-    label: '学习资源',
+    label: '课程',
     icon: DatabaseOutlined,
     permissions: resourceNavPermissions,
     matchPaths: [

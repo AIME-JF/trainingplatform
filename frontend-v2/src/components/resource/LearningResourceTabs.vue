@@ -33,7 +33,7 @@ const route = useRoute()
 const authStore = useAuthStore()
 
 const tabs: TabItem[] = [
-  { path: '/resource/courses', label: '课程资源', permissions: COURSE_PERMISSIONS },
+  { path: '/resource/courses', label: '课程', permissions: COURSE_PERMISSIONS },
   { path: '/resource/teaching-generate', label: '教学资源生成', permissions: TEACHING_RESOURCE_GENERATION_PERMISSIONS },
 ]
 

@@ -28,12 +28,6 @@ export interface CourseCreate {
   instructor_id?: number | null;
   /** 总时长(分钟) */
   duration?: number;
-  /**
-     * 难度1-5
-     * @minimum 1
-     * @maximum 5
-     */
-  difficulty?: number;
   /** 是否必修 */
   is_required?: boolean;
   /** 封面色 */

@@ -347,7 +347,7 @@ def init_roles():
                     "perm_codes": [
                         "GET_CURRENT_USER", "CHANGE_PASSWORD", "ROOT", "HEALTH_CHECK",
                         "GET_DASHBOARD",
-                        "GET_COURSES", "CREATE_COURSE", "GET_COURSE_DETAIL", "UPDATE_COURSE",
+                        "GET_COURSES", "GET_COURSE_DETAIL",
                         "GET_EXAMS", "CREATE_EXAM", "GET_EXAM_DETAIL", "GET_EXAM_SCORES",
                         "GET_QUESTIONS", "CREATE_QUESTION", "UPDATE_QUESTION", "DELETE_QUESTION", "BATCH_CREATE_QUESTIONS",
                         "GET_KNOWLEDGE_POINTS", "CREATE_KNOWLEDGE_POINT", "UPDATE_KNOWLEDGE_POINT", "DELETE_KNOWLEDGE_POINT",

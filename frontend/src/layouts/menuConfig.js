@@ -45,12 +45,12 @@ export const appMenuConfig = [
   },
   {
     key: 'learn',
-    label: '学习资源',
+    label: '课程',
     icon: ReadOutlined,
     children: [
       {
         key: '/courses',
-        label: '课程资源',
+        label: '课程',
         anyPermissions: COURSE_PAGE_PERMISSIONS,
       },
       {

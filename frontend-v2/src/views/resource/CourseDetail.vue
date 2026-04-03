@@ -3,9 +3,9 @@
     <header class="detail-header">
       <div class="header-main">
         <div class="header-actions">
-          <a-button ghost @click="router.push('/resource/courses')">返回课程资源</a-button>
-          <a-button v-if="authStore.isInstructor" ghost @click="editorVisible = true">编辑课程</a-button>
-          <a-popconfirm v-if="authStore.isInstructor" title="确定删除此课程吗？" @confirm="handleDeleteCourse">
+          <a-button ghost @click="router.push('/resource/courses')">返回课程</a-button>
+          <a-button v-if="canManageCourse" ghost @click="openEdit">编辑课程</a-button>
+          <a-popconfirm v-if="canManageCourse" title="确定删除此课程吗？" @confirm="handleDeleteCourse">
             <a-button ghost danger>删除课程</a-button>
           </a-popconfirm>
         </div>
@@ -134,7 +134,7 @@
                   </a-table>
                 </a-tab-pane>
 
-                <a-tab-pane v-if="authStore.isInstructor" key="resources" tab="关联资源">
+                <a-tab-pane v-if="canManageCourse" key="resources" tab="关联资源">
                   <div class="resource-bind-toolbar">
                     <a-select
                       v-model:value="selectedResourceId"
@@ -271,6 +271,7 @@ import {
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const canManageCourse = computed(() => authStore.role === 'admin' || authStore.roleCodes.includes('admin'))
 
 const loading = ref(false)
 const learningLoading = ref(false)
@@ -376,6 +377,10 @@ async function fetchLearningStatus(courseId: number) {
 }
 
 async function loadBindResources() {
+  if (!canManageCourse.value) {
+    resourceOptions.value = []
+    return
+  }
   try {
     const response = await listResources({ page: 1, size: -1, my_only: true, status: 'published' })
     resourceOptions.value = (response.items || []).map((item) => ({
@@ -557,6 +562,10 @@ async function handleQASubmit() {
 }
 
 async function bindSelectedResource() {
+  if (!canManageCourse.value) {
+    message.warning('仅管理员可绑定课程资源')
+    return
+  }
   if (!course.value?.id || !selectedResourceId.value) {
     message.warning('请先选择资源')
     return
@@ -576,6 +585,10 @@ async function bindSelectedResource() {
 }
 
 async function removeResource(resourceId: number) {
+  if (!canManageCourse.value) {
+    message.warning('仅管理员可解绑课程资源')
+    return
+  }
   if (!course.value?.id) {
     return
   }
@@ -589,6 +602,10 @@ async function removeResource(resourceId: number) {
 }
 
 async function handleDeleteCourse() {
+  if (!canManageCourse.value) {
+    message.warning('仅管理员可删除课程')
+    return
+  }
   if (!course.value?.id) {
     return
   }
@@ -599,6 +616,14 @@ async function handleDeleteCourse() {
   } catch (error) {
     message.error(error instanceof Error ? error.message : '删除失败')
   }
+}
+
+function openEdit() {
+  if (!canManageCourse.value) {
+    message.warning('仅管理员可编辑课程')
+    return
+  }
+  editorVisible.value = true
 }
 </script>
 

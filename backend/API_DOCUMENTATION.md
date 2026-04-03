@@ -148,11 +148,16 @@ Authorization: Bearer <access_token>
 | Method | Path | 说明 | 请求要点 |
 | --- | --- | --- | --- |
 | `GET` | `/api/v1/courses` | 课程列表 | Query：`page` `size` `search` `category` `sort` |
-| `POST` | `/api/v1/courses` | 创建课程 | JSON：`title` `category` `file_type` `description` `instructor_id` `duration` `difficulty` `is_required` `cover_color` `tags` `chapters[]` |
+| `POST` | `/api/v1/courses` | 创建课程 | JSON：`title` `category` `file_type` `description` `instructor_id` `duration` `is_required` `cover_color` `tags` `chapters[]` |
 | `GET` | `/api/v1/courses/progress` | 当前用户学习进度 | 无 |
 | `GET` | `/api/v1/courses/{course_id}` | 课程详情 | 返回章节与当前用户进度 |
 | `PUT` | `/api/v1/courses/{course_id}` | 更新课程 | 字段同创建接口，均可选 |
 | `DELETE` | `/api/v1/courses/{course_id}` | 删除课程 | 无 |
+
+说明：
+
+- `POST /api/v1/courses` 与 `POST /api/v1/courses/tags` 需要 `CREATE_COURSE`
+- `PUT /api/v1/courses/{course_id}`、`DELETE /api/v1/courses/{course_id}` 以及课程资源绑定/解绑当前仅系统管理员可执行
 
 ### 5.2 课程学习附属接口
 

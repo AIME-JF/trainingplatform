@@ -54,13 +54,13 @@ const router = createRouter({
           path: 'courses',
           name: 'CourseList',
           component: () => import('../views/courses/List.vue'),
-          meta: { title: '课程资源', icon: 'PlayCircleOutlined', anyPermissions: COURSE_PAGE_PERMISSIONS },
+          meta: { title: '课程', icon: 'PlayCircleOutlined', anyPermissions: COURSE_PAGE_PERMISSIONS },
         },
         {
           path: 'courses/:id',
           name: 'CourseDetail',
           component: () => import('../views/courses/Detail.vue'),
-          meta: { title: '课程资源详情', anyPermissions: COURSE_PAGE_PERMISSIONS },
+          meta: { title: '课程详情', anyPermissions: COURSE_PAGE_PERMISSIONS },
         },
         {
           path: 'exam/list',

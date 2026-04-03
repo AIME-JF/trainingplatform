@@ -73,7 +73,6 @@ class CourseCreate(BaseModel):
     description: Optional[str] = Field(None, description="课程描述")
     instructor_id: Optional[int] = Field(None, description="教官ID")
     duration: int = Field(0, description="总时长(分钟)")
-    difficulty: int = Field(1, ge=1, le=5, description="难度1-5")
     is_required: bool = Field(False, description="是否必修")
     cover_color: Optional[str] = Field(None, description="封面色")
     scope: Optional[str] = None
@@ -101,7 +100,6 @@ class CourseUpdate(BaseModel):
     description: Optional[str] = None
     instructor_id: Optional[int] = None
     duration: Optional[int] = None
-    difficulty: Optional[int] = Field(None, ge=1, le=5)
     is_required: Optional[bool] = None
     cover_color: Optional[str] = None
     scope: Optional[str] = None
