@@ -218,25 +218,54 @@
                   </a-button>
                 </a-form-item>
                 <a-form-item label="课次">
-                  <a-table :data-source="course.sessions" :columns="sessionColumns" size="small" :pagination="false" row-key="(_, i) => i">
-                    <template #bodyCell="{ column, record, index }">
-                      <template v-if="column.key === 'date'">
-                        <a-date-picker v-model:value="record.date" size="small" style="width:130px" value-format="YYYY-MM-DD" />
-                      </template>
-                      <template v-if="column.key === 'timeStart'">
-                        <a-time-picker v-model:value="record.timeStart" size="small" style="width:90px" format="HH:mm" value-format="HH:mm" :minute-step="5" />
-                      </template>
-                      <template v-if="column.key === 'timeEnd'">
-                        <a-time-picker v-model:value="record.timeEnd" size="small" style="width:90px" format="HH:mm" value-format="HH:mm" :minute-step="5" />
-                      </template>
-                      <template v-if="column.key === 'location'">
-                        <a-input v-model:value="record.location" size="small" style="width:120px" placeholder="可选" />
-                      </template>
-                      <template v-if="column.key === 'action'">
-                        <a-button type="link" danger size="small" @click="course.sessions.splice(index, 1)">删除</a-button>
-                      </template>
-                    </template>
-                  </a-table>
+                  <table class="session-edit-table">
+                    <thead>
+                      <tr>
+                        <th style="width:120px">日期</th>
+                        <th style="width:90px">开始</th>
+                        <th style="width:90px">结束</th>
+                        <th style="width:120px">地点</th>
+                        <th style="width:50px"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(sess, si) in course.sessions" :key="si">
+                        <td @click="startEdit(ci, si, 'date')">
+                          <a-date-picker
+                            v-if="isEditing(ci, si, 'date')"
+                            v-model:value="sess.date"
+                            size="small" style="width:112px" value-format="YYYY-MM-DD"
+                            :open="true" @blur="stopEdit" @change="stopEdit"
+                          />
+                          <span v-else class="cell-display">{{ sess.date || '点击设置' }}</span>
+                        </td>
+                        <td @click="startEdit(ci, si, 'timeStart')">
+                          <a-time-picker
+                            v-if="isEditing(ci, si, 'timeStart')"
+                            v-model:value="sess.timeStart"
+                            size="small" style="width:84px" format="HH:mm" value-format="HH:mm" :minute-step="5"
+                            :open="true" @blur="stopEdit" @change="stopEdit"
+                          />
+                          <span v-else class="cell-display">{{ sess.timeStart || '点击设置' }}</span>
+                        </td>
+                        <td @click="startEdit(ci, si, 'timeEnd')">
+                          <a-time-picker
+                            v-if="isEditing(ci, si, 'timeEnd')"
+                            v-model:value="sess.timeEnd"
+                            size="small" style="width:84px" format="HH:mm" value-format="HH:mm" :minute-step="5"
+                            :open="true" @blur="stopEdit" @change="stopEdit"
+                          />
+                          <span v-else class="cell-display">{{ sess.timeEnd || '点击设置' }}</span>
+                        </td>
+                        <td>
+                          <a-input v-model:value="sess.location" size="small" placeholder="可选" />
+                        </td>
+                        <td style="text-align:center">
+                          <a-button type="link" danger size="small" @click="course.sessions.splice(si, 1)">删除</a-button>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                   <a-button type="dashed" size="small" style="margin-top:8px" @click="course.sessions.push({ date: '', timeStart: '', timeEnd: '', location: '' })">
                     <PlusOutlined /> 添加课次
                   </a-button>
@@ -410,7 +439,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, shallowRef } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined, InboxOutlined } from '@ant-design/icons-vue'
@@ -470,13 +499,11 @@ const userPickerTitle = ref('选择用户')
 const userPickerCurrentName = ref('')
 const userPickerContext = reactive({ type: '', courseIndex: -1, assistantIndex: -1 })
 
-const sessionColumns = [
-  { title: '日期', key: 'date', width: 140 },
-  { title: '开始', key: 'timeStart', width: 100 },
-  { title: '结束', key: 'timeEnd', width: 100 },
-  { title: '地点', key: 'location', width: 140 },
-  { title: '', key: 'action', width: 60 },
-]
+// 点击编辑单元格：格式 `${courseIndex}-${sessionIndex}-${field}`
+const editingCell = shallowRef(null)
+function startEdit(ci, si, field) { editingCell.value = `${ci}-${si}-${field}` }
+function stopEdit() { editingCell.value = null }
+function isEditing(ci, si, field) { return editingCell.value === `${ci}-${si}-${field}` }
 
 const previewCourseColumns = [
   { title: '课程名称', dataIndex: 'name', key: 'name' },
@@ -570,7 +597,7 @@ function syncEditState() {
     classCode: cfg.classCode || '',
   })
   needAdmissionExam.value = !!editConfig.admissionExamId
-  courseCollapseKeys.value = editCourses.value.map((_, i) => i)
+  courseCollapseKeys.value = editCourses.value.length > 0 ? [0] : []
 }
 
 async function fetchTrainingBaseOptions() {
@@ -999,6 +1026,44 @@ onMounted(() => {
 
 .task-row-actions {
   flex-shrink: 0;
+}
+
+/* 点击编辑课次表格 */
+.session-edit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.session-edit-table th,
+.session-edit-table td {
+  border: 1px solid #f0f0f0;
+  padding: 3px 6px;
+  vertical-align: middle;
+}
+
+.session-edit-table thead th {
+  background: #fafafa;
+  color: #666;
+  font-weight: 500;
+  text-align: center;
+}
+
+.session-edit-table td {
+  cursor: pointer;
+}
+
+.cell-display {
+  display: block;
+  min-height: 22px;
+  padding: 2px 4px;
+  border-radius: 4px;
+  color: #333;
+}
+
+.cell-display:hover {
+  background: #e6f4ff;
+  color: #1677ff;
 }
 
 /* 日历 */
