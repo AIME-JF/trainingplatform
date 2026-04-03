@@ -20,6 +20,7 @@ from .question import router as question_router
 from .recommendation import router as recommendation_router
 from .report import router as report_router
 from .resource import router as resource_router
+from .library import router as library_router
 from .review import router as review_router
 from .role import router as role_router
 from .system import router as system_router
@@ -55,6 +56,7 @@ all_routers = [
     department_router,
     permission_router,
     resource_router,
+    library_router,
     review_router,
     recommendation_router,
 ]
@@ -86,6 +88,7 @@ __all__ = [
     "department_router",
     "permission_router",
     "resource_router",
+    "library_router",
     "review_router",
     "recommendation_router",
 ]

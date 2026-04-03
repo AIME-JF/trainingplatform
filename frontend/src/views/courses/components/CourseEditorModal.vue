@@ -86,14 +86,14 @@
         <a-alert
           type="info"
           show-icon
-          message="每章从资源库选择当前用户已发布的资源；不选具体文件时，系统默认使用该资源的首个文件。"
+          message="每章从资源库选择当前用户自己的资源；文件类资源默认直接使用原始文件，知识点卡片可直接作为章节内容。"
           style="margin-bottom: 16px; font-size: 12px"
         />
         <a-alert
           v-if="!resourceListLoading && !resourceOptions.length"
           type="warning"
           show-icon
-          message="当前账号下暂无已发布资源。请先在资源库发布资源，再回来创建课程章节。"
+          message="当前账号下暂无资源。请先在【资源库】导入文件或创建知识点，再回来配置课程章节。"
           style="margin-bottom: 16px; font-size: 12px"
         />
 
@@ -141,7 +141,7 @@ import { computed, reactive, ref, toRef, watch } from 'vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import { createCourse, createCourseTag, getCourse, getCourseTags, updateCourse } from '@/api/course'
-import { getResource, getResources } from '@/api/resource'
+import { getLibraryItem, getLibraryItems } from '@/api/library'
 import { getUsers } from '@/api/user'
 import AdmissionScopeSelector from '@/views/exam/components/AdmissionScopeSelector.vue'
 import { useCreatableTagSelect } from '@/utils/creatableTagSelect'
@@ -184,6 +184,7 @@ const resourceTypeLabels = {
   image: '图片',
   image_text: '图文',
   audio: '音频',
+  knowledge: '知识点',
   mixed: '混合',
 }
 
@@ -232,6 +233,7 @@ function createChapter(overrides = {}) {
     title: overrides.title ?? '',
     fileId: overrides.fileId ?? null,
     resourceId: overrides.resourceId ?? null,
+    legacyResourceId: overrides.legacyResourceId ?? null,
     fileUrl: overrides.fileUrl ?? '',
     contentType: overrides.contentType ?? null,
     resourceTitle: overrides.resourceTitle ?? '',
@@ -241,6 +243,7 @@ function createChapter(overrides = {}) {
     originalLegacyFileOnly: overrides.legacyFileOnly ?? false,
     originalFileId: overrides.fileId ?? null,
     originalResourceId: overrides.resourceId ?? null,
+    originalLegacyResourceId: overrides.legacyResourceId ?? null,
     originalContentType: overrides.contentType ?? null,
     originalResourceTitle: overrides.resourceTitle ?? '',
     originalResourceFileName: overrides.resourceFileName ?? '',
@@ -265,6 +268,9 @@ function detectContentType(fileName = '', mimeType = '') {
   const lowerMime = String(mimeType || '').toLowerCase()
   if (lowerMime.includes('video') || lowerName.endsWith('.mp4')) {
     return 'video'
+  }
+  if (lowerMime.includes('audio') || lowerName.endsWith('.mp3') || lowerName.endsWith('.wav') || lowerName.endsWith('.m4a')) {
+    return 'audio'
   }
   if (
     lowerMime.includes('pdf')
@@ -313,17 +319,16 @@ function upsertResourceOption(resource) {
 }
 
 function buildFileOptions(resourceDetail) {
-  const links = (resourceDetail?.mediaLinks || [])
-    .slice()
-    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0))
-
-  return links.map((link, index) => ({
-    value: Number(link.mediaFileId),
-    label: [`文件${index + 1}`, link.fileName].filter(Boolean).join(' · '),
-    fileName: link.fileName || '',
-    displayLabel: `文件${index + 1}`,
-    contentType: link.contentType || detectContentType(link.fileName || ''),
-  }))
+  if (!resourceDetail?.mediaFileId) {
+    return []
+  }
+  return [{
+    value: Number(resourceDetail.mediaFileId),
+    label: ['原始文件', resourceDetail.fileName].filter(Boolean).join(' · '),
+    fileName: resourceDetail.fileName || '',
+    displayLabel: '原始文件',
+    contentType: resourceDetail.contentType || detectContentType(resourceDetail.fileName || '', resourceDetail.mimeType || ''),
+  }]
 }
 
 function getChapterFileOptions(chapter) {
@@ -360,10 +365,9 @@ function applyFileOptionToChapter(chapter, fileOption) {
 async function ensureResourceListLoaded() {
   resourceListLoading.value = true
   try {
-    const response = await getResources({
+    const response = await getLibraryItems({
       size: -1,
-      myOnly: true,
-      status: 'published',
+      scope: 'private',
     })
     const items = response.items || response || []
     resourceOptions.value = []
@@ -390,7 +394,7 @@ async function ensureResourceDetail(resourceId, fallbackTitle = '') {
     if (fallbackTitle) {
       upsertResourceOption({ id: normalizedId, title: fallbackTitle })
     }
-    const detail = await getResource(normalizedId)
+    const detail = await getLibraryItem(normalizedId)
     const resolved = {
       id: normalizedId,
       title: detail.title || fallbackTitle || `资源#${normalizedId}`,
@@ -424,6 +428,13 @@ async function syncChapterResourceSelection(chapter) {
   }
   chapter.resourceTitle = detail.title
   const options = detail.fileOptions || []
+  if (!options.length && detail.contentType === 'knowledge') {
+    chapter.fileId = null
+    chapter.resourceFileName = ''
+    chapter.resourceFileLabel = '知识点卡片'
+    chapter.contentType = 'knowledge'
+    return
+  }
   if (!options.length) {
     return
   }
@@ -479,13 +490,14 @@ async function loadCourseDetail() {
         id: chapter.id,
         title: chapter.title,
         fileId: chapter.fileId || null,
-        resourceId: chapter.resourceId || null,
+        resourceId: chapter.libraryItemId || null,
+        legacyResourceId: chapter.resourceId || null,
         fileUrl: chapter.fileUrl || '',
         contentType: chapter.contentType || detectContentType(chapter.fileUrl || chapter.videoUrl || chapter.docUrl || ''),
         resourceTitle: chapter.resourceTitle || '',
         resourceFileName: chapter.resourceFileName || '',
         resourceFileLabel: chapter.resourceFileLabel || '',
-        legacyFileOnly: !!chapter.fileId && !chapter.resourceId,
+        legacyFileOnly: !!chapter.fileId && !chapter.libraryItemId,
       })
     })
 
@@ -583,6 +595,7 @@ async function handleChapterResourceChange(index, value) {
   if (!normalizedValue) {
     if (chapter.originalLegacyFileOnly) {
       chapter.resourceId = null
+      chapter.legacyResourceId = chapter.originalLegacyResourceId
       chapter.fileId = chapter.originalFileId
       chapter.contentType = chapter.originalContentType
       chapter.resourceTitle = chapter.originalResourceTitle
@@ -592,6 +605,7 @@ async function handleChapterResourceChange(index, value) {
       return
     }
     chapter.resourceId = null
+    chapter.legacyResourceId = null
     chapter.fileId = null
     chapter.contentType = null
     chapter.resourceTitle = ''
@@ -602,6 +616,7 @@ async function handleChapterResourceChange(index, value) {
   }
 
   chapter.resourceId = normalizedValue
+  chapter.legacyResourceId = null
   chapter.fileId = null
   chapter.contentType = null
   chapter.resourceTitle = resourceOptions.value.find((item) => Number(item.value) === normalizedValue)?.title || ''
@@ -625,7 +640,7 @@ function inferCourseFileType() {
   const types = [...new Set(
     form.chapters
       .map((chapter) => chapter.contentType)
-      .filter((item) => ['video', 'document', 'image'].includes(item)),
+      .filter((item) => ['video', 'document', 'image', 'audio', 'knowledge'].includes(item)),
   )]
   if (!types.length) {
     return 'document'
@@ -649,7 +664,7 @@ async function handleSubmit() {
     message.warning('请填写所有章节名称')
     return
   }
-  if (form.chapters.some((chapter) => !chapter.resourceId && !chapter.legacyFileOnly)) {
+  if (form.chapters.some((chapter) => !chapter.resourceId && !chapter.legacyResourceId && !chapter.legacyFileOnly)) {
     message.warning('每个章节都需要从资源库选择资源')
     return
   }
@@ -668,18 +683,16 @@ async function handleSubmit() {
       return Promise.resolve()
     }))
 
-    if (form.chapters.some((chapter) => chapter.resourceId && !['video', 'document', 'image'].includes(chapter.contentType))) {
-      message.warning('课程章节目前仅支持引用视频、文档或图片文件')
-      return
-    }
-
     const chapters = form.chapters.map((chapter, index) => ({
       id: chapter.id,
       title: chapter.title.trim(),
       sortOrder: index,
       duration: 0,
-      fileId: chapter.resourceId ? (chapter.fileId || null) : (chapter.legacyFileOnly ? chapter.fileId || null : null),
-      resourceId: chapter.resourceId || null,
+      fileId: chapter.resourceId
+        ? (chapter.contentType === 'knowledge' ? null : (chapter.fileId || null))
+        : ((chapter.legacyResourceId || chapter.legacyFileOnly) ? (chapter.fileId || null) : null),
+      resourceId: chapter.legacyResourceId || null,
+      libraryItemId: chapter.resourceId || null,
     }))
 
     const normalizedTags = normalizeTags(form.tags)

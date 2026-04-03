@@ -185,10 +185,16 @@ const router = createRouter({
           meta: { title: '智能个训方案', anyPermissions: TRAINING_PAGE_PERMISSIONS },
         },
         {
+          path: 'library',
+          name: 'Library',
+          component: () => import('../views/library/Index.vue'),
+          meta: { title: '资源库', roles: ['admin', 'instructor'] },
+        },
+        {
           path: 'resource/library',
           name: 'ResourceLibrary',
           component: () => import('../views/resource/Library.vue'),
-          meta: { title: '资源库' },
+          meta: { title: '社区精选' },
         },
         {
           path: 'resource/recommend',

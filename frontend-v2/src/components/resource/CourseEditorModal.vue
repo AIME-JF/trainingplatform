@@ -81,7 +81,7 @@
         <div class="chapter-header">
           <div>
             <h3>章节资源</h3>
-            <p>每章从资源库选择当前用户已发布的资源；不选具体文件时默认使用该资源的首个文件。</p>
+            <p>每章从资源库选择当前用户自己的资源；文件类资源默认直接使用原始文件，知识点卡片可直接作为章节内容。</p>
           </div>
           <a-button type="dashed" @click="addChapter">添加章节</a-button>
         </div>
@@ -115,17 +115,17 @@
 <script setup lang="ts">
 import { computed, reactive, ref, toRef, watch } from 'vue'
 import { message } from 'ant-design-vue'
-import type { CourseCreate, CourseResponse, CourseUpdate, ResourceDetailResponse, ResourceListItemResponse } from '@/api/learning-resource'
+import type { CourseCreate, CourseResponse, CourseUpdate } from '@/api/learning-resource'
 import {
   createCourse,
   createCourseTag,
   getCourseDetail,
-  getResourceDetail,
   listCourseTags,
-  listResources,
   listUsers,
   updateCourse,
 } from '@/api/learning-resource'
+import type { LibraryItemResponse } from '@/api/library'
+import { getLibraryItemDetail, listLibraryItems } from '@/api/library'
 import { useCreatableTagSelect } from '@/composables/useCreatableTagSelect'
 import { useAuthStore } from '@/stores/auth'
 import { COURSE_CATEGORIES, getUserDisplayName } from '@/utils/learning-resource'
@@ -143,11 +143,13 @@ interface EditableChapter {
   title: string
   sort_order: number
   resource_id: number | null
+  legacy_resource_id: number | null
   file_id: number | null
   content_type?: string | null
   resource_title?: string
   resource_file_name?: string
   resource_file_label?: string
+  legacy_file_only?: boolean
 }
 
 const props = withDefaults(defineProps<{
@@ -174,7 +176,7 @@ const instructorOptions = ref<SelectOption[]>([])
 const resourceOptions = ref<SelectOption[]>([])
 const chapterFileOptions = reactive<Record<string, SelectOption[]>>({})
 const chapterFileLoading = reactive<Record<string, boolean>>({})
-const resourceDetailCache = new Map<number, ResourceDetailResponse>()
+const resourceDetailCache = new Map<number, LibraryItemResponse>()
 let chapterSeed = 0
 
 const form = reactive({
@@ -236,11 +238,13 @@ function createChapter(overrides: Partial<EditableChapter> = {}): EditableChapte
     title: '',
     sort_order: form.chapters.length,
     resource_id: null,
+    legacy_resource_id: null,
     file_id: null,
     content_type: null,
     resource_title: '',
     resource_file_name: '',
     resource_file_label: '',
+    legacy_file_only: false,
     ...overrides,
   }
 }
@@ -272,10 +276,10 @@ async function loadInstructors() {
 async function loadResources() {
   resourceLoading.value = true
   try {
-    const response = await listResources({ page: 1, size: -1, my_only: true, status: 'published' })
-    resourceOptions.value = (response.items || []).map((item: ResourceListItemResponse) => ({
+    const response = await listLibraryItems({ page: 1, size: -1, scope: 'private' })
+    resourceOptions.value = (response.items || []).map((item) => ({
       value: item.id,
-      label: item.title,
+      label: [item.title, getContentTypeLabel(item.content_type)].filter(Boolean).join(' · '),
     }))
   } finally {
     resourceLoading.value = false
@@ -296,12 +300,14 @@ async function loadCourse(courseId: number) {
     id: chapter.id,
     title: chapter.title,
     sort_order: chapter.sort_order ?? index,
-    resource_id: chapter.resource_id || null,
+    resource_id: chapter.library_item_id || null,
+    legacy_resource_id: chapter.resource_id || null,
     file_id: chapter.file_id || null,
     content_type: chapter.content_type,
     resource_title: chapter.resource_title || '',
     resource_file_name: chapter.resource_file_name || '',
     resource_file_label: chapter.resource_file_label || '',
+    legacy_file_only: !!chapter.file_id && !chapter.library_item_id,
   }))
 
   for (let index = 0; index < form.chapters.length; index += 1) {
@@ -321,20 +327,26 @@ async function loadResourceFiles(chapter: EditableChapter) {
   try {
     let detail = resourceDetailCache.get(chapter.resource_id)
     if (!detail) {
-      detail = await getResourceDetail(chapter.resource_id)
+      detail = await getLibraryItemDetail(chapter.resource_id)
       resourceDetailCache.set(chapter.resource_id, detail)
     }
     chapter.resource_title = detail.title
-    chapterFileOptions[chapter.local_key] = (detail.media_links || []).map((item, index) => ({
-      value: item.media_file_id,
-      label: [item.display_label || `文件${index + 1}`, item.file_name].filter(Boolean).join(' · '),
-    }))
-    if (!chapter.file_id && detail.media_links?.[0]) {
-      const first = detail.media_links[0]
-      chapter.file_id = first.media_file_id
-      chapter.resource_file_name = first.file_name || ''
-      chapter.resource_file_label = first.display_label || '文件1'
-      chapter.content_type = first.content_type || detail.content_type
+    chapter.content_type = detail.content_type
+    chapterFileOptions[chapter.local_key] = detail.media_file_id ? [{
+      value: detail.media_file_id,
+      label: ['原始文件', detail.file_name].filter(Boolean).join(' · '),
+    }] : []
+    if (!chapter.file_id && detail.media_file_id) {
+      chapter.file_id = detail.media_file_id
+      chapter.resource_file_name = detail.file_name || ''
+      chapter.resource_file_label = '原始文件'
+      chapter.content_type = detail.content_type
+    }
+    if (!detail.media_file_id && detail.content_type === 'knowledge') {
+      chapter.file_id = null
+      chapter.resource_file_name = ''
+      chapter.resource_file_label = '知识点卡片'
+      chapter.content_type = 'knowledge'
     }
   } finally {
     chapterFileLoading[chapter.local_key] = false
@@ -352,11 +364,16 @@ function removeChapter(index: number) {
 async function handleChapterResourceChange(index: number, value: number | null) {
   const chapter = form.chapters[index]
   chapter.resource_id = value
+  chapter.legacy_resource_id = value ? null : chapter.legacy_resource_id
   chapter.file_id = null
   chapter.resource_file_name = ''
   chapter.resource_file_label = ''
   chapter.content_type = null
   if (!value) {
+    if (chapter.legacy_file_only) {
+      return
+    }
+    chapter.legacy_resource_id = null
     chapter.resource_title = ''
     chapterFileOptions[chapter.local_key] = []
     return
@@ -369,6 +386,17 @@ function handleChapterFileChange(index: number, value: number | null) {
   chapter.file_id = value
   const selected = (chapterFileOptions[chapter.local_key] || []).find((item) => item.value === value)
   chapter.resource_file_label = selected?.label || ''
+}
+
+function getContentTypeLabel(contentType?: string | null) {
+  const map: Record<string, string> = {
+    video: '视频',
+    document: '文档',
+    image: '图片',
+    audio: '音频',
+    knowledge: '知识点',
+  }
+  return map[contentType || ''] || ''
 }
 
 function computeFileType() {
@@ -400,7 +428,7 @@ function buildPayload(): CourseCreate | CourseUpdate | null {
       message.warning(`请填写第 ${index + 1} 章的标题`)
       return null
     }
-    if (!chapter.resource_id) {
+    if (!chapter.resource_id && !chapter.legacy_resource_id && !chapter.legacy_file_only) {
       message.warning(`第 ${index + 1} 章请从资源库选择资源`)
       return null
     }
@@ -420,8 +448,11 @@ function buildPayload(): CourseCreate | CourseUpdate | null {
       id: chapter.id,
       title: chapter.title.trim(),
       sort_order: index,
-      resource_id: chapter.resource_id || undefined,
-      file_id: chapter.file_id || undefined,
+      resource_id: chapter.legacy_resource_id || undefined,
+      library_item_id: chapter.resource_id || undefined,
+      file_id: chapter.resource_id
+        ? (chapter.content_type === 'knowledge' ? undefined : (chapter.file_id || undefined))
+        : ((chapter.legacy_resource_id || chapter.legacy_file_only) ? (chapter.file_id || undefined) : undefined),
     })),
   }
 }

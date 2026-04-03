@@ -17,7 +17,7 @@
           :loading="resourceLoading"
           :options="resourceOptions"
           :filter-option="filterOption"
-          placeholder="请选择当前用户已发布的资源"
+          placeholder="请选择当前用户自己的资源"
           @change="handleResourceChange"
         />
       </a-col>
@@ -30,7 +30,7 @@
           :loading="fileLoading"
           :options="fileOptions"
           :filter-option="filterOption"
-          :placeholder="chapter.resource_id ? '可指定资源中的具体文件，默认首个' : '请先选择资源'"
+          :placeholder="chapter.resource_id ? '文件类资源默认原始文件，知识点无需再选文件' : '请先选择资源'"
           @change="handleFileChange"
         />
       </a-col>
@@ -38,7 +38,7 @@
 
     <div class="chapter-meta">
       <span v-if="summaryText" class="chapter-meta-item bound">已引用：{{ summaryText }}</span>
-      <span v-else class="chapter-meta-item hint">每章从资源库选择当前用户已发布的资源；不选具体文件时默认使用该资源的首个文件。</span>
+      <span v-else class="chapter-meta-item hint">每章从资源库选择当前用户自己的资源；文件类资源默认直接使用原始文件。</span>
     </div>
   </div>
 </template>
@@ -55,9 +55,11 @@ interface ChapterModel {
   title: string
   file_id: number | null
   resource_id: number | null
+  legacy_resource_id?: number | null
   resource_title?: string
   resource_file_name?: string
   resource_file_label?: string
+  content_type?: string | null
 }
 
 const props = withDefaults(defineProps<{

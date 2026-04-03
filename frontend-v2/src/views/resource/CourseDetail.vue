@@ -63,10 +63,18 @@
                   @ended="markChapterCompleted"
                 />
               </template>
+              <template v-else-if="currentChapter?.content_type === 'audio' && currentChapter.file_url">
+                <div class="audio-stage">
+                  <audio :src="currentChapter.file_url" class="course-audio" controls preload="metadata" />
+                </div>
+              </template>
               <template v-else-if="currentChapter?.content_type === 'image' && currentChapter.file_url">
                 <div class="image-stage">
                   <img :src="currentChapter.file_url" :alt="currentChapter.title" class="course-image" />
                 </div>
+              </template>
+              <template v-else-if="currentChapter?.content_type === 'knowledge'">
+                <div class="knowledge-stage" v-html="currentChapter.knowledge_content_html || '<p>暂无知识点内容</p>'" />
               </template>
               <template v-else-if="currentChapter?.file_url">
                 <iframe :src="currentChapter.file_url" class="doc-frame" title="课程文档预览" />
@@ -739,12 +747,29 @@ function openEdit() {
   margin-top: 18px;
 }
 
+.audio-stage {
+  padding: 26px 22px;
+  background: linear-gradient(180deg, rgba(238, 242, 255, 0.72), rgba(248, 250, 252, 0.92));
+}
+
+.course-audio {
+  width: 100%;
+}
+
 .course-image {
   object-fit: contain;
 }
 
 .image-stage {
   background: #0b1220;
+}
+
+.knowledge-stage {
+  min-height: 320px;
+  padding: 22px;
+  line-height: 1.9;
+  color: var(--v2-text-primary);
+  background: var(--v2-bg);
 }
 
 .viewer-actions {

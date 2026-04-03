@@ -14,7 +14,7 @@ class Course(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(200), nullable=False, comment='课程标题')
     category = Column(String(50), nullable=False, comment='课程分类: law/fraud/traffic/community/cybersec/physical')
-    file_type = Column(String(20), nullable=False, default='video', comment='文件类型: video/document/image/mixed')
+    file_type = Column(String(20), nullable=False, default='video', comment='文件类型: video/document/image/audio/knowledge/mixed')
     description = Column(Text, comment='课程描述')
     created_by = Column(Integer, ForeignKey('users.id'), nullable=True, index=True, comment='创建人ID')
     instructor_id = Column(Integer, ForeignKey('users.id'), nullable=True, comment='教官ID')
@@ -54,11 +54,13 @@ class Chapter(Base):
     doc_url = Column(String(500), nullable=True, comment='文档URL(兼容旧数据)')
     file_id = Column(Integer, ForeignKey('media_files.id'), nullable=True, comment='关联文件ID')
     resource_id = Column(Integer, ForeignKey('resources.id'), nullable=True, index=True, comment='关联资源ID')
+    library_item_id = Column(Integer, ForeignKey('library_items.id'), nullable=True, index=True, comment='关联资源库项ID')
 
     # 关联关系
     course = relationship("Course", back_populates="chapters")
     file = relationship("MediaFile", foreign_keys=[file_id])
     resource = relationship("Resource", foreign_keys=[resource_id])
+    library_item = relationship("LibraryItem", foreign_keys=[library_item_id])
 
 
 class CourseNote(Base):

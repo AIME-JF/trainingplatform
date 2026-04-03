@@ -275,8 +275,14 @@ function getCourseTypeTagLabel(fileType) {
   if (fileType === 'video') {
     return '视频型'
   }
+  if (fileType === 'audio') {
+    return '音频型'
+  }
   if (fileType === 'image') {
     return '图片型'
+  }
+  if (fileType === 'knowledge') {
+    return '知识点型'
   }
   if (fileType === 'mixed') {
     return '混合型'
@@ -288,8 +294,14 @@ function getCourseTypeTagColor(fileType) {
   if (fileType === 'video') {
     return 'purple'
   }
+  if (fileType === 'audio') {
+    return 'magenta'
+  }
   if (fileType === 'image') {
     return 'green'
+  }
+  if (fileType === 'knowledge') {
+    return 'blue'
   }
   if (fileType === 'mixed') {
     return 'orange'

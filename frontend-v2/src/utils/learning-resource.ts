@@ -82,6 +82,8 @@ export function getResourceContentTypeLabel(contentType?: string | null) {
     document: '文档',
     image: '图片',
     image_text: '图片',
+    audio: '音频',
+    knowledge: '知识点',
     mixed: '混合',
   }
   return map[contentType || ''] || contentType || '-'
@@ -107,8 +109,14 @@ export function getCourseFileTypeLabel(fileType?: string | null) {
   if (fileType === 'video') {
     return '视频型'
   }
+  if (fileType === 'audio') {
+    return '音频型'
+  }
   if (fileType === 'image') {
     return '图片型'
+  }
+  if (fileType === 'knowledge') {
+    return '知识点型'
   }
   if (fileType === 'mixed') {
     return '混合型'
@@ -120,8 +128,14 @@ export function getCourseFileTypeColor(fileType?: string | null) {
   if (fileType === 'video') {
     return 'purple'
   }
+  if (fileType === 'audio') {
+    return 'magenta'
+  }
   if (fileType === 'image') {
     return 'green'
+  }
+  if (fileType === 'knowledge') {
+    return 'blue'
   }
   if (fileType === 'mixed') {
     return 'orange'
@@ -141,6 +155,9 @@ export function detectMediaKind(url?: string | null) {
   const cleanUrl = url.split('?')[0].split('#')[0].toLowerCase()
   if (cleanUrl.endsWith('.mp4')) {
     return 'video'
+  }
+  if (['.mp3', '.wav', '.m4a'].some((ext) => cleanUrl.endsWith(ext))) {
+    return 'audio'
   }
   if (['.jpg', '.jpeg', '.png', '.webp', '.gif'].some((ext) => cleanUrl.endsWith(ext))) {
     return 'image'

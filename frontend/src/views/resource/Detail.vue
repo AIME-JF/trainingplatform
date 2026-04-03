@@ -7,7 +7,7 @@
       </div>
       <a-space>
         <a-button @click="$router.push('/resource/recommend')">返回推荐</a-button>
-        <a-button @click="$router.push('/resource/library')">返回资源库</a-button>
+        <a-button @click="$router.push('/resource/library')">返回精选</a-button>
       </a-space>
     </div>
 

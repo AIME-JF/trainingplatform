@@ -1,7 +1,7 @@
 <template>
   <div class="resource-library-page">
     <div class="page-header">
-      <h2>资源库</h2>
+      <h2>社区精选</h2>
       <a-space>
         <a-button @click="$router.push('/resource/my')">我的空间</a-button>
         <permissions-tooltip

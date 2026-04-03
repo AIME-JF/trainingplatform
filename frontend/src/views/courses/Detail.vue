@@ -43,6 +43,17 @@
               preload="metadata"
             ></video>
           </template>
+          <template v-else-if="viewerType === 'audio'">
+            <div class="doc-toolbar">
+              <div>
+                <div class="doc-title">{{ currentChapter.title || localCourse.title }}</div>
+                <div class="doc-subtitle">{{ currentChapterBindingText }}</div>
+              </div>
+            </div>
+            <div class="audio-stage">
+              <audio :src="currentAudioUrl" class="course-audio" controls preload="metadata" />
+            </div>
+          </template>
           <template v-else-if="viewerType === 'image'">
             <div class="doc-toolbar">
               <div>
@@ -59,7 +70,16 @@
               <img :src="currentImageUrl" class="course-image" :alt="currentChapter.title || localCourse.title" />
             </div>
           </template>
-          <template v-else>
+          <template v-else-if="viewerType === 'knowledge'">
+            <div class="doc-toolbar">
+              <div>
+                <div class="doc-title">{{ currentChapter.title || localCourse.title }}</div>
+                <div class="doc-subtitle">{{ currentChapterBindingText }}</div>
+              </div>
+            </div>
+            <div class="knowledge-stage" v-html="currentKnowledgeHtml"></div>
+          </template>
+          <template v-else-if="viewerType === 'document'">
             <div class="doc-toolbar">
               <div>
                 <div class="doc-title">{{ currentChapter.title || localCourse.title }}</div>
@@ -72,6 +92,9 @@
               </div>
             </div>
             <iframe :src="currentDocUrl" class="doc-iframe" frameborder="0" title="课程文档"></iframe>
+          </template>
+          <template v-else>
+            <a-empty description="当前章节暂无可预览内容" style="padding: 48px 0" />
           </template>
         </div>
 
@@ -261,14 +284,25 @@ const viewerType = computed(() => {
   if (currentChapter.value.contentType === 'video') {
     return 'video'
   }
+  if (currentChapter.value.contentType === 'audio') {
+    return 'audio'
+  }
   if (currentChapter.value.contentType === 'image') {
     return 'image'
+  }
+  if (currentChapter.value.contentType === 'knowledge') {
+    return 'knowledge'
+  }
+  if (currentChapter.value.contentType === 'document') {
+    return 'document'
   }
   return 'document'
 })
 const currentVideoUrl = computed(() => currentChapter.value.fileUrl || currentChapter.value.videoUrl || '')
+const currentAudioUrl = computed(() => currentChapter.value.fileUrl || '')
 const currentDocUrl = computed(() => currentChapter.value.fileUrl || currentChapter.value.docUrl || '')
 const currentImageUrl = computed(() => currentChapter.value.fileUrl || currentChapter.value.docUrl || '')
+const currentKnowledgeHtml = computed(() => currentChapter.value.knowledgeContentHtml || '<p>暂无知识点内容</p>')
 const currentChapterBindingText = computed(() => getChapterBindingText(currentChapter.value))
 
 const resourceColumns = [
@@ -322,6 +356,12 @@ function calculateCourseProgress(chapters) {
 }
 
 function getChapterTypeLabel(chapter) {
+  if (chapter?.contentType === 'knowledge') {
+    return '知识点'
+  }
+  if (chapter?.contentType === 'audio') {
+    return '音频'
+  }
   if (chapter?.contentType === 'image') {
     return '图片'
   }
@@ -735,11 +775,14 @@ onBeforeRouteLeave(() => {
 .top-actions { display: flex; gap: 8px; }
 .viewer-card { border: 1px solid #e8e8e8; border-radius: 8px; overflow: hidden; background: #fff; }
 .course-video { width: 100%; height: 420px; display: block; background: #000; }
+.audio-stage { padding: 28px 24px; background: linear-gradient(180deg, #f8fbff, #f1f5fb); }
+.course-audio { width: 100%; }
 .doc-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid #eef1f5; background: linear-gradient(135deg, #f8fbff, #edf4ff); }
 .doc-title { font-size: 16px; font-weight: 600; color: #1f2d3d; }
 .doc-subtitle { margin-top: 4px; font-size: 12px; color: #7a8699; }
 .doc-actions { display: flex; gap: 8px; }
 .doc-iframe { width: 100%; height: 560px; display: block; }
+.knowledge-stage { min-height: 360px; padding: 24px; line-height: 1.9; color: #1f2d3d; background: #fbfcfe; }
 .image-stage { display: flex; align-items: center; justify-content: center; min-height: 560px; padding: 24px; background: #f7f9fc; }
 .course-image { max-width: 100%; max-height: 520px; object-fit: contain; border-radius: 8px; box-shadow: 0 8px 24px rgba(15, 23, 42, 0.08); }
 .course-description { line-height: 1.8; color: #444; }

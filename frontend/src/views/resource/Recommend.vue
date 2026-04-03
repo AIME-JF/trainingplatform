@@ -6,7 +6,7 @@
     @touchend.capture="onTouchEnd"
   >
     <div class="recommend-top-actions">
-      <a-button size="small" @click="$router.push('/resource/library')">资源库</a-button>
+      <a-button size="small" @click="$router.push('/resource/library')">社区精选</a-button>
       <a-button v-if="!isMobile" size="small" type="primary" @click="nextRecommendation">下一个</a-button>
     </div>
 

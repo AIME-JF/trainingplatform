@@ -12,6 +12,7 @@ from app.models.course import (
     Course, Chapter, CourseNote, CourseProgress, CourseQA, CourseTag, CourseTagRelation
 )
 from app.models.department import Department
+from app.models.library import LibraryItem
 from app.models.media import MediaFile
 from app.models.resource import Resource, ResourceMediaLink, CourseResourceRef, ResourceTagRelation
 from app.models.role import Role
@@ -84,6 +85,7 @@ class CourseService:
             joinedload(Course.creator),
             joinedload(Course.instructor),
             selectinload(Course.chapters).joinedload(Chapter.file),
+            selectinload(Course.chapters).joinedload(Chapter.library_item).joinedload(LibraryItem.media_file),
             selectinload(Course.chapters).joinedload(Chapter.resource)
             .selectinload(Resource.media_links)
             .joinedload(ResourceMediaLink.media_file),
@@ -601,6 +603,7 @@ class CourseService:
                 joinedload(Course.creator),
                 joinedload(Course.instructor),
                 selectinload(Course.chapters).joinedload(Chapter.file),
+                selectinload(Course.chapters).joinedload(Chapter.library_item).joinedload(LibraryItem.media_file),
                 selectinload(Course.chapters).joinedload(Chapter.resource)
                 .selectinload(Resource.media_links)
                 .joinedload(ResourceMediaLink.media_file),
@@ -843,13 +846,14 @@ class CourseService:
 
             chapter.title = str(chapter_title).strip()
             chapter.sort_order = chapter_data.get("sort_order", idx)
-            next_resource_id, next_file_id, next_content_type, next_duration_seconds = self._resolve_chapter_binding(
+            next_resource_id, next_library_item_id, next_file_id, next_content_type, next_duration_seconds = self._resolve_chapter_binding(
                 chapter=chapter,
                 chapter_data=chapter_data,
                 chapter_index=idx,
                 actor_user_id=actor_user_id,
             )
             chapter.resource_id = next_resource_id
+            chapter.library_item_id = next_library_item_id
             chapter.file_id = next_file_id
             chapter.duration = self._minutes_from_seconds(
                 next_duration_seconds,
@@ -857,7 +861,7 @@ class CourseService:
             )
             total_duration_seconds += next_duration_seconds
 
-            if next_resource_id:
+            if next_resource_id or next_library_item_id:
                 chapter.video_url = None
                 chapter.doc_url = None
             else:
@@ -890,9 +894,45 @@ class CourseService:
         chapter_data: dict,
         chapter_index: int,
         actor_user_id: Optional[int] = None,
-    ) -> tuple[Optional[int], Optional[int], Optional[str], int]:
+    ) -> tuple[Optional[int], Optional[int], Optional[int], Optional[str], int]:
         requested_resource_id = chapter_data.get("resource_id", chapter.resource_id)
+        requested_library_item_id = chapter_data.get("library_item_id", getattr(chapter, "library_item_id", None))
         requested_file_id = chapter_data.get("file_id", chapter.file_id)
+
+        if requested_library_item_id:
+            library_item = (
+                self.db.query(LibraryItem)
+                .options(joinedload(LibraryItem.media_file))
+                .filter(LibraryItem.id == requested_library_item_id)
+                .first()
+            )
+            if not library_item:
+                raise ValueError(f"第{chapter_index + 1}章所选资源不存在")
+
+            existing_library_item_id = getattr(chapter, "library_item_id", None)
+            existing_file_id = getattr(chapter, "file_id", None)
+            binding_changed = existing_library_item_id != requested_library_item_id or existing_file_id != requested_file_id
+            if actor_user_id and binding_changed and library_item.owner_user_id != actor_user_id:
+                raise ValueError(f"第{chapter_index + 1}章只能引用当前用户自己的资源库资源")
+
+            if library_item.content_type == "knowledge":
+                return None, requested_library_item_id, None, "knowledge", self._minutes_to_seconds(
+                    chapter_data.get("duration", chapter.duration),
+                )
+
+            media = getattr(library_item, "media_file", None)
+            if not media:
+                raise ValueError(f"第{chapter_index + 1}章所选资源没有可用文件")
+
+            if requested_file_id is not None and int(requested_file_id) != int(media.id):
+                raise ValueError(f"第{chapter_index + 1}章选择的文件不属于当前资源")
+
+            content_type = library_item.content_type or self._guess_content_type(media.filename, media.mime_type)
+            duration_seconds = self._resolve_media_duration_seconds(
+                media,
+                fallback_minutes=chapter_data.get("duration", chapter.duration),
+            )
+            return None, requested_library_item_id, media.id, content_type, duration_seconds
 
         if requested_resource_id:
             resource = (
@@ -943,7 +983,7 @@ class CourseService:
                 media,
                 fallback_minutes=chapter_data.get("duration", chapter.duration),
             )
-            return requested_resource_id, selected_link.media_file_id, content_type, duration_seconds
+            return requested_resource_id, None, selected_link.media_file_id, content_type, duration_seconds
 
         if chapter.id and chapter.file_id:
             content_type = self._guess_content_type(chapter.video_url) or self._guess_content_type(chapter.doc_url)
@@ -953,9 +993,9 @@ class CourseService:
                 getattr(chapter, "file", None),
                 fallback_minutes=chapter_data.get("duration", chapter.duration),
             )
-            return None, chapter.file_id, content_type, duration_seconds
+            return None, None, chapter.file_id, content_type, duration_seconds
 
-        raise ValueError(f"第{chapter_index + 1}章请从资源库选择当前用户已发布的资源")
+        raise ValueError(f"第{chapter_index + 1}章请从资源库选择当前用户自己的资源")
 
     def _normalize_duration_seconds(self, value: Any) -> int:
         try:
@@ -1014,7 +1054,22 @@ class CourseService:
         resource_title = None
         resource_file_name = None
         resource_file_label = None
+        knowledge_content_html = None
         duration_seconds = self._minutes_to_seconds(chapter.duration)
+
+        if getattr(chapter, "library_item_id", None):
+            library_item = getattr(chapter, "library_item", None)
+            if library_item:
+                resource_title = library_item.title
+                content_type = library_item.content_type
+                knowledge_content_html = library_item.knowledge_content_html
+                media = getattr(library_item, "media_file", None)
+                if media:
+                    file_url = self._resolve_file_url(media.id, media.storage_path)
+                    content_type = content_type or self._guess_content_type(media.filename, media.mime_type)
+                    resource_file_name = media.filename
+                    resource_file_label = "原始文件"
+                    duration_seconds = self._resolve_media_duration_seconds(media, fallback_minutes=chapter.duration)
 
         if getattr(chapter, "resource_id", None):
             resource = getattr(chapter, "resource", None)
@@ -1061,6 +1116,7 @@ class CourseService:
             "resource_title": resource_title,
             "resource_file_name": resource_file_name,
             "resource_file_label": resource_file_label,
+            "knowledge_content_html": knowledge_content_html,
             "duration_seconds": duration_seconds,
         }
 
@@ -1166,6 +1222,10 @@ class CourseService:
         mime = (mime_type or "").lower()
         if "video" in mime or source.endswith(".mp4"):
             return "video"
+        if "audio" in mime or source.endswith((".mp3", ".wav", ".m4a")):
+            return "audio"
+        if "image" in mime or source.endswith((".jpg", ".jpeg", ".png", ".webp", ".gif")):
+            return "image"
         if "html" in mime or "pdf" in mime or any(source.endswith(ext) for ext in (".pdf", ".ppt", ".pptx", ".doc", ".docx", ".html", ".htm")):
             return "document"
         return None
@@ -1209,11 +1269,13 @@ class CourseService:
             doc_url=chapter.doc_url,
             file_id=chapter.file_id,
             resource_id=getattr(chapter, "resource_id", None),
+            library_item_id=getattr(chapter, "library_item_id", None),
             resource_title=media_context["resource_title"],
             resource_file_name=media_context["resource_file_name"],
             resource_file_label=media_context["resource_file_label"],
             file_url=media_context["file_url"],
             content_type=media_context["content_type"],
+            knowledge_content_html=media_context["knowledge_content_html"],
             progress=progress_record.progress if progress_record else 0,
             playback_seconds=int(progress_record.playback_seconds or 0) if progress_record else 0,
             last_studied_at=progress_record.last_studied_at if progress_record else None,

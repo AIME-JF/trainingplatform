@@ -23,8 +23,8 @@ async def upload_file(
     db: Session = Depends(get_db),
 ):
     """
-    上传视频/文档文件，返回文件信息含直链 URL。
-    支持 MP4、PDF、PPT、DOC 等格式，单文件 ≤ 500MB。
+    上传视频/音频/文档/图片文件，返回文件信息含直链 URL。
+    支持 MP4、MP3、WAV、M4A、PDF、PPT、DOC、JPG、PNG 等格式，单文件 ≤ 500MB。
     相同文件自动秒传。
     """
     controller = MediaController(db)

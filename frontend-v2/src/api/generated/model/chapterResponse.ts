@@ -19,11 +19,13 @@ export interface ChapterResponse {
   doc_url?: string | null;
   file_id?: number | null;
   resource_id?: number | null;
+  library_item_id?: number | null;
   resource_title?: string | null;
   resource_file_name?: string | null;
   resource_file_label?: string | null;
   file_url?: string | null;
   content_type?: string | null;
+  knowledge_content_html?: string | null;
   progress?: number;
   playback_seconds?: number;
   last_studied_at?: string | null;

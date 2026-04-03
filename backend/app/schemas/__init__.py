@@ -140,6 +140,12 @@ from .resource import (
     ResourceLikeStatusResponse, ResourceShareStatusResponse,
     CourseResourceBindRequest, TrainingResourceBindRequest
 )
+from .library import (
+    LibraryFolderCreate, LibraryFolderUpdate, LibraryFolderResponse,
+    LibraryBatchFileCreateRequest, LibraryKnowledgeCreateRequest,
+    LibraryItemUpdateRequest, LibraryItemMoveRequest,
+    LibraryItemListResponse, LibraryItemDetailResponse, LibraryItemListParams,
+)
 from .review import (
     ReviewPolicyCreate, ReviewPolicyUpdate,
     ReviewPolicyResponse, ReviewPolicyStageResponse,
@@ -258,6 +264,11 @@ __all__ = [
     "ResourceCommentCreate", "ResourceCommentResponse",
     "ResourceLikeStatusResponse", "ResourceShareStatusResponse",
     "CourseResourceBindRequest", "TrainingResourceBindRequest",
+    # 新资源库
+    "LibraryFolderCreate", "LibraryFolderUpdate", "LibraryFolderResponse",
+    "LibraryBatchFileCreateRequest", "LibraryKnowledgeCreateRequest",
+    "LibraryItemUpdateRequest", "LibraryItemMoveRequest",
+    "LibraryItemListResponse", "LibraryItemDetailResponse", "LibraryItemListParams",
     # 审核
     "ReviewPolicyCreate", "ReviewPolicyUpdate",
     "ReviewPolicyResponse", "ReviewPolicyStageResponse",

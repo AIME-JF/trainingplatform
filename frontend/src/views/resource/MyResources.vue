@@ -3,7 +3,7 @@
     <div class="page-header">
       <h2>我的空间</h2>
       <a-space>
-        <a-button @click="$router.push('/resource/library')">资源库</a-button>
+        <a-button @click="$router.push('/resource/library')">社区精选</a-button>
         <permissions-tooltip
           :allowed="canUseTeachingGeneration"
           tips="需要 USE_TEACHING_RESOURCE_GENERATION 权限"

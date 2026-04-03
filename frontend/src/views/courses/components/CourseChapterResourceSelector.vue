@@ -22,7 +22,7 @@
           :loading="resourceLoading"
           :options="resourceOptions"
           :filter-option="filterOption"
-          placeholder="请选择当前用户已发布的资源"
+          placeholder="请选择当前用户自己的资源"
           @change="handleResourceChange"
         />
       </a-col>
@@ -35,7 +35,7 @@
           :loading="fileLoading"
           :options="fileOptions"
           :filter-option="filterOption"
-          :placeholder="chapter.resourceId ? '可指定资源中的具体文件，默认首个' : '请先选择资源'"
+          :placeholder="chapter.resourceId ? '文件类资源默认原始文件，知识点无需再选文件' : '请先选择资源'"
           @change="handleFileChange"
         />
       </a-col>
@@ -43,17 +43,19 @@
 
     <div class="chapter-meta">
       <span v-if="chapter.legacyFileOnly" class="chapter-meta-item legacy">
-        当前章节保留了历史文件引用；如需调整，请改为选择资源库中的已发布资源。
+        当前章节保留了历史资源引用；如需调整，请改为选择资源库中的新资源。
       </span>
       <span v-else-if="summaryText" class="chapter-meta-item bound">
         已引用：{{ summaryText }}
       </span>
       <span v-else class="chapter-meta-item hint">
-        每章从资源库选择当前用户已发布的资源；不选具体文件时默认使用该资源的首个文件。
+        每章从资源库选择当前用户自己的资源；文件类资源默认直接使用原始文件。
       </span>
       <a-tag v-if="chapter.contentType === 'video'" color="purple">视频</a-tag>
+      <a-tag v-else-if="chapter.contentType === 'audio'" color="magenta">音频</a-tag>
       <a-tag v-else-if="chapter.contentType === 'document'" color="cyan">文档</a-tag>
       <a-tag v-else-if="chapter.contentType === 'image'" color="green">图片</a-tag>
+      <a-tag v-else-if="chapter.contentType === 'knowledge'" color="blue">知识点</a-tag>
     </div>
   </div>
 </template>

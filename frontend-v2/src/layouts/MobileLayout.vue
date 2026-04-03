@@ -119,6 +119,7 @@ interface NavItem {
   label: string
   icon: unknown
   permissions?: string[]
+  roles?: string[]
   matchPaths?: string[]
 }
 
@@ -143,6 +144,12 @@ const sidebarNavConfig: NavItem[] = [
       '/resource/teaching-generate',
       '/resource/ai-generate',
     ],
+  },
+  {
+    path: '/library',
+    label: '资源库',
+    icon: DatabaseOutlined,
+    roles: ['admin', 'instructor'],
   },
   {
     path: '/resource/community',
@@ -177,8 +184,19 @@ const bottomNavConfig: NavItem[] = [
   { path: '/profile', label: '我的', icon: UserOutlined, permissions: PROFILE_PERMISSIONS },
 ]
 
-const sidebarItems = computed(() => sidebarNavConfig.filter((item) => authStore.hasAnyPermission(item.permissions || [])))
-const bottomTabs = computed(() => bottomNavConfig.filter((item) => authStore.hasAnyPermission(item.permissions || [])))
+function hasRoleAccess(item: NavItem) {
+  if (!item.roles?.length) {
+    return true
+  }
+  return item.roles.some((role) => role === authStore.role || authStore.roleCodes.includes(role))
+}
+
+const sidebarItems = computed(() =>
+  sidebarNavConfig.filter((item) => authStore.hasAnyPermission(item.permissions || []) && hasRoleAccess(item)),
+)
+const bottomTabs = computed(() =>
+  bottomNavConfig.filter((item) => authStore.hasAnyPermission(item.permissions || []) && hasRoleAccess(item)),
+)
 
 const activeNavPath = computed(() => {
   if (currentRoute.path.startsWith('/resource/detail/')) {

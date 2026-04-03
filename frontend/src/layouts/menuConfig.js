@@ -54,8 +54,13 @@ export const appMenuConfig = [
         anyPermissions: COURSE_PAGE_PERMISSIONS,
       },
       {
-        key: '/resource/library',
+        key: '/library',
         label: '资源库',
+        roles: ['admin', 'instructor'],
+      },
+      {
+        key: '/resource/library',
+        label: '社区精选',
         anyPermissions: [],
       },
       {

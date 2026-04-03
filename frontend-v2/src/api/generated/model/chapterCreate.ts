@@ -28,4 +28,6 @@ export interface ChapterCreate {
   file_id?: number | null;
   /** 关联资源ID */
   resource_id?: number | null;
+  /** 关联资源库项ID */
+  library_item_id?: number | null;
 }

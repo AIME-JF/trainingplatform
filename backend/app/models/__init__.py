@@ -32,6 +32,7 @@ from .resource import (
     ResourceVisibilityScope, CourseResourceRef, TrainingResourceRef,
     ResourceLike, ResourceComment,
 )
+from .library import LibraryFolder, LibraryItem
 from .review import (
     ReviewPolicy, ReviewPolicyStage, ResourceReviewWorkflow,
     ResourceReviewTask, ResourceReviewLog
@@ -81,6 +82,7 @@ __all__ = [
     "Resource", "ResourceMediaLink", "ResourceTag", "ResourceTagRelation",
     "ResourceVisibilityScope", "CourseResourceRef", "TrainingResourceRef",
     "ResourceLike", "ResourceComment",
+    "LibraryFolder", "LibraryItem",
     # 审核
     "ReviewPolicy", "ReviewPolicyStage", "ResourceReviewWorkflow",
     "ResourceReviewTask", "ResourceReviewLog",
