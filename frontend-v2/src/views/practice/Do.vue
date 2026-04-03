@@ -353,6 +353,7 @@ const practiceFilters = computed(() => ({
   policeTypeName: getSingleQueryValue(route.query.policeTypeName),
   keyword: getSingleQueryValue(route.query.keyword).trim(),
   courseId: parsePositiveInt(getSingleQueryValue(route.query.courseId)),
+  courseName: getSingleQueryValue(route.query.courseName),
 }))
 
 const sourceName = computed(() => practiceSource.value?.sourceName || '')
@@ -376,6 +377,9 @@ const filterSummary = computed(() => {
   }
   if (practiceFilters.value.policeTypeName) {
     tags.push(`警种：${practiceFilters.value.policeTypeName}`)
+  }
+  if (practiceFilters.value.courseName) {
+    tags.push(`课程：${practiceFilters.value.courseName}`)
   }
   if (practiceFilters.value.keyword) {
     tags.push(`关键词：${practiceFilters.value.keyword}`)

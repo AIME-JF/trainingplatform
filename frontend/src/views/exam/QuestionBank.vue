@@ -65,7 +65,7 @@
                 添加题库
                 </button>
                 <button v-if="canUseAiQuestion" class="btn-primary" @click="goToAiQuestion">
-                  智能出题
+                  上传材料生成题库
                 </button>
                 <div class="search-wrapper">
                   <svg class="search-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
@@ -77,11 +77,6 @@
                   <option value="">题库分类 (全部)</option>
                   <option value="default">默认分类</option>
                 </select>
-                <div class="divider-v"></div>
-                <label class="checkbox-label">
-                  <input type="checkbox" v-model="filterMyOnly" class="custom-checkbox">
-                  <span>只看我发布的</span>
-                </label>
               </div>
             </template>
           </div>
@@ -100,7 +95,7 @@
                   <th class="col-publisher">发布人</th>
                   <th class="col-category text-center">题库分类</th>
                   <th class="col-paper text-center">试卷数</th>
-                  <th class="col-exercise text-center">课后练习数</th>
+                  <th class="col-course text-center">关联课程</th>
                   <th class="col-questions text-center">题目数量</th>
                   <th class="col-status text-center">状态</th>
                   <th class="col-time">添加时间</th>
@@ -120,7 +115,7 @@
                   <td class="col-publisher">{{ item.creatorName || '-' }}</td>
                   <td class="col-category text-center">{{ item.category }}</td>
                   <td class="col-paper text-center">{{ item.paperCount }}</td>
-                  <td class="col-exercise text-center">{{ item.exerciseCount }}</td>
+                  <td class="col-course text-center">{{ item.courseName || '未关联' }}</td>
                   <td class="col-questions text-center">
                     <button class="question-count-btn" @click.stop="handleViewQuestions(item)">{{ item.questionCount }} 题</button>
                   </td>
@@ -310,6 +305,13 @@
             <a-select-option value="legacy">legacy</a-select-option>
           </a-select>
         </a-form-item>
+        <a-form-item label="关联课程">
+          <a-select v-model:value="folderForm.courseId" placeholder="不关联课程时仅自己可见" allow-clear show-search option-filter-prop="label">
+            <a-select-option v-for="item in courseOptions" :key="item.id" :value="item.id" :label="item.title">
+              {{ item.title }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
         <a-form-item v-if="editingFolderId" label="移动到">
           <a-tree-select
             v-model:value="folderForm.parentId"
@@ -369,6 +371,7 @@ import {
   updateQuestion,
   updateQuestionFolder,
 } from '@/api/question'
+import { getCourses } from '@/api/course'
 import { getPoliceTypes } from '@/api/user'
 import { getKnowledgePoints } from '@/api/knowledgePoint'
 import QuestionFormModal from './components/QuestionFormModal.vue'
@@ -385,7 +388,6 @@ const activeNav = computed(() => (route.path.startsWith('/question/knowledge-poi
 const searchText = ref('')
 const filterCategory = ref('')
 const filterDifficulty = ref('')
-const filterMyOnly = ref(false)
 
 const typeLabels = { single: '单选题', multi: '多选题', judge: '判断题', gap: '填空题' }
 const typeTagColors = { single: 'tag-blue', multi: 'tag-purple', judge: 'tag-orange', gap: 'tag-cyan' }
@@ -403,6 +405,7 @@ const selectedFolderId = ref(null)
 const selectedFolderName = ref('')
 const questionList = ref([])
 const questionLoading = ref(false)
+const courseOptions = ref([])
 
 // 题目筛选与选题模式
 const pickerSearch = ref('')
@@ -420,7 +423,7 @@ const questionPagination = reactive({ current: 1, pageSize: 20, total: 0 })
 // ============ 文件夹管理弹窗 ============
 const folderFormModalVisible = ref(false)
 const editingFolderId = ref(null)
-const folderForm = reactive({ name: '', category: '', parentId: null })
+const folderForm = reactive({ name: '', category: '', parentId: null, courseId: undefined })
 const moveQuestionModalVisible = ref(false)
 const moveQuestionTargetFolderId = ref(null)
 const currentMovingQuestion = ref(null)
@@ -442,10 +445,8 @@ const filteredList = computed(() => {
     list = list.filter(item => item.name.toLowerCase().includes(keyword) || (item.creatorName || '').toLowerCase().includes(keyword))
   }
 
-  // 只看我发布的
-  if (filterMyOnly.value) {
-    const currentUserId = authStore.currentUser?.id
-    list = list.filter(item => item.createdBy === currentUserId)
+  if (filterCategory.value) {
+    list = list.filter(item => item.category === filterCategory.value || (filterCategory.value === 'default' && item.category === '默认分类'))
   }
 
   return list
@@ -537,6 +538,8 @@ function buildBankList(folders) {
     const createdAt = folder.created_at ?? folder.createdAt
     const createdBy = folder.created_by ?? folder.createdBy
     const parentId = folder.parent_id ?? folder.parentId ?? null
+    const courseName = folder.course_name ?? folder.courseName ?? ''
+    const courseId = folder.course_id ?? folder.courseId ?? undefined
 
     return {
       id: folder.id,
@@ -552,6 +555,8 @@ function buildBankList(folders) {
       statusText: status,
       createdAt: formatDate(createdAt),
       createdBy,
+      courseId,
+      courseName,
     }
   })
 }
@@ -659,6 +664,7 @@ function openCreateFolderModal() {
   folderForm.name = ''
   folderForm.category = ''
   folderForm.parentId = null
+  folderForm.courseId = undefined
   folderFormModalVisible.value = true
 }
 
@@ -688,6 +694,7 @@ function openEditFolderModal(folder) {
   folderForm.name = folder.name
   folderForm.category = folder.category === '默认分类' ? '' : folder.category
   folderForm.parentId = folder.parentId
+  folderForm.courseId = folder.courseId
   folderFormModalVisible.value = true
 }
 
@@ -696,6 +703,7 @@ function resetFolderFormModal() {
   folderForm.name = ''
   folderForm.category = ''
   folderForm.parentId = null
+  folderForm.courseId = undefined
   folderFormModalVisible.value = false
 }
 
@@ -710,6 +718,7 @@ async function handleFolderSubmit() {
       category: folderForm.category || null,
       parent_id: folderForm.parentId,
       sort_order: 0,
+      course_id: folderForm.courseId ?? null,
     }
     if (editingFolderId.value) {
       await updateQuestionFolder(editingFolderId.value, payload)
@@ -935,6 +944,15 @@ async function loadPoliceTypeOptions() {
   }
 }
 
+async function loadCourseOptions() {
+  try {
+    const result = await getCourses({ page: 1, size: -1 })
+    courseOptions.value = result.items || []
+  } catch {
+    courseOptions.value = []
+  }
+}
+
 function clearQuestionSelection() {
   selectedFolderId.value = null
   selectedFolderName.value = ''
@@ -981,6 +999,7 @@ onMounted(async () => {
   if (canManageQuestionBank.value) {
     await loadData()
     await loadPoliceTypeOptions()
+    await loadCourseOptions()
   }
   if (!ensureActiveViewAccess()) return
   await syncFolderState(route.query.folderId)
@@ -1319,8 +1338,8 @@ onUnmounted(() => {
   width: 80px;
 }
 
-.col-exercise {
-  width: 100px;
+.col-course {
+  width: 140px;
 }
 
 .col-questions {

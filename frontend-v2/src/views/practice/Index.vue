@@ -433,8 +433,13 @@ function confirmStartPractice() {
       policeTypeName: getSelectedPoliceTypeName() || undefined,
       keyword: searchKeyword.value.trim() || undefined,
       courseId: selectedCourseId.value || undefined,
+      courseName: getSelectedCourseName() || undefined,
     },
   })
+}
+
+function getSelectedCourseName() {
+  return courses.value.find((item) => String(item.id) === String(selectedCourseId.value))?.title || ''
 }
 
 onMounted(() => {

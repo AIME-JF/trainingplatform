@@ -110,6 +110,11 @@ class AIQuestionTaskCreateRequest(BaseModel):
 
     task_name: str = Field(..., max_length=200, description="任务名称")
     topic: str = Field(..., max_length=200, description="出题主题")
+    target_bank_name: Optional[str] = Field(None, max_length=100, description="生成到的题库名称")
+    course_id: Optional[int] = Field(None, description="关联课程 ID")
+    course_name: Optional[str] = Field(None, max_length=200, description="关联课程名称")
+    source_material_name: Optional[str] = Field(None, max_length=200, description="来源材料名称")
+    source_material_type: Optional[str] = Field(None, max_length=50, description="来源材料类型")
     source_text: Optional[str] = Field(None, max_length=200000, description="参考文本")
     knowledge_points: List[str] = Field(default_factory=list, description="知识点列表")
     question_count: int = Field(10, ge=1, le=50, description="题目数量（当前 AI 智能出题最多 20 题）")

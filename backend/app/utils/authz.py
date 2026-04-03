@@ -185,6 +185,18 @@ def can_view_question_with_context(context: DataScopeContext, question: Optional
     )
 
 
+def can_manage_question(db: Session, question: Optional[Question], user_id: int) -> bool:
+    if not question:
+        return False
+    if is_admin_user(db, user_id):
+        return True
+
+    if getattr(question, "folder", None) and question.folder.created_by is not None:
+        return question.folder.created_by == user_id
+
+    return question.created_by == user_id
+
+
 def can_access_user_record(db: Session, target_user: Optional[User], user_id: int) -> bool:
     if not target_user:
         return False
