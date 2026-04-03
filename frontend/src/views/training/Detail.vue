@@ -71,6 +71,10 @@
             <template #icon><ReadOutlined /></template>
             课程管理
           </a-menu-item>
+          <a-menu-item key="resources">
+            <template #icon><FolderOutlined /></template>
+            资源
+          </a-menu-item>
           <a-sub-menu key="exams-group">
             <template #icon><FileTextOutlined /></template>
             <template #title>考试测评</template>
@@ -197,8 +201,7 @@
               <h3>课程管理</h3>
               <a-space>
                 <a-button @click="openAiScheduleTask">智能排课</a-button>
-                <a-button @click="openCourseImportModal">导入课程</a-button>
-                <a-button @click="openScheduleImportModal">导入课次</a-button>
+                <a-button @click="openScheduleImportModal">导入课表</a-button>
                 <a-button type="primary" @click="openCourseModal()"><PlusOutlined /> 添加课程</a-button>
               </a-space>
             </div>
@@ -216,7 +219,6 @@
               :schedule-status-label-map="scheduleStatusLabelMap"
               @update:scheduleViewMode="scheduleViewMode = $event"
               @open-ai-schedule="openAiScheduleTask"
-              @open-course-import="openCourseImportModal"
               @open-schedule-import="openScheduleImportModal"
               @add-course="openCourseModal()"
               @edit-course="openCourseModal"
@@ -227,6 +229,17 @@
               @start-session-checkout="handleStartSessionCheckout"
               @end-session-checkout="handleEndSessionCheckout"
               @skip-current-session="handleSkipCurrentSession"
+            />
+          </div>
+
+          <!-- 资源 -->
+          <div v-show="activeTab === 'resources'">
+            <div class="content-section-header">
+              <h3>课程资源</h3>
+            </div>
+            <TrainingResourcesContent
+              :training-data="trainingData"
+              :active="activeTab === 'resources'"
             />
           </div>
 
@@ -686,28 +699,14 @@
       />
     </a-modal>
 
-    <ExcelImportModal
-      v-model:open="courseImportDialog.visible"
-      title="课程导入"
-      :confirm-loading="courseImportDialog.submitting"
-      :can-submit="canScheduleEdit"
-      :can-download-template="canScheduleEdit"
-      :submit-tooltip="scheduleEditTooltip"
-      :download-template-tooltip="scheduleEditTooltip"
-      @submit="submitCourseImport"
-      @download-template="handleDownloadCourseImportTemplate"
-    />
-
-    <ExcelImportModal
+    <ScheduleImportModal
       v-model:open="scheduleImportDialog.visible"
-      title="课次导入"
-      :confirm-loading="scheduleImportDialog.submitting"
+      :training-id="trainingId"
       :can-submit="canScheduleEdit"
       :can-download-template="canScheduleEdit"
       :submit-tooltip="scheduleEditTooltip"
       :download-template-tooltip="scheduleEditTooltip"
-      @submit="submitSessionImport"
-      @download-template="handleDownloadSessionImportTemplate"
+      @import-success="onScheduleImportSuccess"
     />
 
     <ExcelImportModal
@@ -951,7 +950,7 @@
 import { ref, computed, reactive, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
-import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QuestionCircleOutlined, AppstoreOutlined, ReadOutlined, FileTextOutlined, SettingOutlined, PlusOutlined, TeamOutlined } from '@ant-design/icons-vue'
+import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QuestionCircleOutlined, AppstoreOutlined, ReadOutlined, FileTextOutlined, SettingOutlined, PlusOutlined, TeamOutlined, FolderOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import {
   getTraining,
@@ -970,10 +969,6 @@ import {
   skipTrainingSession,
   importTrainingStudents,
   downloadTrainingStudentImportTemplate,
-  importTrainingCourses,
-  downloadTrainingCourseImportTemplate,
-  importTrainingSessions,
-  downloadTrainingSessionImportTemplate,
   getStudents,
   getCheckinRecords,
   getTrainingCourses,
@@ -987,6 +982,7 @@ import { useAuthStore } from '@/stores/auth'
 import { formatDateTime } from '@/utils/datetime'
 import { downloadBlob } from '@/utils/download'
 import ExcelImportModal from '@/views/system/components/ExcelImportModal.vue'
+import ScheduleImportModal from './components/ScheduleImportModal.vue'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 import TrainingOverviewContent from './components/TrainingOverviewContent.vue'
 import TrainingScheduleContent from './components/TrainingScheduleContent.vue'
@@ -996,6 +992,7 @@ import QuickCreateExamModal from './components/QuickCreateExamModal.vue'
 import TrainingStudentsContent from './components/TrainingStudentsContent.vue'
 import CourseResourcePicker from './components/CourseResourcePicker.vue'
 import TrainingCourseChangeLogsContent from './components/TrainingCourseChangeLogsContent.vue'
+import TrainingResourcesContent from './components/TrainingResourcesContent.vue'
 import TrainingNextActionCard from './components/TrainingNextActionCard.vue'
 import TrainingQuickOpsCard from './components/TrainingQuickOpsCard.vue'
 import TrainingNoticeCard from './components/TrainingNoticeCard.vue'
@@ -1085,8 +1082,7 @@ const policeTypeOptions = ref([])
 const trainingBaseOptions = ref([])
 const trainingTypeOptions = ref([])
 const studentImportDialog = reactive({ visible: false, submitting: false })
-const courseImportDialog = reactive({ visible: false, submitting: false })
-const scheduleImportDialog = reactive({ visible: false, submitting: false })
+const scheduleImportDialog = reactive({ visible: false })
 const notices = ref([])
 const courseChangeLogs = ref([])
 const courseChangeLogsLoading = ref(false)
@@ -2360,73 +2356,13 @@ async function submitStudentImport(file) {
   }
 }
 
-function openCourseImportModal() {
-  if (!canScheduleEdit.value) return
-  courseImportDialog.visible = true
-}
-
-async function handleDownloadCourseImportTemplate() {
-  if (!canScheduleEdit.value) return
-  try {
-    const blob = await downloadTrainingCourseImportTemplate(trainingId)
-    downloadBlob(blob, '培训班课程导入模板.xlsx')
-  } catch (error) {
-    message.error(error?.message || '下载模板失败')
-  }
-}
-
-async function submitCourseImport(file) {
-  if (!canScheduleEdit.value) {
-    message.warning(scheduleEditTooltip.value)
-    return
-  }
-  courseImportDialog.submitting = true
-  try {
-    const result = await importTrainingCourses(trainingId, file)
-    message.success(`课程导入完成：新增课程 ${result?.addedCourseCount || 0} 门，跳过 ${result?.skippedCount || 0} 行`)
-    courseImportDialog.visible = false
-    await loadTrainingDetail()
-  } catch (error) {
-    message.error(error?.message || '课程导入失败')
-  } finally {
-    courseImportDialog.submitting = false
-  }
-}
-
 function openScheduleImportModal() {
   if (!canScheduleEdit.value) return
   scheduleImportDialog.visible = true
 }
 
-async function handleDownloadSessionImportTemplate() {
-  if (!canScheduleEdit.value) return
-  try {
-    const blob = await downloadTrainingSessionImportTemplate(trainingId)
-    downloadBlob(blob, '培训班课次导入模板.xlsx')
-  } catch (error) {
-    message.error(error?.message || '下载模板失败')
-  }
-}
-
-async function submitSessionImport(file) {
-  if (!canScheduleEdit.value) {
-    message.warning(scheduleEditTooltip.value)
-    return
-  }
-  scheduleImportDialog.submitting = true
-  try {
-    const result = await importTrainingSessions(trainingId, file)
-    message.success(`课次导入完成：新增课次 ${result?.addedSessionCount || 0} 个，跳过 ${result?.skippedCount || 0} 行`)
-    if (result?.courseMatchFailureSummary) {
-      message.warning(result.courseMatchFailureSummary, 6)
-    }
-    scheduleImportDialog.visible = false
-    await loadTrainingDetail()
-  } catch (error) {
-    message.error(error?.message || '课次导入失败')
-  } finally {
-    scheduleImportDialog.submitting = false
-  }
+async function onScheduleImportSuccess() {
+  await loadTrainingDetail()
 }
 
 // ===== 课程 CRUD =====

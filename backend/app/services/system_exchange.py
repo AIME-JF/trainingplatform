@@ -99,6 +99,18 @@ TRAINING_SESSION_TEMPLATE_SAMPLE_ROWS = [
     ["【示例】警务实战理论", "王教官", "理论", "2026-03-18", "09:00", "10:30", "第一教室"],
 ]
 
+TRAINING_SCHEDULE_UNIFIED_TEMPLATE_HEADERS = [
+    "日期",
+    "时间",
+    "课程安排",
+    "主讲教官",
+    "辅助教官",
+]
+
+TRAINING_SCHEDULE_UNIFIED_TEMPLATE_SAMPLE_ROWS = [
+    ["4月10日", "19:30-21:30", "警务实战理论", "王教官", "李教官、赵教官"],
+]
+
 DEPARTMENT_TEMPLATE_HEADERS = [
     "部门编码",
     "部门名称",
@@ -266,7 +278,15 @@ class SystemExchangeService(BatchImportService):
         )
 
     def build_training_schedule_template(self) -> bytes:
-        return self.build_training_session_template()
+        return self.build_training_schedule_unified_template()
+
+    def build_training_schedule_unified_template(self) -> bytes:
+        return self._build_template_bytes(
+            "课表导入",
+            TRAINING_SCHEDULE_UNIFIED_TEMPLATE_HEADERS,
+            self._build_training_schedule_unified_template_instructions(),
+            TRAINING_SCHEDULE_UNIFIED_TEMPLATE_SAMPLE_ROWS,
+        )
 
     def build_department_template(self) -> bytes:
         instructions = [
@@ -865,6 +885,18 @@ class SystemExchangeService(BatchImportService):
             ("课程类型", "选填；可填 理论/theory 或 实操/技能/practice/skill"),
             ("课时", "选填；在 AI 排课任务选择“按课时排”时必填，会作为课程计划课时使用"),
             ("地点", "选填；留空时显示为空"),
+        ]
+
+    @staticmethod
+    def _build_training_schedule_unified_template_instructions() -> List[tuple[str, str]]:
+        return [
+            ("字段", "说明"),
+            ("示例行", "第 2 行为示例数据，导入前请删除或覆盖"),
+            ("日期", "必填；支持 4-10、4月10日、2026-4-10 等格式；缺少年份时自动使用培训班开始日期的年份"),
+            ("时间", "必填；示例 19:30-21:30，课时自动计算"),
+            ("课程安排", "必填；课程名称，相同课程名称+主讲教官的行会归为同一门课程的多个课次"),
+            ("主讲教官", "必填；教官姓名，系统会自动匹配已有用户；未匹配到的将自动创建账号"),
+            ("辅助教官", "选填；多个辅助教官用中文顿号「、」分隔；未匹配到的将自动创建账号"),
         ]
 
     @staticmethod

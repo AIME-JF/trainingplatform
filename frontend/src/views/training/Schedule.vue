@@ -19,11 +19,8 @@
         </div>
       </div>
       <div class="week-nav">
-        <a-button v-if="canImportInstructors" @click="showInstructorImportModal = true">
-          导入教官
-        </a-button>
-        <a-button v-if="canImportSchedule" @click="showScheduleImportModal = true">
-          导入课次
+        <a-button v-if="canImportSchedule" @click="showScheduleUnifiedImportModal = true">
+          导入课表
         </a-button>
         <a-button v-if="selectedTrainingId && canImportSchedule" type="primary" ghost @click="openAiSchedule">
           智能排课
@@ -61,8 +58,8 @@
                  @drop="canEdit ? onDrop($event, day) : null"
             >
               <div v-for="item in getScheduleForDay(day.weekday)" :key="item.id"
-                class="schedule-item" :class="['type-' + item.type, { 'is-draggable': isItemEditable(item), 'is-locked': !isItemEditable(item) }]"
-                :style="{ top: getTopOffset(item.timeStart) + 'px', height: getHeight(item.duration) + 'px' }"
+                class="schedule-item" :class="{ 'is-draggable': isItemEditable(item), 'is-locked': !isItemEditable(item) }"
+                :style="{ top: getTopOffset(item.timeStart) + 'px', height: getHeight(item.duration) + 'px', ...getCourseColorStyle(item) }"
                 :draggable="isItemEditable(item)"
                 @dragstart="isItemEditable(item) ? onDragStart($event, item) : null"
                 @click.stop="isItemEditable(item) ? openEditItem(item) : null"
@@ -85,7 +82,7 @@
                 <a-list-item>
                   <a-list-item-meta>
                     <template #avatar>
-                      <div class="type-dot" :class="'type-' + item.type">{{ typeIcons[item.type] }}</div>
+                      <div class="type-dot" :style="{ background: getCourseColor(item).bg, color: getCourseColor(item).border }">{{ typeIcons[item.type] }}</div>
                     </template>
                     <template #title>{{ item.title }}</template>
                     <template #description>{{ item.dayName }} {{ item.timeStart }} · {{ item.location }}</template>
@@ -169,28 +166,14 @@
       </a-form>
     </a-modal>
 
-    <ExcelImportModal
-      v-model:open="showInstructorImportModal"
-      title="教官导入"
-      :confirm-loading="importingInstructor"
-      :can-submit="canImportInstructors"
-      :can-download-template="canImportInstructors"
-      submit-tooltip="无权导入教官"
-      download-template-tooltip="无权下载教官导入模板"
-      @submit="submitInstructorImport"
-      @download-template="handleDownloadInstructorTemplate"
-    />
-
-    <ExcelImportModal
-      v-model:open="showScheduleImportModal"
-      title="课次导入"
-      :confirm-loading="importingSchedule"
+    <ScheduleImportModal
+      v-model:open="showScheduleUnifiedImportModal"
+      :training-id="selectedTrainingId"
       :can-submit="canImportSchedule"
       :can-download-template="canImportSchedule"
-      submit-tooltip="无权导入课次"
-      download-template-tooltip="无权下载课次导入模板"
-      @submit="submitScheduleImport"
-      @download-template="handleDownloadScheduleTemplate"
+      submit-tooltip="无权导入课表"
+      download-template-tooltip="无权下载课表导入模板"
+      @import-success="onScheduleImportSuccess"
     />
   </div>
 </template>
@@ -203,14 +186,9 @@ import {
   getTraining,
   manageTraining,
   updateTraining,
-  downloadTrainingInstructorImportTemplate,
-  downloadTrainingSessionImportTemplate,
-  importTrainingInstructors,
-  importTrainingSessions,
 } from '@/api/training'
 import { useAuthStore } from '@/stores/auth'
-import { downloadBlob } from '@/utils/download'
-import ExcelImportModal from '@/views/system/components/ExcelImportModal.vue'
+import ScheduleImportModal from './components/ScheduleImportModal.vue'
 import { message } from 'ant-design-vue'
 import dayjs from 'dayjs'
 
@@ -218,10 +196,7 @@ const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
-const importingInstructor = ref(false)
-const importingSchedule = ref(false)
-const showInstructorImportModal = ref(false)
-const showScheduleImportModal = ref(false)
+const showScheduleUnifiedImportModal = ref(false)
 
 const allTrainings = ref([])
 
@@ -270,7 +245,6 @@ const selectedTrainingDetail = computed(() => {
 })
 
 const canEdit = computed(() => Boolean(selectedTrainingDetail.value?.canEditCourses))
-const canImportInstructors = computed(() => Boolean(selectedTrainingDetail.value?.canManageTraining))
 const canImportSchedule = computed(() => Boolean(selectedTrainingDetail.value?.canEditCourses))
 
 const selectedTraining = computed(() => {
@@ -344,67 +318,8 @@ async function submitTrainingUpdate(payload) {
   return updateTraining(selectedTrainingId.value, payload)
 }
 
-async function handleDownloadInstructorTemplate() {
-  if (!selectedTrainingId.value || !canImportInstructors.value) {
-    return
-  }
-  try {
-    const blob = await downloadTrainingInstructorImportTemplate(selectedTrainingId.value)
-    downloadBlob(blob, '培训班教官导入模板.xlsx')
-  } catch (error) {
-    message.error(error?.message || '下载模板失败')
-  }
-}
-
-async function submitInstructorImport(file) {
-  if (!selectedTrainingId.value || !canImportInstructors.value) {
-    message.warning('无权导入教官')
-    return
-  }
-  importingInstructor.value = true
-  try {
-    const result = await importTrainingInstructors(selectedTrainingId.value, file)
-    await refreshCurrentTraining()
-    showInstructorImportModal.value = false
-    message.success(`教官导入完成：成功 ${result.successRows || 0} 行，新增账号 ${result.createdCount || 0} 个`)
-  } catch (error) {
-    message.error(error?.message || '教官导入失败')
-  } finally {
-    importingInstructor.value = false
-  }
-}
-
-async function handleDownloadScheduleTemplate() {
-  if (!selectedTrainingId.value || !canImportSchedule.value) {
-    return
-  }
-  try {
-    const blob = await downloadTrainingSessionImportTemplate(selectedTrainingId.value)
-    downloadBlob(blob, '培训班课次导入模板.xlsx')
-  } catch (error) {
-    message.error(error?.message || '下载模板失败')
-  }
-}
-
-async function submitScheduleImport(file) {
-  if (!selectedTrainingId.value || !canImportSchedule.value) {
-    message.warning('无权导入课次')
-    return
-  }
-  importingSchedule.value = true
-  try {
-    const result = await importTrainingSessions(selectedTrainingId.value, file)
-    await refreshCurrentTraining()
-    showScheduleImportModal.value = false
-    message.success(`课次导入完成：新增课次 ${result.addedSessionCount || 0} 个，跳过 ${result.skippedCount || 0} 行`)
-    if (result?.courseMatchFailureSummary) {
-      message.warning(result.courseMatchFailureSummary, 6)
-    }
-  } catch (error) {
-    message.error(error?.message || '课次导入失败')
-  } finally {
-    importingSchedule.value = false
-  }
+async function onScheduleImportSuccess() {
+  await refreshCurrentTraining()
 }
 
 const initialized = ref(false)
@@ -779,6 +694,40 @@ const dayNames = { 1: '周一', 2: '周二', 3: '周三', 4: '周四', 5: '周�
 const typeColors = { theory: 'blue', skill: 'green', review: 'purple', physical: 'orange', drill: 'red' }
 const typeLabels = { theory: '理论课', skill: '技能课', review: '复习', physical: '体能', drill: '演练' }
 const typeIcons = { theory: '📖', skill: '🔧', review: '📝', physical: '💪', drill: '⚠️' }
+
+const COURSE_COLOR_PALETTE = [
+  { bg: '#e6f4ff', border: '#1890ff', text: '#003a8c' },
+  { bg: '#f6ffed', border: '#52c41a', text: '#135200' },
+  { bg: '#f9f0ff', border: '#722ed1', text: '#391085' },
+  { bg: '#fff7e6', border: '#fa8c16', text: '#873800' },
+  { bg: '#fff1f0', border: '#ff4d4f', text: '#820014' },
+  { bg: '#e6fffb', border: '#13c2c2', text: '#006d75' },
+  { bg: '#fcffe6', border: '#a0d911', text: '#3f6600' },
+  { bg: '#fff0f6', border: '#eb2f96', text: '#780650' },
+  { bg: '#f0f5ff', border: '#2f54eb', text: '#10239e' },
+  { bg: '#fffbe6', border: '#fadb14', text: '#614700' },
+]
+
+const courseColorMap = computed(() => {
+  const courses = selectedTraining.value?.courses || []
+  const map = {}
+  courses.forEach((c, idx) => {
+    const key = c.id ?? `idx-${idx}`
+    map[key] = idx % COURSE_COLOR_PALETTE.length
+  })
+  return map
+})
+
+function getCourseColor(item) {
+  const key = item.courseId ?? `idx-${item.courseIdx}`
+  const colorIdx = courseColorMap.value[key] ?? (item.courseIdx % COURSE_COLOR_PALETTE.length)
+  return COURSE_COLOR_PALETTE[colorIdx]
+}
+
+function getCourseColorStyle(item) {
+  const c = getCourseColor(item)
+  return { background: c.bg, borderLeftColor: c.border, color: c.text }
+}
 
 const weekStats = computed(() => {
   const items = currentScheduleItems.value

@@ -636,7 +636,60 @@ class TrainingService:
         return SystemExchangeService(self.db).build_training_instructor_template()
 
     def build_training_schedule_import_template(self) -> bytes:
-        return self.build_training_session_import_template()
+        return SystemExchangeService(self.db).build_training_schedule_template()
+
+    def preview_schedule_import(self, training_id: int, file_bytes: bytes) -> dict:
+        """Preview unified schedule import (parse Excel, return structured preview)."""
+        importer = BatchImportService(self.db)
+        return importer.preview_unified_schedule(training_id, file_bytes)
+
+    def confirm_schedule_import(
+        self,
+        training_id: int,
+        file_bytes: bytes,
+        skip_rows: Optional[List[int]] = None,
+        actor_id: Optional[int] = None,
+    ) -> dict:
+        """Confirm unified schedule import with change tracking."""
+        training = self.db.query(Training).options(
+            joinedload(Training.courses),
+        ).filter(Training.id == training_id).first()
+        if not training:
+            raise ValueError("培训班不存在")
+        self.course_change_service.ensure_course_keys(training.courses or [])
+        self._assert_training_course_editable(training, "导入课表")
+        before_courses = self.course_change_service.snapshot_course_entities(training.courses or [])
+
+        importer = BatchImportService(self.db)
+        summary = importer.confirm_unified_schedule(
+            training_id,
+            file_bytes,
+            skip_rows=skip_rows,
+            commit=False,
+        )
+
+        self.db.flush()
+        after_courses = self._load_training_courses(training_id)
+        try:
+            self._validate_schedule_mutation_window(
+                training,
+                before_courses,
+                self.course_change_service.snapshot_course_entities(after_courses),
+            )
+        except ValueError:
+            self.db.rollback()
+            raise
+
+        if training.status == "active":
+            self.course_change_service.record_changes(
+                training_id,
+                before_courses,
+                after_courses,
+                actor_id,
+                "import_schedule",
+            )
+        self.db.commit()
+        return summary
 
     def import_training_courses(
         self,

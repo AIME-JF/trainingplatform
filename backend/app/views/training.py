@@ -448,13 +448,15 @@ def download_training_session_import_template(
     return _excel_response(data, "training_sessions_import_template.xlsx")
 
 
-@router.get("/{training_id}/import/schedule/template", summary="下载培训班课次导入模板")
+@router.get("/{training_id}/import/schedule/template", summary="下载培训班课表导入模板")
 def download_training_schedule_import_template(
     training_id: int,
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return download_training_session_import_template(training_id, current_user, db)
+    _require_training_manager(db, training_id, current_user.user_id)
+    data = TrainingService(db).build_training_schedule_import_template()
+    return _excel_response(data, "training_schedule_import_template.xlsx")
 
 
 @router.post("/{training_id}/import/students", response_model=StandardResponse, summary="批量导入学员并自动开户")
@@ -550,6 +552,59 @@ async def import_schedule(
     db: Session = Depends(get_db),
 ):
     return await import_sessions(training_id, file, current_user, db)
+
+
+@router.post("/{training_id}/import/schedule/preview", response_model=StandardResponse, summary="预览课表导入")
+async def preview_schedule_import(
+    training_id: int,
+    file: UploadFile = File(...),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_training_manager(db, training_id, current_user.user_id)
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="导入文件为空")
+    service = TrainingService(db)
+    try:
+        data = service.preview_schedule_import(training_id, file_bytes)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return StandardResponse(data=data)
+
+
+@router.post("/{training_id}/import/schedule/confirm", response_model=StandardResponse, summary="确认课表导入")
+async def confirm_schedule_import(
+    training_id: int,
+    file: UploadFile = File(...),
+    skip_rows: str = Form("[]"),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_training_manager(db, training_id, current_user.user_id)
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="导入文件为空")
+
+    import json as _json_mod
+    try:
+        skip_rows_list = _json_mod.loads(skip_rows)
+        if not isinstance(skip_rows_list, list):
+            skip_rows_list = []
+    except (ValueError, TypeError):
+        skip_rows_list = []
+
+    service = TrainingService(db)
+    try:
+        data = service.confirm_schedule_import(
+            training_id,
+            file_bytes,
+            skip_rows=skip_rows_list,
+            actor_id=current_user.user_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    return StandardResponse(data=data)
 
 
 @router.post("/{training_id}/enroll", response_model=StandardResponse[EnrollmentResponse], summary="学员报名")
