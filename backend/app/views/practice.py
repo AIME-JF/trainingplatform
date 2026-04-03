@@ -4,14 +4,31 @@
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from app.controllers import KnowledgePointController, PoliceTypeController, QuestionController
 from app.database import get_db
 from app.middleware.auth import get_current_user
+from app.models import PracticeRecord
 from app.schemas import PaginatedResponse, QuestionResponse, StandardResponse, TokenData
 
 router = APIRouter(prefix="/practice", tags=["practice"])
+
+
+class SavePracticeRecordRequest(BaseModel):
+    """保存练习记录请求"""
+    source_type: str
+    source_id: int
+    source_name: Optional[str] = None
+    total_count: int
+    correct_count: int
+    wrong_count: int
+    accuracy: int
+    duration: int
+    question_limit: Optional[str] = None
+    question_type: Optional[str] = None
+    difficulty: Optional[int] = None
 
 
 @router.get("/sources", response_model=StandardResponse[dict[str, Any]], summary="获取练习来源")
@@ -77,3 +94,30 @@ def get_practice_questions(
         current_user.user_id,
     )
     return StandardResponse(data=data)
+
+
+@router.post("/records", response_model=StandardResponse[dict], summary="保存练习记录")
+def save_practice_record(
+    record: SavePracticeRecordRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """保存练习记录"""
+    practice_record = PracticeRecord(
+        user_id=current_user.user_id,
+        source_type=record.source_type,
+        source_id=record.source_id,
+        source_name=record.source_name,
+        total_count=record.total_count,
+        correct_count=record.correct_count,
+        wrong_count=record.wrong_count,
+        accuracy=record.accuracy,
+        duration=record.duration,
+        question_limit=record.question_limit,
+        question_type=record.question_type,
+        difficulty=record.difficulty,
+    )
+    db.add(practice_record)
+    db.commit()
+    db.refresh(practice_record)
+    return StandardResponse(data={"id": practice_record.id})

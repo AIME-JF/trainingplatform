@@ -254,7 +254,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { useRoute, useRouter } from 'vue-router'
-import { getPracticeQuestions } from '@/api/practice'
+import { getPracticeQuestions, savePracticeRecord } from '@/api/practice'
 
 const route = useRoute()
 const router = useRouter()
@@ -265,6 +265,7 @@ const currentIndex = ref(0)
 const answers = ref({})
 const shownQuestions = ref({})
 const finished = ref(false)
+const startTime = ref(Date.now())
 
 const questionTypeLabels = {
   single: '单选题',
@@ -541,7 +542,28 @@ function goToQuestion(index) {
   currentIndex.value = index
 }
 
-function finishPractice() {
+async function finishPractice() {
+  const duration = Math.round((Date.now() - startTime.value) / 1000)
+  const source = practiceSource.value
+
+  try {
+    await savePracticeRecord({
+      source_type: source?.sourceType || '',
+      source_id: Number(source?.sourceId) || 0,
+      source_name: source?.sourceName || '',
+      total_count: questions.value.length,
+      correct_count: correctCount.value,
+      wrong_count: questions.value.length - correctCount.value,
+      accuracy: accuracy.value,
+      duration,
+      question_limit: practiceFilters.value.questionLimit ? String(practiceFilters.value.questionLimit) : 'all',
+      question_type: practiceFilters.value.questionType || undefined,
+      difficulty: practiceFilters.value.difficulty || undefined,
+    })
+  } catch (e) {
+    // 记录保存失败不影响完成流程
+  }
+
   finished.value = true
 }
 
@@ -550,6 +572,7 @@ function restartPractice() {
   answers.value = {}
   shownQuestions.value = {}
   finished.value = false
+  startTime.value = Date.now()
 }
 
 function returnToHome() {

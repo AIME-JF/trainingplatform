@@ -61,3 +61,25 @@ export async function getPracticeQuestions(params?: GetPracticeQuestionsParams) 
     params,
   })
 }
+
+export interface SavePracticeRecordParams {
+  source_type: string
+  source_id: number
+  source_name?: string
+  total_count: number
+  correct_count: number
+  wrong_count: number
+  accuracy: number
+  duration: number
+  question_limit?: string
+  question_type?: string
+  difficulty?: number
+}
+
+export async function savePracticeRecord(data: SavePracticeRecordParams) {
+  return customInstance<{ id: number }>({
+    url: '/practice/records',
+    method: 'POST',
+    data,
+  })
+}
