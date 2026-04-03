@@ -18,8 +18,9 @@ from app.schemas import (
     AIScheduleTaskCreateRequest,
     AIScheduleParsePreviewResponse,
     AIScheduleTaskUpdateRequest,
+    ScheduleFileParseTaskUpdateRequest,
 )
-from app.services import TeachingResourceGenerationService, AIService, TrainingAIService
+from app.services import TeachingResourceGenerationService, AIService, TrainingAIService, ScheduleFileParseService
 from logger import logger
 
 
@@ -31,6 +32,7 @@ class AIController:
         self.service = AIService(db)
         self.teaching_resource_generation_service = TeachingResourceGenerationService(db)
         self.training_ai_service = TrainingAIService(db)
+        self.schedule_file_parse_service = ScheduleFileParseService(db)
 
     def list_question_tasks(self, page: int, size: int, status_value: str | None, current_user_id: int):
         try:
@@ -386,4 +388,51 @@ class AIController:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
         except Exception as exc:
             logger.error("确认 AI 个训任务异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="确认任务失败")
+
+    # ------------------------------------------------------------------
+    # 智能解析课表
+    # ------------------------------------------------------------------
+
+    def list_schedule_file_parse_tasks(self, page: int, size: int, status_value: str | None, current_user_id: int):
+        try:
+            return self.schedule_file_parse_service.list_tasks(page, size, status_value, current_user_id)
+        except Exception as exc:
+            logger.error("获取智能解析课表任务列表异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取任务列表失败")
+
+    def create_schedule_file_parse_task(self, file_content: bytes, file_name: str, task_name: str | None, current_user_id: int):
+        try:
+            return self.schedule_file_parse_service.create_task(file_content, file_name, task_name, current_user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("创建智能解析课表任务异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="创建任务失败")
+
+    def get_schedule_file_parse_task_detail(self, task_id: int, current_user_id: int):
+        try:
+            return self.schedule_file_parse_service.get_task_detail(task_id, current_user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+        except Exception as exc:
+            logger.error("获取智能解析课表任务详情异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取任务详情失败")
+
+    def update_schedule_file_parse_task(self, task_id: int, data: ScheduleFileParseTaskUpdateRequest, current_user_id: int):
+        try:
+            return self.schedule_file_parse_service.update_task(task_id, data, current_user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("更新智能解析课表任务异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新任务失败")
+
+    def confirm_schedule_file_parse_task(self, task_id: int, current_user_id: int):
+        try:
+            return self.schedule_file_parse_service.confirm_task(task_id, current_user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("确认智能解析课表任务异常: %s", exc)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="确认任务失败")

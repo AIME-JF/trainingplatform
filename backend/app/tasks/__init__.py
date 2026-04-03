@@ -8,6 +8,10 @@ from .teaching_resource_generation import (
     schedule_teaching_resource_generation_task,
 )
 from .ai_schedule import generate_ai_schedule_task, schedule_ai_schedule_task
+from .schedule_file_parse import (
+    generate_schedule_file_parse_task,
+    schedule_schedule_file_parse_task,
+)
 from .recommendation import (
     refresh_recommendation_scores_for_user,
     refresh_recommendation_scores_for_all_users,
@@ -24,6 +28,8 @@ __all__ = [
     "schedule_teaching_resource_generation_task",
     "generate_ai_schedule_task",
     "schedule_ai_schedule_task",
+    "generate_schedule_file_parse_task",
+    "schedule_schedule_file_parse_task",
     'refresh_recommendation_scores_for_user',
     'refresh_recommendation_scores_for_all_users',
 ]

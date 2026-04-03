@@ -169,3 +169,27 @@ export function updateAiPersonalTrainingTaskResult(taskId, data) {
 export function confirmAiPersonalTrainingTask(taskId) {
   return request.post(`/ai/personal-training-tasks/${taskId}/confirm`)
 }
+
+// 智能解析课表
+export function getScheduleFileParseTaskList(params) {
+  return request.get('/ai/schedule-file-parse-tasks', { params })
+}
+
+export function createScheduleFileParseTask(file, taskName) {
+  const formData = new FormData()
+  formData.append('file', file)
+  const params = taskName ? { task_name: taskName } : {}
+  return request.post('/ai/schedule-file-parse-tasks', formData, { params })
+}
+
+export function getScheduleFileParseTaskDetail(taskId) {
+  return request.get(`/ai/schedule-file-parse-tasks/${taskId}`)
+}
+
+export function updateScheduleFileParseTask(taskId, data) {
+  return request.put(`/ai/schedule-file-parse-tasks/${taskId}`, data)
+}
+
+export function confirmScheduleFileParseTask(taskId) {
+  return request.post(`/ai/schedule-file-parse-tasks/${taskId}/confirm`)
+}

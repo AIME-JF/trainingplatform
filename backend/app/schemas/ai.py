@@ -23,6 +23,7 @@ AITaskType = Literal[
     "resource_generation",
     "schedule_generation",
     "personal_training_plan_generation",
+    "schedule_file_parse",
 ]
 AITaskStatus = Literal["pending", "processing", "completed", "confirmed", "failed"]
 AIScheduleTaskStage = Literal["rule_parsing", "rule_confirmation", "schedule_generation", "schedule_confirmation"]

@@ -31,6 +31,7 @@ from .notice import NoticeService
 from .resource import ResourceService
 from .review import ReviewService
 from .recommendation import RecommendationService
+from .schedule_file_parse import ScheduleFileParseService
 
 __all__ = [
     "AuthService", "UserService", "DepartmentService", "RoleService", "PermissionService",
@@ -41,5 +42,5 @@ __all__ = [
     "DashboardService", "ReportService", "AIService", "TeachingResourceGenerationService",
     "TrainingPortraitAggregator", "TrainingAIService", "TalentService",
     "MediaService", "NoticeService",
-    "ResourceService", "ReviewService", "RecommendationService",
+    "ResourceService", "ReviewService", "RecommendationService", "ScheduleFileParseService",
 ]

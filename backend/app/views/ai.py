@@ -32,6 +32,8 @@ from app.schemas import (
     AIScheduleTaskDetailResponse,
     AIScheduleTaskUpdateRequest,
     AITaskSummaryResponse,
+    ScheduleFileParseTaskDetailResponse,
+    ScheduleFileParseTaskUpdateRequest,
     PaginatedResponse,
     StandardResponse,
     TokenData,
@@ -770,6 +772,97 @@ def confirm_personal_training_task(
 ):
     controller = AIController(db)
     result = controller.confirm_personal_training_task(task_id, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+# ---------------------------------------------------------------------------
+# 智能解析课表
+# ---------------------------------------------------------------------------
+
+@router.get(
+    "/schedule-file-parse-tasks",
+    response_model=StandardResponse[PaginatedResponse[AITaskSummaryResponse]],
+    summary="智能解析课表任务列表",
+)
+def list_schedule_file_parse_tasks(
+    page: int = Query(1, ge=1),
+    size: int = Query(10, ge=-1),
+    status_value: Optional[str] = Query(None, alias="status"),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = AIController(db)
+    data = controller.list_schedule_file_parse_tasks(page, size, status_value, current_user.user_id)
+    return StandardResponse(data=data)
+
+
+@router.post(
+    "/schedule-file-parse-tasks",
+    response_model=StandardResponse[ScheduleFileParseTaskDetailResponse],
+    summary="创建智能解析课表任务（上传 xlsx）",
+)
+async def create_schedule_file_parse_task(
+    file: UploadFile = File(...),
+    task_name: Optional[str] = Query(None, max_length=200),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    file_content = await file.read()
+    controller = AIController(db)
+    result = controller.create_schedule_file_parse_task(
+        file_content, file.filename or "unknown.xlsx", task_name, current_user.user_id,
+    )
+    return StandardResponse(data=result)
+
+
+@router.get(
+    "/schedule-file-parse-tasks/{task_id}",
+    response_model=StandardResponse[ScheduleFileParseTaskDetailResponse],
+    summary="智能解析课表任务详情",
+)
+def get_schedule_file_parse_task_detail(
+    task_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = AIController(db)
+    data = controller.get_schedule_file_parse_task_detail(task_id, current_user.user_id)
+    return StandardResponse(data=data)
+
+
+@router.put(
+    "/schedule-file-parse-tasks/{task_id}",
+    response_model=StandardResponse[ScheduleFileParseTaskDetailResponse],
+    summary="更新智能解析课表任务（步骤 2-4 提交）",
+)
+def update_schedule_file_parse_task(
+    task_id: int,
+    data: ScheduleFileParseTaskUpdateRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = AIController(db)
+    result = controller.update_schedule_file_parse_task(task_id, data, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.post(
+    "/schedule-file-parse-tasks/{task_id}/confirm",
+    response_model=StandardResponse[ScheduleFileParseTaskDetailResponse],
+    summary="确认智能解析课表任务（创建培训班）",
+)
+def confirm_schedule_file_parse_task(
+    task_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = AIController(db)
+    result = controller.confirm_schedule_file_parse_task(task_id, current_user.user_id)
     return StandardResponse(data=result)
 
 

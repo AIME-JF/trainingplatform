@@ -151,6 +151,12 @@ const router = createRouter({
           meta: { title: '智能排课', anyPermissions: TRAINING_MANAGE_PAGE_PERMISSIONS },
         },
         {
+          path: 'training/ai-schedule-file-parse',
+          name: 'AiScheduleFileParse',
+          component: () => import('../views/training/AiScheduleFileParse.vue'),
+          meta: { title: '智能解析课表创建', anyPermissions: TRAINING_MANAGE_PAGE_PERMISSIONS },
+        },
+        {
           path: 'training/board',
           redirect: '/report',
         },

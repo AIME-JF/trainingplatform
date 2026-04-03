@@ -115,6 +115,16 @@ from .ai import (
     AIScheduleTaskDetailResponse,
     AIPersonalTrainingTaskDetailResponse, TeachingResourceGenerationTaskDetailResponse
 )
+from .schedule_file_parse import (
+    ScheduleFileParseTaskDetailResponse,
+    ScheduleFileParseTaskUpdateRequest,
+    ScheduleFileClassInfo,
+    ScheduleFileCourse,
+    ScheduleFileTrainingConfig,
+    ScheduleFileHeadteacher,
+    ScheduleFileInstructor,
+    ScheduleFileCourseSession,
+)
 # 人才库
 from .talent import TalentResponse, TalentStatsResponse
 # 文件管理
@@ -230,6 +240,10 @@ __all__ = [
     "AIPaperGenerationTaskDetailResponse", "AIPaperDocumentGenerationTaskDetailResponse",
     "AIScheduleTaskDetailResponse",
     "AIPersonalTrainingTaskDetailResponse", "TeachingResourceGenerationTaskDetailResponse",
+    # 智能解析课表
+    "ScheduleFileParseTaskDetailResponse", "ScheduleFileParseTaskUpdateRequest",
+    "ScheduleFileClassInfo", "ScheduleFileCourse", "ScheduleFileTrainingConfig",
+    "ScheduleFileHeadteacher", "ScheduleFileInstructor", "ScheduleFileCourseSession",
     # 人才库
     "TalentResponse", "TalentStatsResponse",
     # 文件管理

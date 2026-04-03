@@ -57,6 +57,21 @@ const currentStatusLabel = computed(() => {
     if (props.status === 'processing') return '智能生成中'
     if (props.status === 'pending') return '排队中'
   }
+  if (props.mode === 'schedule-file-parse') {
+    if (props.status === 'failed') return '解析失败'
+    if (props.status === 'confirmed') return '已创建培训班'
+    if (props.status === 'completed') {
+      const stageLabels = {
+        class_info_confirmation: '待确认班级信息',
+        course_confirmation: '待确认课表',
+        training_config: '待完善信息',
+        preview: '待最终确认',
+      }
+      return stageLabels[props.stage] || '解析完成'
+    }
+    if (props.status === 'processing') return '智能解析中'
+    if (props.status === 'pending') return '排队中'
+  }
   return statusLabels[props.status] || props.status
 })
 
@@ -74,6 +89,12 @@ const currentStatusColor = computed(() => {
     if (props.status === 'completed') return 'blue'
     if (props.status === 'processing') return 'processing'
   }
+  if (props.mode === 'schedule-file-parse') {
+    if (props.status === 'failed') return 'red'
+    if (props.status === 'confirmed') return 'green'
+    if (props.status === 'completed') return 'blue'
+    if (props.status === 'processing') return 'processing'
+  }
   return statusColors[props.status] || 'default'
 })
 
@@ -83,6 +104,9 @@ const stepTitles = computed(() => {
   }
   if (props.mode === 'resource-generation') {
     return ['创建任务', '智能生成', '查看结果', '预览', '确认完成']
+  }
+  if (props.mode === 'schedule-file-parse') {
+    return ['智能解析', '确认班级信息', '确认课表', '完善班级信息', '预览', '完成']
   }
   return ['创建任务', '后端处理', '查看结果', '确认完成']
 })
@@ -105,6 +129,22 @@ const currentStep = computed(() => {
     if (props.status === 'completed') return 2
     if (props.status === 'processing') return 1
     if (props.status === 'failed') return 1
+    return 0
+  }
+  if (props.mode === 'schedule-file-parse') {
+    if (props.activeStep >= 0) return props.activeStep
+    if (props.status === 'confirmed') return 5
+    if (props.status === 'completed') {
+      const stageStepMap = {
+        class_info_confirmation: 1,
+        course_confirmation: 2,
+        training_config: 3,
+        preview: 4,
+      }
+      return stageStepMap[props.stage] || 1
+    }
+    if (props.status === 'processing') return 0
+    if (props.status === 'failed') return 0
     return 0
   }
   if (props.status === 'failed') return 1
