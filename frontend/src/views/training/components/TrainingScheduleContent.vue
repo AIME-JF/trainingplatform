@@ -26,17 +26,8 @@
           :tips="scheduleEditTooltip"
           v-slot="{ disabled }"
         >
-          <a-button size="small" :disabled="disabled" @click="$emit('open-course-import')">
-            导入课程
-          </a-button>
-        </permissions-tooltip>
-        <permissions-tooltip
-          :allowed="canScheduleEdit"
-          :tips="scheduleEditTooltip"
-          v-slot="{ disabled }"
-        >
           <a-button size="small" :disabled="disabled" @click="$emit('open-schedule-import')">
-            导入课次
+            导入课表
           </a-button>
         </permissions-tooltip>
         <permissions-tooltip
@@ -180,7 +171,6 @@ defineProps({
 defineEmits([
   'update:scheduleViewMode',
   'open-ai-schedule',
-  'open-course-import',
   'open-schedule-import',
   'add-course',
   'edit-course',

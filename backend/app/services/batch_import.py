@@ -82,6 +82,14 @@ class BatchImportService:
         "location": {"地点", "教室", "上课地点", "location", "classroom"},
     }
 
+    SCHEDULE_UNIFIED_FIELD_ALIASES: Dict[str, set[str]] = {
+        "date": {"日期", "上课日期", "date", "day"},
+        "time_range": {"时间", "时间段", "时段", "上课时间", "time", "time_range"},
+        "course_name": {"课程安排", "课程名称", "课程", "科目", "course", "course_name"},
+        "instructor_name": {"主讲教官", "教官", "授课教官", "instructor", "teacher"},
+        "assistant_instructors": {"辅助教官", "带教教官", "助教", "assistant"},
+    }
+
     SESSION_FIELD_ALIASES: Dict[str, set[str]] = {
         "course_name": {"课程名称", "课程", "科目", "课名", "course", "course_name", "title"},
         "instructor_name": {"教官", "授课教官", "讲师", "教师", "instructor", "teacher", "lecturer"},
@@ -414,6 +422,404 @@ class BatchImportService:
         )
         summary["replace_existing"] = False
         return summary
+
+    # ===== Unified Schedule Import (Preview + Confirm) =====
+
+    def preview_unified_schedule(
+        self,
+        training_id: int,
+        file_bytes: bytes,
+    ) -> Dict[str, Any]:
+        """Parse Excel and return a structured preview for unified schedule import."""
+        training = self.db.query(Training).filter(Training.id == training_id).first()
+        if not training:
+            raise ValueError("培训班不存在")
+
+        default_year = training.start_date.year if training.start_date else datetime.now().year
+
+        # Read Excel with unified aliases
+        if not file_bytes:
+            raise ValueError("Excel文件为空")
+
+        try:
+            from openpyxl import load_workbook
+        except Exception as exc:
+            raise ValueError("服务器缺少openpyxl依赖") from exc
+
+        try:
+            workbook = load_workbook(BytesIO(file_bytes), data_only=True)
+        except Exception as exc:
+            raise ValueError("Excel文件解析失败，请确认文件为.xlsx格式") from exc
+
+        sheet = workbook.active
+        raw_rows = list(sheet.iter_rows(values_only=True))
+        if not raw_rows:
+            raise ValueError("Excel文件为空")
+
+        # Map headers
+        alias_map = self._build_alias_map(self.SCHEDULE_UNIFIED_FIELD_ALIASES)
+        header_row = raw_rows[0]
+        header_keys: List[str] = []
+        for index, raw_header in enumerate(header_row):
+            normalized = self._normalize_header(raw_header)
+            canonical = alias_map.get(normalized, normalized or f"column_{index + 1}")
+            header_keys.append(canonical)
+
+        # Check required columns
+        errors: List[Dict[str, Any]] = []
+        found_fields = set(header_keys)
+        required_fields = {"date", "time_range", "course_name", "instructor_name"}
+        missing_fields = required_fields - found_fields
+        if missing_fields:
+            field_labels = {
+                "date": "日期",
+                "time_range": "时间",
+                "course_name": "课程安排",
+                "instructor_name": "主讲教官",
+            }
+            for field in missing_fields:
+                errors.append({
+                    "row": 0,
+                    "message": f"未找到字段「{field_labels.get(field, field)}」",
+                    "skippable": False,
+                })
+            return {
+                "courses": [],
+                "instructors_to_create": [],
+                "errors": errors,
+                "has_blocking_errors": True,
+                "total_rows": 0,
+                "valid_rows": 0,
+                "course_count": 0,
+                "session_count": 0,
+            }
+
+        # Parse rows
+        parsed_rows: List[Dict[str, Any]] = []
+        total_rows = 0
+        for row_index, values in enumerate(raw_rows[1:], start=2):
+            row: Dict[str, Any] = {}
+            has_value = False
+            for idx, raw_value in enumerate(values):
+                value = self._normalize_cell(raw_value)
+                if value in (None, ""):
+                    continue
+                key = header_keys[idx] if idx < len(header_keys) else f"column_{idx + 1}"
+                row[key] = value
+                has_value = True
+
+            if not has_value or self._is_example_row(row):
+                continue
+
+            total_rows += 1
+
+            # Parse date
+            parsed_date = self._parse_date(row.get("date"), default_year=default_year)
+            if not parsed_date:
+                errors.append({"row": row_index, "message": "日期格式无效或缺少日期", "skippable": True})
+                continue
+
+            # Parse time range
+            time_start, time_end = self._parse_time_range(row.get("time_range"))
+            if not time_start or not time_end:
+                errors.append({"row": row_index, "message": "时间格式无效或缺少时间", "skippable": True})
+                continue
+
+            # Course name
+            course_name = self._to_text(row.get("course_name"))
+            if not course_name:
+                errors.append({"row": row_index, "message": "缺少课程安排", "skippable": True})
+                continue
+
+            # Instructor name
+            instructor_name = self._to_text(row.get("instructor_name"))
+            if not instructor_name:
+                errors.append({"row": row_index, "message": "缺少主讲教官", "skippable": True})
+                continue
+
+            # Assistant instructors
+            assistant_names = self._split_multi_values(row.get("assistant_instructors"))
+
+            # Calculate hours
+            hours = self._calc_hours(time_start, time_end)
+            if hours <= 0:
+                errors.append({"row": row_index, "message": "时间范围无效（结束时间应晚于开始时间）", "skippable": True})
+                continue
+
+            parsed_rows.append({
+                "row": row_index,
+                "date": parsed_date,
+                "time_start": time_start,
+                "time_end": time_end,
+                "hours": round(hours, 2),
+                "course_name": course_name,
+                "instructor_name": instructor_name,
+                "assistant_names": assistant_names,
+            })
+
+        # Group by (course_name, instructor_name)
+        from collections import OrderedDict
+        groups: OrderedDict[str, List[Dict[str, Any]]] = OrderedDict()
+        for pr in parsed_rows:
+            key = f"{pr['course_name']}||{pr['instructor_name']}"
+            groups.setdefault(key, []).append(pr)
+
+        # Build preview courses
+        from app.models.course import Course as CourseModel
+        all_instructors_to_create: List[str] = []
+        seen_instructors: set[str] = set()
+        courses_preview: List[Dict[str, Any]] = []
+
+        for group_key, group_rows in groups.items():
+            course_name = group_rows[0]["course_name"]
+            instructor_name = group_rows[0]["instructor_name"]
+
+            # Collect all unique assistant names across all rows in group
+            all_assistants: List[str] = []
+            seen_assist: set[str] = set()
+            for gr in group_rows:
+                for aname in gr.get("assistant_names", []):
+                    if aname not in seen_assist:
+                        seen_assist.add(aname)
+                        all_assistants.append(aname)
+
+            # Match course resource
+            course_id = None
+            course_resource_matched = False
+            from sqlalchemy.orm import joinedload as _jl
+            candidates = self.db.query(CourseModel).options(
+                _jl(CourseModel.instructor)
+            ).filter(CourseModel.title == course_name).all()
+            if candidates:
+                matched = False
+                for c in candidates:
+                    inst = c.instructor
+                    if inst and (inst.nickname == instructor_name or inst.username == instructor_name):
+                        course_id = c.id
+                        course_resource_matched = True
+                        matched = True
+                        break
+                if not matched:
+                    # Name matches but instructor doesn't - custom course
+                    course_resource_matched = False
+
+            # Look up primary instructor
+            primary_user = self.db.query(User).filter(
+                (User.nickname == instructor_name) | (User.username == instructor_name)
+            ).first()
+            primary_instructor_id = primary_user.id if primary_user else None
+            primary_instructor_exists = primary_user is not None
+
+            if not primary_instructor_exists and instructor_name not in seen_instructors:
+                all_instructors_to_create.append(instructor_name)
+                seen_instructors.add(instructor_name)
+
+            # Look up assistant instructors
+            assistant_ids: List[Optional[int]] = []
+            assistants_to_create: List[str] = []
+            for aname in all_assistants:
+                auser = self.db.query(User).filter(
+                    (User.nickname == aname) | (User.username == aname)
+                ).first()
+                if auser:
+                    assistant_ids.append(auser.id)
+                else:
+                    assistant_ids.append(None)
+                    assistants_to_create.append(aname)
+                    if aname not in seen_instructors:
+                        all_instructors_to_create.append(aname)
+                        seen_instructors.add(aname)
+
+            # Build sessions
+            sessions = []
+            for gr in group_rows:
+                sessions.append({
+                    "row": gr["row"],
+                    "date": gr["date"],
+                    "time_range": f"{gr['time_start']}~{gr['time_end']}",
+                    "hours": gr["hours"],
+                })
+
+            courses_preview.append({
+                "name": course_name,
+                "course_id": course_id,
+                "course_resource_matched": course_resource_matched,
+                "primary_instructor_name": instructor_name,
+                "primary_instructor_id": primary_instructor_id,
+                "primary_instructor_exists": primary_instructor_exists,
+                "assistant_instructor_names": all_assistants,
+                "assistant_instructor_ids": assistant_ids,
+                "assistants_to_create": assistants_to_create,
+                "type": "theory",
+                "sessions": sessions,
+            })
+
+        return {
+            "courses": courses_preview,
+            "instructors_to_create": all_instructors_to_create,
+            "errors": errors,
+            "has_blocking_errors": False,
+            "total_rows": total_rows,
+            "valid_rows": len(parsed_rows),
+            "course_count": len(courses_preview),
+            "session_count": len(parsed_rows),
+        }
+
+    def confirm_unified_schedule(
+        self,
+        training_id: int,
+        file_bytes: bytes,
+        skip_rows: Optional[List[int]] = None,
+        commit: bool = True,
+    ) -> Dict[str, Any]:
+        """Re-parse the file, skip specified rows, create instructors & courses."""
+        training = self.db.query(Training).filter(Training.id == training_id).first()
+        if not training:
+            raise ValueError("培训班不存在")
+
+        skip_set = set(skip_rows or [])
+
+        # Get preview data (reparse)
+        preview = self.preview_unified_schedule(training_id, file_bytes)
+        if preview.get("has_blocking_errors"):
+            raise ValueError("存在阻塞性错误，无法确认导入")
+
+        # Filter out skipped rows from each course's sessions
+        filtered_courses: List[Dict[str, Any]] = []
+        for course_data in preview["courses"]:
+            filtered_sessions = [
+                s for s in course_data["sessions"]
+                if s["row"] not in skip_set
+            ]
+            if filtered_sessions:
+                course_copy = dict(course_data)
+                course_copy["sessions"] = filtered_sessions
+                filtered_courses.append(course_copy)
+
+        if not filtered_courses:
+            return {
+                "training_id": training_id,
+                "created_instructors": [],
+                "course_count": 0,
+                "session_count": 0,
+                "message": "没有可导入的数据",
+            }
+
+        # 1. Auto-create missing instructor accounts
+        created_instructors: List[str] = []
+        instructor_name_to_id: Dict[str, int] = {}
+
+        # Collect all instructor names that need to be created
+        names_to_create: set[str] = set()
+        for course_data in filtered_courses:
+            if not course_data["primary_instructor_exists"]:
+                names_to_create.add(course_data["primary_instructor_name"])
+            for aname in course_data.get("assistants_to_create", []):
+                names_to_create.add(aname)
+
+        instructor_role = self.db.query(Role).filter(Role.code == "instructor").first()
+
+        for name in names_to_create:
+            # Check again in case user was just created in this loop
+            existing = self.db.query(User).filter(
+                (User.nickname == name) | (User.username == name)
+            ).first()
+            if existing:
+                instructor_name_to_id[name] = existing.id
+                continue
+
+            # Build unique username
+            unique_username = self._build_unique_username(name)
+            new_user = User(
+                username=unique_username,
+                password_hash=auth_service.get_password_hash(self.DEFAULT_PASSWORD),
+                nickname=name,
+                is_active=True,
+            )
+            if instructor_role:
+                new_user.roles = [instructor_role]
+            self.db.add(new_user)
+            self.db.flush()
+            instructor_name_to_id[name] = new_user.id
+            created_instructors.append(name)
+
+        # Resolve all instructor IDs
+        def _resolve_instructor_id(iname: str) -> Optional[int]:
+            if iname in instructor_name_to_id:
+                return instructor_name_to_id[iname]
+            user = self.db.query(User).filter(
+                (User.nickname == iname) | (User.username == iname)
+            ).first()
+            if user:
+                instructor_name_to_id[iname] = user.id
+                return user.id
+            return None
+
+        # 2. Build course entries
+        existing_courses = self._load_training_course_payloads(training_id)
+        appended_courses: List[Dict[str, Any]] = []
+
+        for course_data in filtered_courses:
+            primary_id = course_data.get("primary_instructor_id") or _resolve_instructor_id(
+                course_data["primary_instructor_name"]
+            )
+            assistant_ids: List[int] = []
+            for i, aname in enumerate(course_data.get("assistant_instructor_names", [])):
+                aid = (
+                    course_data["assistant_instructor_ids"][i]
+                    if i < len(course_data.get("assistant_instructor_ids", []))
+                    else None
+                )
+                if aid is None:
+                    aid = _resolve_instructor_id(aname)
+                if aid is not None:
+                    assistant_ids.append(aid)
+
+            # Build schedules
+            schedules = []
+            for sess in course_data["sessions"]:
+                schedules.append({
+                    "session_id": str(uuid.uuid4()),
+                    "date": sess["date"],
+                    "time_range": sess["time_range"],
+                    "hours": sess["hours"],
+                    "location": None,
+                })
+
+            # Calculate total hours
+            total_hours = sum(s["hours"] for s in schedules)
+
+            course_entry = {
+                "course_id": course_data.get("course_id"),
+                "course_key": str(uuid.uuid4()),
+                "name": course_data["name"],
+                "location": None,
+                "instructor": course_data["primary_instructor_name"],
+                "primary_instructor_id": primary_id,
+                "assistant_instructor_ids": assistant_ids,
+                "type": course_data.get("type") or "theory",
+                "hours": round(total_hours, 2),
+                "schedules": schedules,
+            }
+            appended_courses.append(course_entry)
+
+        # 3. Persist
+        total_sessions = sum(len(c["schedules"]) for c in appended_courses)
+
+        if appended_courses:
+            self._persist_training_courses(training_id, existing_courses + appended_courses)
+            if commit:
+                self.db.commit()
+        elif commit:
+            self.db.rollback()
+
+        return {
+            "training_id": training_id,
+            "created_instructors": created_instructors,
+            "course_count": len(appended_courses),
+            "session_count": total_sessions,
+            "message": f"成功导入 {len(appended_courses)} 门课程，{total_sessions} 个课次",
+        }
 
     # ===== Row Parsing =====
 
@@ -1147,7 +1553,7 @@ class BatchImportService:
         return ""
 
     @staticmethod
-    def _parse_date(value: Any) -> Optional[str]:
+    def _parse_date(value: Any, default_year: Optional[int] = None) -> Optional[str]:
         if value is None or value == "":
             return None
         if isinstance(value, datetime):
@@ -1167,12 +1573,22 @@ class BatchImportService:
             return None
         text = text.replace("年", "-").replace("月", "-").replace("日", "")
         text = text.replace(".", "-").replace("/", "-")
+        # Remove trailing dash from e.g. "4-10-" (from "4月10日" conversion)
+        text = text.rstrip("-")
         for fmt in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%m-%d-%Y"):
             try:
                 parsed = datetime.strptime(text, fmt)
                 return parsed.date().isoformat()
             except ValueError:
                 continue
+        # Try month-day only (e.g. "4-10")
+        if default_year is not None:
+            for fmt in ("%m-%d",):
+                try:
+                    parsed = datetime.strptime(text, fmt)
+                    return date(default_year, parsed.month, parsed.day).isoformat()
+                except ValueError:
+                    continue
         return None
 
     @staticmethod

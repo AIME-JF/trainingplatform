@@ -242,3 +242,26 @@ export function importTrainingSessions(trainingId, file) {
 export function importTrainingSchedule(trainingId, file, replaceExisting = true) {
   return importTrainingSessions(trainingId, file)
 }
+
+export function previewScheduleImport(trainingId, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post(`/trainings/${trainingId}/import/schedule/preview`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export function confirmScheduleImport(trainingId, file, skipRows = []) {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('skip_rows', JSON.stringify(skipRows))
+  return request.post(`/trainings/${trainingId}/import/schedule/confirm`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export function downloadScheduleImportTemplate(trainingId) {
+  return request.get(`/trainings/${trainingId}/import/schedule/template`, {
+    responseType: 'blob',
+  })
+}

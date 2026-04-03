@@ -152,6 +152,11 @@
             <CourseScheduleTab :courses="courses" />
           </div>
 
+          <!-- ========== 资源 ========== -->
+          <div v-if="activeTab === 'resources'" class="tab-panel">
+            <ClassResourcesTab :courses="courses" :active="activeTab === 'resources'" />
+          </div>
+
           <!-- ========== 考试 ========== -->
           <div v-if="activeTab === 'exam'" class="tab-panel">
             <a-empty v-if="!detail.exam_sessions?.length" description="暂无考试安排" />
@@ -321,6 +326,7 @@ import CurrentSessionCard from '@/components/classes/detail/CurrentSessionCard.v
 import ActivityFeed from '@/components/classes/detail/ActivityFeed.vue'
 import NoticeList from '@/components/classes/detail/NoticeList.vue'
 import CourseScheduleTab from '@/components/classes/detail/CourseScheduleTab.vue'
+import ClassResourcesTab from '@/components/classes/detail/ClassResourcesTab.vue'
 import CheckinManager from '@/components/classes/detail/CheckinManager.vue'
 import CheckoutManager from '@/components/classes/detail/CheckoutManager.vue'
 import StudentCheckinConfirm from '@/components/classes/detail/StudentCheckinConfirm.vue'
@@ -459,6 +465,7 @@ const visibleTabs = computed(() => {
   const tabs = [
     { key: 'overview', label: '概览' },
     { key: 'schedule', label: '课程' },
+    { key: 'resources', label: '资源' },
     { key: 'exam', label: '考试' },
   ]
   if (isClassInstructor.value) {
