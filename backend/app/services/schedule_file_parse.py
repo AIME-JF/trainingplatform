@@ -254,7 +254,7 @@ class ScheduleFileParseService:
 
         result = dict(task.result_payload or {})
         stage = result.get("task_stage")
-        if stage != "preview":
+        if stage not in ("training_config", "preview"):
             raise ValueError("请先完成所有步骤后再确认")
 
         confirmed_class = result.get("confirmed_class_info") or result.get("class_info")
@@ -408,7 +408,7 @@ class ScheduleFileParseService:
     def _auto_create_instructors(self, class_info: Any, courses: list) -> list[str]:
         """自动创建不存在的教官账号，返回已创建的姓名列表"""
         from app.services.auth import AuthService
-        auth_service = AuthService(self.db)
+        auth_service = AuthService()
         instructor_role = self.db.query(Role).filter(Role.code == "instructor").first()
 
         names_to_create: set[str] = set()

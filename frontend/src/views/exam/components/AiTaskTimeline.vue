@@ -64,8 +64,8 @@ const currentStatusLabel = computed(() => {
       const stageLabels = {
         class_info_confirmation: '待确认班级信息',
         course_confirmation: '待确认课表',
+        preview: '待预览确认',
         training_config: '待完善信息',
-        preview: '待最终确认',
       }
       return stageLabels[props.stage] || '解析完成'
     }
@@ -106,7 +106,7 @@ const stepTitles = computed(() => {
     return ['创建任务', '智能生成', '查看结果', '预览', '确认完成']
   }
   if (props.mode === 'schedule-file-parse') {
-    return ['智能解析', '确认班级信息', '确认课表', '完善班级信息', '预览', '完成']
+    return ['智能解析', '确认班级信息', '确认课表', '预览', '完善班级信息', '完成']
   }
   return ['创建任务', '后端处理', '查看结果', '确认完成']
 })
@@ -138,8 +138,8 @@ const currentStep = computed(() => {
       const stageStepMap = {
         class_info_confirmation: 1,
         course_confirmation: 2,
-        training_config: 3,
-        preview: 4,
+        preview: 3,
+        training_config: 4,
       }
       return stageStepMap[props.stage] || 1
     }

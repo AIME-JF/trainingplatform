@@ -5,18 +5,16 @@
         <h2>{{ authStore.isStudent ? '我的培训' : '培训班管理' }}</h2>
         <p class="page-sub">支持发布挂网、准入考试绑定、名单锁定和训历归档</p>
       </div>
-      <a-dropdown v-if="canCreateTraining">
-        <a-button type="primary">
-          <template #icon><PlusOutlined /></template>新建培训班 <DownOutlined />
-        </a-button>
+      <a-dropdown-button v-if="canCreateTraining" type="primary" :trigger="['hover']" @click="openCreateModal">
+        <template #icon><DownOutlined /></template>
+        <PlusOutlined />新建培训班
         <template #overlay>
           <a-menu>
-            <a-menu-item key="form" @click="openCreateModal">单个添加</a-menu-item>
             <a-menu-item key="ai" @click="openAiCreateModal">智能创建</a-menu-item>
             <a-menu-item key="file-parse" @click="$router.push({ name: 'AiScheduleFileParse' })">智能解析课表创建</a-menu-item>
           </a-menu>
         </template>
-      </a-dropdown>
+      </a-dropdown-button>
     </div>
 
     <a-row :gutter="16" style="margin-bottom:20px">
