@@ -14,7 +14,7 @@ from app.schemas import (
     QuestionFolderCreate, QuestionFolderUpdate, QuestionFolderResponse, QuestionMoveRequest
 )
 from app.controllers import QuestionController
-from app.utils.authz import can_view_question
+from app.utils.authz import can_manage_question
 
 router = APIRouter(prefix="/questions", tags=["question_management"])
 
@@ -57,6 +57,7 @@ def get_questions(
         folder_id,
         recursive,
         current_user.user_id,
+        visibility_mode="owner",
     )
     return StandardResponse(data=data)
 
@@ -84,7 +85,7 @@ def update_question(
     """更新题目"""
     _require_permission(current_user, "UPDATE_QUESTION")
     question = db.query(Question).filter(Question.id == question_id).first()
-    if question and not can_view_question(db, question, current_user.user_id):
+    if question and not can_manage_question(db, question, current_user.user_id):
         raise HTTPException(status_code=403, detail="无权操作该题目")
     controller = QuestionController(db)
     result = controller.update_question(question_id, data, current_user.user_id)
@@ -100,10 +101,10 @@ def delete_question(
     """删除题目"""
     _require_permission(current_user, "DELETE_QUESTION")
     question = db.query(Question).filter(Question.id == question_id).first()
-    if question and not can_view_question(db, question, current_user.user_id):
+    if question and not can_manage_question(db, question, current_user.user_id):
         raise HTTPException(status_code=403, detail="无权操作该题目")
     controller = QuestionController(db)
-    controller.delete_question(question_id)
+    controller.delete_question(question_id, current_user.user_id)
     return StandardResponse(message="删除成功")
 
 
@@ -130,7 +131,7 @@ def get_question_folders(
     """获取试题文件夹树"""
     _require_permission(current_user, "GET_QUESTIONS")
     controller = QuestionController(db)
-    data = controller.get_question_folders()
+    data = controller.get_question_folders(current_user.user_id)
     return StandardResponse(data=data)
 
 
@@ -157,7 +158,7 @@ def update_question_folder(
     """更新试题文件夹"""
     _require_permission(current_user, "UPDATE_QUESTION")
     controller = QuestionController(db)
-    result = controller.update_question_folder(folder_id, data)
+    result = controller.update_question_folder(folder_id, data, current_user.user_id)
     return StandardResponse(data=result)
 
 
@@ -170,7 +171,7 @@ def delete_question_folder(
     """删除试题文件夹"""
     _require_permission(current_user, "DELETE_QUESTION")
     controller = QuestionController(db)
-    result = controller.delete_question_folder(folder_id)
+    result = controller.delete_question_folder(folder_id, current_user.user_id)
     return StandardResponse(data=result)
 
 
@@ -184,5 +185,5 @@ def move_question_to_folder(
     """移动试题到文件夹"""
     _require_permission(current_user, "UPDATE_QUESTION")
     controller = QuestionController(db)
-    result = controller.move_question_to_folder(question_id, data)
+    result = controller.move_question_to_folder(question_id, data, current_user.user_id)
     return StandardResponse(data=result)

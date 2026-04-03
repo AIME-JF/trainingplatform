@@ -8,7 +8,7 @@ from typing import Iterable, List, Optional
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import AITask, ExamPaper, KnowledgePoint, Question
+from app.models import AITask, ExamPaper, KnowledgePoint, Question, QuestionFolder
 from app.schemas import (
     AIPaperAssemblyTaskCreateRequest,
     AIPaperAssemblyParsedRequest,
@@ -33,6 +33,7 @@ from app.agents.paper_assembly_parser import AIPaperAssemblyParser
 from app.agents.paper_generator import AIPaperGenerator
 from app.services.exam import ExamService
 from app.services.question import QuestionService, deduplicate_questions
+from app.services.course import CourseService
 from app.utils.authz import can_view_question_with_context
 from app.utils.data_scope import build_data_scope_context
 from logger import logger
@@ -139,6 +140,7 @@ class AIService:
         current_user_id: int,
     ) -> AIQuestionTaskDetailResponse:
         normalized_data = self._normalize_question_task_request(data)
+        self._ensure_question_task_course_manageable(normalized_data.course_id, current_user_id)
         task = self._create_task_entity(
             normalized_data.task_name,
             self.QUESTION_TASK_TYPE,
@@ -471,7 +473,11 @@ class AIService:
             raise ValueError("任务结果中没有可确认的题目")
         self._validate_question_task_result(task, questions)
 
-        created_ids = [self._persist_question_draft(item, current_user_id).id for item in questions]
+        target_folder = self._ensure_question_task_target_folder(task, current_user_id)
+        created_ids = [
+            self._persist_question_draft(item, current_user_id, folder_id=target_folder.id).id
+            for item in questions
+        ]
         task.confirmed_question_ids = created_ids
         task.status = "confirmed"
         task.confirmed_at = datetime.now()
@@ -759,9 +765,18 @@ class AIService:
         if not task_name or not topic:
             raise ValueError("请填写任务名称和出题主题")
 
+        target_bank_name = str(data.target_bank_name or "").strip() or f"{topic}题库"
+        source_material_name = str(data.source_material_name or "").strip() or None
+        source_material_type = str(data.source_material_type or "").strip() or None
+        course_name = str(data.course_name or "").strip() or None
+
         payload = data.model_dump(mode="python")
         payload["task_name"] = task_name
         payload["topic"] = topic
+        payload["target_bank_name"] = target_bank_name[:100]
+        payload["course_name"] = course_name
+        payload["source_material_name"] = source_material_name
+        payload["source_material_type"] = source_material_type
         payload["source_text"] = (data.source_text or "").strip() or None
         payload["requirements"] = (data.requirements or "").strip() or None
         payload["question_count"] = question_count
@@ -1514,7 +1529,48 @@ class AIService:
             ordered_ids.append(self._persist_question_draft(draft, current_user_id).id)
         return ordered_ids
 
-    def _persist_question_draft(self, draft: AITaskQuestionDraft, current_user_id: int) -> Question:
+    def _ensure_question_task_course_manageable(self, course_id: Optional[int], current_user_id: int) -> None:
+        if course_id is None:
+            return
+        course_service = CourseService(self.db)
+        course = course_service.get_course_entity(course_id)
+        if not course:
+            raise ValueError("关联课程不存在")
+        if not course_service.can_manage_course(course, current_user_id):
+            raise ValueError("无权关联该课程")
+
+    def _ensure_question_task_target_folder(self, task: AITask, current_user_id: int) -> QuestionFolder:
+        request_payload = AIQuestionTaskCreateRequest.model_validate(task.request_payload or {})
+        self._ensure_question_task_course_manageable(request_payload.course_id, current_user_id)
+
+        folder_name = str(request_payload.target_bank_name or "").strip() or f"{request_payload.topic}题库"
+        folder = self.db.query(QuestionFolder).filter(
+            QuestionFolder.created_by == current_user_id,
+            QuestionFolder.name == folder_name,
+        ).first()
+        if folder:
+            folder.course_id = request_payload.course_id
+            if not folder.category:
+                folder.category = "AI生成"
+            self.db.flush()
+            return folder
+
+        folder = QuestionFolder(
+            name=folder_name,
+            category="AI生成",
+            created_by=current_user_id,
+            course_id=request_payload.course_id,
+        )
+        self.db.add(folder)
+        self.db.flush()
+        return folder
+
+    def _persist_question_draft(
+        self,
+        draft: AITaskQuestionDraft,
+        current_user_id: int,
+        folder_id: Optional[int] = None,
+    ) -> Question:
         question_service = QuestionService(self.db)
         return question_service._create_question_entity(
             QuestionCreate(
@@ -1527,6 +1583,7 @@ class AIService:
                 knowledge_point_names=draft.knowledge_points,
                 police_type_id=draft.police_type_id,
                 score=draft.score,
+                folder_id=folder_id,
             ),
             current_user_id,
         )

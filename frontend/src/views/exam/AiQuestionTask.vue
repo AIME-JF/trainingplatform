@@ -56,6 +56,33 @@
                   />
                 </div>
               </div>
+              <div class="form-grid-2 mt-16">
+                <div class="form-field">
+                  <label class="field-label required">生成到题库</label>
+                  <input
+                    type="text"
+                    class="field-input"
+                    v-model="taskForm.targetBankName"
+                    placeholder="例：刑侦基础训练题库"
+                  />
+                </div>
+                <div class="form-field">
+                  <label class="field-label">关联课程</label>
+                  <a-select
+                    v-model:value="taskForm.courseId"
+                    allow-clear
+                    show-search
+                    option-filter-prop="label"
+                    placeholder="不关联课程时仅自己可见"
+                    style="width: 100%"
+                    @change="handleCourseChange"
+                  >
+                    <a-select-option v-for="item in courseOptions" :key="item.id" :value="item.id" :label="item.title">
+                      {{ item.title }}
+                    </a-select-option>
+                  </a-select>
+                </div>
+              </div>
             </section>
 
             <!-- 核心区域：左右分栏 -->
@@ -150,6 +177,15 @@
                 <!-- 参考文本 -->
                 <div class="form-field-full">
                   <label class="field-label">参考文本 (AI 生成依据)</label>
+                  <div class="material-toolbar">
+                    <input ref="fileInputRef" type="file" class="hidden-file-input" accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt" @change="handleSourceFileChange" />
+                    <a-space>
+                      <a-button :loading="parsingFile" @click="triggerSourceFileSelect">上传材料并提取文本</a-button>
+                      <span v-if="taskForm.sourceMaterialName" class="material-name">
+                        已加载：{{ taskForm.sourceMaterialName }}
+                      </span>
+                    </a-space>
+                  </div>
                   <div class="textarea-wrapper">
                     <textarea
                       class="field-textarea min-h-[200px]"
@@ -232,7 +268,7 @@
                           v-slot="{ disabled }"
                         >
                           <a-button type="primary" :loading="confirming" :disabled="disabled" @click="handleConfirmTask">
-                            确认入题库
+                            确认生成题库
                           </a-button>
                         </permissions-tooltip>
                       </a-space>
@@ -248,10 +284,14 @@
                     <div class="detail-section">
                       <div class="detail-section-title">任务请求</div>
                       <a-descriptions :column="2" size="small" bordered>
+                        <a-descriptions-item label="目标题库">{{ activeTask.requestPayload?.targetBankName || '未设置' }}</a-descriptions-item>
+                        <a-descriptions-item label="关联课程">{{ activeTask.requestPayload?.courseName || '未关联' }}</a-descriptions-item>
                         <a-descriptions-item label="知识点">{{ activeTask.requestPayload?.knowledgePoints?.join('、') || '未设置' }}</a-descriptions-item>
                         <a-descriptions-item label="题型">{{ formatQuestionTypes(activeTask.requestPayload?.questionTypes) }}</a-descriptions-item>
                         <a-descriptions-item label="题目数量">{{ activeTask.requestPayload?.questionCount }}</a-descriptions-item>
                         <a-descriptions-item label="默认分值">{{ activeTask.requestPayload?.score }}</a-descriptions-item>
+                        <a-descriptions-item label="来源材料">{{ activeTask.requestPayload?.sourceMaterialName || '未上传材料' }}</a-descriptions-item>
+                        <a-descriptions-item label="材料类型">{{ activeTask.requestPayload?.sourceMaterialType || '未设置' }}</a-descriptions-item>
                       </a-descriptions>
                     </div>
 
@@ -353,8 +393,10 @@ import {
   createAiQuestionTask,
   getAiQuestionTaskDetail,
   getAiQuestionTasks,
+  parseAiDocumentFile,
   updateAiQuestionTaskResult,
 } from '@/api/ai'
+import { getCourses } from '@/api/course'
 import { getPoliceTypes } from '@/api/user'
 import AiTaskTimeline from './components/AiTaskTimeline.vue'
 import QuestionFormModal from './components/QuestionFormModal.vue'
@@ -373,6 +415,7 @@ const DEFAULT_QUESTION_TYPE = 'single'
 const creating = ref(false)
 const saving = ref(false)
 const confirming = ref(false)
+const parsingFile = ref(false)
 const taskLoading = ref(false)
 const questionModalOpen = ref(false)
 const editingQuestion = ref(null)
@@ -381,6 +424,8 @@ const taskList = ref([])
 const activeTask = ref(null)
 const activeTab = ref('create')
 const policeTypeOptions = ref([])
+const courseOptions = ref([])
+const fileInputRef = ref(null)
 const {
   knowledgePointLoading,
   knowledgePointSelectOptions,
@@ -391,6 +436,11 @@ const {
 const taskForm = reactive({
   taskName: '',
   topic: '',
+  targetBankName: '',
+  courseId: undefined,
+  courseName: '',
+  sourceMaterialName: '',
+  sourceMaterialType: '',
   sourceText: '',
   knowledgePoints: [],
   questionCount: 10,
@@ -421,6 +471,11 @@ function resetTaskForm() {
   Object.assign(taskForm, {
     taskName: '',
     topic: '',
+    targetBankName: '',
+    courseId: undefined,
+    courseName: '',
+    sourceMaterialName: '',
+    sourceMaterialType: '',
     sourceText: '',
     knowledgePoints: [],
     questionCount: 10,
@@ -450,6 +505,47 @@ async function loadPoliceTypeOptions() {
     policeTypeOptions.value = result.items || result || []
   } catch {
     policeTypeOptions.value = []
+  }
+}
+
+async function loadCourseOptions() {
+  try {
+    const result = await getCourses({ page: 1, size: -1 })
+    courseOptions.value = result.items || []
+  } catch {
+    courseOptions.value = []
+  }
+}
+
+function handleCourseChange(value) {
+  const selectedCourse = courseOptions.value.find((item) => item.id === value)
+  taskForm.courseName = selectedCourse?.title || ''
+}
+
+function triggerSourceFileSelect() {
+  fileInputRef.value?.click?.()
+}
+
+async function handleSourceFileChange(event) {
+  const file = event?.target?.files?.[0]
+  if (!file) return
+
+  parsingFile.value = true
+  try {
+    const result = await parseAiDocumentFile(file)
+    taskForm.sourceText = result.text || ''
+    taskForm.sourceMaterialName = result.filename || file.name
+    const filename = result.filename || file.name || ''
+    const extension = filename.includes('.') ? filename.split('.').pop()?.toLowerCase() : ''
+    taskForm.sourceMaterialType = extension || file.type || ''
+    message.success('材料内容已提取，可继续生成题库')
+  } catch (error) {
+    message.error(error.message || '材料解析失败')
+  } finally {
+    parsingFile.value = false
+    if (event?.target) {
+      event.target.value = ''
+    }
   }
 }
 
@@ -501,6 +597,10 @@ async function handleCreateTask() {
   try {
     const result = await createAiQuestionTask({
       ...taskForm,
+      targetBankName: taskForm.targetBankName?.trim() || `${taskForm.topic.trim()}题库`,
+      courseName: taskForm.courseName || undefined,
+      sourceMaterialName: taskForm.sourceMaterialName || undefined,
+      sourceMaterialType: taskForm.sourceMaterialType || undefined,
       questionTypes: [...taskForm.questionTypes],
       knowledgePoints: [...(taskForm.knowledgePoints || [])],
     })
@@ -598,6 +698,7 @@ async function handleConfirmTask() {
 
 onMounted(() => {
   loadPoliceTypeOptions()
+  loadCourseOptions()
   loadTasks()
 })
 </script>
@@ -718,6 +819,10 @@ onMounted(() => {
   padding: 32px;
 }
 
+.mt-16 {
+  margin-top: 16px;
+}
+
 /* 表单网格 */
 .form-grid-2 {
   display: grid;
@@ -812,6 +917,23 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   flex: 1;
+}
+
+.material-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.material-name {
+  font-size: 12px;
+  color: #64748B;
 }
 
 .textarea-counter {

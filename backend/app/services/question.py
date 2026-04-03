@@ -10,10 +10,9 @@ from sqlalchemy.orm import joinedload, selectinload
 from app.models import KnowledgePoint, PoliceType, Question, QuestionFolder, User
 from app.schemas import PaginatedResponse
 from app.schemas.exam import QuestionCreate, QuestionUpdate, QuestionResponse, QuestionBatchCreate, QuestionFolderCreate, QuestionFolderUpdate
-from app.schemas.knowledge_point import KnowledgePointSimpleResponse
-from app.utils.authz import can_view_question_with_context
 from app.utils.data_scope import build_data_scope_context, can_assign_scoped_values
 from logger import logger
+from .course import CourseService
 from .knowledge_point import KnowledgePointService
 
 
@@ -59,12 +58,15 @@ class QuestionService:
         recursive: bool = False,
         current_user_id: Optional[int] = None,
         course_id: Optional[int] = None,
+        visibility_mode: str = "owner",
     ) -> PaginatedResponse[QuestionResponse]:
         """获取题目列表"""
         query = self.db.query(Question).options(*self._question_load_options())
 
-        if search or knowledge_point or knowledge_point_id is not None or course_id is not None:
+        if search or knowledge_point or knowledge_point_id is not None:
             query = query.outerjoin(Question.knowledge_points)
+        if course_id is not None:
+            query = query.outerjoin(Question.folder)
         if search:
             query = query.filter(
                 or_(
@@ -83,7 +85,7 @@ class QuestionService:
         if knowledge_point_id is not None:
             query = query.filter(KnowledgePoint.id == knowledge_point_id)
         if course_id is not None:
-            query = query.filter(KnowledgePoint.course_id == course_id)
+            query = query.filter(QuestionFolder.course_id == course_id)
 
         # 文件夹筛选，支持递归
         if folder_id is not None:
@@ -97,13 +99,7 @@ class QuestionService:
 
         query = query.order_by(Question.created_at.desc(), Question.id.desc())
         questions = deduplicate_questions(query.all())
-        scope_context = build_data_scope_context(self.db, current_user_id) if current_user_id else None
-        if scope_context:
-            questions = [
-                question
-                for question in questions
-                if can_view_question_with_context(scope_context, question)
-            ]
+        questions = self._filter_questions_by_visibility(questions, current_user_id, visibility_mode)
         total = len(questions)
 
         if size != -1:
@@ -134,6 +130,8 @@ class QuestionService:
         question = self._get_question_entity(question_id)
         if not question:
             return None
+        if user_id is not None:
+            self._ensure_question_manageable(question, user_id)
 
         update_data = data.model_dump(exclude_unset=True)
         knowledge_point_names = update_data.pop("knowledge_point_names", None)
@@ -141,6 +139,12 @@ class QuestionService:
             if user_id is not None:
                 self._ensure_actor_can_assign_question_scope(user_id, update_data["police_type_id"])
             self._ensure_police_type(update_data["police_type_id"])
+        if "folder_id" in update_data and update_data["folder_id"] is not None:
+            folder = self.db.query(QuestionFolder).filter(QuestionFolder.id == update_data["folder_id"]).first()
+            if not folder:
+                raise ValueError("题库不存在")
+            if user_id is not None:
+                self._ensure_folder_manageable(folder, user_id)
         for field, value in update_data.items():
             setattr(question, field, value)
         if knowledge_point_names is not None:
@@ -150,11 +154,12 @@ class QuestionService:
         logger.info(f"更新题目: {question.id}")
         return self._get_question_response(question.id)
 
-    def delete_question(self, question_id: int) -> bool:
+    def delete_question(self, question_id: int, user_id: Optional[int] = None) -> bool:
         """删除题目"""
         question = self.db.query(Question).filter(Question.id == question_id).first()
         if not question:
             return False
+        self._ensure_question_manageable(question, user_id)
         self.db.delete(question)
         self.db.commit()
         logger.info(f"删除题目: {question_id}")
@@ -210,9 +215,64 @@ class QuestionService:
             "children": [],
         }
 
-    def get_question_folders(self) -> List:
+    def get_question_folders(self, current_user_id: int) -> List:
         """获取试题文件夹树"""
-        folders = self.db.query(QuestionFolder).order_by(QuestionFolder.sort_order, QuestionFolder.id).all()
+        folders = (
+            self.db.query(QuestionFolder)
+            .filter(QuestionFolder.created_by == current_user_id)
+            .order_by(QuestionFolder.sort_order, QuestionFolder.id)
+            .all()
+        )
+
+        return self._build_folder_responses(folders)
+
+    def get_practice_question_folders(self, current_user_id: int) -> List:
+        course_ids = self._get_accessible_course_ids(current_user_id)
+        if not course_ids:
+            return []
+
+        folders = (
+            self.db.query(QuestionFolder)
+            .filter(QuestionFolder.course_id.in_(course_ids))
+            .order_by(QuestionFolder.sort_order, QuestionFolder.id)
+            .all()
+        )
+        return self._build_folder_responses(folders)
+
+    def get_practice_knowledge_points(self, current_user_id: int) -> List[dict]:
+        course_ids = self._get_accessible_course_ids(current_user_id)
+        if not course_ids:
+            return []
+
+        from sqlalchemy import func as sa_func
+
+        rows = (
+            self.db.query(
+                KnowledgePoint.id,
+                KnowledgePoint.name,
+                sa_func.count(sa_func.distinct(Question.id)).label("question_count"),
+            )
+            .join(KnowledgePoint.questions)
+            .join(Question.folder)
+            .filter(QuestionFolder.course_id.in_(course_ids))
+            .group_by(KnowledgePoint.id, KnowledgePoint.name)
+            .order_by(KnowledgePoint.name.asc(), KnowledgePoint.id.asc())
+            .all()
+        )
+        return [
+            {
+                "id": row.id,
+                "name": row.name,
+                "question_count": int(row.question_count or 0),
+                "police_type": None,
+                "difficulty_avg": None,
+            }
+            for row in rows
+        ]
+
+    def _build_folder_responses(self, folders: List[QuestionFolder]) -> List:
+        if not folders:
+            return []
 
         creator_ids = {f.created_by for f in folders if f.created_by}
         creators = {u.id: u for u in self.db.query(User).filter(User.id.in_(creator_ids)).all()} if creator_ids else {}
@@ -311,44 +371,59 @@ class QuestionService:
             parent = self.db.query(QuestionFolder).filter(QuestionFolder.id == data.parent_id).first()
             if not parent:
                 raise ValueError("父文件夹不存在")
+            self._ensure_folder_manageable(parent, user_id)
+        self._ensure_course_manageable(data.course_id, user_id)
         folder = QuestionFolder(
             name=data.name,
             category=data.category,
             parent_id=data.parent_id,
             sort_order=data.sort_order,
             created_by=user_id,
+            course_id=data.course_id,
         )
         self.db.add(folder)
         self.db.commit()
         return self._build_folder_response(folder)
 
-    def update_question_folder(self, folder_id: int, data: QuestionFolderUpdate):
+    def update_question_folder(self, folder_id: int, data: QuestionFolderUpdate, user_id: int):
         folder = self.db.query(QuestionFolder).filter(QuestionFolder.id == folder_id).first()
         if not folder:
             raise ValueError("文件夹不存在")
-        if data.name is not None:
-            folder.name = data.name
-        if data.category is not None:
-            folder.category = data.category
-        if data.parent_id is not None:
-            if data.parent_id == folder_id:
+        self._ensure_folder_manageable(folder, user_id)
+
+        update_data = data.model_dump(exclude_unset=True)
+        if "name" in update_data:
+            folder.name = update_data["name"]
+        if "category" in update_data:
+            folder.category = update_data["category"]
+        if "parent_id" in update_data:
+            parent_id = update_data["parent_id"]
+            if parent_id == folder_id:
                 raise ValueError("不能将文件夹设置为自己的子文件夹")
-            parent = self.db.query(QuestionFolder).filter(QuestionFolder.id == data.parent_id).first()
-            if not parent:
-                raise ValueError("父文件夹不存在")
-            folder.parent_id = data.parent_id
-        if data.sort_order is not None:
-            folder.sort_order = data.sort_order
+            if parent_id is None:
+                folder.parent_id = None
+            else:
+                parent = self.db.query(QuestionFolder).filter(QuestionFolder.id == parent_id).first()
+                if not parent:
+                    raise ValueError("父文件夹不存在")
+                self._ensure_folder_manageable(parent, user_id)
+                folder.parent_id = parent_id
+        if "sort_order" in update_data:
+            folder.sort_order = update_data["sort_order"]
+        if "course_id" in update_data:
+            self._ensure_course_manageable(update_data["course_id"], user_id)
+            folder.course_id = update_data["course_id"]
         self.db.commit()
 
         q_count = self.db.query(Question).filter(Question.folder_id == folder_id).count()
         return self._build_folder_response(folder, question_count=q_count)
 
-    def delete_question_folder(self, folder_id: int) -> None:
+    def delete_question_folder(self, folder_id: int, user_id: int) -> None:
         """删除文件夹"""
         folder = self.db.query(QuestionFolder).filter(QuestionFolder.id == folder_id).first()
         if not folder:
             raise ValueError("文件夹不存在")
+        self._ensure_folder_manageable(folder, user_id)
         children = self.db.query(QuestionFolder).filter(QuestionFolder.parent_id == folder_id).count()
         if children > 0:
             raise ValueError("请先删除子文件夹")
@@ -358,15 +433,17 @@ class QuestionService:
         self.db.delete(folder)
         self.db.commit()
 
-    def move_question_to_folder(self, question_id: int, folder_id: Optional[int]) -> QuestionResponse:
+    def move_question_to_folder(self, question_id: int, folder_id: Optional[int], user_id: int) -> QuestionResponse:
         """移动试题到文件夹"""
         question = self._get_question_entity(question_id)
         if not question:
             raise ValueError("试题不存在")
+        self._ensure_question_manageable(question, user_id)
         if folder_id is not None:
             folder = self.db.query(QuestionFolder).filter(QuestionFolder.id == folder_id).first()
             if not folder:
                 raise ValueError("目标文件夹不存在")
+            self._ensure_folder_manageable(folder, user_id)
         question.folder_id = folder_id
         self.db.commit()
         return self._get_question_response(question.id)
@@ -374,6 +451,7 @@ class QuestionService:
     def _question_load_options(self) -> tuple:
         return (
             joinedload(Question.police_type),
+            joinedload(Question.folder).joinedload(QuestionFolder.course),
             selectinload(Question.knowledge_points),
         )
 
@@ -408,6 +486,11 @@ class QuestionService:
         if check_scope:
             self._ensure_actor_can_assign_question_scope(user_id, data.police_type_id)
         self._ensure_police_type(data.police_type_id)
+        if data.folder_id is not None:
+            folder = self.db.query(QuestionFolder).filter(QuestionFolder.id == data.folder_id).first()
+            if not folder:
+                raise ValueError("题库不存在")
+            self._ensure_folder_manageable(folder, user_id)
 
         question = Question(
             type=data.type,
@@ -453,6 +536,65 @@ class QuestionService:
             treat_missing_as_unrestricted=True,
         ):
             raise ValueError("超出当前角色可操作的数据范围")
+
+    def _get_accessible_course_ids(self, user_id: Optional[int]) -> List[int]:
+        if not user_id:
+            return []
+        course_service = CourseService(self.db)
+        result = course_service.get_courses(page=1, size=-1, user_id=user_id)
+        return [item.id for item in result.items or []]
+
+    def _filter_questions_by_visibility(
+        self,
+        questions: List[Question],
+        current_user_id: Optional[int],
+        visibility_mode: str,
+    ) -> List[Question]:
+        if not current_user_id:
+            return []
+
+        if visibility_mode == "practice":
+            visible_course_ids = set(self._get_accessible_course_ids(current_user_id))
+            return [
+                question
+                for question in questions
+                if question.folder
+                and question.folder.course_id in visible_course_ids
+            ]
+
+        return [
+            question
+            for question in questions
+            if self._is_owner_visible_question(question, current_user_id)
+        ]
+
+    @staticmethod
+    def _is_owner_visible_question(question: Question, current_user_id: int) -> bool:
+        if question.folder:
+            return question.folder.created_by == current_user_id
+        return question.created_by == current_user_id
+
+    def _ensure_question_manageable(self, question: Optional[Question], user_id: Optional[int]) -> None:
+        if not question:
+            raise ValueError("试题不存在")
+        if not user_id or not self._is_owner_visible_question(question, user_id):
+            raise ValueError("无权操作该试题")
+
+    def _ensure_folder_manageable(self, folder: Optional[QuestionFolder], user_id: Optional[int]) -> None:
+        if not folder:
+            raise ValueError("文件夹不存在")
+        if not user_id or folder.created_by != user_id:
+            raise ValueError("无权操作该题库")
+
+    def _ensure_course_manageable(self, course_id: Optional[int], user_id: Optional[int]) -> None:
+        if course_id is None:
+            return
+        course_service = CourseService(self.db)
+        course = course_service.get_course_entity(course_id)
+        if not course:
+            raise ValueError("关联课程不存在")
+        if not course_service.can_manage_course(course, user_id):
+            raise ValueError("无权关联该课程")
 
     def _to_response(self, question: Question) -> QuestionResponse:
         knowledge_points = sorted(question.knowledge_points or [], key=lambda item: (item.name or "", item.id or 0))

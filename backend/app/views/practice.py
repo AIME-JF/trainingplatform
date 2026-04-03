@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.controllers import KnowledgePointController, PoliceTypeController, QuestionController
+from app.controllers import PoliceTypeController, QuestionController
 from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.models import PracticeRecord
@@ -36,16 +36,11 @@ def get_practice_sources(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    knowledge_point_controller = KnowledgePointController(db)
     question_controller = QuestionController(db)
     police_type_controller = PoliceTypeController(db)
 
-    knowledge_points = knowledge_point_controller.get_knowledge_points(
-        page=1,
-        size=-1,
-        is_active=True,
-    ).items
-    question_folders = question_controller.get_question_folders()
+    knowledge_points = question_controller.get_practice_knowledge_points(current_user.user_id)
+    question_folders = question_controller.get_practice_question_folders(current_user.user_id)
     police_types = police_type_controller.get_police_types(
         page=1,
         size=-1,
@@ -94,6 +89,7 @@ def get_practice_questions(
         recursive,
         current_user.user_id,
         course_id,
+        visibility_mode="practice",
     )
     return StandardResponse(data=data)
 
