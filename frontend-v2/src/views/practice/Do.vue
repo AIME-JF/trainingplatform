@@ -347,8 +347,8 @@ const practiceSource = computed(() => {
 
 const practiceFilters = computed(() => ({
   questionLimit: parseQuestionLimit(getSingleQueryValue(route.query.questionLimit)),
-  questionType: normalizeQuestionType(getSingleQueryValue(route.query.questionType)),
-  difficulty: parsePositiveInt(getSingleQueryValue(route.query.difficulty)),
+  questionTypes: normalizeQuestionTypeList(getSingleQueryValue(route.query.questionType)),
+  difficulties: parsePositiveIntList(getSingleQueryValue(route.query.difficulty)),
   policeTypeId: parsePositiveInt(getSingleQueryValue(route.query.policeTypeId)),
   policeTypeName: getSingleQueryValue(route.query.policeTypeName),
   keyword: getSingleQueryValue(route.query.keyword).trim(),
@@ -369,11 +369,11 @@ const filterSummary = computed(() => {
   } else {
     tags.push('题量不限')
   }
-  if (practiceFilters.value.questionType) {
-    tags.push(questionTypeLabels[practiceFilters.value.questionType] || practiceFilters.value.questionType)
+  if (practiceFilters.value.questionTypes.length) {
+    tags.push(practiceFilters.value.questionTypes.map((item) => questionTypeLabels[item] || item).join(' / '))
   }
-  if (practiceFilters.value.difficulty) {
-    tags.push(`难度 ${practiceFilters.value.difficulty}`)
+  if (practiceFilters.value.difficulties.length) {
+    tags.push(`难度 ${practiceFilters.value.difficulties.join(' / ')}`)
   }
   if (practiceFilters.value.policeTypeName) {
     tags.push(`警种：${practiceFilters.value.policeTypeName}`)
@@ -414,6 +414,22 @@ function normalizeQuestionType(value) {
   return ''
 }
 
+function normalizeQuestionTypeList(value) {
+  if (!value) return []
+  return String(value)
+    .split(',')
+    .map((item) => normalizeQuestionType(item.trim()))
+    .filter(Boolean)
+}
+
+function parsePositiveIntList(value) {
+  if (!value) return []
+  return String(value)
+    .split(',')
+    .map((item) => parsePositiveInt(item.trim()))
+    .filter((item) => Number.isInteger(item) && item > 0)
+}
+
 function shuffleQuestions(list) {
   const shuffled = [...list]
   for (let i = shuffled.length - 1; i > 0; i--) {
@@ -426,6 +442,108 @@ function shuffleQuestions(list) {
 function applyQuestionLimit(list, limit) {
   if (!limit || list.length <= limit) return list
   return shuffleQuestions(list).slice(0, limit)
+}
+
+function filterQuestionsByConditions(list, options = {}) {
+  const questionTypes = options.questionTypes || []
+  const difficulties = options.difficulties || []
+  return list.filter((question) => {
+    const matchedType = !questionTypes.length || questionTypes.includes(String(question?.type || ''))
+    const matchedDifficulty = !difficulties.length || difficulties.includes(Number(question?.difficulty || 0))
+    return matchedType && matchedDifficulty
+  })
+}
+
+function buildSelectionTiers() {
+  const questionTypes = practiceFilters.value.questionTypes
+  const difficulties = practiceFilters.value.difficulties
+  const tiers = [
+    {
+      label: '所选题型和难度',
+      options: { questionTypes, difficulties },
+    },
+  ]
+
+  if (questionTypes.length && difficulties.length) {
+    tiers.push({
+      label: '所选题型，不限难度',
+      options: { questionTypes, difficulties: [] },
+    })
+    tiers.push({
+      label: '不限题型，所选难度',
+      options: { questionTypes: [], difficulties },
+    })
+  }
+
+  if (questionTypes.length || difficulties.length) {
+    tiers.push({
+      label: '当前知识点/题库下全部题目',
+      options: { questionTypes: [], difficulties: [] },
+    })
+  }
+
+  return tiers
+}
+
+function applyPracticeFilters(list, limit) {
+  const tiers = buildSelectionTiers()
+  const strictMatches = shuffleQuestions(filterQuestionsByConditions(list, tiers[0]?.options || {}))
+
+  if (!limit) {
+    if (strictMatches.length) {
+      return { questions: strictMatches, notice: '' }
+    }
+    for (const tier of tiers.slice(1)) {
+      const fallbackMatches = shuffleQuestions(filterQuestionsByConditions(list, tier.options))
+      if (fallbackMatches.length) {
+        return {
+          questions: fallbackMatches,
+          notice: `未找到完全符合条件的题目，已自动放宽为“${tier.label}”。`,
+        }
+      }
+    }
+    return { questions: [], notice: '' }
+  }
+
+  const selected = []
+  const selectedIds = new Set()
+  const usedTiers = []
+
+  for (const tier of tiers) {
+    if (selected.length >= limit) break
+    const tierMatches = shuffleQuestions(filterQuestionsByConditions(list, tier.options))
+    for (const question of tierMatches) {
+      if (selected.length >= limit) break
+      if (selectedIds.has(question.id)) continue
+      selected.push(question)
+      selectedIds.add(question.id)
+      if (!usedTiers.includes(tier.label)) {
+        usedTiers.push(tier.label)
+      }
+    }
+  }
+
+  if (strictMatches.length >= limit || usedTiers.length <= 1) {
+    if (selected.length > 0 && selected.length < limit) {
+      return {
+        questions: selected,
+        notice: `当前筛选仅找到 ${selected.length} 题，将按现有题目开始练习。`,
+      }
+    }
+    return { questions: selected, notice: '' }
+  }
+
+  if (strictMatches.length > 0) {
+    return {
+      questions: selected,
+      notice: `当前筛选仅匹配 ${strictMatches.length} 题，已自动放宽条件补足到 ${selected.length} 题。`,
+    }
+  }
+
+  return {
+    questions: selected,
+    notice: `未找到完全符合条件的题目，已自动放宽为“${usedTiers[usedTiers.length - 1]}”。`,
+  }
 }
 
 function getQuestionTypeClass(type) {
@@ -562,8 +680,8 @@ async function finishPractice() {
       accuracy: accuracy.value,
       duration,
       question_limit: practiceFilters.value.questionLimit ? String(practiceFilters.value.questionLimit) : 'all',
-      question_type: practiceFilters.value.questionType || undefined,
-      difficulty: practiceFilters.value.difficulty || undefined,
+      question_type: practiceFilters.value.questionTypes.length ? practiceFilters.value.questionTypes.join(',') : undefined,
+      difficulty: practiceFilters.value.difficulties.length === 1 ? practiceFilters.value.difficulties[0] : undefined,
     })
   } catch (e) {
     // 记录保存失败不影响完成流程
@@ -607,8 +725,8 @@ async function loadQuestions() {
       size: 1000,
     }
     if (practiceFilters.value.keyword) params.search = practiceFilters.value.keyword
-    if (practiceFilters.value.questionType) params.type = practiceFilters.value.questionType
-    if (practiceFilters.value.difficulty) params.difficulty = practiceFilters.value.difficulty
+    if (practiceFilters.value.questionTypes.length === 1) params.type = practiceFilters.value.questionTypes[0]
+    if (practiceFilters.value.difficulties.length === 1) params.difficulty = practiceFilters.value.difficulties[0]
     if (practiceFilters.value.policeTypeId) params.police_type_id = practiceFilters.value.policeTypeId
     if (practiceFilters.value.courseId) params.course_id = practiceFilters.value.courseId
     if (source.sourceType === 'knowledge-point') {
@@ -621,8 +739,12 @@ async function loadQuestions() {
     }
 
     const response = await getPracticeQuestions(params)
-    const matched = response?.items || []
-    questions.value = applyQuestionLimit(matched, practiceFilters.value.questionLimit)
+    const resolved = applyPracticeFilters(response?.items || [], practiceFilters.value.questionLimit)
+    questions.value = resolved.questions
+
+    if (resolved.notice) {
+      message.warning(resolved.notice)
+    }
 
     if (questions.value.length === 0) {
       message.warning(source.sourceType === 'knowledge-point' ? '该知识点暂无题目' : '该题库暂无题目')
