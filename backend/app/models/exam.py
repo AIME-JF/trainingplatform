@@ -25,6 +25,14 @@ question_knowledge_point_relations = Table(
     Column("knowledge_point_id", Integer, ForeignKey("knowledge_points.id", ondelete="CASCADE"), primary_key=True),
 )
 
+# 题库与课程的多对多关联表
+question_folder_course_relations = Table(
+    "question_folder_course_relations",
+    Base.metadata,
+    Column("question_folder_id", Integer, ForeignKey("question_folders.id", ondelete="CASCADE"), primary_key=True),
+    Column("course_id", Integer, ForeignKey("courses.id", ondelete="CASCADE"), primary_key=True),
+)
+
 
 class KnowledgePoint(Base):
     """知识点表"""
@@ -89,14 +97,20 @@ class QuestionFolder(Base):
     parent_id = Column(Integer, ForeignKey("question_folders.id"), nullable=True, comment="父文件夹ID")
     sort_order = Column(Integer, default=0, comment="排序")
     created_by = Column(Integer, ForeignKey("users.id"), nullable=True, comment="创建人ID")
-    course_id = Column(Integer, ForeignKey("courses.id"), nullable=True, comment="关联课程ID")
+    # 保留旧字段用于兼容，优先使用 courses 关系
+    course_id = Column(Integer, ForeignKey("courses.id"), nullable=True, comment="关联课程ID（兼容旧数据）")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), comment="更新时间")
 
     creator = relationship("User", foreign_keys=[created_by])
     parent = relationship("QuestionFolder", remote_side=[id], backref="children")
     questions = relationship("Question", back_populates="folder")
-    course = relationship("Course", back_populates="question_folders")
+    # 多对多关系：一个题库可以关联多个课程
+    courses = relationship(
+        "Course",
+        secondary=question_folder_course_relations,
+        back_populates="question_folders",
+    )
 
 
 class PaperFolder(Base):

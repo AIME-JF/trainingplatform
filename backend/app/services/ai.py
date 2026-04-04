@@ -8,7 +8,7 @@ from typing import Iterable, List, Optional
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, selectinload
 
-from app.models import AITask, ExamPaper, KnowledgePoint, Question, QuestionFolder
+from app.models import AITask, Course, ExamPaper, KnowledgePoint, Question, QuestionFolder
 from app.schemas import (
     AIPaperAssemblyTaskCreateRequest,
     AIPaperAssemblyParsedRequest,
@@ -1541,7 +1541,15 @@ class AIService:
 
     def _ensure_question_task_target_folder(self, task: AITask, current_user_id: int) -> QuestionFolder:
         request_payload = AIQuestionTaskCreateRequest.model_validate(task.request_payload or {})
-        self._ensure_question_task_course_manageable(request_payload.course_id, current_user_id)
+
+        # 处理课程关联（支持多个课程）
+        course_ids_to_link = request_payload.course_ids or []
+        if request_payload.course_id and request_payload.course_id not in course_ids_to_link:
+            course_ids_to_link = course_ids_to_link + [request_payload.course_id]
+
+        # 验证所有课程权限
+        for cid in course_ids_to_link:
+            self._ensure_question_task_course_manageable(cid, current_user_id)
 
         folder_name = str(request_payload.target_bank_name or "").strip() or f"{request_payload.topic}题库"
         folder = self.db.query(QuestionFolder).filter(
@@ -1549,9 +1557,15 @@ class AIService:
             QuestionFolder.name == folder_name,
         ).first()
         if folder:
-            folder.course_id = request_payload.course_id
+            folder.course_id = request_payload.course_id  # 兼容旧字段
             if not folder.category:
                 folder.category = "AI生成"
+            # 更新多课程关联
+            if course_ids_to_link:
+                courses = self.db.query(Course).filter(Course.id.in_(course_ids_to_link)).all()
+                folder.courses = courses
+            else:
+                folder.courses = []
             self.db.flush()
             return folder
 
@@ -1559,10 +1573,17 @@ class AIService:
             name=folder_name,
             category="AI生成",
             created_by=current_user_id,
-            course_id=request_payload.course_id,
+            course_id=request_payload.course_id,  # 兼容旧字段
         )
         self.db.add(folder)
         self.db.flush()
+
+        # 关联多课程
+        if course_ids_to_link:
+            courses = self.db.query(Course).filter(Course.id.in_(course_ids_to_link)).all()
+            folder.courses = courses
+            self.db.flush()
+
         return folder
 
     def _persist_question_draft(

@@ -20,6 +20,7 @@ from .exam import (
     AdmissionExam, AdmissionExamRecord,
     Exam, ExamQuestion, ExamRecord,
     question_knowledge_point_relations,
+    question_folder_course_relations,
 )
 from .ai_task import AITask
 from .teaching_resource_generation_snapshot import TeachingResourceGenerationSnapshot
@@ -68,6 +69,7 @@ __all__ = [
     "AdmissionExam", "AdmissionExamRecord",
     "Exam", "ExamQuestion", "ExamRecord",
     "question_knowledge_point_relations",
+    "question_folder_course_relations",
     "AITask",
     "TeachingResourceGenerationSnapshot",
     "PersonalTrainingPlanSnapshot",

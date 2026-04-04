@@ -7,8 +7,8 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import joinedload, selectinload
 
-from app.models import KnowledgePoint, PoliceType, Question, QuestionFolder, User
-from app.schemas import PaginatedResponse
+from app.models import Course, KnowledgePoint, PoliceType, Question, QuestionFolder, User
+from app.schemas import PaginatedResponse, KnowledgePointSimpleResponse
 from app.schemas.exam import QuestionCreate, QuestionUpdate, QuestionResponse, QuestionBatchCreate, QuestionFolderCreate, QuestionFolderUpdate
 from app.utils.data_scope import build_data_scope_context, can_assign_scoped_values
 from logger import logger
@@ -191,12 +191,16 @@ class QuestionService:
         if folder.created_by:
             user = self.db.query(User).filter(User.id == folder.created_by).first()
             if user:
-                creator_name = user.name or user.username
+                creator_name = user.nickname or user.username
 
         if question_count > 0 or paper_count > 0:
             status = "使用中"
         else:
             status = "未使用"
+
+        # 获取关联的课程信息
+        course_ids = [c.id for c in folder.courses] if folder.courses else []
+        course_names = [c.title for c in folder.courses] if folder.courses else []
 
         return {
             "id": folder.id,
@@ -210,6 +214,10 @@ class QuestionService:
             "status": status,
             "created_by": folder.created_by,
             "created_by_name": creator_name,
+            "course_id": folder.course_id,  # 兼容旧字段
+            "course_ids": course_ids,
+            "course_name": course_names[0] if course_names else None,  # 兼容旧字段
+            "course_names": course_names,
             "created_at": folder.created_at,
             "updated_at": folder.updated_at,
             "children": [],
@@ -329,6 +337,8 @@ class QuestionService:
             p_count = paper_counts.get(folder.id, 0)
             creator = creators.get(folder.created_by)
             creator_name = creator.nickname if creator and creator.nickname else (creator.username if creator else None)
+            course_ids = [c.id for c in folder.courses] if folder.courses else []
+            course_names = [c.title for c in folder.courses] if folder.courses else []
 
             if q_count > 0 or p_count > 0:
                 status = "使用中"
@@ -347,8 +357,10 @@ class QuestionService:
                 "status": status,
                 "created_by": folder.created_by,
                 "created_by_name": creator_name,
-                "course_id": folder.course_id,
-                "course_name": folder.course.title if folder.course else None,
+                "course_id": folder.course_id,  # 兼容旧字段
+                "course_ids": course_ids,
+                "course_name": course_names[0] if course_names else None,  # 兼容旧字段
+                "course_names": course_names,
                 "created_at": folder.created_at,
                 "updated_at": folder.updated_at,
                 "children": [],
@@ -372,16 +384,33 @@ class QuestionService:
             if not parent:
                 raise ValueError("父文件夹不存在")
             self._ensure_folder_manageable(parent, user_id)
-        self._ensure_course_manageable(data.course_id, user_id)
+
+        # 处理课程关联（支持多个课程）
+        course_ids_to_link = data.course_ids or []
+        if data.course_id and data.course_id not in course_ids_to_link:
+            # 兼容旧接口：同时传递了 course_id 和 course_ids
+            course_ids_to_link = course_ids_to_link + [data.course_id]
+
+        if course_ids_to_link:
+            for cid in course_ids_to_link:
+                self._ensure_course_manageable(cid, user_id)
+
         folder = QuestionFolder(
             name=data.name,
             category=data.category,
             parent_id=data.parent_id,
             sort_order=data.sort_order,
             created_by=user_id,
-            course_id=data.course_id,
+            course_id=data.course_id,  # 兼容旧字段
         )
         self.db.add(folder)
+        self.db.flush()  # 获取 folder.id
+
+        # 关联课程
+        if course_ids_to_link:
+            courses = self.db.query(Course).filter(Course.id.in_(course_ids_to_link)).all()
+            folder.courses = courses
+
         self.db.commit()
         return self._build_folder_response(folder)
 
@@ -410,9 +439,22 @@ class QuestionService:
                 folder.parent_id = parent_id
         if "sort_order" in update_data:
             folder.sort_order = update_data["sort_order"]
-        if "course_id" in update_data:
-            self._ensure_course_manageable(update_data["course_id"], user_id)
-            folder.course_id = update_data["course_id"]
+
+        # 处理课程关联更新（支持多个课程）
+        if "course_ids" in update_data or "course_id" in update_data:
+            course_ids_to_link = update_data.get("course_ids") or []
+            if update_data.get("course_id") and update_data["course_id"] not in course_ids_to_link:
+                course_ids_to_link = course_ids_to_link + [update_data["course_id"]]
+
+            if course_ids_to_link:
+                for cid in course_ids_to_link:
+                    self._ensure_course_manageable(cid, user_id)
+                courses = self.db.query(Course).filter(Course.id.in_(course_ids_to_link)).all()
+                folder.courses = courses
+            else:
+                folder.courses = []
+                folder.course_id = None
+
         self.db.commit()
 
         q_count = self.db.query(Question).filter(Question.folder_id == folder_id).count()
@@ -451,7 +493,7 @@ class QuestionService:
     def _question_load_options(self) -> tuple:
         return (
             joinedload(Question.police_type),
-            joinedload(Question.folder).joinedload(QuestionFolder.course),
+            joinedload(Question.folder),
             selectinload(Question.knowledge_points),
         )
 
@@ -559,7 +601,10 @@ class QuestionService:
                 question
                 for question in questions
                 if question.folder
-                and question.folder.course_id in visible_course_ids
+                and (
+                    question.folder.course_id in visible_course_ids
+                    or any(c.id in visible_course_ids for c in (question.folder.courses or []))
+                )
             ]
 
         return [
