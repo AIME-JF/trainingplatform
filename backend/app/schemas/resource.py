@@ -179,6 +179,40 @@ class ResourceDetailResponse(ResourceListItemResponse):
     visibility_scopes: List[int] = []
 
 
+class CourseBoundResourceResponse(BaseModel):
+    id: int = Field(..., description="课程资源绑定ID")
+    ref_id: int = Field(..., description="课程资源绑定ID")
+    binding_type: str = Field(..., description="绑定类型: resource/library_item")
+    resource_id: Optional[int] = None
+    library_item_id: Optional[int] = None
+    title: str
+    summary: Optional[str] = None
+    content_type: str
+    source_type: Optional[str] = None
+    source_label: Optional[str] = None
+    status: Optional[str] = None
+    status_label: Optional[str] = None
+    visibility_type: Optional[str] = None
+    uploader_id: Optional[int] = None
+    uploader_name: Optional[str] = None
+    owner_department_id: Optional[int] = None
+    owner_department_name: Optional[str] = None
+    cover_media_file_id: Optional[int] = None
+    cover_url: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
+    file_id: Optional[int] = None
+    file_name: Optional[str] = None
+    file_url: Optional[str] = None
+    mime_type: Optional[str] = None
+    duration_seconds: int = 0
+    knowledge_content_html: Optional[str] = None
+    is_public: Optional[bool] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class ResourceCommentCreate(BaseModel):
     content: str = Field(..., min_length=1, max_length=1000, description='评论内容')
 
@@ -216,9 +250,18 @@ class ResourceShareStatusResponse(BaseModel):
 
 
 class CourseResourceBindRequest(BaseModel):
-    resource_id: int
+    resource_id: Optional[int] = None
+    library_item_id: Optional[int] = None
     usage_type: str = Field('required', description='用途')
     sort_order: int = Field(0, description='排序')
+
+    @model_validator(mode='after')
+    def validate_binding_target(self):
+        has_resource_id = self.resource_id is not None
+        has_library_item_id = self.library_item_id is not None
+        if has_resource_id == has_library_item_id:
+            raise ValueError('课程绑定资源必须且只能传 resource_id 或 library_item_id 其中之一')
+        return self
 
 
 class TrainingResourceBindRequest(BaseModel):

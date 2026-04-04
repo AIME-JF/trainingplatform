@@ -7,7 +7,12 @@
       <a-button v-if="canCreateCourse" type="primary" @click="openCreate">创建课程</a-button>
     </div>
 
-    <CourseEditorModal v-model:open="editorVisible" :course-id="editingCourseId" @success="fetchCourses" />
+    <CourseEditorModal
+      v-model:open="editorVisible"
+      :course-id="editingCourseId"
+      :can-manage="editingCourseCanManage"
+      @success="fetchCourses"
+    />
 
     <a-card :bordered="false" class="filter-card">
       <div class="filter-shell">
@@ -103,7 +108,7 @@
           <div class="cover-labels">
             <a-tag class="cover-tag cover-tag-category">{{ getCourseCategoryLabel(course.category) }}</a-tag>
             <div class="cover-tag-stack">
-              <a-tag class="cover-tag cover-tag-type">{{ getCourseFileTypeLabel(course.file_type) }}</a-tag>
+              <a-tag class="cover-tag cover-tag-type">{{ getCourseFileTypeLabel(course.file_type, course.chapter_count) }}</a-tag>
               <a-tag v-if="course.is_required" class="cover-tag cover-tag-required">必修</a-tag>
             </div>
           </div>
@@ -150,7 +155,7 @@
               </div>
               <p>{{ course.description || '暂无课程简介' }}</p>
             </div>
-            <div v-if="canManageCourse" class="card-actions" @click.stop>
+            <div v-if="course.can_manage_course" class="card-actions" @click.stop>
               <a-button size="small" type="text" @click="openEdit(course.id)">编辑</a-button>
               <a-popconfirm title="确定删除此课程吗？" @confirm="handleDelete(course.id)">
                 <a-button size="small" type="text" danger>删除</a-button>
@@ -215,7 +220,6 @@ import {
 const router = useRouter()
 const authStore = useAuthStore()
 const canCreateCourse = computed(() => authStore.hasPermission('CREATE_COURSE'))
-const canManageCourse = computed(() => authStore.role === 'admin' || authStore.roleCodes.includes('admin'))
 
 const loading = ref(false)
 const courses = ref<CourseListResponse[]>([])
@@ -224,6 +228,12 @@ const editorVisible = ref(false)
 const editingCourseId = ref<number | null>(null)
 const dateRange = ref<Dayjs[] | null>(null)
 const advancedFiltersVisible = ref(false)
+const editingCourseCanManage = computed(() => {
+  if (!editingCourseId.value) {
+    return false
+  }
+  return !!courses.value.find((item) => item.id === editingCourseId.value)?.can_manage_course
+})
 
 const filters = reactive({
   search: '',
@@ -375,8 +385,9 @@ function openCreate() {
 }
 
 function openEdit(courseId: number) {
-  if (!canManageCourse.value) {
-    message.warning('仅管理员可编辑课程')
+  const target = courses.value.find((item) => item.id === courseId)
+  if (!target?.can_manage_course) {
+    message.warning('您没有编辑该课程的权限')
     return
   }
   editingCourseId.value = courseId
@@ -384,8 +395,9 @@ function openEdit(courseId: number) {
 }
 
 async function handleDelete(courseId: number) {
-  if (!canManageCourse.value) {
-    message.warning('仅管理员可删除课程')
+  const target = courses.value.find((item) => item.id === courseId)
+  if (!target?.can_manage_course) {
+    message.warning('您没有删除该课程的权限')
     return
   }
   try {

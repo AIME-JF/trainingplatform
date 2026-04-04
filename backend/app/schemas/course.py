@@ -3,7 +3,7 @@
 """
 
 from typing import Any, Optional, List
-from datetime import datetime
+from datetime import datetime, date as DateType
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 from .exam import (
@@ -11,7 +11,7 @@ from .exam import (
     _normalize_admission_scope_target_ids,
     _normalize_admission_scope_type,
 )
-from .resource import ResourceListItemResponse
+from .resource import CourseBoundResourceResponse
 
 
 # ========== Chapter ==========
@@ -73,10 +73,11 @@ class CourseCreate(BaseModel):
     """创建课程"""
     title: str = Field(..., max_length=200, description="课程标题")
     category: str = Field(..., max_length=50, description="课程分类")
-    file_type: str = Field("video", description="文件类型: video/document/image/audio/knowledge/mixed")
+    file_type: str = Field("video", description="文件类型: video/document/image/audio/knowledge/mixed/pending")
     description: Optional[str] = Field(None, description="课程描述")
     instructor_id: Optional[int] = Field(None, description="教官ID")
     duration: int = Field(0, description="总时长(分钟)")
+    difficulty: int = Field(1, ge=1, le=5, description="难度1-5")
     is_required: bool = Field(False, description="是否必修")
     cover_color: Optional[str] = Field(None, description="封面色")
     scope: Optional[str] = None
@@ -104,6 +105,7 @@ class CourseUpdate(BaseModel):
     description: Optional[str] = None
     instructor_id: Optional[int] = None
     duration: Optional[int] = None
+    difficulty: Optional[int] = Field(None, ge=1, le=5)
     is_required: Optional[bool] = None
     cover_color: Optional[str] = None
     scope: Optional[str] = None
@@ -151,6 +153,20 @@ class CourseQAResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CourseRelatedTrainingResponse(BaseModel):
+    """课程关联班级摘要"""
+    id: int
+    name: str
+    class_code: Optional[str] = None
+    status: str = "upcoming"
+    start_date: Optional[DateType] = None
+    end_date: Optional[DateType] = None
+    instructor_name: Optional[str] = None
+    relation_roles: List[str] = Field(default_factory=list)
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class CourseResponse(BaseModel):
     """课程响应"""
     id: int
@@ -182,10 +198,12 @@ class CourseResponse(BaseModel):
     last_studied_chapter_title: Optional[str] = None
     last_playback_seconds: int = 0
     can_view_learning_status: bool = False
+    can_manage_course: bool = False
     chapters: List[ChapterResponse] = []
     note: Optional[CourseNoteResponse] = None
     qa_list: List[CourseQAResponse] = Field(default_factory=list)
-    resources: List[ResourceListItemResponse] = Field(default_factory=list)
+    resources: List[CourseBoundResourceResponse] = Field(default_factory=list)
+    related_trainings: List[CourseRelatedTrainingResponse] = Field(default_factory=list)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -218,6 +236,7 @@ class CourseListResponse(BaseModel):
     chapter_count: int = 0
     completed_chapter_count: int = 0
     last_studied_at: Optional[datetime] = None
+    can_manage_course: bool = False
     created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)

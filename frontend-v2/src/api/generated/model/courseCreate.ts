@@ -20,7 +20,7 @@ export interface CourseCreate {
      * @maxLength 50
      */
   category: string;
-  /** 文件类型: video/document/image/mixed */
+  /** 文件类型: video/document/image/audio/knowledge/mixed/pending */
   file_type?: string;
   /** 课程描述 */
   description?: string | null;
@@ -28,6 +28,8 @@ export interface CourseCreate {
   instructor_id?: number | null;
   /** 总时长(分钟) */
   duration?: number;
+  /** 难度1-5 */
+  difficulty?: number;
   /** 是否必修 */
   is_required?: boolean;
   /** 封面色 */

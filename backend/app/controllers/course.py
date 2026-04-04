@@ -13,6 +13,7 @@ from app.schemas import (
     CourseNoteUpdate, CourseNoteResponse,
     CourseQACreate, CourseQAResponse,
     CourseTagCreate, CourseTagResponse, CourseLearningStatusResponse,
+    CourseRelatedTrainingResponse,
     PaginatedResponse
 )
 from logger import logger
@@ -162,3 +163,10 @@ class CourseController:
         except Exception as e:
             logger.error(f"获取课程学习情况异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取课程学习情况失败")
+
+    def list_related_trainings(self, course_id: int, user_id: int) -> List[CourseRelatedTrainingResponse]:
+        try:
+            return self.service.list_related_trainings(course_id, user_id)
+        except Exception as e:
+            logger.error(f"获取课程关联班级异常: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取课程关联班级失败")

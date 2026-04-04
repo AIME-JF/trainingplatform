@@ -280,22 +280,18 @@ import {
 import QuickUploadModal from '@/components/library/QuickUploadModal.vue'
 import KnowledgeCardModal from '@/components/library/KnowledgeCardModal.vue'
 import MoveItemModal from '@/components/library/MoveItemModal.vue'
+import {
+  buildLibraryTreeData,
+  findLibraryFolderName,
+  flattenLibraryFolders,
+  formatLibraryDateTime,
+  formatLibraryFileMeta,
+  getLibraryTypeIcon,
+  getLibraryTypeLabel,
+  LIBRARY_CATEGORIES,
+} from '@/utils/library-browser'
 
-interface LibraryTreeNode {
-  key: number
-  title: string
-  itemCount: number
-  children: LibraryTreeNode[]
-}
-
-const categories = [
-  { key: 'all', label: '全部类型', hint: '查看当前范围内全部资源' },
-  { key: 'video', label: '视频', hint: 'MP4 课件视频' },
-  { key: 'document', label: '文档', hint: 'PDF / PPT / DOC' },
-  { key: 'image', label: '图片', hint: 'JPG / PNG / WEBP / GIF' },
-  { key: 'audio', label: '音频', hint: 'MP3 / WAV / M4A' },
-  { key: 'knowledge', label: '知识点', hint: '富文本知识卡片' },
-] as const
+const categories = LIBRARY_CATEGORIES
 
 const loading = ref(false)
 const items = ref<LibraryItemResponse[]>([])
@@ -333,16 +329,16 @@ const contextMenu = reactive<{
   item: null,
 })
 
-const treeData = computed(() => buildTreeData(folders.value))
+const treeData = computed(() => buildLibraryTreeData(folders.value))
 const selectedFolderKeys = computed(() => selectedFolderId.value ? [selectedFolderId.value] : [])
-const folderOptions = computed(() => flattenFolders(folders.value))
+const folderOptions = computed(() => flattenLibraryFolders(folders.value))
 const currentFilterDescription = computed(() => {
   const category = categories.find((item) => item.key === selectedCategory.value)?.label || '全部类型'
   if (scopeTab.value !== 'private') {
     return `当前查看所有教官共享的${category}`
   }
   const folderName = selectedFolderId.value
-    ? findFolderName(folders.value, selectedFolderId.value)
+    ? findLibraryFolderName(folders.value, selectedFolderId.value)
     : '根目录'
   return `当前查看${folderName}下的${category}`
 })
@@ -418,40 +414,6 @@ function handleFolderSelect(keys: Array<string | number>) {
 
 function selectFolderKey(folderId: string | number) {
   selectedFolderId.value = Number(folderId)
-}
-
-function buildTreeData(nodes: LibraryFolderResponse[]): LibraryTreeNode[] {
-  return (nodes || []).map((node) => ({
-    key: node.id,
-    title: node.name,
-    itemCount: node.item_count || 0,
-    children: buildTreeData(node.children || []),
-  }))
-}
-
-function flattenFolders(nodes: LibraryFolderResponse[], depth = 0): Array<{ value: number; label: string }> {
-  const result: Array<{ value: number; label: string }> = []
-  ;(nodes || []).forEach((node) => {
-    result.push({
-      value: node.id,
-      label: `${'　'.repeat(depth)}${node.name}`,
-    })
-    result.push(...flattenFolders(node.children || [], depth + 1))
-  })
-  return result
-}
-
-function findFolderName(nodes: LibraryFolderResponse[], folderId: number): string {
-  for (const node of nodes || []) {
-    if (Number(node.id) === Number(folderId)) {
-      return node.name
-    }
-    const child = findFolderName(node.children || [], folderId)
-    if (child) {
-      return child
-    }
-  }
-  return ''
 }
 
 function openCreateFolder() {
@@ -616,48 +578,10 @@ function handleDataRefresh() {
   void fetchFolders()
 }
 
-function formatDateTime(value?: string | null) {
-  if (!value) {
-    return '-'
-  }
-  return String(value).replace('T', ' ').slice(0, 16)
-}
-
-function formatFileMeta(item: LibraryItemResponse) {
-  if (item.content_type === 'knowledge') {
-    return '知识卡片'
-  }
-  const size = Number(item.size || 0)
-  if (size >= 1024 * 1024) {
-    return `${(size / 1024 / 1024).toFixed(1)} MB`
-  }
-  if (size >= 1024) {
-    return `${Math.round(size / 1024)} KB`
-  }
-  return `${size} B`
-}
-
-function getTypeLabel(contentType?: string | null) {
-  const map: Record<string, string> = {
-    video: '视频',
-    document: '文档',
-    image: '图片',
-    audio: '音频',
-    knowledge: '知识点',
-  }
-  return map[contentType || ''] || contentType || '资源'
-}
-
-function getTypeIcon(contentType?: string | null) {
-  const map: Record<string, string> = {
-    video: 'VID',
-    document: 'DOC',
-    image: 'IMG',
-    audio: 'AUD',
-    knowledge: 'TXT',
-  }
-  return map[contentType || ''] || 'FILE'
-}
+const formatDateTime = formatLibraryDateTime
+const formatFileMeta = formatLibraryFileMeta
+const getTypeLabel = getLibraryTypeLabel
+const getTypeIcon = getLibraryTypeIcon
 </script>
 
 <style scoped>

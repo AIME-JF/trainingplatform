@@ -14,7 +14,7 @@
 
         <div class="header-meta">
           <span class="meta-badge">{{ getCourseCategoryLabel(course?.category) }}</span>
-          <span class="meta-badge">{{ getCourseFileTypeLabel(course?.file_type) }}</span>
+          <span class="meta-badge">{{ getCourseFileTypeLabel(course?.file_type, course?.chapter_count) }}</span>
           <span class="meta-badge">{{ formatCourseDuration(course?.duration_seconds, course?.duration) }}</span>
           <span
             v-if="authStore.isStudent && course"
@@ -30,7 +30,18 @@
     </header>
 
     <section class="page-content">
-      <CourseEditorModal v-model:open="editorVisible" :course-id="course?.id || null" @success="fetchCourse" />
+      <CourseEditorModal
+        v-model:open="editorVisible"
+        :course-id="course?.id || null"
+        :can-manage="canManageCourse"
+        @success="fetchCourse"
+      />
+      <LibraryItemPickerModal
+        v-model:open="pickerVisible"
+        :confirm-loading="pickerSubmitting"
+        :bound-item-ids="boundLibraryItemIds"
+        @confirm="handlePickerConfirm"
+      />
 
       <a-spin v-if="loading" size="large" class="loading-block" />
       <a-empty v-else-if="!course" description="课程不存在或无权限查看" class="loading-block" />
@@ -100,6 +111,47 @@
                     <a-descriptions-item label="课程时长">{{ formatCourseDuration(course.duration_seconds, course.duration) }}</a-descriptions-item>
                     <a-descriptions-item label="课程标签">{{ formatTagList(course.tags || null) }}</a-descriptions-item>
                   </a-descriptions>
+
+                  <div v-if="!authStore.isStudent" class="related-training-section">
+                    <div class="related-training-header">
+                      <div>
+                        <h3>关联班级</h3>
+                        <p>仅展示你当前有管理或授课关系的班级，可直接跳转进入班级页面。</p>
+                      </div>
+                    </div>
+
+                    <a-empty
+                      v-if="!course.related_trainings?.length"
+                      description="暂无你可管理或授课的关联班级"
+                    />
+
+                    <div v-else class="related-training-list">
+                      <article
+                        v-for="training in course.related_trainings"
+                        :key="training.id"
+                        class="related-training-card"
+                      >
+                        <div class="related-training-main">
+                          <div class="related-training-top">
+                            <h4>{{ training.name }}</h4>
+                            <a-tag :color="getTrainingStatusColor(training.status)">{{ getTrainingStatusLabel(training.status) }}</a-tag>
+                          </div>
+                          <div class="related-training-meta">
+                            <span>班级编号：{{ training.class_code || '-' }}</span>
+                            <span>班主任：{{ training.instructor_name || '-' }}</span>
+                            <span>时间：{{ formatTrainingDateRange(training.start_date, training.end_date) }}</span>
+                          </div>
+                          <div v-if="training.relation_roles?.length" class="related-training-roles">
+                            <a-tag v-for="role in training.relation_roles" :key="role">{{ role }}</a-tag>
+                          </div>
+                        </div>
+
+                        <a-button type="link" class="related-training-link" @click="goTrainingDetail(training.id)">
+                          查看班级
+                        </a-button>
+                      </article>
+                    </div>
+                  </div>
                 </a-tab-pane>
 
                 <a-tab-pane v-if="authStore.isStudent" key="notes" tab="学习笔记">
@@ -144,17 +196,12 @@
 
                 <a-tab-pane v-if="canManageCourse" key="resources" tab="关联资源">
                   <div class="resource-bind-toolbar">
-                    <a-select
-                      v-model:value="selectedResourceId"
-                      show-search
-                      allow-clear
-                      :options="resourceOptions"
-                      placeholder="选择资源后绑定到课程"
-                      class="resource-select"
-                    />
-                    <a-button type="primary" @click="bindSelectedResource">绑定资源</a-button>
+                    <a-button type="primary" class="resource-picker-btn" @click="openLibraryPicker">
+                      从资源库中选择资源
+                    </a-button>
                     <a-button @click="fetchCourse">刷新</a-button>
                   </div>
+                  <div class="resource-bind-hint">在弹窗中按住 Ctrl + 鼠标左键可多选，点“确定关联”后直接完成批量关联。</div>
                   <a-table :data-source="courseResources" :columns="resourceColumns" row-key="id" :pagination="false">
                     <template #bodyCell="{ column, record }">
                       <template v-if="column.key === 'tags'">
@@ -162,8 +209,16 @@
                           <a-tag v-for="tag in record.tags || []" :key="tag">{{ tag }}</a-tag>
                         </a-space>
                       </template>
+                      <template v-else-if="column.key === 'content_type'">
+                        {{ getCourseFileTypeLabel(record.content_type) }}
+                      </template>
+                      <template v-else-if="column.key === 'status'">
+                        <a-tag :color="getBoundResourceStatusColor(record)">
+                          {{ record.status_label || record.status || '-' }}
+                        </a-tag>
+                      </template>
                       <template v-else-if="column.key === 'action'">
-                        <a-popconfirm title="确认解绑该资源？" @confirm="removeResource(record.id)">
+                        <a-popconfirm title="确认解绑该资源？" @confirm="removeResource(record.ref_id || record.id)">
                           <a-button size="small" danger>解绑</a-button>
                         </a-popconfirm>
                       </template>
@@ -251,19 +306,24 @@ import { CheckCircleFilled } from '@ant-design/icons-vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import type { CourseLearningStatusResponse, CourseQAResponse, CourseResponse, ResourceListItemResponse } from '@/api/learning-resource'
+import type {
+  CourseBoundResourceResponse,
+  CourseLearningStatusResponse,
+  CourseQAResponse,
+  CourseResponse,
+} from '@/api/learning-resource'
 import {
   bindCourseResource,
   createCourseQuestion,
   deleteCourse,
   getCourseDetail,
   getCourseLearningStatus,
-  listResources,
   unbindCourseResource,
   updateCourseChapterProgress,
   updateCourseNote,
 } from '@/api/learning-resource'
 import { useAuthStore } from '@/stores/auth'
+import LibraryItemPickerModal from '@/components/library/LibraryItemPickerModal.vue'
 import CourseEditorModal from '@/components/resource/CourseEditorModal.vue'
 import {
   formatCourseDuration,
@@ -279,7 +339,6 @@ import {
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
-const canManageCourse = computed(() => authStore.role === 'admin' || authStore.roleCodes.includes('admin'))
 
 const loading = ref(false)
 const learningLoading = ref(false)
@@ -292,15 +351,21 @@ const qaSubmitting = ref(false)
 const currentChapterIndex = ref(0)
 const activeTab = ref('intro')
 const editorVisible = ref(false)
-const selectedResourceId = ref<number | undefined>()
-const resourceOptions = ref<Array<{ value: number; label: string }>>([])
-const courseResources = ref<ResourceListItemResponse[]>([])
+const pickerVisible = ref(false)
+const pickerSubmitting = ref(false)
+const courseResources = ref<CourseBoundResourceResponse[]>([])
 const noteContent = ref('')
 const videoElement = ref<HTMLVideoElement | null>(null)
 const progressTimer = ref<number | null>(null)
 const progressSaving = ref(false)
 const lastSavedSignature = ref('')
 const restoringPlayback = ref(false)
+const canManageCourse = computed(() => !!course.value?.can_manage_course)
+const boundLibraryItemIds = computed(() =>
+  courseResources.value
+    .filter((item) => item.binding_type === 'library_item' && item.library_item_id)
+    .map((item) => Number(item.library_item_id))
+)
 
 const learningColumns = [
   { title: '学员', dataIndex: 'user_name', key: 'user_name', width: 140 },
@@ -321,7 +386,7 @@ const resourceColumns = [
 const currentChapter = computed(() => course.value?.chapters?.[currentChapterIndex.value] || null)
 
 onMounted(() => {
-  void Promise.all([fetchCourse(), loadBindResources()])
+  void fetchCourse()
 })
 
 onBeforeUnmount(() => {
@@ -331,7 +396,9 @@ onBeforeUnmount(() => {
 
 watch(() => route.params.id, () => {
   clearProgressTimer()
-  void Promise.all([fetchCourse(), loadBindResources()])
+  pickerVisible.value = false
+  courseResources.value = []
+  void fetchCourse()
 })
 
 async function fetchCourse() {
@@ -354,6 +421,12 @@ async function fetchCourse() {
       learningStatus.value = []
     }
   } catch (error) {
+    course.value = null
+    qaList.value = []
+    courseResources.value = []
+    learningStatus.value = []
+    noteContent.value = ''
+    pickerVisible.value = false
     message.error(error instanceof Error ? error.message : '加载课程详情失败')
   } finally {
     loading.value = false
@@ -381,22 +454,6 @@ async function fetchLearningStatus(courseId: number) {
     learningStatus.value = await getCourseLearningStatus(courseId)
   } finally {
     learningLoading.value = false
-  }
-}
-
-async function loadBindResources() {
-  if (!canManageCourse.value) {
-    resourceOptions.value = []
-    return
-  }
-  try {
-    const response = await listResources({ page: 1, size: -1, my_only: true, status: 'published' })
-    resourceOptions.value = (response.items || []).map((item) => ({
-      value: item.id,
-      label: item.title,
-    }))
-  } catch {
-    resourceOptions.value = []
   }
 }
 
@@ -569,32 +626,61 @@ async function handleQASubmit() {
   }
 }
 
-async function bindSelectedResource() {
+function openLibraryPicker() {
   if (!canManageCourse.value) {
-    message.warning('仅管理员可绑定课程资源')
+    message.warning('仅课程管理者可绑定课程资源')
     return
   }
-  if (!course.value?.id || !selectedResourceId.value) {
+  pickerVisible.value = true
+}
+
+async function handlePickerConfirm(selectedIds: number[]) {
+  if (!course.value?.id || !selectedIds.length) {
     message.warning('请先选择资源')
     return
   }
+  pickerSubmitting.value = true
   try {
-    await bindCourseResource(course.value.id, {
-      resource_id: selectedResourceId.value,
-      usage_type: 'required',
-      sort_order: courseResources.value.length,
-    })
-    selectedResourceId.value = undefined
-    message.success('资源绑定成功')
-    await fetchCourse()
-  } catch (error) {
-    message.error(error instanceof Error ? error.message : '绑定失败')
+    const startSortOrder = courseResources.value.length
+    const results = await Promise.allSettled(
+      selectedIds.map((libraryItemId, index) => bindCourseResource(course.value!.id, {
+        library_item_id: libraryItemId,
+        usage_type: 'required',
+        sort_order: startSortOrder + index,
+      })),
+    )
+    const succeeded = results.filter((item) => item.status === 'fulfilled').length
+    const failed = results.filter((item) => item.status === 'rejected')
+
+    if (succeeded > 0) {
+      pickerVisible.value = false
+      await fetchCourse()
+    }
+
+    if (!failed.length) {
+      message.success(`已关联 ${succeeded} 个资源`)
+      return
+    }
+
+    if (succeeded > 0) {
+      message.warning(`已关联 ${succeeded} 个资源，另有 ${failed.length} 个关联失败`)
+      return
+    }
+
+    const firstError = failed[0]
+    if (firstError?.status === 'rejected') {
+      message.error(firstError.reason instanceof Error ? firstError.reason.message : '关联失败')
+      return
+    }
+    message.error('关联失败')
+  } finally {
+    pickerSubmitting.value = false
   }
 }
 
 async function removeResource(resourceId: number) {
   if (!canManageCourse.value) {
-    message.warning('仅管理员可解绑课程资源')
+    message.warning('仅课程管理者可解绑课程资源')
     return
   }
   if (!course.value?.id) {
@@ -611,7 +697,7 @@ async function removeResource(resourceId: number) {
 
 async function handleDeleteCourse() {
   if (!canManageCourse.value) {
-    message.warning('仅管理员可删除课程')
+    message.warning('仅课程管理者可删除课程')
     return
   }
   if (!course.value?.id) {
@@ -628,10 +714,54 @@ async function handleDeleteCourse() {
 
 function openEdit() {
   if (!canManageCourse.value) {
-    message.warning('仅管理员可编辑课程')
+    message.warning('仅课程管理者可编辑课程')
     return
   }
   editorVisible.value = true
+}
+
+function getTrainingStatusLabel(status?: string | null) {
+  const statusMap: Record<string, string> = {
+    upcoming: '未开始',
+    active: '进行中',
+    ended: '已结束',
+  }
+  return statusMap[status || ''] || (status || '未知状态')
+}
+
+function getTrainingStatusColor(status?: string | null) {
+  const statusMap: Record<string, string> = {
+    upcoming: 'blue',
+    active: 'green',
+    ended: 'default',
+  }
+  return statusMap[status || ''] || 'default'
+}
+
+function formatTrainingDateRange(startDate?: string | null, endDate?: string | null) {
+  if (!startDate && !endDate) {
+    return '-'
+  }
+  return `${startDate || '-'} ~ ${endDate || '-'}`
+}
+
+function goTrainingDetail(trainingId: number) {
+  void router.push(`/classes/${trainingId}`)
+}
+
+function getBoundResourceStatusColor(resource: CourseBoundResourceResponse) {
+  if (resource.binding_type === 'library_item') {
+    return resource.status === 'public' ? 'gold' : 'blue'
+  }
+  const statusMap: Record<string, string> = {
+    draft: 'default',
+    pending_review: 'orange',
+    reviewing: 'processing',
+    published: 'green',
+    rejected: 'red',
+    offline: 'default',
+  }
+  return statusMap[resource.status || ''] || 'default'
 }
 </script>
 
@@ -806,6 +936,88 @@ function openEdit() {
   margin-bottom: 16px;
 }
 
+.related-training-section {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--v2-border-light);
+}
+
+.related-training-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.related-training-header h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  color: var(--v2-text-primary);
+}
+
+.related-training-header p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--v2-text-secondary);
+}
+
+.related-training-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.related-training-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 18px;
+  border: 1px solid var(--v2-border-light);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(75, 110, 245, 0.04) 0%, rgba(255, 255, 255, 0.95) 100%);
+}
+
+.related-training-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.related-training-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.related-training-top h4 {
+  margin: 0;
+  font-size: 15px;
+  color: var(--v2-text-primary);
+}
+
+.related-training-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--v2-text-secondary);
+}
+
+.related-training-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.related-training-link {
+  flex-shrink: 0;
+  padding-inline: 0;
+  font-weight: 600;
+}
+
 .notes-panel {
   display: flex;
   flex-direction: column;
@@ -835,11 +1047,22 @@ function openEdit() {
 .resource-bind-toolbar {
   display: flex;
   gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
   margin-bottom: 16px;
 }
 
-.resource-select {
-  min-width: 260px;
+.resource-picker-btn {
+  min-width: 220px;
+  background: linear-gradient(135deg, #2457d6 0%, #4f46e5 100%);
+  border: none;
+  box-shadow: 0 12px 24px rgba(59, 130, 246, 0.2);
+}
+
+.resource-bind-hint {
+  margin-bottom: 16px;
+  color: var(--v2-text-muted);
+  font-size: 13px;
 }
 
 .qa-list {

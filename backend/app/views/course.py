@@ -15,11 +15,10 @@ from app.schemas import (
     CourseNoteUpdate, CourseNoteResponse,
     CourseQACreate, CourseQAResponse,
     CourseTagCreate, CourseTagResponse, CourseLearningStatusResponse,
-    CourseResourceBindRequest, ResourceListItemResponse
+    CourseRelatedTrainingResponse, CourseBoundResourceResponse, CourseResourceBindRequest
 )
 from app.controllers import CourseController
 from app.services.course import CourseService
-from app.utils.authz import is_admin_user
 
 router = APIRouter(prefix="/courses", tags=["course_management"])
 
@@ -33,11 +32,6 @@ def _require_permission(current_user: TokenData, permission: str):
     )
 
 
-def _require_admin(db: Session, user_id: int):
-    if not is_admin_user(db, user_id):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅系统管理员可执行该操作")
-
-
 def _require_course_viewer(db: Session, course_id: int, user_id: int):
     service = CourseService(db)
     course = service.get_course_entity(course_id)
@@ -45,6 +39,16 @@ def _require_course_viewer(db: Session, course_id: int, user_id: int):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="课程不存在")
     if not service.can_view_course(course, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权查看该课程")
+    return course
+
+
+def _require_course_manager(db: Session, course_id: int, user_id: int):
+    service = CourseService(db)
+    course = service.get_course_entity(course_id)
+    if not course:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="课程不存在")
+    if not service.can_manage_course(course, user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权管理该课程")
     return course
 
 
@@ -157,7 +161,7 @@ def update_course(
     db: Session = Depends(get_db)
 ):
     """更新课程"""
-    _require_admin(db, current_user.user_id)
+    _require_course_manager(db, course_id, current_user.user_id)
     controller = CourseController(db)
     result = controller.update_course(course_id, data, actor_user_id=current_user.user_id)
     return StandardResponse(data=result)
@@ -170,7 +174,7 @@ def delete_course(
     db: Session = Depends(get_db)
 ):
     """删除课程"""
-    _require_admin(db, current_user.user_id)
+    _require_course_manager(db, course_id, current_user.user_id)
     controller = CourseController(db)
     controller.delete_course(course_id)
     return StandardResponse(message="课程已删除")
@@ -267,20 +271,39 @@ def get_course_learning_status(
     return StandardResponse(data=result)
 
 
-@router.post("/{course_id}/resources", response_model=StandardResponse[ResourceListItemResponse], summary="课程绑定资源")
+@router.get(
+    "/{course_id}/related-trainings",
+    response_model=StandardResponse[List[CourseRelatedTrainingResponse]],
+    summary="课程关联班级列表",
+)
+def get_related_trainings(
+    course_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_course_viewer(db, course_id, current_user.user_id)
+    controller = CourseController(db)
+    result = controller.list_related_trainings(course_id, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.post("/{course_id}/resources", response_model=StandardResponse[CourseBoundResourceResponse], summary="课程绑定资源")
 def add_course_resource(
     course_id: int,
     data: CourseResourceBindRequest,
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    _require_admin(db, current_user.user_id)
+    _require_course_manager(db, course_id, current_user.user_id)
     service = CourseService(db)
-    result = service.add_course_resource(course_id, data)
+    try:
+        result = service.add_course_resource(course_id, data, actor_user_id=current_user.user_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return StandardResponse(data=result)
 
 
-@router.get("/{course_id}/resources", response_model=StandardResponse[List[ResourceListItemResponse]], summary="课程资源列表")
+@router.get("/{course_id}/resources", response_model=StandardResponse[List[CourseBoundResourceResponse]], summary="课程资源列表")
 def list_course_resources(
     course_id: int,
     current_user: TokenData = Depends(get_current_user),
@@ -299,7 +322,7 @@ def remove_course_resource(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
-    _require_admin(db, current_user.user_id)
+    _require_course_manager(db, course_id, current_user.user_id)
     service = CourseService(db)
     ok = service.remove_course_resource(course_id, resource_id)
     if not ok:

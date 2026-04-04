@@ -15,6 +15,12 @@
       </a-steps>
 
       <div v-show="currentStep === 0">
+        <a-alert
+          type="info"
+          show-icon
+          message="系统管理员可先创建不含章节的课程，后续再由任课教官补充章节与资源。"
+          style="margin-bottom: 16px; font-size: 12px"
+        />
         <a-form :label-col="{ span: 5 }" style="padding-right: 8px">
           <a-form-item label="课程名称" required>
             <a-input v-model:value="form.title" placeholder="请输入课程名称" />
@@ -86,7 +92,7 @@
         <a-alert
           type="info"
           show-icon
-          message="每章从资源库选择当前用户自己的资源；文件类资源默认直接使用原始文件，知识点卡片可直接作为章节内容。"
+          message="可先创建不含章节的课程，后续再由任课教官补充章节与资源；已添加章节时，每章仍需绑定自己的资源。"
           style="margin-bottom: 16px; font-size: 12px"
         />
         <a-alert
@@ -97,23 +103,29 @@
           style="margin-bottom: 16px; font-size: 12px"
         />
 
-        <CourseChapterResourceSelector
-          v-for="(chapter, idx) in form.chapters"
-          :key="chapter.localKey"
-          :chapter="chapter"
-          :index="idx"
-          :can-remove="form.chapters.length > 1"
-          :resource-options="resourceOptions"
-          :resource-loading="resourceListLoading"
-          :file-options="getChapterFileOptions(chapter)"
-          :file-loading="isChapterFileLoading(chapter)"
-          @remove="removeChapter(idx)"
-          @change-resource="(value) => handleChapterResourceChange(idx, value)"
-          @change-file="(value) => handleChapterFileChange(idx, value)"
-        />
+        <div v-if="!form.chapters.length" class="chapter-empty-state">
+          <a-empty description="当前还没有章节。系统管理员可以先创建课程，后续再由任课教官补充章节资源。" />
+        </div>
+
+        <template v-else>
+          <CourseChapterResourceSelector
+            v-for="(chapter, idx) in form.chapters"
+            :key="chapter.localKey"
+            :chapter="chapter"
+            :index="idx"
+            :can-remove="canRemoveChapter(chapter)"
+            :resource-options="resourceOptions"
+            :resource-loading="resourceListLoading"
+            :file-options="getChapterFileOptions(chapter)"
+            :file-loading="isChapterFileLoading(chapter)"
+            @remove="removeChapter(idx)"
+            @change-resource="(value) => handleChapterResourceChange(idx, value)"
+            @change-file="(value) => handleChapterFileChange(idx, value)"
+          />
+        </template>
 
         <a-button type="dashed" block style="margin-top: 16px" @click="addChapter">
-          <template #icon><PlusOutlined /></template>添加章节
+          <template #icon><PlusOutlined /></template>{{ form.chapters.length ? '添加章节' : '添加第一章' }}
         </a-button>
       </div>
 
@@ -121,6 +133,9 @@
         <a-button @click="handleClose">取消</a-button>
         <div style="display: flex; gap: 8px">
           <a-button v-if="currentStep > 0" @click="currentStep -= 1">上一步</a-button>
+          <a-button v-if="currentStep < 1" :loading="submitting" @click="handleSubmit">
+            {{ isEditing ? '仅保存基本信息' : '先跳过，直接创建' }}
+          </a-button>
           <a-button v-if="currentStep < 1" type="primary" @click="goNextStep">下一步</a-button>
           <a-button
             v-if="currentStep === 1"
@@ -260,7 +275,7 @@ function resetForm() {
   form.isRequired = false
   form.scopeType = 'all'
   form.scopeTargetIds = []
-  form.chapters = [createChapter()]
+  form.chapters = []
 }
 
 function detectContentType(fileName = '', mimeType = '') {
@@ -502,7 +517,6 @@ async function loadCourseDetail() {
     })
 
   if (!form.chapters.length) {
-    form.chapters = [createChapter()]
     return
   }
 
@@ -585,6 +599,10 @@ function removeChapter(index) {
   form.chapters.splice(index, 1)
 }
 
+function canRemoveChapter(chapter) {
+  return form.chapters.length > 1 || !chapter?.id
+}
+
 async function handleChapterResourceChange(index, value) {
   const chapter = form.chapters[index]
   if (!chapter) {
@@ -637,6 +655,9 @@ function handleChapterFileChange(index, value) {
 }
 
 function inferCourseFileType() {
+  if (!form.chapters.length) {
+    return 'pending'
+  }
   const types = [...new Set(
     form.chapters
       .map((chapter) => chapter.contentType)
@@ -652,6 +673,9 @@ function inferCourseFileType() {
 }
 
 async function handleSubmit() {
+  if (submitting.value) {
+    return
+  }
   if (!form.title.trim()) {
     message.warning('请输入课程名称')
     return
@@ -660,13 +684,15 @@ async function handleSubmit() {
     message.warning('请选择课程分类')
     return
   }
-  if (form.chapters.some((chapter) => !chapter.title.trim())) {
-    message.warning('请填写所有章节名称')
-    return
-  }
-  if (form.chapters.some((chapter) => !chapter.resourceId && !chapter.legacyResourceId && !chapter.legacyFileOnly)) {
-    message.warning('每个章节都需要从资源库选择资源')
-    return
+  if (form.chapters.length) {
+    if (form.chapters.some((chapter) => !chapter.title.trim())) {
+      message.warning('请填写所有章节名称')
+      return
+    }
+    if (form.chapters.some((chapter) => !chapter.resourceId && !chapter.legacyResourceId && !chapter.legacyFileOnly)) {
+      message.warning('每个章节都需要从资源库选择资源')
+      return
+    }
   }
   if (form.scopeType !== 'all' && !form.scopeTargetIds.length) {
     message.warning('请至少选择一个可见范围目标')
@@ -729,6 +755,13 @@ async function handleSubmit() {
 <style scoped>
 .chapters-editor {
   min-height: 240px;
+}
+
+.chapter-empty-state {
+  border: 1px dashed #d9d9d9;
+  border-radius: 8px;
+  background: #fafcff;
+  padding: 12px 0;
 }
 
 .modal-footer {

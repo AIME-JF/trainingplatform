@@ -156,8 +156,13 @@
                       <a-tag v-for="tag in (record.tags || [])" :key="tag">{{ tag }}</a-tag>
                     </a-space>
                   </template>
+                  <template v-else-if="column.key === 'status'">
+                    <a-tag :color="getCourseResourceStatusColor(record)">
+                      {{ record.statusLabel || record.status || '-' }}
+                    </a-tag>
+                  </template>
                   <template v-else-if="column.key === 'action'">
-                    <a-popconfirm title="确认解绑该资源？" @confirm="removeResource(record.id)">
+                    <a-popconfirm title="确认解绑该资源？" @confirm="removeResource(record.refId || record.id)">
                       <a-button size="small" danger>解绑</a-button>
                     </a-popconfirm>
                   </template>
@@ -234,7 +239,7 @@ import {
   unbindCourseResource,
   updateChapterProgress,
 } from '@/api/course'
-import { getResources } from '@/api/resource'
+import { getLibraryItems } from '@/api/library'
 import { useAuthStore } from '@/stores/auth'
 import CourseEditorModal from './components/CourseEditorModal.vue'
 
@@ -256,6 +261,7 @@ const localCourse = ref({
   studentCount: 0,
   progressPercent: 0,
   canViewLearningStatus: false,
+  canManageCourse: false,
   chapters: [],
 })
 
@@ -278,9 +284,12 @@ const learningStatus = ref([])
 const learningStatusLoading = ref(false)
 const learningStatusLoaded = ref(false)
 
-const canManageCourse = computed(() => authStore.isAdmin)
+const canManageCourse = computed(() => !!localCourse.value.canManageCourse)
 const currentChapter = computed(() => localCourse.value.chapters[currentChapterIdx.value] || {})
 const viewerType = computed(() => {
+  if (!currentChapter.value?.id) {
+    return null
+  }
   if (currentChapter.value.contentType === 'video') {
     return 'video'
   }
@@ -322,7 +331,7 @@ const learningStatusColumns = [
 ]
 const resourceOptions = computed(() => (availableResources.value || []).map((item) => ({
   value: item.id,
-  label: `${item.title}（${item.status || '-'}）`,
+  label: formatLibraryItemLabel(item),
 })))
 
 function getNoteCacheKey() {
@@ -482,7 +491,7 @@ async function loadResourceCandidates() {
     return
   }
   try {
-    const response = await getResources({ page: 1, size: 200, status: 'published' })
+    const response = await getLibraryItems({ page: 1, size: -1, scope: 'private' })
     availableResources.value = response.items || []
   } catch {
     availableResources.value = []
@@ -491,22 +500,23 @@ async function loadResourceCandidates() {
 
 async function bindSelectedResource() {
   if (!canManageCourse.value) {
-    message.warning('仅系统管理员可绑定课程资源')
+    message.warning('仅课程管理者可绑定课程资源')
     return
   }
   if (!selectedResourceId.value) {
-    message.warning('请选择资源')
+    message.warning('请选择资源库项')
     return
   }
+
   try {
     await bindCourseResource(courseId.value, {
-      resourceId: selectedResourceId.value,
+      libraryItemId: selectedResourceId.value,
       usageType: 'required',
-      sortOrder: 0,
+      sortOrder: courseResources.value.length || 0,
     })
     selectedResourceId.value = undefined
     await fetchCourse()
-    message.success('绑定成功')
+    message.success('资源绑定成功')
   } catch (error) {
     message.error(error?.message || '绑定失败')
   }
@@ -514,7 +524,7 @@ async function bindSelectedResource() {
 
 async function removeResource(resourceId) {
   if (!canManageCourse.value) {
-    message.warning('仅系统管理员可解绑课程资源')
+    message.warning('仅课程管理者可解绑课程资源')
     return
   }
   try {
@@ -524,6 +534,34 @@ async function removeResource(resourceId) {
   } catch (error) {
     message.error(error?.message || '解绑失败')
   }
+}
+
+function formatLibraryItemLabel(item) {
+  const typeMap = {
+    video: '视频',
+    document: '文档',
+    image: '图片',
+    audio: '音频',
+    knowledge: '知识点',
+  }
+  const typeText = typeMap[item?.contentType] || item?.contentType || '资源'
+  const extra = item?.fileName ? ` · ${item.fileName}` : ''
+  return `${item?.title || '未命名资源'}（${typeText}）${extra}`
+}
+
+function getCourseResourceStatusColor(record) {
+  if (record?.bindingType === 'library_item') {
+    return record?.status === 'public' ? 'gold' : 'blue'
+  }
+  const colorMap = {
+    draft: 'default',
+    pending_review: 'orange',
+    reviewing: 'processing',
+    published: 'green',
+    rejected: 'red',
+    offline: 'default',
+  }
+  return colorMap[record?.status] || 'default'
 }
 
 async function handleQASubmit() {
@@ -706,7 +744,7 @@ async function markDocProgress() {
 
 async function handleDeleteCourse() {
   if (!canManageCourse.value) {
-    message.warning('仅系统管理员可删除课程')
+    message.warning('仅课程管理者可删除课程')
     return
   }
   try {

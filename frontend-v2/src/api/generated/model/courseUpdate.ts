@@ -16,6 +16,7 @@ export interface CourseUpdate {
   description?: string | null;
   instructor_id?: number | null;
   duration?: number | null;
+  difficulty?: number | null;
   is_required?: boolean | null;
   cover_color?: string | null;
   scope?: string | null;

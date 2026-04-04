@@ -1,6 +1,32 @@
 <template>
   <div>
-    <a-empty v-if="linkedItems.length === 0 && !loading" description="本班暂无关联课程资源" />
+    <a-modal
+      v-model:open="previewVisible"
+      :title="previewResource?.title || '资源预览'"
+      :footer="null"
+      :width="860"
+      destroy-on-close
+    >
+      <div v-if="previewResource" class="resource-preview-body">
+        <div class="resource-preview-meta">
+          <a-tag :color="boundResourceStatusColor(previewResource)">
+            {{ previewResource.status_label || previewResource.status || '资源库项' }}
+          </a-tag>
+          <span>{{ previewResource.uploader_name || '-' }}</span>
+        </div>
+        <div
+          v-if="previewResource.content_type === 'knowledge'"
+          class="resource-preview-html"
+          v-html="previewResource.knowledge_content_html || '<p>暂无知识点内容</p>'"
+        />
+        <a-empty v-else description="当前资源暂无可内嵌预览内容" />
+      </div>
+    </a-modal>
+
+    <a-empty
+      v-if="linkedItems.length === 0 && customItems.length === 0 && !legacyResources.length && !loading"
+      description="本班暂无可展示的课程资源"
+    />
 
     <div v-else class="res-course-list">
       <div
@@ -8,63 +34,141 @@
         :key="item.trainingCourse.id"
         class="res-course-card"
       >
-        <!-- 课程头 -->
         <div class="res-course-top">
           <div class="res-course-info">
             <h4 class="res-course-name">{{ item.trainingCourse.name }}</h4>
             <div class="res-course-meta">
-              <span class="res-badge res-badge--linked">已关联课程资源</span>
-              <span v-if="!item.loading && item.chapters.length > 0" class="meta-hint">
-                {{ item.chapters.length }} 个章节 · {{ boundCount(item) }} 个绑定资源
+              <span class="res-badge res-badge--linked">已绑定课程</span>
+              <span v-if="!item.loading" class="meta-hint">
+                {{ item.courseResources.length }} 个课程关联资源 · {{ item.chapters.length }} 个章节 · {{ boundCount(item) }} 个章节绑定资源
               </span>
             </div>
           </div>
         </div>
 
-        <!-- 章节列表 -->
-        <div class="res-chapter-body">
+        <div class="res-card-body">
           <div v-if="item.loading" class="res-loading">
             <a-spin size="small" /> 加载中…
           </div>
-          <div v-else-if="item.chapters.length === 0" class="res-empty">该课程暂无章节</div>
-          <div v-else class="res-chapter-list">
-            <div
-              v-for="ch in item.chapters"
-              :key="ch.id"
-              class="res-chapter-row"
-            >
-              <span class="res-chapter-idx">{{ (ch.sort_order ?? 0) + 1 }}</span>
-              <span class="res-chapter-title">{{ ch.title }}</span>
-              <template v-if="ch.resource_id">
-                <span class="res-chapter-resource">
-                  <span class="res-type-icon">{{ contentTypeIcon(ch.content_type) }}</span>
-                  {{ ch.resource_title || ch.resource_file_name || '未命名资源' }}
-                </span>
-                <span class="res-type-tag" :class="'res-type-' + (ch.content_type || 'document')">
-                  {{ ch.resource_file_label || contentTypeLabel(ch.content_type) }}
-                </span>
-                <a
-                  v-if="ch.file_url"
-                  :href="ch.file_url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="res-view-link"
-                >查看</a>
-                <span v-else class="res-na">—</span>
-              </template>
-              <template v-else>
-                <span class="res-chapter-resource res-na">未绑定资源</span>
-                <span class="res-na">—</span>
-                <span class="res-na">—</span>
-              </template>
+
+          <template v-else>
+            <section v-if="item.courseResources.length" class="res-section">
+              <div class="res-section-head">
+                <h5>课程关联资源</h5>
+                <span>这些资源会随课程继承到班级中</span>
+              </div>
+              <div class="res-linked-resource-list">
+                <article
+                  v-for="resource in item.courseResources"
+                  :key="resource.ref_id || resource.id"
+                  class="res-linked-resource-card"
+                >
+                  <div class="res-linked-resource-main">
+                    <div class="res-linked-resource-top">
+                      <span class="res-type-icon">{{ contentTypeIcon(resource.content_type) }}</span>
+                      <strong>{{ resource.title }}</strong>
+                      <a-tag :color="boundResourceStatusColor(resource)">{{ resource.status_label || resource.status || '-' }}</a-tag>
+                    </div>
+                    <div class="res-linked-resource-meta">
+                      <span>类型：{{ contentTypeLabel(resource.content_type) }}</span>
+                      <span>来源：{{ resource.source_label || (resource.binding_type === 'library_item' ? '个人资源库' : '公共资源') }}</span>
+                      <span>上传者：{{ resource.uploader_name || '-' }}</span>
+                      <span>归属部门：{{ resource.owner_department_name || '-' }}</span>
+                    </div>
+                    <div v-if="resource.tags?.length" class="res-linked-resource-tags">
+                      <a-tag v-for="tag in resource.tags" :key="tag">{{ tag }}</a-tag>
+                    </div>
+                  </div>
+
+                  <a-button type="link" class="res-view-link-btn" @click="openBoundResource(resource)">
+                    查看资源
+                  </a-button>
+                </article>
+              </div>
+            </section>
+
+            <section v-if="item.chapters.length" class="res-section">
+              <div class="res-section-head">
+                <h5>章节资源</h5>
+                <span>课程章节中直接绑定的资源</span>
+              </div>
+              <div class="res-chapter-list">
+                <div
+                  v-for="ch in item.chapters"
+                  :key="ch.id"
+                  class="res-chapter-row"
+                >
+                  <span class="res-chapter-idx">{{ (ch.sort_order ?? 0) + 1 }}</span>
+                  <span class="res-chapter-title">{{ ch.title }}</span>
+                  <template v-if="ch.resource_id || ch.library_item_id">
+                    <span class="res-chapter-resource">
+                      <span class="res-type-icon">{{ contentTypeIcon(ch.content_type) }}</span>
+                      {{ ch.resource_title || ch.resource_file_name || '未命名资源' }}
+                    </span>
+                    <span class="res-type-tag" :class="'res-type-' + (ch.content_type || 'document')">
+                      {{ ch.resource_file_label || contentTypeLabel(ch.content_type) }}
+                    </span>
+                    <a
+                      v-if="ch.file_url"
+                      :href="ch.file_url"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="res-view-link"
+                    >查看</a>
+                    <span v-else class="res-na">—</span>
+                  </template>
+                  <template v-else>
+                    <span class="res-chapter-resource res-na">未绑定资源</span>
+                    <span class="res-na">—</span>
+                    <span class="res-na">—</span>
+                  </template>
+                </div>
+              </div>
+            </section>
+
+            <div v-if="!item.courseResources.length && !item.chapters.length" class="res-empty">
+              该课程暂无可展示资源
             </div>
-          </div>
+          </template>
         </div>
       </div>
 
-      <!-- 自定义课程 -->
+      <div v-if="legacyResources.length" class="res-legacy-section">
+        <div class="res-section-head">
+          <h5>历史班级资源</h5>
+          <span>兼容显示历史班级单独绑定的资源，当前不再支持新增</span>
+        </div>
+        <div class="res-linked-resource-list">
+          <article
+            v-for="resource in legacyResources"
+            :key="resource.id"
+            class="res-linked-resource-card"
+          >
+            <div class="res-linked-resource-main">
+              <div class="res-linked-resource-top">
+                <span class="res-type-icon">{{ contentTypeIcon(resource.content_type) }}</span>
+                <strong>{{ resource.title }}</strong>
+                <a-tag color="default">历史资源</a-tag>
+              </div>
+              <div class="res-linked-resource-meta">
+                <span>类型：{{ contentTypeLabel(resource.content_type) }}</span>
+                <span>上传者：{{ resource.uploader_name || '-' }}</span>
+                <span>归属部门：{{ resource.owner_department_name || '-' }}</span>
+              </div>
+              <div v-if="resource.tags?.length" class="res-linked-resource-tags">
+                <a-tag v-for="tag in resource.tags" :key="tag">{{ tag }}</a-tag>
+              </div>
+            </div>
+
+            <a-button type="link" class="res-view-link-btn" @click="goResourceDetail(resource.id)">
+              查看资源
+            </a-button>
+          </article>
+        </div>
+      </div>
+
       <div v-if="customItems.length > 0" class="res-custom-section">
-        <div class="res-custom-label">以下课程为自定义课程，无章节资源</div>
+        <div class="res-custom-label">以下课程为自定义课程，未继承课程资源</div>
         <div
           v-for="c in customItems"
           :key="c.id"
@@ -79,9 +183,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { getCourseApiV1CoursesCourseIdGet } from '@/api/generated/course-management/course-management'
+import { computed, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { message } from 'ant-design-vue'
 import type { ChapterResponse } from '@/api/generated/model'
+import type { CourseBoundResourceResponse, CourseResponse, ResourceListItemResponse } from '@/api/learning-resource'
+import { getCourseDetail } from '@/api/learning-resource'
 
 interface TrainingCourse {
   id: number
@@ -92,69 +199,134 @@ interface TrainingCourse {
 
 interface CourseResourceItem {
   trainingCourse: TrainingCourse
+  courseResources: CourseBoundResourceResponse[]
   chapters: ChapterResponse[]
   loading: boolean
 }
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   courses: TrainingCourse[]
   active: boolean
-}>()
+  legacyResources?: ResourceListItemResponse[]
+}>(), {
+  legacyResources: () => [],
+})
 
+const router = useRouter()
 const linkedItems = ref<CourseResourceItem[]>([])
 const loading = ref(false)
+const previewVisible = ref(false)
+const previewResource = ref<CourseBoundResourceResponse | null>(null)
 let loaded = false
 
 const customItems = computed<TrainingCourse[]>(() =>
-  props.courses.filter(c => !c.course_id)
+  props.courses.filter((course) => !course.course_id),
 )
 
+const legacyResources = computed(() => props.legacyResources || [])
+
 function boundCount(item: CourseResourceItem): number {
-  return item.chapters.filter(ch => ch.resource_id).length
+  return item.chapters.filter((chapter) => chapter.resource_id || chapter.library_item_id).length
 }
 
 function contentTypeIcon(type?: string | null): string {
   if (type === 'video') return '🎬'
   if (type === 'image') return '🖼️'
+  if (type === 'audio') return '🎧'
+  if (type === 'knowledge') return '🧠'
   return '📄'
 }
 
 function contentTypeLabel(type?: string | null): string {
   if (type === 'video') return '视频'
   if (type === 'image') return '图片'
+  if (type === 'audio') return '音频'
+  if (type === 'knowledge') return '知识点'
   if (type === 'document') return '文档'
   return type || '文件'
+}
+
+function resourceStatusColor(status?: string | null) {
+  const colorMap: Record<string, string> = {
+    draft: 'default',
+    pending_review: 'orange',
+    reviewing: 'processing',
+    published: 'green',
+    rejected: 'red',
+    offline: 'default',
+  }
+  return colorMap[status || ''] || 'default'
+}
+
+function boundResourceStatusColor(resource: CourseBoundResourceResponse) {
+  if (resource.binding_type === 'library_item') {
+    return resource.status === 'public' ? 'gold' : 'blue'
+  }
+  return resourceStatusColor(resource.status)
+}
+
+function goResourceDetail(resourceId: number) {
+  void router.push(`/resource/detail/${resourceId}`)
+}
+
+function openBoundResource(resource: CourseBoundResourceResponse) {
+  if (resource.binding_type === 'resource' && resource.resource_id) {
+    void router.push(`/resource/detail/${resource.resource_id}`)
+    return
+  }
+  if (resource.content_type === 'knowledge') {
+    previewResource.value = resource
+    previewVisible.value = true
+    return
+  }
+  if (resource.file_url) {
+    window.open(resource.file_url, '_blank', 'noopener,noreferrer')
+    return
+  }
+  message.warning('当前资源暂无可预览内容')
 }
 
 async function loadResources() {
   if (loaded) return
   loaded = true
+  loading.value = true
 
-  const linked = props.courses.filter(c => c.course_id)
-  linkedItems.value = linked.map(c => ({ trainingCourse: c, chapters: [], loading: true }))
+  const linked = props.courses.filter((course) => course.course_id)
+  linkedItems.value = linked.map((course) => ({
+    trainingCourse: course,
+    courseResources: [],
+    chapters: [],
+    loading: true,
+  }))
 
   await Promise.all(
     linkedItems.value.map(async (item) => {
       try {
-        const detail = await getCourseApiV1CoursesCourseIdGet(item.trainingCourse.course_id!)
-        const raw = (detail as any)?.data ?? detail
-        const chapters: ChapterResponse[] = (raw?.chapters || []).slice().sort(
-          (a: ChapterResponse, b: ChapterResponse) => (a.sort_order ?? 0) - (b.sort_order ?? 0)
+        const detail = await getCourseDetail(item.trainingCourse.course_id!) as CourseResponse
+        item.courseResources = [...(detail.resources || [])]
+        item.chapters = (detail.chapters || []).slice().sort(
+          (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
         )
-        item.chapters = chapters
       } catch {
+        item.courseResources = []
         item.chapters = []
       } finally {
         item.loading = false
       }
-    })
+    }),
   )
+
+  loading.value = false
 }
 
 watch(
   () => props.active,
-  (val) => { if (val) loadResources() },
-  { immediate: true }
+  (active) => {
+    if (active) {
+      void loadResources()
+    }
+  },
+  { immediate: true },
 )
 
 watch(
@@ -162,8 +334,10 @@ watch(
   () => {
     loaded = false
     linkedItems.value = []
-    if (props.active) loadResources()
-  }
+    if (props.active) {
+      void loadResources()
+    }
+  },
 )
 </script>
 
@@ -183,7 +357,7 @@ watch(
 .res-course-top {
   padding: 16px 18px;
   border-bottom: 1px solid var(--v2-border-light);
-  background: linear-gradient(135deg, rgba(75,110,245,0.04) 0%, transparent 100%);
+  background: linear-gradient(135deg, rgba(75, 110, 245, 0.04) 0%, transparent 100%);
 }
 
 .res-course-name {
@@ -223,8 +397,31 @@ watch(
   border: 1px solid var(--v2-border-light);
 }
 
-.res-chapter-body {
-  padding: 12px 18px 8px;
+.res-card-body {
+  padding: 14px 18px 16px;
+}
+
+.res-section + .res-section {
+  margin-top: 16px;
+}
+
+.res-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.res-section-head h5 {
+  margin: 0;
+  font-size: 14px;
+  color: var(--v2-text-primary);
+}
+
+.res-section-head span {
+  font-size: 12px;
+  color: var(--v2-text-muted);
 }
 
 .res-loading {
@@ -241,6 +438,57 @@ watch(
   color: var(--v2-text-muted);
   padding: 12px 0;
   text-align: center;
+}
+
+.res-linked-resource-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.res-linked-resource-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--v2-border-light);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.res-linked-resource-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.res-linked-resource-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--v2-text-primary);
+}
+
+.res-linked-resource-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--v2-text-secondary);
+}
+
+.res-linked-resource-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.res-view-link-btn {
+  flex-shrink: 0;
+  padding-inline: 0;
 }
 
 .res-chapter-list {
@@ -303,9 +551,12 @@ watch(
   flex-shrink: 0;
 }
 
-.res-type-video   { background: rgba(114,46,209,0.1); color: #722ed1; }
-.res-type-image   { background: rgba(19,194,194,0.1); color: #08979c; }
-.res-type-document, .res-type-mixed { background: rgba(75,110,245,0.1); color: var(--v2-primary); }
+.res-type-video { background: rgba(114, 46, 209, 0.1); color: #722ed1; }
+.res-type-image { background: rgba(19, 194, 194, 0.1); color: #08979c; }
+.res-type-audio { background: rgba(245, 34, 45, 0.08); color: #cf1322; }
+.res-type-knowledge { background: rgba(19, 194, 163, 0.1); color: #08979c; }
+.res-type-document,
+.res-type-mixed { background: rgba(75, 110, 245, 0.1); color: var(--v2-primary); }
 
 .res-view-link {
   font-size: 12px;
@@ -314,7 +565,9 @@ watch(
   text-decoration: none;
 }
 
-.res-view-link:hover { text-decoration: underline; }
+.res-view-link:hover {
+  text-decoration: underline;
+}
 
 .res-na {
   color: var(--v2-text-muted);
@@ -322,9 +575,8 @@ watch(
   flex-shrink: 0;
 }
 
-/* 自定义课程 */
+.res-legacy-section,
 .res-custom-section {
-  margin-top: 8px;
   padding: 16px 18px;
   border: 1px dashed var(--v2-border-light);
   border-radius: var(--v2-radius);
@@ -344,7 +596,9 @@ watch(
   border-bottom: 1px solid var(--v2-border-light);
 }
 
-.res-custom-row:last-child { border-bottom: none; }
+.res-custom-row:last-child {
+  border-bottom: none;
+}
 
 .res-custom-name {
   flex: 1;
@@ -352,7 +606,53 @@ watch(
   color: var(--v2-text-secondary);
 }
 
+.resource-preview-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.resource-preview-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  color: var(--v2-text-secondary);
+  font-size: 13px;
+}
+
+.resource-preview-html {
+  max-height: 60vh;
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid var(--v2-border-light);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--v2-text-primary);
+  line-height: 1.7;
+}
+
+@media (max-width: 768px) {
+  .res-linked-resource-card,
+  .res-course-top,
+  .res-card-body {
+    padding-inline: 14px;
+  }
+
+  .res-linked-resource-card {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .res-section-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+
 @media (max-width: 600px) {
-  .res-chapter-resource { display: none; }
+  .res-chapter-resource {
+    display: none;
+  }
 }
 </style>
