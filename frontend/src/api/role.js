@@ -48,3 +48,15 @@ export function importRoles(file) {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }
+
+export function exportRolePermissions(roleId) {
+  return request.get(`/roles/${roleId}/permissions/export`, { responseType: 'blob' })
+}
+
+export function importRolePermissions(roleId, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post(`/roles/${roleId}/permissions/import`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}

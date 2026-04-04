@@ -199,6 +199,9 @@
         :permissions="permissionDialog.permissions"
         :loading="permissionDialog.loading"
         :height="480"
+        resource-type="department"
+        :resource-id="permissionDialog.department?.id"
+        @imported="onPermissionsImported"
       />
     </a-modal>
   </div>
@@ -535,6 +538,11 @@ async function openPermissionDialog(record) {
   } finally {
     permissionDialog.loading = false
   }
+}
+
+function onPermissionsImported() {
+  permissionDialog.visible = false
+  fetchDepartmentList()
 }
 
 async function submitDepartmentPermissions() {

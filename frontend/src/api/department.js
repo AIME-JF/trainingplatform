@@ -52,3 +52,15 @@ export function importDepartments(file) {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }
+
+export function exportDepartmentPermissions(departmentId) {
+  return request.get(`/departments/${departmentId}/permissions/export`, { responseType: 'blob' })
+}
+
+export function importDepartmentPermissions(departmentId, file) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post(`/departments/${departmentId}/permissions/import`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}

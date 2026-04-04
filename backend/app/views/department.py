@@ -178,3 +178,34 @@ def update_department_permissions(
     controller = DepartmentController(db)
     result = controller.update_department_permissions(department_id, data)
     return StandardResponse(message="更新部门权限成功", data=result)
+
+
+@router.get("/{department_id}/permissions/export", summary="导出部门权限配置")
+def export_department_permissions(
+    department_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_permission(current_user, "UPDATE_DEPARTMENT_PERMISSIONS")
+    data = SystemExchangeService(db).export_department_permissions(department_id)
+    return _excel_response(data, f"department_permissions_{department_id}.xlsx")
+
+
+@router.post("/{department_id}/permissions/import", response_model=StandardResponse[DepartmentResponse], summary="导入部门权限配置")
+async def import_department_permissions(
+    department_id: int,
+    file: UploadFile = File(...),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_permission(current_user, "UPDATE_DEPARTMENT_PERMISSIONS")
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="导入文件为空")
+    try:
+        permission_ids = SystemExchangeService(db).import_permissions_from_excel(file_bytes)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    controller = DepartmentController(db)
+    result = controller.update_department_permissions(department_id, DepartmentPermissionUpdate(permission_ids=permission_ids))
+    return StandardResponse(message=f"导入成功，共更新 {len(permission_ids)} 条权限", data=result)

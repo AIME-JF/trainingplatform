@@ -19,6 +19,19 @@
       <a-button type="primary" :disabled="disabled" @click="showAddModal = true">
         <PlusOutlined /> 添加权限
       </a-button>
+      <a-button :disabled="assignedPermissions.length === 0 || !resourceId" :loading="exporting" @click="handleExport">
+        <ExportOutlined /> 导出权限
+      </a-button>
+      <a-upload
+        :before-upload="handleImportFile"
+        :show-upload-list="false"
+        accept=".xlsx"
+        :disabled="disabled || !resourceId"
+      >
+        <a-button :disabled="disabled || !resourceId" :loading="importing">
+          <ImportOutlined /> 导入权限
+        </a-button>
+      </a-upload>
     </div>
 
     <!-- 已分配权限列表 -->
@@ -119,17 +132,24 @@
 
 <script setup>
 import { computed, ref, watch, onMounted } from 'vue'
-import { PlusOutlined } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
+import { PlusOutlined, ExportOutlined, ImportOutlined } from '@ant-design/icons-vue'
 import { getPermissionGroups } from '@/api/permission'
+import { exportRolePermissions, importRolePermissions } from '@/api/role'
+import { exportDepartmentPermissions, importDepartmentPermissions } from '@/api/department'
+import { downloadBlob } from '@/utils/download'
 
 const props = defineProps({
   loading: { type: Boolean, default: false },
   permissions: { type: Array, default: () => [] },
   targetKeys: { type: Array, default: () => [] },
   disabled: { type: Boolean, default: false },
+  // 导入导出所需
+  resourceType: { type: String, default: '' }, // 'role' | 'department'
+  resourceId: { type: Number, default: null },
 })
 
-const emit = defineEmits(['update:targetKeys'])
+const emit = defineEmits(['update:targetKeys', 'imported'])
 
 const searchText = ref('')
 const filterGroup = ref(undefined)
@@ -138,6 +158,8 @@ const addSearchText = ref('')
 const addFilterGroup = ref(undefined)
 const addPageCurrent = ref(1)
 const groupList = ref([])
+const exporting = ref(false)
+const importing = ref(false)
 
 // 切换分组或搜索时重置页码
 watch([addFilterGroup, addSearchText], () => { addPageCurrent.value = 1 })
@@ -160,10 +182,6 @@ const targetKeySet = computed(() => new Set(props.targetKeys.map(String)))
 
 const assignedPermissions = computed(() =>
   props.permissions.filter(p => targetKeySet.value.has(String(p.id)))
-)
-
-const availablePermissions = computed(() =>
-  props.permissions.filter(p => !targetKeySet.value.has(String(p.id)))
 )
 
 function isAssigned(record) {
@@ -230,6 +248,44 @@ function addPermission(record) {
 
 function removePermission(record) {
   emit('update:targetKeys', props.targetKeys.filter(k => String(k) !== String(record.id)))
+}
+
+async function handleExport() {
+  if (!props.resourceId) return
+  exporting.value = true
+  try {
+    let blob
+    if (props.resourceType === 'role') {
+      blob = await exportRolePermissions(props.resourceId)
+    } else {
+      blob = await exportDepartmentPermissions(props.resourceId)
+    }
+    downloadBlob(blob, `permissions_${props.resourceType}_${props.resourceId}.xlsx`)
+  } catch (e) {
+    message.error(e?.message || '导出失败')
+  } finally {
+    exporting.value = false
+  }
+}
+
+async function handleImportFile(file) {
+  if (!props.resourceId) return false
+  importing.value = true
+  try {
+    let res
+    if (props.resourceType === 'role') {
+      res = await importRolePermissions(props.resourceId, file)
+    } else {
+      res = await importDepartmentPermissions(props.resourceId, file)
+    }
+    message.success(res?.message || '导入成功')
+    emit('imported', res)
+  } catch (e) {
+    message.error(e?.message || '导入失败')
+  } finally {
+    importing.value = false
+  }
+  return false // 阻止 a-upload 默认上传
 }
 </script>
 

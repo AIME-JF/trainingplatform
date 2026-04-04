@@ -163,3 +163,34 @@ def update_role_permissions(
     controller = RoleController(db)
     result = controller.update_role_permissions(role_id, data)
     return StandardResponse(message="更新角色权限成功", data=result)
+
+
+@router.get("/{role_id}/permissions/export", summary="导出角色权限配置")
+def export_role_permissions(
+    role_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_permission(current_user, "UPDATE_ROLE_PERMISSIONS")
+    data = SystemExchangeService(db).export_role_permissions(role_id)
+    return _excel_response(data, f"role_permissions_{role_id}.xlsx")
+
+
+@router.post("/{role_id}/permissions/import", response_model=StandardResponse[RoleResponse], summary="导入角色权限配置")
+async def import_role_permissions(
+    role_id: int,
+    file: UploadFile = File(...),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_permission(current_user, "UPDATE_ROLE_PERMISSIONS")
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="导入文件为空")
+    try:
+        permission_ids = SystemExchangeService(db).import_permissions_from_excel(file_bytes)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    controller = RoleController(db)
+    result = controller.update_role_permissions(role_id, RolePermissionUpdate(permission_ids=permission_ids))
+    return StandardResponse(message=f"导入成功，共更新 {len(permission_ids)} 条权限", data=result)

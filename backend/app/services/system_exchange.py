@@ -425,6 +425,34 @@ class SystemExchangeService(BatchImportService):
             )
         return self._build_data_bytes("角色导出", ROLE_TEMPLATE_HEADERS, rows)
 
+    def export_role_permissions(self, role_id: int) -> bytes:
+        role = self.db.query(Role).filter(Role.id == role_id).first()
+        if not role:
+            raise ValueError("角色不存在")
+        headers = ["权限编码", "权限名称"]
+        rows = [[p.code or "", p.description or p.name or ""] for p in role.permissions]
+        return self._build_data_bytes(f"角色权限导出-{role.name}", headers, rows)
+
+    def export_department_permissions(self, department_id: int) -> bytes:
+        department = self.db.query(Department).filter(Department.id == department_id).first()
+        if not department:
+            raise ValueError("部门不存在")
+        headers = ["权限编码", "权限名称"]
+        rows = [[p.code or "", p.description or p.name or ""] for p in department.permissions]
+        return self._build_data_bytes(f"部门权限导出-{department.name}", headers, rows)
+
+    def import_permissions_from_excel(self, file_bytes: bytes) -> List[int]:
+        """解析权限配置 xlsx，按 code 匹配权限，返回匹配到的 permission_ids 列表。"""
+        field_aliases: Dict[str, set[str]] = {
+            "code": {"权限编码", "编码", "code", "permissioncode"},
+        }
+        rows = self._read_excel_rows(file_bytes, field_aliases)
+        if not rows:
+            raise ValueError("Excel文件为空，或缺少可识别的表头")
+        codes = {str(row.get("code", "")).strip() for _, row in rows if row.get("code")}
+        permissions = self.db.query(Permission).filter(Permission.code.in_(codes)).all()
+        return [p.id for p in permissions]
+
     # ===== 导入 =====
 
     def import_users(self, file_bytes: bytes, default_role_code: str = "student") -> Dict[str, Any]:

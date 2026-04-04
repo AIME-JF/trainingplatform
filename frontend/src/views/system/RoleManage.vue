@@ -186,6 +186,9 @@
         :permissions="permissionDialog.permissions"
         :loading="permissionDialog.loading"
         :disabled="isAdminRole(permissionDialog.role)"
+        resource-type="role"
+        :resource-id="permissionDialog.role?.id"
+        @imported="onPermissionsImported"
       />
     </a-modal>
   </div>
@@ -495,6 +498,11 @@ async function openPermissionDialog(record) {
   } finally {
     permissionDialog.loading = false
   }
+}
+
+function onPermissionsImported() {
+  permissionDialog.visible = false
+  fetchRoleList()
 }
 
 async function submitRolePermissions() {
