@@ -406,6 +406,7 @@ function getSelectedMenuKeyByPath(path) {
   if (path === '/') return '/'
   if (path.startsWith('/courses')) return '/courses'
   if (path.startsWith('/library')) return '/library'
+  if (path.startsWith('/resource/detail')) return '/resource/library'
   if (path.startsWith('/exam/do')) return '/exam/manage'
   if (path.startsWith('/exam/result')) return '/exam/manage'
   if (path.startsWith('/exam/list')) return '/exam/manage'
@@ -446,10 +447,16 @@ function getSelectedMenuKeyByPath(path) {
 function getOpenKeysByPath(path) {
   if (path.startsWith('/courses')) return ['learn']
   if (path.startsWith('/library')) return ['learn']
+  if (path.startsWith('/resource/library')) return ['community']
+  if (path.startsWith('/resource/recommend')) return ['community']
+  if (path.startsWith('/resource/my')) return ['community']
+  if (path.startsWith('/resource/detail')) return ['community']
+  if (path.startsWith('/resource/teaching-generate')) return ['learn']
+  if (path.startsWith('/resource/ai-generate')) return ['learn']
   if (path.startsWith('/resource/manage')) return ['manage']
   if (path.startsWith('/resource/review')) return ['review']
   if (path.startsWith('/resource/policy')) return ['review']
-  if (path.startsWith('/resource/')) return ['learn']
+  if (path.startsWith('/resource/')) return ['community']
   if (path.startsWith('/exam/') || path.startsWith('/question/') || path.startsWith('/paper/')) return ['exam']
   if (path.startsWith('/training/board')) return ['evaluate']
   if (path.startsWith('/training')) return ['train']

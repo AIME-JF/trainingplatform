@@ -1,9 +1,9 @@
 <template>
   <div class="resource-library-page">
     <div class="page-header">
-      <h2>社区精选</h2>
+      <h2>{{ COMMUNITY_RESOURCE_MANAGE_TITLE }}</h2>
       <a-space>
-        <a-button @click="$router.push('/resource/my')">我的空间</a-button>
+        <a-button @click="$router.push('/resource/my')">{{ MY_UPLOAD_TITLE }}</a-button>
         <permissions-tooltip
           v-if="!isStudentOnly"
           :allowed="canUploadResource"
@@ -105,6 +105,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { getResources, offlineResource, deleteResource } from '@/api/resource'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
+import { COMMUNITY_RESOURCE_MANAGE_TITLE, MY_UPLOAD_TITLE } from '@/constants/navigationTitles'
 import ResourceUploadModal from './components/ResourceUploadModal.vue'
 
 const router = useRouter()

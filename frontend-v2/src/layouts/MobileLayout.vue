@@ -100,6 +100,7 @@ import {
   TRAINING_PERMISSIONS,
   TRAINING_SCHEDULE_PERMISSIONS,
 } from '@/constants/permissions'
+import { COURSE_RESOURCES_TITLE } from '@/constants/navigationTitles'
 
 const router = useRouter()
 const currentRoute = useRoute()
@@ -136,7 +137,7 @@ const sidebarNavConfig: NavItem[] = [
   { path: '/classes', label: '班级', icon: ReadOutlined, permissions: TRAINING_PERMISSIONS },
   {
     path: '/resource/courses',
-    label: '课程',
+    label: COURSE_RESOURCES_TITLE,
     icon: DatabaseOutlined,
     permissions: resourceNavPermissions,
     matchPaths: [

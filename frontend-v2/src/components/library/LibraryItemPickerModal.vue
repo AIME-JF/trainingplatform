@@ -100,6 +100,7 @@
                   </div>
                   <a-tag v-if="isBound(item.id)" color="default">已关联</a-tag>
                   <a-tag v-else-if="isSelected(item.id)" color="blue">已选中</a-tag>
+                  <a-tag v-else-if="item.source_kind === 'ai_generated'" color="cyan">AI教学资源</a-tag>
                 </div>
                 <div class="picker-card-meta">
                   <span>{{ getLibraryTypeLabel(item.content_type) }}</span>
@@ -128,6 +129,7 @@ import {
   getLibraryTypeIcon,
   getLibraryTypeLabel,
   LIBRARY_CATEGORIES,
+  resolveLibraryCategoryFilter,
 } from '@/utils/library-browser'
 
 const props = withDefaults(defineProps<{
@@ -206,13 +208,15 @@ async function fetchFolders() {
 async function fetchItems() {
   loading.value = true
   try {
+    const filters = resolveLibraryCategoryFilter(selectedCategory.value)
     const response = await listLibraryItems({
       page: 1,
       size: -1,
       scope: 'private',
-      category: selectedCategory.value === 'all' ? undefined : selectedCategory.value,
+      category: filters.category,
       folder_id: selectedFolderId.value,
       search: appliedKeyword.value || undefined,
+      source_kind: filters.source_kind,
     })
     items.value = response.items || []
   } catch (error) {

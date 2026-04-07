@@ -28,7 +28,7 @@ export const RESOURCE_STATUS_LABELS: Record<string, string> = {
   skipped: '已跳过',
   processing: '处理中',
   completed: '已完成',
-  confirmed: '已确认',
+  confirmed: '已保存并入库',
   failed: '失败',
 }
 

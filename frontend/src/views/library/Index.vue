@@ -59,6 +59,7 @@
       <div v-if="previewItem" class="preview-panel">
         <div class="preview-meta">
           <a-tag color="blue">{{ getTypeLabel(previewItem.contentType) }}</a-tag>
+          <a-tag v-if="previewItem.sourceKind === 'ai_generated'" color="cyan">AI教学资源</a-tag>
           <a-tag v-if="previewItem.isPublic" color="gold">公共资源</a-tag>
           <span>{{ previewItem.ownerName || '-' }}</span>
           <span>{{ formatDateTime(previewItem.updatedAt || previewItem.createdAt) }}</span>
@@ -227,7 +228,10 @@
                     <h3>{{ item.title }}</h3>
                     <p>{{ item.folderName || '根目录' }}</p>
                   </div>
-                  <a-tag :color="item.isPublic ? 'gold' : 'default'">{{ item.isPublic ? '公共' : '私人' }}</a-tag>
+                  <div class="item-tag-stack">
+                    <a-tag v-if="item.sourceKind === 'ai_generated'" color="cyan">AI教学资源</a-tag>
+                    <a-tag :color="item.isPublic ? 'gold' : 'default'">{{ item.isPublic ? '公共' : '私人' }}</a-tag>
+                  </div>
                 </div>
                 <div class="item-bottom">
                   <div class="item-bottom-meta">
@@ -295,11 +299,12 @@ import MoveItemModal from './components/MoveItemModal.vue'
 
 const categories = [
   { key: 'all', label: '全部类型', hint: '查看当前范围内全部资源' },
-  { key: 'video', label: '视频', hint: 'MP4 课件视频' },
-  { key: 'document', label: '文档', hint: 'PDF / PPT / DOC' },
-  { key: 'image', label: '图片', hint: 'JPG / PNG / WEBP / GIF' },
-  { key: 'audio', label: '音频', hint: 'MP3 / WAV / M4A' },
-  { key: 'knowledge', label: '知识点', hint: '富文本知识卡片' },
+  { key: 'video', label: '视频', hint: 'MP4 课件视频', category: 'video' },
+  { key: 'document', label: '文档', hint: 'PDF / PPT / DOC', category: 'document' },
+  { key: 'image', label: '图片', hint: 'JPG / PNG / WEBP / GIF', category: 'image' },
+  { key: 'audio', label: '音频', hint: 'MP3 / WAV / M4A', category: 'audio' },
+  { key: 'knowledge', label: '知识点', hint: '富文本知识卡片', category: 'knowledge' },
+  { key: 'aiGenerated', label: 'AI教学资源', hint: '教学资源生成后自动入库的课件', sourceKind: 'ai_generated' },
 ]
 
 const loading = ref(false)
@@ -382,13 +387,15 @@ async function fetchFolders() {
 async function fetchItems() {
   loading.value = true
   try {
+    const filters = resolveCategoryFilter(selectedCategory.value)
     const response = await getLibraryItems({
       page: 1,
       size: -1,
       scope: scopeTab.value,
-      category: selectedCategory.value === 'all' ? undefined : selectedCategory.value,
+      category: filters.category,
       folderId: scopeTab.value === 'private' ? selectedFolderId.value : undefined,
       search: searchKeyword.value || undefined,
+      sourceKind: filters.sourceKind,
     })
     items.value = response.items || []
   } catch (error) {
@@ -417,6 +424,14 @@ function setScopeTab(nextScope) {
 
 function handleCategorySelect(category) {
   selectedCategory.value = category
+}
+
+function resolveCategoryFilter(categoryKey) {
+  const currentCategory = categories.find((item) => item.key === categoryKey)
+  return {
+    category: currentCategory?.category,
+    sourceKind: currentCategory?.sourceKind,
+  }
 }
 
 function handleFolderSelect(keys) {
@@ -1012,6 +1027,13 @@ function getTypeIcon(contentType) {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.item-tag-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
 }
 
 .item-top h3 {

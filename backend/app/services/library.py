@@ -16,6 +16,7 @@ from app.schemas.library import (
     LIBRARY_CONTENT_TYPE_IMAGE,
     LIBRARY_CONTENT_TYPE_KNOWLEDGE,
     LIBRARY_CONTENT_TYPE_VIDEO,
+    LIBRARY_SOURCE_KIND_AI_GENERATED,
     LIBRARY_SOURCE_KIND_FILE,
     LIBRARY_SOURCE_KIND_KNOWLEDGE,
     LIBRARY_SCOPE_PRIVATE,
@@ -240,21 +241,14 @@ class LibraryService:
                 raise ValueError(f"文件 {media_file_id} 不存在")
             if not is_admin and media.uploader_id != current_user_id:
                 raise ValueError("只能将当前账号上传的文件加入资源库")
-            content_type = self._detect_media_content_type(media)
-            if content_type == LIBRARY_CONTENT_TYPE_KNOWLEDGE:
-                raise ValueError("知识点卡片不能通过文件上传创建")
-            title = self._derive_media_title(media.filename)
-            item = LibraryItem(
-                owner_user_id=current_user_id,
-                folder_id=folder.id if folder else None,
-                title=title,
-                content_type=content_type,
-                source_kind=LIBRARY_SOURCE_KIND_FILE,
-                media_file_id=media.id,
-                is_public=False,
+            created_items.append(
+                self._create_file_item_entity(
+                    owner_user_id=current_user_id,
+                    media=media,
+                    folder_id=folder.id if folder else None,
+                    source_kind=LIBRARY_SOURCE_KIND_FILE,
+                )
             )
-            self.db.add(item)
-            created_items.append(item)
 
         self.db.commit()
         for item in created_items:
@@ -267,6 +261,22 @@ class LibraryService:
             )
             for item in created_items
         ]
+
+    def create_ai_generated_item(
+        self,
+        current_user_id: int,
+        media: MediaFile,
+        *,
+        title: Optional[str] = None,
+        folder_id: Optional[int] = None,
+    ) -> LibraryItem:
+        return self._create_file_item_entity(
+            owner_user_id=current_user_id,
+            media=media,
+            folder_id=folder_id,
+            title=title,
+            source_kind=LIBRARY_SOURCE_KIND_AI_GENERATED,
+        )
 
     def create_knowledge_item(
         self,
@@ -364,6 +374,40 @@ class LibraryService:
             LibraryFolder.id == folder_id,
             LibraryFolder.owner_user_id == owner_user_id,
         ).first()
+
+    def _create_file_item_entity(
+        self,
+        *,
+        owner_user_id: int,
+        media: MediaFile,
+        folder_id: Optional[int] = None,
+        title: Optional[str] = None,
+        source_kind: str = LIBRARY_SOURCE_KIND_FILE,
+    ) -> LibraryItem:
+        content_type = self._detect_media_content_type(media)
+        if content_type == LIBRARY_CONTENT_TYPE_KNOWLEDGE:
+            raise ValueError("知识点卡片不能通过文件上传创建")
+
+        normalized_source_kind = str(source_kind or LIBRARY_SOURCE_KIND_FILE).strip().lower() or LIBRARY_SOURCE_KIND_FILE
+        if normalized_source_kind not in {
+            LIBRARY_SOURCE_KIND_FILE,
+            LIBRARY_SOURCE_KIND_KNOWLEDGE,
+            LIBRARY_SOURCE_KIND_AI_GENERATED,
+        }:
+            raise ValueError("不支持的资源来源类型")
+
+        item = LibraryItem(
+            owner_user_id=owner_user_id,
+            folder_id=folder_id,
+            title=(str(title or "").strip() or self._derive_media_title(media.filename))[:200],
+            content_type=content_type,
+            source_kind=normalized_source_kind,
+            media_file_id=media.id,
+            is_public=False,
+        )
+        self.db.add(item)
+        self.db.flush()
+        return item
 
     def _validate_folder_parent(self, owner_user_id: int, parent_id: Optional[int]) -> Optional[LibraryFolder]:
         if parent_id is None:

@@ -1,6 +1,6 @@
 <template>
   <DarkPageHeader
-    title="课程"
+    :title="COURSE_RESOURCES_TITLE"
     search-placeholder="搜索课程名称、简介、章节或标签..."
     v-model="filters.search"
     @search="fetchCourses"
@@ -170,6 +170,7 @@ import { deleteCourse, listCourses, listUsers } from '@/api/learning-resource'
 import { useAuthStore } from '@/stores/auth'
 import CourseEditorModal from '@/components/resource/CourseEditorModal.vue'
 import DarkPageHeader from '@/components/common/DarkPageHeader.vue'
+import { COURSE_RESOURCES_TITLE } from '@/constants/navigationTitles'
 import {
   formatCourseDuration,
   formatDate,

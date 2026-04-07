@@ -139,7 +139,12 @@ class ResourceService:
         return ResourceTagResponse.model_validate(tag)
 
     def create_resource(self, data: ResourceCreate, current_user_id: int) -> ResourceDetailResponse:
+        if data.direct_publish and not self._is_admin_user(current_user_id):
+            raise PermissionError('仅管理员可直接上传并发布资源')
+
         resource = self.create_resource_entity(data, current_user_id)
+        if data.direct_publish:
+            self.transition_resource_status(resource, 'published', force=True)
         self.db.commit()
         self.db.refresh(resource)
         resource = self._get_resource_entity(resource.id)
@@ -802,6 +807,16 @@ class ResourceService:
             if role_code
         }
         return bool(role_codes) and role_codes == {'student'}
+
+    def _is_admin_user(self, user_id: int) -> bool:
+        if not user_id:
+            return False
+
+        return self.db.query(Role.id).join(User.roles).filter(
+            User.id == user_id,
+            Role.is_active == True,
+            Role.code == 'admin',
+        ).first() is not None
 
     def _can_edit_resource(self, resource: Resource, user_id: int, user_permissions: List[str]) -> bool:
         if resource.uploader_id == user_id:

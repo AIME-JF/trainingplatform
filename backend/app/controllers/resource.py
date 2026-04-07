@@ -39,6 +39,8 @@ class ResourceController:
     def create_resource(self, data: ResourceCreate, current_user_id: int):
         try:
             return self.service.create_resource(data, current_user_id)
+        except PermissionError as e:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
         except ValueError as e:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
         except Exception as e:

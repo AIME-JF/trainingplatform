@@ -20,6 +20,7 @@ import {
   TRAINING_PERMISSIONS,
   TRAINING_SCHEDULE_PERMISSIONS,
 } from '@/constants/permissions'
+import { COURSE_RESOURCES_TITLE } from '@/constants/navigationTitles'
 
 export type QuickActionSurface = 'dashboard' | 'profile'
 
@@ -65,7 +66,7 @@ export const quickActionConfigs: QuickActionConfig[] = [
     surfaces: ['dashboard', 'profile'],
   },
   {
-    title: '课程',
+    title: COURSE_RESOURCES_TITLE,
     description: '继续课程学习与资源浏览',
     path: '/resource/courses',
     icon: DatabaseOutlined,

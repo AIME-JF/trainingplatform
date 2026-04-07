@@ -59,6 +59,7 @@
       <div v-if="previewItem" class="preview-panel">
         <div class="preview-meta">
           <a-tag color="blue">{{ getTypeLabel(previewItem.content_type) }}</a-tag>
+          <a-tag v-if="previewItem.source_kind === 'ai_generated'" color="cyan">AI教学资源</a-tag>
           <a-tag v-if="previewItem.is_public" color="gold">公共资源</a-tag>
           <span>{{ previewItem.owner_name || '-' }}</span>
           <span>{{ formatDateTime(previewItem.updated_at || previewItem.created_at) }}</span>
@@ -217,7 +218,10 @@
                     <h3>{{ item.title }}</h3>
                     <p>{{ item.folder_name || '根目录' }}</p>
                   </div>
-                  <a-tag :color="item.is_public ? 'gold' : 'default'">{{ item.is_public ? '公共' : '私人' }}</a-tag>
+                  <div class="item-tag-stack">
+                    <a-tag v-if="item.source_kind === 'ai_generated'" color="cyan">AI教学资源</a-tag>
+                    <a-tag :color="item.is_public ? 'gold' : 'default'">{{ item.is_public ? '公共' : '私人' }}</a-tag>
+                  </div>
                 </div>
                 <div class="item-bottom">
                   <div class="item-bottom-meta">
@@ -289,6 +293,7 @@ import {
   getLibraryTypeIcon,
   getLibraryTypeLabel,
   LIBRARY_CATEGORIES,
+  resolveLibraryCategoryFilter,
 } from '@/utils/library-browser'
 
 const categories = LIBRARY_CATEGORIES
@@ -371,13 +376,15 @@ async function fetchFolders() {
 async function fetchItems() {
   loading.value = true
   try {
+    const filters = resolveLibraryCategoryFilter(selectedCategory.value)
     const response = await listLibraryItems({
       page: 1,
       size: -1,
       scope: scopeTab.value,
-      category: selectedCategory.value === 'all' ? undefined : selectedCategory.value,
+      category: filters.category,
       folder_id: scopeTab.value === 'private' ? selectedFolderId.value : undefined,
       search: searchKeyword.value || undefined,
+      source_kind: filters.source_kind,
     })
     items.value = response.items || []
   } catch (error) {
@@ -926,6 +933,13 @@ const getTypeIcon = getLibraryTypeIcon
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.item-tag-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
 }
 
 .item-top h3 {
