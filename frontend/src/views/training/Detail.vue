@@ -1978,14 +1978,7 @@ const mockStudents = computed(() => trainingData.studentIds.map(userId => {
   const name = u.nickname || u.username || '未知学员'
   const idCardNumber = u.idCardNumber || String(userId)
   const unit = (u.departments && u.departments.length > 0) ? u.departments[0].name : '未分配'
-  // 计算该学员所有的记录
-  const records = (trainingData.checkinRecords || []).filter(cr => cr.studentId === userId)
-  let cRate = 0
-  if (records.length > 0) {
-    const score = records.reduce((acc, r) => acc + (r.status === 'on_time' ? 100 : r.status === 'late' ? 80 : 0), 0)
-    cRate = Math.round(score / records.length)
-  }
-  return { key: userId, name, idCardNumber, unit, checkinRate: cRate }
+  return { key: userId, name, idCardNumber, unit }
 }))
 
 const filteredStudents = computed(() =>
@@ -2181,7 +2174,6 @@ const baseStudentColumns = [
   { title: '姓名', dataIndex: 'name', key: 'name' },
   { title: '身份证号', dataIndex: 'idCardNumber', key: 'idCardNumber' },
   { title: '单位', dataIndex: 'unit', key: 'unit' },
-  { title: '签到率', key: 'checkin', width: 80 },
 ]
 const studentColumnsWithAction = computed(() =>
   !authStore.isStudent ? [...baseStudentColumns, { title: '操作', key: 'action', width: 80 }] : baseStudentColumns
@@ -3093,12 +3085,11 @@ function exportMsg() {
     ['准入考试', trainingData.admissionExamTitle || '无'],
     [],
   ]
-  const headers = ['姓名', '身份证号', '单位', '总签到率']
+  const headers = ['姓名', '身份证号', '单位']
   const rows = filteredStudents.value.map(s => [
     s.name,
     `\t${s.idCardNumber}`, // 防止长数字科学计数法
     s.unit,
-    `${s.checkinRate}%`
   ])
   
   const csvContent = [...metaRows, headers, ...rows].map(e => e.join(",")).join("\n")

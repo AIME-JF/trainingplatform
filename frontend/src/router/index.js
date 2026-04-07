@@ -179,12 +179,6 @@ const router = createRouter({
           meta: { title: '培训训历', anyPermissions: TRAINING_PAGE_PERMISSIONS },
         },
         {
-          path: 'training/:id/ai-personal',
-          name: 'AiPersonalTrainingTask',
-          component: () => import('../views/training/AiPersonalTrainingTask.vue'),
-          meta: { title: '智能个训方案', anyPermissions: TRAINING_PAGE_PERMISSIONS },
-        },
-        {
           path: 'library',
           name: 'Library',
           component: () => import('../views/library/Index.vue'),

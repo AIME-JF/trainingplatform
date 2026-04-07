@@ -150,26 +150,6 @@ export function confirmAiScheduleTask(taskId) {
   return request.post(`/ai/schedule-tasks/${taskId}/confirm`)
 }
 
-export function getAiPersonalTrainingTasks(params) {
-  return request.get('/ai/personal-training-tasks', { params })
-}
-
-export function createAiPersonalTrainingTask(data) {
-  return request.post('/ai/personal-training-tasks', data)
-}
-
-export function getAiPersonalTrainingTaskDetail(taskId) {
-  return request.get(`/ai/personal-training-tasks/${taskId}`)
-}
-
-export function updateAiPersonalTrainingTaskResult(taskId, data) {
-  return request.put(`/ai/personal-training-tasks/${taskId}/result`, data)
-}
-
-export function confirmAiPersonalTrainingTask(taskId) {
-  return request.post(`/ai/personal-training-tasks/${taskId}/confirm`)
-}
-
 // 智能解析课表
 export function getScheduleFileParseTaskList(params) {
   return request.get('/ai/schedule-file-parse-tasks', { params })
