@@ -119,8 +119,55 @@
         </div>
       </a-layout-header>
 
+      <!-- 标签页栏 -->
+      <div v-if="!isImmersiveRoute && !isMobile" class="tab-bar" @click="hideTabMenu">
+        <div class="tab-bar-inner">
+          <div
+            v-for="tab in tabList"
+            :key="tab.path"
+            class="tab-item"
+            :class="{ active: tab.path === currentTabPath }"
+            @click="goTab(tab)"
+            @contextmenu.prevent="showTabMenu($event, tab)"
+          >
+            <span v-if="tab.path === currentTabPath" class="tab-dot"></span>
+            <span class="tab-label">{{ tab.title }}</span>
+            <close-outlined
+              v-if="tab.closable"
+              class="tab-close"
+              @click.stop="closeTab(tab)"
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- 标签页右键菜单 -->
+      <teleport to="body">
+        <div
+          v-if="tabMenu.visible"
+          class="tab-context-menu"
+          :style="{ top: tabMenu.y + 'px', left: tabMenu.x + 'px' }"
+          @click.stop
+        >
+          <div
+            class="tab-ctx-item"
+            :class="{ disabled: !tabMenu.tab?.closable }"
+            @click="ctxClose"
+          >
+            <close-outlined class="tab-ctx-icon" /> 关闭
+          </div>
+          <div class="tab-ctx-divider"></div>
+          <div class="tab-ctx-item" @click="ctxCloseOthers">
+            <minus-outlined class="tab-ctx-icon" /> 关闭其他
+          </div>
+          <div class="tab-ctx-item" @click="ctxCloseAll">
+            <close-circle-outlined class="tab-ctx-icon" /> 关闭全部
+          </div>
+        </div>
+      </teleport>
+
       <!-- 内容区 -->
-      <a-layout-content class="content-area" :class="{ 'immersive-content': isImmersiveRoute }">
+      <a-layout-content class="content-area" :class="{ 'immersive-content': isImmersiveRoute, 'with-tabbar': !isImmersiveRoute && !isMobile }">
         <router-view v-if="isMounted" />
       </a-layout-content>
     </a-layout>
@@ -171,6 +218,7 @@ import {
   HomeOutlined, FormOutlined,
   TeamOutlined, UserOutlined,
   MenuUnfoldOutlined, MenuFoldOutlined, DownOutlined, LogoutOutlined,
+  CloseOutlined, MinusOutlined, CloseCircleOutlined,
 } from '@ant-design/icons-vue'
 
 const router = useRouter()
@@ -190,6 +238,80 @@ const isMobile = ref(window.innerWidth <= 768)
 const isMounted = ref(false)
 
 const isImmersiveRoute = computed(() => route.meta?.immersive === true)
+
+// ── 多标签页 ──────────────────────────────────────────
+const tabList = ref([{ path: '/', title: '首页', closable: false }])
+
+// 当前激活的标签路径：对 detail 子路由做归一化
+const currentTabPath = computed(() => {
+  const p = route.path
+  if (tabList.value.find(t => t.path === p)) return p
+  const matched = tabList.value
+    .filter(t => t.path !== '/' && p.startsWith(t.path + '/'))
+    .sort((a, b) => b.path.length - a.path.length)
+  return matched[0]?.path ?? p
+})
+
+watch(
+  () => route.path,
+  (path) => {
+    if (isImmersiveRoute.value) return
+    const title = route.meta?.title
+    if (!title || path === '/login') return
+    const exists = tabList.value.find(t => t.path === path)
+    if (!exists) {
+      tabList.value.push({ path, title, closable: true })
+    }
+  },
+  { immediate: true },
+)
+
+function goTab(tab) {
+  router.push(tab.path)
+}
+
+function closeTab(tab) {
+  const idx = tabList.value.findIndex(t => t.path === tab.path)
+  if (idx === -1) return
+  tabList.value.splice(idx, 1)
+  if (currentTabPath.value === tab.path) {
+    const next = tabList.value[Math.min(idx, tabList.value.length - 1)]
+    if (next) router.push(next.path)
+  }
+}
+
+// ── 右键菜单 ──────────────────────────────────────────
+const tabMenu = ref({ visible: false, x: 0, y: 0, tab: null })
+
+function showTabMenu(e, tab) {
+  tabMenu.value = { visible: true, x: e.clientX, y: e.clientY, tab }
+}
+
+function hideTabMenu() {
+  tabMenu.value.visible = false
+}
+
+function ctxClose() {
+  if (tabMenu.value.tab?.closable) closeTab(tabMenu.value.tab)
+  hideTabMenu()
+}
+
+function ctxCloseOthers() {
+  const keep = tabMenu.value.tab
+  tabList.value = tabList.value.filter(t => !t.closable || t.path === keep?.path)
+  if (keep) router.push(keep.path)
+  hideTabMenu()
+}
+
+function ctxCloseAll() {
+  tabList.value = tabList.value.filter(t => !t.closable)
+  router.push('/')
+  hideTabMenu()
+}
+
+onMounted(() => document.addEventListener('click', hideTabMenu))
+onUnmounted(() => document.removeEventListener('click', hideTabMenu))
+// ─────────────────────────────────────────────────────
 const desktopSidebarWidth = computed(() => {
   if (isMobile.value) {
     return 0
@@ -542,6 +664,137 @@ function handleLogout() {
   color: var(--police-text-muted);
 }
 
+/* 标签页栏 */
+.tab-bar {
+  background: #fff;
+  border-bottom: 1px solid #e8eaf0;
+  box-shadow: 0 1px 3px rgba(0, 48, 135, 0.06);
+  flex-shrink: 0;
+  overflow: hidden;
+  z-index: 90;
+}
+
+.tab-bar-inner {
+  display: flex;
+  align-items: stretch;
+  height: 38px;
+  padding: 0 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  gap: 4px;
+}
+
+.tab-bar-inner::-webkit-scrollbar {
+  display: none;
+}
+
+.tab-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 12px;
+  height: 28px;
+  margin-top: 5px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  background: #f0f2f5;
+  color: #595959;
+  transition: background 0.15s, color 0.15s;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.tab-item:hover {
+  background: #e6eaf5;
+  color: var(--police-primary, #003087);
+}
+
+.tab-item.active {
+  background: var(--police-primary, #003087);
+  color: #fff;
+}
+
+.tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  flex-shrink: 0;
+}
+
+.tab-label {
+  line-height: 1;
+}
+
+.tab-close {
+  font-size: 10px;
+  color: inherit;
+  opacity: 0.7;
+  border-radius: 50%;
+  padding: 2px;
+  transition: opacity 0.15s, background 0.15s;
+}
+
+.tab-close:hover {
+  opacity: 1;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.tab-item.active .tab-close:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* 右键菜单 */
+.tab-context-menu {
+  position: fixed;
+  z-index: 9999;
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+  padding: 4px 0;
+  min-width: 130px;
+  user-select: none;
+}
+
+.tab-ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 13px;
+  color: #333;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.tab-ctx-item:hover {
+  background: #f0f4ff;
+  color: var(--police-primary, #003087);
+}
+
+.tab-ctx-item.disabled {
+  color: #bbb;
+  cursor: not-allowed;
+}
+
+.tab-ctx-item.disabled:hover {
+  background: transparent;
+  color: #bbb;
+}
+
+.tab-ctx-icon {
+  font-size: 12px;
+}
+
+.tab-ctx-divider {
+  height: 1px;
+  background: #f0f0f0;
+  margin: 4px 0;
+}
+
 /* 内容区 */
 .content-area {
   flex: 1;
@@ -551,6 +804,10 @@ function handleLogout() {
   height: calc(var(--app-vh, 1vh) * 100 - 64px);
   overflow-y: auto;
   overflow-x: hidden;
+}
+
+.content-area.with-tabbar {
+  height: calc(var(--app-vh, 1vh) * 100 - 64px - 38px);
 }
 
 .content-area.immersive-content {
