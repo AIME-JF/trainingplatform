@@ -1,17 +1,18 @@
+// 知识点API已移除，此文件保留以保持向后兼容
 import request from './request'
 
 export function getKnowledgePoints(params) {
-  return request.get('/knowledge-points', { params })
+    return Promise.resolve({ items: [], total: 0 })
 }
 
 export function createKnowledgePoint(data) {
-  return request.post('/knowledge-points', data)
+    return Promise.reject(new Error('知识点功能已移除'))
 }
 
 export function updateKnowledgePoint(id, data) {
-  return request.put(`/knowledge-points/${id}`, data)
+    return Promise.reject(new Error('知识点功能已移除'))
 }
 
 export function deleteKnowledgePoint(id) {
-  return request.delete(`/knowledge-points/${id}`)
+    return Promise.reject(new Error('知识点功能已移除'))
 }

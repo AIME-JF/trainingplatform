@@ -11,6 +11,41 @@
   >
     <a-form layout="vertical">
       <a-row :gutter="16">
+        <a-col v-if="showBankFields" :span="12">
+          <a-form-item label="题库名称" required>
+            <a-auto-complete
+              v-model:value="form.bankName"
+              placeholder="选择已有题库，或直接输入新题库名称"
+              :options="bankNameOptions"
+              allow-clear
+            />
+          </a-form-item>
+        </a-col>
+        <a-col v-if="showBankFields" :span="6">
+          <a-form-item label="题库分类">
+            <a-auto-complete
+              v-model:value="form.bankCategory"
+              placeholder="可输入新分类"
+              :options="bankCategoryOptions"
+              allow-clear
+            />
+          </a-form-item>
+        </a-col>
+        <a-col v-if="showBankFields" :span="6">
+          <a-form-item label="关联课程">
+            <a-select
+              v-model:value="form.bankCourseId"
+              allow-clear
+              show-search
+              option-filter-prop="label"
+              placeholder="不关联课程时仅自己可见"
+            >
+              <a-select-option v-for="item in courseOptions" :key="item.id" :value="item.id" :label="item.title">
+                {{ item.title }}
+              </a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
         <a-col :span="8">
           <a-form-item label="题型" required>
             <a-select v-model:value="form.type" :disabled="typeOptions.length === 1" @change="handleTypeChange">
@@ -68,7 +103,7 @@
             </a-select>
           </a-form-item>
         </a-col>
-        <a-col :span="12">
+        <a-col v-if="!showBankFields" :span="12">
           <a-form-item
             label="所属文件夹"
             :extra="form.policeTypeId ? '已根据警种自动推荐，可手动调整' : '选择警种后会自动推荐到对应文件夹'"
@@ -146,6 +181,14 @@ const props = defineProps({
   policeTypeOptions: { type: Array, default: () => [] },
   knowledgePointOptions: { type: Array, default: () => [] },
   allowedTypes: { type: Array, default: () => ['single', 'multi', 'judge'] },
+  defaultFolderId: { type: Number, default: null },
+  showBankFields: { type: Boolean, default: false },
+  bankName: { type: String, default: '' },
+  bankCategory: { type: String, default: '' },
+  bankCourseId: { type: Number, default: undefined },
+  bankNameOptions: { type: Array, default: () => [] },
+  bankCategoryOptions: { type: Array, default: () => [] },
+  courseOptions: { type: Array, default: () => [] },
 })
 
 const folderOptions = ref([])
@@ -214,6 +257,7 @@ onMounted(() => {
 })
 
 const emit = defineEmits(['update:open', 'submit'])
+const showBankFields = computed(() => props.showBankFields)
 
 const difficultyLabels = {
   1: '1级',
@@ -248,6 +292,9 @@ function createDefaultForm() {
     tempId: '',
     sourceQuestionId: undefined,
     origin: 'manual',
+    bankName: '',
+    bankCategory: '',
+    bankCourseId: undefined,
     type: 'single',
     difficulty: 3,
     score: 2,
@@ -277,13 +324,16 @@ function resetForm(question = null) {
     tempId: question?.tempId || question?.id || `draft-${Date.now()}`,
     sourceQuestionId: question?.sourceQuestionId || question?.source_question_id,
     origin: question?.origin || 'manual',
+    bankName: question?.bankName || props.bankName || '',
+    bankCategory: question?.bankCategory || props.bankCategory || '',
+    bankCourseId: question?.bankCourseId ?? props.bankCourseId,
     type: resolvedType,
     difficulty: Number(question?.difficulty || 3),
     score: Number(question?.score || 2),
     content: question?.content || '',
     knowledgePointNames: resolveKnowledgePointNames(question),
     policeTypeId: question?.policeTypeId || question?.police_type_id,
-    folderId: question?.folderId || question?.folder_id,
+    folderId: question?.folderId || question?.folder_id || props.defaultFolderId,
     options: normalizeOptions(resolvedType, question?.options),
     explanation: question?.explanation || '',
   })
@@ -393,6 +443,10 @@ function removeOption(index) {
 }
 
 function handleOk() {
+  if (showBankFields.value && !String(form.bankName || '').trim()) {
+    message.warning('请填写题库名称')
+    return
+  }
   if (!form.content.trim()) {
     message.warning('请填写题目内容')
     return
@@ -418,6 +472,9 @@ function handleOk() {
     tempId: form.tempId || `draft-${Date.now()}`,
     sourceQuestionId: form.sourceQuestionId || undefined,
     origin: form.origin || 'manual',
+    bankName: String(form.bankName || '').trim() || undefined,
+    bankCategory: String(form.bankCategory || '').trim() || undefined,
+    bankCourseId: form.bankCourseId ?? undefined,
     type: form.type,
     difficulty: Number(form.difficulty || 3),
     score: Number(form.score || 2),

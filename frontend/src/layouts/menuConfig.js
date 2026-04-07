@@ -14,7 +14,6 @@ import {
   AI_PAPER_GENERATE_PAGE_PERMISSIONS,
   AI_QUESTION_PAGE_PERMISSIONS,
   EXAM_MANAGE_PAGE_PERMISSIONS,
-  KNOWLEDGE_POINT_PAGE_PERMISSIONS,
   QUESTION_BANK_PAGE_PERMISSIONS,
   CERTIFICATE_PAGE_PERMISSIONS,
   COURSE_PAGE_PERMISSIONS,
@@ -103,7 +102,9 @@ export const appMenuConfig = [
       {
         key: '/question/repository',
         label: '题库管理',
-        anyPermissions: [...QUESTION_BANK_PAGE_PERMISSIONS, ...AI_QUESTION_PAGE_PERMISSIONS, ...KNOWLEDGE_POINT_PAGE_PERMISSIONS],
+<<<<<<< Updated upstream
+        anyPermissions: [...QUESTION_BANK_PAGE_PERMISSIONS, ...AI_QUESTION_PAGE_PERMISSIONS],
+
       },
       {
         key: '/paper/repository',

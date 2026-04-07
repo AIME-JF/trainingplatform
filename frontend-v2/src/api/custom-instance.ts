@@ -21,7 +21,7 @@ function normalizeApiBaseUrl(baseUrl: string): string {
 
 const axiosInstance = axios.create({
   baseURL: normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL || '/api/v1'),
-  timeout: 15000,
+  timeout: 30000,
 })
 
 // 请求拦截器：附加 JWT token

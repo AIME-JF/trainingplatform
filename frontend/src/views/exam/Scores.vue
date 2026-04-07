@@ -1,6 +1,11 @@
 <template>
   <div class="scores-page">
     <div class="page-header-bar">
+      <div class="header-left">
+        <a-button type="text" @click="router.push({ name: 'ExamManage' })">
+          <template #icon><LeftOutlined /></template>
+        </a-button>
+      </div>
       <div>
         <h2 class="page-h2">考试成绩</h2>
         <p class="page-sub">教官可查看本场所有学员成绩，并进入完整答卷详情</p>
@@ -149,12 +154,14 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
-import { DownloadOutlined } from '@ant-design/icons-vue'
+import { DownloadOutlined, LeftOutlined } from '@ant-design/icons-vue'
 import { getExams, getExamScores } from '@/api/exam'
 import { useAuthStore } from '@/stores/auth'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
+const router = useRouter()
 const authStore = useAuthStore()
 const canExportScores = computed(() => authStore.hasPermission('GET_EXAM_SCORES'))
 

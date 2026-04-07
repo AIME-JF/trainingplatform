@@ -413,7 +413,6 @@ function getSelectedMenuKeyByPath(path) {
   if (path.startsWith('/exam/manage')) return '/exam/manage'
   if (path.startsWith('/exam/scores')) return '/exam/manage'
   if (path.startsWith('/question/repository')) return '/question/repository'
-  if (path.startsWith('/question/knowledge-points')) return '/question/repository'
   if (path.startsWith('/question/ai')) return '/question/repository'
   if (path.startsWith('/paper/ai-assemble')) return '/paper/repository'
   if (path.startsWith('/paper/repository')) return '/paper/repository'

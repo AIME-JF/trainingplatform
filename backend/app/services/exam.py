@@ -356,9 +356,7 @@ class ExamService:
         status_filters = self._normalize_exam_status_filters(status)
         current_user = self._get_admission_scope_user(current_user_id)
         query = self.db.query(Exam).options(
-            joinedload(Exam.paper).joinedload(ExamPaper.paper_questions),
-            joinedload(Exam.training),
-            joinedload(Exam.records),
+            *self._training_exam_load_options(),
         ).filter(Exam.training_id.isnot(None))
 
         if exam_type:
@@ -417,9 +415,7 @@ class ExamService:
         current_user = self._get_admission_scope_user(current_user_id)
         can_manage_all = bool(current_user_id and self._can_manage_admission_exam(current_user_id))
         query = self.db.query(AdmissionExam).options(
-            joinedload(AdmissionExam.paper).joinedload(ExamPaper.paper_questions),
-            joinedload(AdmissionExam.linked_trainings),
-            joinedload(AdmissionExam.records),
+            *self._admission_exam_load_options(),
         )
 
         if exam_type:
@@ -552,7 +548,7 @@ class ExamService:
     def update_exam(self, exam_id: int, data: ExamUpdate) -> ExamResponse:
         """更新培训班内考试"""
         exam = self.db.query(Exam).options(
-            joinedload(Exam.paper).joinedload(ExamPaper.paper_questions),
+            *self._training_exam_load_options(include_training=False, include_records=False),
         ).filter(Exam.id == exam_id).first()
         if not exam:
             raise ValueError("考试不存在")
@@ -574,7 +570,7 @@ class ExamService:
     def update_admission_exam(self, exam_id: int, data: AdmissionExamUpdate) -> AdmissionExamResponse:
         """更新独立准入考试"""
         exam = self.db.query(AdmissionExam).options(
-            joinedload(AdmissionExam.paper).joinedload(ExamPaper.paper_questions),
+            *self._admission_exam_load_options(include_linked_trainings=False, include_records=False),
         ).filter(AdmissionExam.id == exam_id).first()
         if not exam:
             raise ValueError("准入考试不存在")
@@ -591,7 +587,7 @@ class ExamService:
     def delete_exam(self, exam_id: int) -> None:
         """删除培训班内考试"""
         exam = self.db.query(Exam).options(
-            joinedload(Exam.records),
+            *self._training_exam_load_options(include_paper=False, include_training=False),
         ).filter(Exam.id == exam_id).first()
         if not exam:
             raise ValueError("考试不存在")
@@ -604,8 +600,7 @@ class ExamService:
     def delete_admission_exam(self, exam_id: int) -> None:
         """删除独立准入考试"""
         exam = self.db.query(AdmissionExam).options(
-            joinedload(AdmissionExam.records),
-            joinedload(AdmissionExam.linked_trainings),
+            *self._admission_exam_load_options(include_paper=False),
         ).filter(AdmissionExam.id == exam_id).first()
         if not exam:
             raise ValueError("准入考试不存在")
@@ -624,9 +619,7 @@ class ExamService:
     ) -> Optional[ExamDetailResponse]:
         """获取培训班内考试详情"""
         exam = self.db.query(Exam).options(
-            joinedload(Exam.paper).joinedload(ExamPaper.paper_questions),
-            joinedload(Exam.training),
-            joinedload(Exam.records),
+            *self._training_exam_load_options(),
         ).filter(Exam.id == exam_id).first()
         if not exam:
             return None
@@ -656,9 +649,7 @@ class ExamService:
     ) -> Optional[AdmissionExamDetailResponse]:
         """获取准入考试详情"""
         exam = self.db.query(AdmissionExam).options(
-            joinedload(AdmissionExam.paper).joinedload(ExamPaper.paper_questions),
-            joinedload(AdmissionExam.linked_trainings),
-            joinedload(AdmissionExam.records),
+            *self._admission_exam_load_options(),
         ).filter(AdmissionExam.id == exam_id).first()
         if not exam:
             return None
@@ -683,8 +674,7 @@ class ExamService:
     def submit_exam(self, exam_id: int, user_id: int, data: ExamSubmit) -> ExamRecordResponse:
         """提交培训班内考试"""
         exam = self.db.query(Exam).options(
-            joinedload(Exam.paper).joinedload(ExamPaper.paper_questions),
-            joinedload(Exam.training),
+            *self._training_exam_load_options(include_records=False),
         ).filter(Exam.id == exam_id).first()
         if not exam:
             raise ValueError("考试不存在")
@@ -720,7 +710,7 @@ class ExamService:
     def submit_admission_exam(self, exam_id: int, user_id: int, data: ExamSubmit) -> AdmissionExamRecordResponse:
         """提交准入考试"""
         exam = self.db.query(AdmissionExam).options(
-            joinedload(AdmissionExam.paper).joinedload(ExamPaper.paper_questions),
+            *self._admission_exam_load_options(include_linked_trainings=False, include_records=False),
         ).filter(AdmissionExam.id == exam_id).first()
         if not exam:
             raise ValueError("准入考试不存在")
@@ -894,6 +884,36 @@ class ExamService:
             joinedload(ExamPaper.creator),
             joinedload(ExamPaper.folder),
         )
+
+    def _training_exam_load_options(
+        self,
+        include_paper: bool = True,
+        include_training: bool = True,
+        include_records: bool = True,
+    ) -> tuple:
+        options = []
+        if include_paper:
+            options.append(selectinload(Exam.paper).options(*self._paper_load_options()))
+        if include_training:
+            options.append(joinedload(Exam.training))
+        if include_records:
+            options.append(selectinload(Exam.records))
+        return tuple(options)
+
+    def _admission_exam_load_options(
+        self,
+        include_paper: bool = True,
+        include_linked_trainings: bool = True,
+        include_records: bool = True,
+    ) -> tuple:
+        options = []
+        if include_paper:
+            options.append(selectinload(AdmissionExam.paper).options(*self._paper_load_options()))
+        if include_linked_trainings:
+            options.append(selectinload(AdmissionExam.linked_trainings))
+        if include_records:
+            options.append(selectinload(AdmissionExam.records))
+        return tuple(options)
 
     def _get_scope_context(self, current_user_id: Optional[int]) -> Optional[DataScopeContext]:
         if not current_user_id:
@@ -1663,7 +1683,12 @@ class ExamService:
         now = self._current_time(exam.start_time, exam.end_time)
         start_time = self._normalize_datetime(exam.start_time, now.tzinfo)
         end_time = self._normalize_datetime(exam.end_time, now.tzinfo)
-        next_status = exam.status or "upcoming"
+
+        # 没有时间信息时，保持不变（由人工设置状态）
+        if not start_time and not end_time:
+            return False
+
+        next_status = "upcoming"
         if start_time and end_time:
             if now < start_time:
                 next_status = "upcoming"
@@ -1671,10 +1696,11 @@ class ExamService:
                 next_status = "active"
             else:
                 next_status = "ended"
-        elif end_time and now > end_time:
-            next_status = "ended"
-        elif start_time and now >= start_time:
-            next_status = "active"
+        elif end_time:
+            next_status = "ended" if now > end_time else "upcoming"
+        elif start_time:
+            next_status = "active" if now >= start_time else "upcoming"
+
         if next_status != exam.status:
             exam.status = next_status
             return True

@@ -20,6 +20,17 @@
               <button class="btn-primary" @click="openCreateDrawer">
                 添加准入考试
               </button>
+              <a-popconfirm
+                title="培训班考试需要在培训班内添加"
+                description="请到培训管理 → 培训班列表，进入培训班后在「考试安排」中添加考试。"
+                ok-text="前往培训班列表"
+                cancel-text="知道了"
+                @confirm="router.push({ name: 'TrainingList' })"
+              >
+                <button class="btn-default">
+                  添加培训班考试
+                </button>
+              </a-popconfirm>
               <div class="search-wrapper">
                 <svg class="search-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                 <a-input-search v-model:value="searchText" placeholder="请输入关键字搜索..." allow-clear @search="handleSearch" class="search-input" />
@@ -36,7 +47,6 @@
                 <option value="upcoming">未开始</option>
                 <option value="active">进行中</option>
                 <option value="ended">已结束</option>
-                <option value="draft">草稿</option>
               </select>
             </div>
           </div>
@@ -105,17 +115,12 @@
                   <td class="col-category text-center text-slate-600">{{ exam.courseNames?.length ? exam.courseNames.join('、') : (exam.courseName || '默认分类') }}</td>
                   <td class="col-training text-center text-slate-600">{{ exam.training_name || '-' }}</td>
                   <td class="col-action text-right">
-                    <a-dropdown :trigger="['click']">
-                      <button class="btn-action" @click.stop>
-                        <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 12h.01M12 12h.01M19 12h.01"/></svg>
-                      </button>
-                      <template #overlay>
-                        <a-menu @click="({ key }) => handleAction(key, exam)">
-                          <a-menu-item key="edit">编辑</a-menu-item>
-                          <a-menu-item key="delete" style="color: #ef4444;">删除</a-menu-item>
-                        </a-menu>
-                      </template>
-                    </a-dropdown>
+                    <div class="action-btns">
+                      <button class="btn-link" @click="handleAction('edit', exam)">编辑</button>
+                      <button class="btn-link" @click="handleAction('view', exam)">查看详情</button>
+                      <button class="btn-link" @click="handleAction('viewScores', exam)">考试情况</button>
+                      <button class="btn-link btn-link-danger" @click="handleAction('delete', exam)">删除</button>
+                    </div>
                   </td>
                 </tr>
 
@@ -185,21 +190,21 @@
         <a-row :gutter="16">
           <a-col :span="24">
             <a-form-item label="场次名称" required>
-              <a-input v-model:value="form.title" placeholder="请输入考试场次名称" />
+              <a-input v-model:value="form.title" placeholder="请输入考试场次名称" :disabled="isViewOnly" />
             </a-form-item>
           </a-col>
           <a-col :span="18">
             <a-form-item label="关联试卷" required>
-              <a-select v-model:value="form.paperId" placeholder="请选择已发布试卷" :disabled="isEdit" show-search option-filter-prop="label" @change="handlePaperChange" :options="availablePaperOptions.map(p => ({ value: p.id, label: p.title }))" />
+              <a-select v-model:value="form.paperId" placeholder="请选择已发布试卷" :disabled="isEdit || isViewOnly" show-search option-filter-prop="label" @change="handlePaperChange" :options="availablePaperOptions.map(p => ({ value: p.id, label: p.title }))" />
               <div class="paper-hint">
                 <span class="hint-text">考试只能选择已发布试卷；考试创建后不能再更换试卷</span>
-                <a-button type="link" size="small" @click="goToPaperManage">去试卷管理创建试卷</a-button>
+                <a-button type="link" size="small" :disabled="isViewOnly" @click="goToPaperManage">去试卷管理创建试卷</a-button>
               </div>
             </a-form-item>
           </a-col>
           <a-col :span="6">
             <a-form-item label="展示类型">
-              <a-select v-model:value="form.type">
+              <a-select v-model:value="form.type" :disabled="isViewOnly">
                 <a-select-option value="formal">正式考核</a-select-option>
                 <a-select-option value="quiz">测验</a-select-option>
               </a-select>
@@ -207,7 +212,7 @@
           </a-col>
           <a-col :span="6">
             <a-form-item label="状态">
-              <a-select v-model:value="form.status">
+              <a-select v-model:value="form.status" :disabled="isViewOnly">
                 <a-select-option value="upcoming">未开始</a-select-option>
                 <a-select-option value="active">进行中</a-select-option>
                 <a-select-option value="ended">已结束</a-select-option>
@@ -216,32 +221,34 @@
           </a-col>
           <a-col :span="12">
             <a-form-item label="适用范围">
-              <AdmissionScopeSelector v-model:scope-type="form.scopeType" v-model:scope-target-ids="form.scopeTargetIds" />
+              <div :class="{ 'read-only-block': isViewOnly }">
+                <AdmissionScopeSelector v-model:scope-type="form.scopeType" v-model:scope-target-ids="form.scopeTargetIds" />
+              </div>
             </a-form-item>
           </a-col>
           <a-col :span="12">
             <a-form-item label="考试时间">
-              <a-range-picker v-model:value="dateRange" show-time format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm" style="width:100%" />
+              <a-range-picker v-model:value="dateRange" show-time format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm" style="width:100%" :disabled="isViewOnly" />
             </a-form-item>
           </a-col>
           <a-col :span="6">
             <a-form-item label="考试时长（分钟）">
-              <a-input-number v-model:value="form.duration" :min="10" :max="300" style="width:100%" />
+              <a-input-number v-model:value="form.duration" :min="10" :max="300" style="width:100%" :disabled="isViewOnly" />
             </a-form-item>
           </a-col>
           <a-col :span="6">
             <a-form-item label="及格分">
-              <a-input-number v-model:value="form.passingScore" :min="1" style="width:100%" />
+              <a-input-number v-model:value="form.passingScore" :min="1" style="width:100%" :disabled="isViewOnly" />
             </a-form-item>
           </a-col>
           <a-col :span="6">
             <a-form-item label="最大次数">
-              <a-input-number v-model:value="form.maxAttempts" :min="1" :max="10" style="width:100%" />
+              <a-input-number v-model:value="form.maxAttempts" :min="1" :max="10" style="width:100%" :disabled="isViewOnly" />
             </a-form-item>
           </a-col>
           <a-col :span="24">
             <a-form-item label="考试说明">
-              <a-textarea v-model:value="form.description" :rows="3" placeholder="选填" />
+              <a-textarea v-model:value="form.description" :rows="3" placeholder="选填" :disabled="isViewOnly" />
             </a-form-item>
           </a-col>
           <a-col :span="24">
@@ -277,8 +284,8 @@
       </a-form>
       <template #footer>
         <a-space style="float:right">
-          <a-button @click="resetForm">取消</a-button>
-          <a-button type="primary" :loading="submitting" @click="handleSave">保存</a-button>
+          <a-button @click="resetForm">{{ isViewOnly ? '关闭' : '取消' }}</a-button>
+          <a-button v-if="!isViewOnly" type="primary" :loading="submitting" @click="handleSave">保存</a-button>
         </a-space>
       </template>
     </a-drawer>
@@ -287,7 +294,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { message, Modal, Dropdown as aDropdown, Menu as aMenu, MenuItem as aMenuItem } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import {
@@ -303,7 +310,7 @@ import AdmissionScopeSelector from './components/AdmissionScopeSelector.vue'
 const router = useRouter()
 const authStore = useAuthStore()
 
-const statusLabels = { upcoming: '未开始', active: '进行中', ended: '已结束', draft: '草稿' }
+const statusLabels = { upcoming: '未开始', active: '进行中', ended: '已结束' }
 const paperStatusLabels = { draft: '草稿', published: '已发布', archived: '已归档' }
 const questionTypeLabels = { single: '单选', multi: '多选', judge: '判断' }
 
@@ -314,7 +321,6 @@ const statusTabs = [
   { label: '进行中', value: 'active' },
   { label: '未开始', value: 'upcoming' },
   { label: '已结束', value: 'ended' },
-  { label: '草稿', value: 'draft' },
 ]
 
 const loading = ref(false)
@@ -331,6 +337,7 @@ const courseOptions = ref([])
 const selectedPaperDetail = ref(null)
 const drawerVisible = ref(false)
 const isEdit = ref(false)
+const isViewOnly = ref(false)
 const editingId = ref(null)
 const dateRange = ref(null)
 const selectAll = ref(false)
@@ -345,8 +352,8 @@ const form = reactive({
   trainingId: 0,
 })
 
-const drawerTitle = computed(() => isEdit.value ? '编辑考试' : '添加考试')
-const availablePaperOptions = computed(() => isEdit.value ? paperOptions.value : paperOptions.value.filter(i => i.status === 'published'))
+const drawerTitle = computed(() => (isViewOnly.value ? '考试详情' : (isEdit.value ? '编辑考试' : '添加考试')))
+const availablePaperOptions = computed(() => (isEdit.value || isViewOnly.value) ? paperOptions.value : paperOptions.value.filter(i => i.status === 'published'))
 const totalPages = computed(() => Math.max(1, Math.ceil(pagination.total / pagination.pageSize)))
 const visiblePages = computed(() => {
   const pages = [], total = totalPages.value, cur = pagination.current
@@ -357,7 +364,7 @@ const visiblePages = computed(() => {
 })
 
 function getStatusPillClass(status) {
-  return { upcoming: 'status-pending', active: 'status-ongoing', ended: 'status-ended', draft: 'status-pending' }[status] || 'status-pending'
+  return { upcoming: 'status-pending', active: 'status-ongoing', ended: 'status-ended' }[status] || 'status-pending'
 }
 
 function switchStatusTab(tab) {
@@ -370,6 +377,10 @@ function switchStatusTab(tab) {
 function handleAction(key, exam) {
   if (key === 'edit') {
     openEditDrawer(exam)
+  } else if (key === 'view') {
+    openViewDrawer(exam)
+  } else if (key === 'viewScores') {
+    router.push({ name: 'ExamScores', query: { examId: exam.id } })
   } else if (key === 'delete') {
     Modal.confirm({
       title: '确定删除该考试吗？',
@@ -460,11 +471,15 @@ async function setPaperPreview(paperId, applyDefaults = false) {
 function handlePaperChange(val) { setPaperPreview(val, !isEdit.value) }
 function openCreateDrawer() {
   resetForm()
+  isViewOnly.value = false
   drawerVisible.value = true
 }
 
-async function openEditDrawer(record) {
-  isEdit.value = true; editingId.value = record.id
+async function openExamDrawer(record, options = {}) {
+  const { viewOnly = false } = options
+  isViewOnly.value = viewOnly
+  isEdit.value = !viewOnly
+  editingId.value = record.id
   try {
     const detail = (filterExamType.value === 'admission' || record.kind === 'admission')
       ? await getAdmissionExamDetail(record.id) : await getExamDetail(record.id)
@@ -490,9 +505,17 @@ async function openEditDrawer(record) {
   } catch (e) { message.error(e.message || '加载详情失败') }
 }
 
+async function openEditDrawer(record) {
+  return openExamDrawer(record, { viewOnly: false })
+}
+
+async function openViewDrawer(record) {
+  return openExamDrawer(record, { viewOnly: true })
+}
+
 function resetForm() {
   Object.assign(form, { title: '', paperId: undefined, description: '', type: 'formal', status: 'upcoming', scopeType: 'all', scopeTargetIds: [], duration: 60, passingScore: 60, maxAttempts: 1 })
-  selectedPaperDetail.value = null; drawerVisible.value = false; isEdit.value = false; editingId.value = null; dateRange.value = null
+  selectedPaperDetail.value = null; drawerVisible.value = false; isEdit.value = false; isViewOnly.value = false; editingId.value = null; dateRange.value = null
 }
 
 async function handleSave() {
@@ -689,6 +712,22 @@ onMounted(() => { loadExams(); loadPaperOptions() })
   background: #1d4ed8;
 }
 
+.btn-default {
+  background: #ffffff;
+  color: #2563eb;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 24px;
+  border-radius: 8px;
+  border: 1.5px solid #2563eb;
+  cursor: pointer;
+  margin-left: 8px;
+}
+
+.btn-default:hover {
+  background: #eff6ff;
+}
+
 .search-wrapper {
   position: relative;
   width: 280px;
@@ -862,7 +901,10 @@ onMounted(() => { loadExams(); loadPaperOptions() })
 .col-type { width: 72px; }
 .col-category { width: 88px; }
 .col-training { width: 100px; }
-.col-action { width: 72px; }
+.col-action {
+  width: 220px;
+  padding-right: 24px !important;
+}
 
 .name-cell {
   display: flex;
@@ -924,15 +966,35 @@ onMounted(() => { loadExams(); loadPaperOptions() })
   text-decoration: underline;
 }
 
-.btn-action {
-  background: none;
-  border: none;
-  color: #94a3b8;
-  cursor: pointer;
+.action-btns {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.btn-action:hover {
-  color: #334155;
+.btn-link {
+  background: none;
+  border: none;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: color 0.2s;
+}
+
+.btn-link:hover {
+  color: #1d4ed8;
+  text-decoration: underline;
+}
+
+.btn-link-danger {
+  color: #ef4444;
+}
+
+.btn-link-danger:hover {
+  color: #dc2626;
 }
 
 .empty-cell {
@@ -1115,6 +1177,11 @@ onMounted(() => { loadExams(); loadPaperOptions() })
   font-size: 12px;
 }
 
+.read-only-block {
+  pointer-events: none;
+  opacity: 0.72;
+}
+
 .paper-preview {
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -1197,4 +1264,25 @@ onMounted(() => { loadExams(); loadPaperOptions() })
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
+
+:deep(.search-input .ant-input-group-addon) {
+  left: 0;
+  border-left: none;
+  border-radius: 0 8px 8px 0;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+  padding: 0;
+}
+
+:deep(.search-input .ant-input-group-addon .ant-btn) {
+  border-radius: 0 8px 8px 0;
+  height: 36px;
+  border-left: none;
+  background: #f8fafc;
+}
+
+:deep(.search-input .ant-input-group) {
+  display: flex;
+}
+
 </style>

@@ -114,7 +114,7 @@
                       <button class="btn-link" @click="openViewDrawer(record)">查看</button>
                       <button v-if="record.status === 'draft'" class="btn-link" @click="openEditDrawer(record)">编辑</button>
                       <button v-if="record.status === 'draft'" class="btn-link" @click="handlePublish(record)">发布</button>
-                      <button v-if="record.usageCount === 0" class="btn-link btn-link-danger" @click="handleDelete(record)">删除</button>
+                      <button v-if="record.usageCount === 0 || record.status === 'published'" class="btn-link btn-link-danger" @click="handleDelete(record)">删除</button>
                     </div>
                   </td>
                 </tr>
