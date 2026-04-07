@@ -73,7 +73,7 @@
           </a-menu-item>
           <a-menu-item key="resources">
             <template #icon><FolderOutlined /></template>
-            资源
+            班级资源
           </a-menu-item>
           <a-sub-menu key="exams-group">
             <template #icon><FileTextOutlined /></template>
@@ -232,10 +232,10 @@
             />
           </div>
 
-          <!-- 资源 -->
+          <!-- 班级资源 -->
           <div v-show="activeTab === 'resources'">
             <div class="content-section-header">
-              <h3>课程资源</h3>
+              <h3>班级资源</h3>
             </div>
             <TrainingResourcesContent
               :training-data="trainingData"

@@ -1,5 +1,34 @@
 <template>
   <div>
+    <!-- 知识库/班级资源相关弹窗 -->
+    <a-modal
+      v-model:open="libraryModalVisible"
+      title="选择知识库资源"
+      ok-text="确认添加"
+      cancel-text="取消"
+      :width="560"
+      @ok="confirmLibraryAdd"
+    >
+      <a-input-search placeholder="搜索知识库资源名称" style="margin-bottom: 16px" />
+      <a-empty description="知识库资源绑定功能开发中，敬请期待" style="padding: 24px 0" />
+    </a-modal>
+
+    <a-modal
+      v-model:open="uploadModalVisible"
+      title="上传班级资源"
+      ok-text="确认上传"
+      cancel-text="取消"
+      :width="520"
+      @ok="confirmUpload"
+    >
+      <a-upload-dragger :before-upload="() => false" multiple style="margin-bottom: 8px">
+        <p class="ant-upload-drag-icon" style="font-size: 32px">📁</p>
+        <p class="ant-upload-text">点击或拖拽文件到此区域</p>
+        <p class="ant-upload-hint">支持文档、图片、视频等各类格式，班级资源上传功能开发中</p>
+      </a-upload-dragger>
+    </a-modal>
+
+    <!-- 课程资源预览弹窗 -->
     <a-modal
       v-model:open="previewVisible"
       :title="previewResource?.title || '资源预览'"
@@ -23,152 +52,186 @@
       </div>
     </a-modal>
 
-    <a-empty
-      v-if="linkedItems.length === 0 && !legacyResources.length && !loading"
-      description="本班暂无可展示的课程资源"
-    />
+    <!-- ===== 知识库资源 ===== -->
+    <div class="class-res-section">
+      <div class="class-res-section-header">
+        <h4 class="class-res-section-title">知识库资源</h4>
+        <a-button size="small" @click="libraryModalVisible = true">
+          + 添加知识库资源
+        </a-button>
+      </div>
+      <a-empty description="暂无已添加的知识库资源" class="section-empty" />
+    </div>
 
-    <div v-else class="res-course-list">
-      <div
-        v-for="item in linkedItems"
-        :key="item.trainingCourse.id"
-        class="res-course-card"
-      >
+    <div class="res-divider" />
+
+    <!-- ===== 课程资源 ===== -->
+    <div class="class-res-section">
+      <div class="class-res-section-header">
+        <h4 class="class-res-section-title">课程资源</h4>
+      </div>
+
+      <a-empty
+        v-if="linkedItems.length === 0 && !legacyResources.length && !loading"
+        description="本班暂无可展示的课程资源"
+        class="section-empty"
+      />
+
+      <div v-else class="res-course-list">
         <div
-          class="res-course-top"
-          :class="{ 'res-course-top--link': !!item.trainingCourse.course_id }"
-          @click="item.trainingCourse.course_id && goToCoursePage(item.trainingCourse.course_id)"
+          v-for="item in linkedItems"
+          :key="item.trainingCourse.id"
+          class="res-course-card"
         >
-          <div class="res-course-info">
-            <h4 class="res-course-name">{{ item.trainingCourse.name }}</h4>
-            <div class="res-course-meta">
-              <span v-if="!item.loading" class="meta-hint">
-                {{ item.courseResources.length }} 个课程关联资源 · {{ item.chapters.length }} 个章节 · {{ boundCount(item) }} 个章节绑定资源
-              </span>
+          <div
+            class="res-course-top"
+            :class="{ 'res-course-top--link': !!item.trainingCourse.course_id }"
+            @click="item.trainingCourse.course_id && goToCoursePage(item.trainingCourse.course_id)"
+          >
+            <div class="res-course-info">
+              <h4 class="res-course-name">{{ item.trainingCourse.name }}</h4>
+              <div class="res-course-meta">
+                <span v-if="!item.loading" class="meta-hint">
+                  {{ item.courseResources.length }} 个课程关联资源 · {{ item.chapters.length }} 个章节 · {{ boundCount(item) }} 个章节绑定资源
+                </span>
+              </div>
             </div>
+          </div>
+
+          <div class="res-card-body">
+            <div v-if="item.loading" class="res-loading">
+              <a-spin size="small" /> 加载中…
+            </div>
+
+            <template v-else>
+              <section v-if="item.courseResources.length" class="res-section">
+                <div class="res-section-head">
+                  <h5>课程关联资源</h5>
+                  <span>这些资源会随课程继承到班级中</span>
+                </div>
+                <div class="res-linked-resource-list">
+                  <article
+                    v-for="resource in item.courseResources"
+                    :key="resource.ref_id || resource.id"
+                    class="res-linked-resource-card"
+                  >
+                    <div class="res-linked-resource-main">
+                      <div class="res-linked-resource-top">
+                        <span class="res-type-icon">{{ contentTypeIcon(resource.content_type) }}</span>
+                        <strong>{{ resource.title }}</strong>
+                      </div>
+                      <div class="res-linked-resource-meta">
+                        <span>类型：{{ contentTypeLabel(resource.content_type) }}</span>
+                        <span>上传者：{{ resource.uploader_name || '-' }}</span>
+                        <span>归属部门：{{ resource.owner_department_name || '-' }}</span>
+                      </div>
+                      <div v-if="resource.tags?.length" class="res-linked-resource-tags">
+                        <a-tag v-for="tag in resource.tags" :key="tag">{{ tag }}</a-tag>
+                      </div>
+                    </div>
+
+                    <a-button type="link" class="res-view-link-btn" @click="openBoundResource(resource)">
+                      查看资源
+                    </a-button>
+                  </article>
+                </div>
+              </section>
+
+              <section v-if="item.chapters.length" class="res-section">
+                <div class="res-section-head">
+                  <h5>章节资源</h5>
+                  <span>课程章节中直接绑定的资源</span>
+                </div>
+                <div class="res-chapter-list">
+                  <div
+                    v-for="ch in item.chapters"
+                    :key="ch.id"
+                    class="res-chapter-row"
+                    :class="{ 'res-chapter-row--link': !!item.trainingCourse.course_id }"
+                    @click="item.trainingCourse.course_id && goToCoursePage(item.trainingCourse.course_id)"
+                  >
+                    <span class="res-chapter-idx">{{ (ch.sort_order ?? 0) + 1 }}</span>
+                    <span class="res-chapter-title">{{ ch.title }}</span>
+                    <template v-if="ch.resource_id || ch.library_item_id">
+                      <span class="res-chapter-resource">
+                        {{ ch.resource_title || ch.resource_file_name || '未命名资源' }}
+                      </span>
+                      <span class="res-type-tag" :class="'res-type-' + (ch.content_type || 'document')">
+                        {{ ch.resource_file_label || contentTypeLabel(ch.content_type) }}
+                      </span>
+                      <a
+                        v-if="ch.file_url"
+                        :href="ch.file_url"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="res-view-link"
+                        @click.stop
+                      >查看</a>
+                      <span v-else class="res-na">—</span>
+                    </template>
+                    <template v-else>
+                      <span class="res-chapter-resource res-na">未绑定资源</span>
+                      <span class="res-na">—</span>
+                      <span class="res-na">—</span>
+                    </template>
+                  </div>
+                </div>
+              </section>
+
+              <div v-if="!item.courseResources.length && !item.chapters.length" class="res-empty">
+                该课程暂无可展示资源
+              </div>
+            </template>
           </div>
         </div>
 
-        <div class="res-card-body">
-          <div v-if="item.loading" class="res-loading">
-            <a-spin size="small" /> 加载中…
+        <div v-if="legacyResources.length" class="res-legacy-section">
+          <div class="res-section-head">
+            <h5>历史班级资源</h5>
+            <span>兼容显示历史班级单独绑定的资源，当前不再支持新增</span>
           </div>
-
-          <template v-else>
-            <section v-if="item.courseResources.length" class="res-section">
-              <div class="res-section-head">
-                <h5>课程关联资源</h5>
-                <span>这些资源会随课程继承到班级中</span>
-              </div>
-              <div class="res-linked-resource-list">
-                <article
-                  v-for="resource in item.courseResources"
-                  :key="resource.ref_id || resource.id"
-                  class="res-linked-resource-card"
-                >
-                  <div class="res-linked-resource-main">
-                    <div class="res-linked-resource-top">
-                      <span class="res-type-icon">{{ contentTypeIcon(resource.content_type) }}</span>
-                      <strong>{{ resource.title }}</strong>
-                    </div>
-                    <div class="res-linked-resource-meta">
-                      <span>类型：{{ contentTypeLabel(resource.content_type) }}</span>
-                      <span>上传者：{{ resource.uploader_name || '-' }}</span>
-                      <span>归属部门：{{ resource.owner_department_name || '-' }}</span>
-                    </div>
-                    <div v-if="resource.tags?.length" class="res-linked-resource-tags">
-                      <a-tag v-for="tag in resource.tags" :key="tag">{{ tag }}</a-tag>
-                    </div>
-                  </div>
-
-                  <a-button type="link" class="res-view-link-btn" @click="openBoundResource(resource)">
-                    查看资源
-                  </a-button>
-                </article>
-              </div>
-            </section>
-
-            <section v-if="item.chapters.length" class="res-section">
-              <div class="res-section-head">
-                <h5>章节资源</h5>
-                <span>课程章节中直接绑定的资源</span>
-              </div>
-              <div class="res-chapter-list">
-                <div
-                  v-for="ch in item.chapters"
-                  :key="ch.id"
-                  class="res-chapter-row"
-                  :class="{ 'res-chapter-row--link': !!item.trainingCourse.course_id }"
-                  @click="item.trainingCourse.course_id && goToCoursePage(item.trainingCourse.course_id)"
-                >
-                  <span class="res-chapter-idx">{{ (ch.sort_order ?? 0) + 1 }}</span>
-                  <span class="res-chapter-title">{{ ch.title }}</span>
-                  <template v-if="ch.resource_id || ch.library_item_id">
-                    <span class="res-chapter-resource">
-                      {{ ch.resource_title || ch.resource_file_name || '未命名资源' }}
-                    </span>
-                    <span class="res-type-tag" :class="'res-type-' + (ch.content_type || 'document')">
-                      {{ ch.resource_file_label || contentTypeLabel(ch.content_type) }}
-                    </span>
-                    <a
-                      v-if="ch.file_url"
-                      :href="ch.file_url"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="res-view-link"
-                      @click.stop
-                    >查看</a>
-                    <span v-else class="res-na">—</span>
-                  </template>
-                  <template v-else>
-                    <span class="res-chapter-resource res-na">未绑定资源</span>
-                    <span class="res-na">—</span>
-                    <span class="res-na">—</span>
-                  </template>
+          <div class="res-linked-resource-list">
+            <article
+              v-for="resource in legacyResources"
+              :key="resource.id"
+              class="res-linked-resource-card"
+            >
+              <div class="res-linked-resource-main">
+                <div class="res-linked-resource-top">
+                  <span class="res-type-icon">{{ contentTypeIcon(resource.content_type) }}</span>
+                  <strong>{{ resource.title }}</strong>
+                  <a-tag color="default">历史资源</a-tag>
+                </div>
+                <div class="res-linked-resource-meta">
+                  <span>类型：{{ contentTypeLabel(resource.content_type) }}</span>
+                  <span>上传者：{{ resource.uploader_name || '-' }}</span>
+                  <span>归属部门：{{ resource.owner_department_name || '-' }}</span>
+                </div>
+                <div v-if="resource.tags?.length" class="res-linked-resource-tags">
+                  <a-tag v-for="tag in resource.tags" :key="tag">{{ tag }}</a-tag>
                 </div>
               </div>
-            </section>
 
-            <div v-if="!item.courseResources.length && !item.chapters.length" class="res-empty">
-              该课程暂无可展示资源
-            </div>
-          </template>
+              <a-button type="link" class="res-view-link-btn" @click="goResourceDetail(resource.id)">
+                查看资源
+              </a-button>
+            </article>
+          </div>
         </div>
       </div>
+    </div>
 
-      <div v-if="legacyResources.length" class="res-legacy-section">
-        <div class="res-section-head">
-          <h5>历史班级资源</h5>
-          <span>兼容显示历史班级单独绑定的资源，当前不再支持新增</span>
-        </div>
-        <div class="res-linked-resource-list">
-          <article
-            v-for="resource in legacyResources"
-            :key="resource.id"
-            class="res-linked-resource-card"
-          >
-            <div class="res-linked-resource-main">
-              <div class="res-linked-resource-top">
-                <span class="res-type-icon">{{ contentTypeIcon(resource.content_type) }}</span>
-                <strong>{{ resource.title }}</strong>
-                <a-tag color="default">历史资源</a-tag>
-              </div>
-              <div class="res-linked-resource-meta">
-                <span>类型：{{ contentTypeLabel(resource.content_type) }}</span>
-                <span>上传者：{{ resource.uploader_name || '-' }}</span>
-                <span>归属部门：{{ resource.owner_department_name || '-' }}</span>
-              </div>
-              <div v-if="resource.tags?.length" class="res-linked-resource-tags">
-                <a-tag v-for="tag in resource.tags" :key="tag">{{ tag }}</a-tag>
-              </div>
-            </div>
+    <div class="res-divider" />
 
-            <a-button type="link" class="res-view-link-btn" @click="goResourceDetail(resource.id)">
-              查看资源
-            </a-button>
-          </article>
-        </div>
+    <!-- ===== 班级资源 ===== -->
+    <div class="class-res-section">
+      <div class="class-res-section-header">
+        <h4 class="class-res-section-title">班级资源</h4>
+        <a-button size="small" @click="uploadModalVisible = true">
+          + 上传班级资源
+        </a-button>
       </div>
+      <a-empty description="暂无已上传的班级资源" class="section-empty" />
     </div>
   </div>
 </template>
@@ -209,6 +272,20 @@ const loading = ref(false)
 const previewVisible = ref(false)
 const previewResource = ref<CourseBoundResourceResponse | null>(null)
 let loaded = false
+
+// 知识库资源弹窗
+const libraryModalVisible = ref(false)
+function confirmLibraryAdd() {
+  message.success('知识库资源绑定功能开发中')
+  libraryModalVisible.value = false
+}
+
+// 班级资源上传弹窗
+const uploadModalVisible = ref(false)
+function confirmUpload() {
+  message.success('班级资源上传功能开发中')
+  uploadModalVisible.value = false
+}
 
 const legacyResources = computed(() => props.legacyResources || [])
 
@@ -333,6 +410,36 @@ watch(
 </script>
 
 <style scoped>
+/* ===== 三大区块 ===== */
+.class-res-section {
+  padding: 4px 0 8px;
+}
+
+.class-res-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.class-res-section-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--v2-text-primary);
+}
+
+.res-divider {
+  height: 1px;
+  background: var(--v2-border-light);
+  margin: 20px 0;
+}
+
+.section-empty {
+  padding: 20px 0;
+}
+
+/* ===== 课程资源内部 ===== */
 .res-course-list {
   display: flex;
   flex-direction: column;
@@ -383,13 +490,6 @@ watch(
 .meta-hint {
   font-size: 12px;
   color: var(--v2-text-muted);
-}
-
-.res-badge {
-  display: inline-block;
-  font-size: 11px;
-  padding: 1px 8px;
-  border-radius: 20px;
 }
 
 .res-card-body {

@@ -469,7 +469,7 @@ const visibleTabs = computed(() => {
   const tabs = [
     { key: 'overview', label: '概览' },
     { key: 'schedule', label: '课程' },
-    { key: 'resources', label: '资源' },
+    { key: 'resources', label: '班级资源' },
     { key: 'exam', label: '考试' },
   ]
   if (isClassInstructor.value) {
