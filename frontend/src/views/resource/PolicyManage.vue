@@ -61,7 +61,10 @@
               tips="需要 MANAGE_REVIEW_POLICY 或 VIEW_RESOURCE_ALL 权限"
               v-slot="{ disabled }"
             >
-              <a-button size="small" :disabled="disabled" @click="openEdit(record)">编辑</a-button>
+              <a-space>
+                <a-button size="small" :disabled="disabled" @click="openEdit(record)">编辑</a-button>
+                <a-button size="small" @click="openFlowPreview(record)">流程</a-button>
+              </a-space>
             </permissions-tooltip>
           </template>
         </template>
@@ -186,17 +189,17 @@
         </a-alert>
 
         <a-row :gutter="8" class="stage-header">
-          <a-col :span="4">阶段顺序</a-col>
+          <a-col :span="3">阶段顺序</a-col>
           <a-col :span="5">审核人类型</a-col>
           <a-col :span="6">审核对象</a-col>
           <a-col :span="4">最小通过数</a-col>
-          <a-col :span="4">允许自审</a-col>
-          <a-col :span="1">操作</a-col>
+          <a-col :span="3">允许自审</a-col>
+          <a-col :span="3">操作</a-col>
         </a-row>
 
         <div v-for="(stage, idx) in form.stages" :key="idx" class="stage-row">
           <a-row :gutter="8" align="middle">
-            <a-col :span="4">
+            <a-col :span="3">
               <a-input-number v-model:value="stage.stageOrder" :min="1" style="width:100%" placeholder="如 1" />
             </a-col>
             <a-col :span="5">
@@ -226,16 +229,16 @@
             <a-col :span="4">
               <a-input-number v-model:value="stage.minApprovals" :min="1" style="width:100%" placeholder="至少 1" />
             </a-col>
-            <a-col :span="4">
+            <a-col :span="3">
               <a-switch v-model:checked="stage.allowSelfReview" />
             </a-col>
-            <a-col :span="1">
+            <a-col :span="3">
               <permissions-tooltip
                 :allowed="canManagePolicy"
                 tips="需要 MANAGE_REVIEW_POLICY 或 VIEW_RESOURCE_ALL 权限"
                 v-slot="{ disabled }"
               >
-                <a-button type="link" danger :disabled="disabled" @click="removeStage(idx)">删</a-button>
+                <a-button type="link" danger :disabled="disabled" @click="removeStage(idx)">删除</a-button>
               </permissions-tooltip>
             </a-col>
           </a-row>
@@ -251,7 +254,28 @@
         >
           <a-button type="dashed" block :disabled="disabled" @click="addStage">添加阶段</a-button>
         </permissions-tooltip>
+
+        <a-divider orientation="left">流程预览</a-divider>
+        <ReviewFlowChart
+          :stages="form.stages"
+          :reviewer-type-labels="reviewerTypeLabels"
+          :get-reviewer-label="getFlowReviewerLabel"
+        />
       </a-form>
+    </a-modal>
+
+    <a-modal
+      v-model:open="flowVisible"
+      :title="flowPolicy ? `审核流程 — ${flowPolicy.name}` : '审核流程'"
+      :footer="null"
+      width="800px"
+    >
+      <ReviewFlowChart
+        v-if="flowPolicy"
+        :stages="flowPolicy.stages || []"
+        :reviewer-type-labels="reviewerTypeLabels"
+        :get-reviewer-label="getFlowReviewerLabel"
+      />
     </a-modal>
   </div>
 </template>
@@ -265,6 +289,7 @@ import { getRoleList } from '@/api/role'
 import { getDepartmentList } from '@/api/department'
 import { useAuthStore } from '@/stores/auth'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
+import ReviewFlowChart from '@/components/common/ReviewFlowChart.vue'
 
 const authStore = useAuthStore()
 const policies = ref([])
@@ -272,6 +297,8 @@ const visible = ref(false)
 const editing = ref(null)
 const saving = ref(false)
 const canManagePolicy = computed(() => authStore.hasAnyPermission(['MANAGE_REVIEW_POLICY', 'VIEW_RESOURCE_ALL']))
+const flowVisible = ref(false)
+const flowPolicy = ref(null)
 
 const userReviewerOptions = ref([])
 const roleReviewerOptions = ref([])
@@ -292,7 +319,7 @@ const columns = [
   { title: '上传者约束', key: 'uploaderConstraint', width: 220 },
   { title: '审核路径', key: 'stages', width: 320 },
   { title: '状态', key: 'enabled', width: 100 },
-  { title: '操作', key: 'action', width: 100, fixed: 'right' },
+  { title: '操作', key: 'action', width: 150, fixed: 'right' },
 ]
 
 const form = reactive({
@@ -426,6 +453,16 @@ function getReviewerPlaceholder(type) {
   if (type === 'user') return '请选择用户'
   if (type === 'department') return '请选择部门'
   return '请选择角色'
+}
+
+function openFlowPreview(record) {
+  flowPolicy.value = record
+  flowVisible.value = true
+}
+
+function getFlowReviewerLabel(stage) {
+  const type = stage?.reviewerType || 'role'
+  return getOptionLabel(getBaseReviewerOptions(type), stage?.reviewerRefId, reviewerTypeLabels[type] || '对象')
 }
 
 function onReviewerTypeChange(stage) {
@@ -752,14 +789,14 @@ async function save() {
 
 .stage-header {
   margin-bottom: 8px;
-  padding: 0 8px;
+  padding: 0 10px;
   color: #666;
   font-size: 12px;
 }
 
 .stage-row {
   margin-bottom: 10px;
-  padding: 10px;
+  padding: 10px 10px 4px;
   background: #fafafa;
   border: 1px solid #f0f0f0;
   border-radius: 6px;
