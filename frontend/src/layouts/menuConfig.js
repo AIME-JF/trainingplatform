@@ -89,7 +89,7 @@ export const appMenuConfig = [
         anyPermissions: TRAINING_BASE_PAGE_PERMISSIONS,
       },
       {
-        key: '/training/schedule',
+        key: '/training/plan',
         label: '培训计划管理',
         anyPermissions: TRAINING_SCHEDULE_PAGE_PERMISSIONS,
       },

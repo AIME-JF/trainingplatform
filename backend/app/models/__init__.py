@@ -40,6 +40,7 @@ from .review import (
 )
 from .recommendation import ResourceBehaviorEvent, ResourceRecommendScore
 from .training_activity import TrainingActivity
+from .training_plan import TrainingPlan
 from .practice import PracticeRecord
 
 
@@ -92,6 +93,8 @@ __all__ = [
     "ResourceBehaviorEvent", "ResourceRecommendScore",
     # 培训动态
     "TrainingActivity",
+    # 培训计划
+    "TrainingPlan",
     # 练习记录
     "PracticeRecord",
 ]

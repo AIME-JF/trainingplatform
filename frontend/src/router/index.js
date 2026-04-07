@@ -145,6 +145,12 @@ const router = createRouter({
           meta: { title: '培训基地', anyPermissions: TRAINING_BASE_PAGE_PERMISSIONS },
         },
         {
+          path: 'training/plan',
+          name: 'TrainingPlan',
+          component: () => import('../views/training/Plan.vue'),
+          meta: { title: '培训计划管理', anyPermissions: TRAINING_SCHEDULE_PAGE_PERMISSIONS },
+        },
+        {
           path: 'training/schedule/:id?',
           name: 'TrainingSchedule',
           component: () => import('../views/training/Schedule.vue'),

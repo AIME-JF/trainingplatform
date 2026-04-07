@@ -387,6 +387,7 @@ const primaryTrainingRoute = computed(() => {
   const preferredRoutes = [
     '/training',
     '/training/base',
+    '/training/plan',
     '/training/schedule',
     '/training/board',
   ]
@@ -417,6 +418,7 @@ function getSelectedMenuKeyByPath(path) {
   if (path.startsWith('/paper/ai-assemble')) return '/paper/repository'
   if (path.startsWith('/paper/repository')) return '/paper/repository'
   if (path.startsWith('/training/base')) return '/training/base'
+  if (path.startsWith('/training/plan')) return '/training/plan'
   if (path.startsWith('/training/schedule')) return '/training/schedule'
   if (path.startsWith('/training/board')) return '/training/board'
   if (path.startsWith('/training')) return '/training'

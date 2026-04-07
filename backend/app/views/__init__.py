@@ -27,6 +27,7 @@ from .system import router as system_router
 from .talent import router as talent_router
 from .training import router as training_router
 from .training_base import router as training_base_router
+from .training_plan import router as training_plan_router
 from .training_type import router as training_type_router
 from .user import router as user_router
 
@@ -40,6 +41,7 @@ all_routers = [
     question_router,
     training_router,
     training_base_router,
+    training_plan_router,
     training_type_router,
     certificate_router,
     profile_router,
@@ -72,6 +74,7 @@ __all__ = [
     "question_router",
     "training_router",
     "training_base_router",
+    "training_plan_router",
     "training_type_router",
     "certificate_router",
     "profile_router",
