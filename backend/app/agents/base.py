@@ -64,7 +64,7 @@ class BaseAIAgent:
         expect_json: bool = False,
     ) -> str:
         from logger import logger as _base_logger
-        _base_logger.debug(f"[BaseAIAgent] timeout=%s, max_tokens=%s, temperature=%s", config.timeout, config.max_tokens, config.temperature)
+        _base_logger.debug("[BaseAIAgent] timeout={}, max_tokens={}, temperature={}", config.timeout, config.max_tokens, config.temperature)
         # 使用 httpx.Timeout 显式设置所有超时类别，避免个别操作超时
         httpx_timeout = httpx.Timeout(config.timeout or 120, connect=30)
         client = OpenAI(
@@ -91,7 +91,7 @@ class BaseAIAgent:
         except Exception as exc:
             if expect_json:
                 request_kwargs.pop("response_format", None)
-                _base_logger.warning("[BaseAIAgent] JSON response_format 调用失败，降级普通模式重试: %s", exc)
+                _base_logger.opt(exception=True).warning("[BaseAIAgent] JSON response_format 调用失败，降级普通模式重试: {}", exc)
                 response = client.chat.completions.create(**request_kwargs)
             else:
                 raise
@@ -179,7 +179,7 @@ class BaseAIAgent:
         temperature = self._to_float(get_config_value("ai", "temperature"))
         timeout_raw = get_config_value("ai", "timeout")
         timeout = self._to_int(timeout_raw) if timeout_raw is not None else None
-        _base_logger.debug(f"[BaseAIAgent] config loaded: timeout_raw=%r, timeout=%r, max_tokens=%r", timeout_raw, timeout, max_tokens)
+        _base_logger.debug("[BaseAIAgent] config loaded: timeout_raw={!r}, timeout={!r}, max_tokens={!r}", timeout_raw, timeout, max_tokens)
         if timeout is None or timeout <= 0:
             timeout = 600
 

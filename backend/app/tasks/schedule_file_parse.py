@@ -79,7 +79,7 @@ def schedule_schedule_file_parse_task(
         )
         return task.id
     except Exception as exc:
-        logger.error("调度智能解析课表任务异常: %s", exc)
+        logger.opt(exception=True).error("调度智能解析课表任务异常: {}", exc)
         session.rollback()
         return None
     finally:
@@ -100,7 +100,7 @@ def generate_schedule_file_parse_task(self, task_id: int) -> None:
         from app.services.schedule_file_parse import ScheduleFileParseService
         ScheduleFileParseService(session).execute_task(task_id)
     except Exception as exc:
-        logger.error("智能解析课表任务 %d 异常: %s", task_id, exc, exc_info=True)
+        logger.opt(exception=True).error("智能解析课表任务 {} 异常: {}", task_id, exc)
         if self.request.retries < self.max_retries:
             session.rollback()
             raise self.retry(exc=exc, countdown=3 * (self.request.retries + 1))

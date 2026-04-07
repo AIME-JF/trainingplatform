@@ -170,15 +170,20 @@ class ScheduleFileParseService:
             self.db.commit()
 
         except Exception as exc:
-            logger.error("智能解析课表任务 %d 执行异常: %s", task_id, exc)
-            task.status = "failed"
-            task.error_message = str(exc)[:2000]
-            task.completed_at = datetime.now(timezone.utc)
-            result = dict(task.result_payload or {})
-            result["parse_success"] = False
-            result["parse_error"] = str(exc)[:2000]
-            task.result_payload = result
-            self.db.commit()
+            logger.opt(exception=True).error("智能解析课表任务 {} 执行异常: {}", task_id, exc)
+            try:
+                self.db.rollback()
+                task.status = "failed"
+                task.error_message = str(exc)[:2000]
+                task.completed_at = datetime.now(timezone.utc)
+                result = dict(task.result_payload or {})
+                result["parse_success"] = False
+                result["parse_error"] = str(exc)[:2000]
+                task.result_payload = result
+                self.db.commit()
+            except Exception as db_exc:
+                logger.error("更新任务 {} 失败状态时出错: {}", task_id, db_exc)
+                raise exc  # 让 Celery 重试或调用 _mark_task_failed
 
     # ------------------------------------------------------------------
     # 详情
@@ -319,6 +324,10 @@ class ScheduleFileParseService:
     # 标记失败
     # ------------------------------------------------------------------
     def mark_task_failed(self, task_id: int, error_message: str) -> None:
+        try:
+            self.db.rollback()
+        except Exception:
+            pass
         task = self.db.query(AITask).filter(AITask.id == task_id).first()
         if not task:
             return
