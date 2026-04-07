@@ -164,6 +164,12 @@ class TrainingBaseCreate(BaseModel):
     name: str = Field(..., max_length=200, description="培训基地名称")
     location: str = Field(..., max_length=200, description="培训基地地点")
     department_id: Optional[int] = Field(None, description="部门ID")
+    capacity: Optional[int] = Field(None, description="最大容纳人数")
+    contact_person: Optional[str] = Field(None, max_length=50, description="联系人")
+    contact_phone: Optional[str] = Field(None, max_length=20, description="联系电话")
+    area_size: Optional[str] = Field(None, max_length=50, description="占地面积")
+    facilities: Optional[str] = Field(None, max_length=500, description="设施设备描述")
+    status: Optional[str] = Field("active", description="状态: active/inactive")
     description: Optional[str] = Field(None, description="备注")
 
 
@@ -173,6 +179,12 @@ class TrainingBaseUpdate(BaseModel):
     name: Optional[str] = Field(None, max_length=200, description="培训基地名称")
     location: Optional[str] = Field(None, max_length=200, description="培训基地地点")
     department_id: Optional[int] = Field(None, description="部门ID")
+    capacity: Optional[int] = Field(None, description="最大容纳人数")
+    contact_person: Optional[str] = Field(None, max_length=50, description="联系人")
+    contact_phone: Optional[str] = Field(None, max_length=20, description="联系电话")
+    area_size: Optional[str] = Field(None, max_length=50, description="占地面积")
+    facilities: Optional[str] = Field(None, max_length=500, description="设施设备描述")
+    status: Optional[str] = Field(None, description="状态: active/inactive")
     description: Optional[str] = Field(None, description="备注")
 
 
@@ -185,6 +197,12 @@ class TrainingBaseResponse(BaseModel):
     department_id: Optional[int] = None
     department_name: Optional[str] = None
     created_by: Optional[int] = None
+    capacity: Optional[int] = None
+    contact_person: Optional[str] = None
+    contact_phone: Optional[str] = None
+    area_size: Optional[str] = None
+    facilities: Optional[str] = None
+    status: Optional[str] = None
     description: Optional[str] = None
     linked_training_count: int = 0
     upcoming_training_count: int = 0

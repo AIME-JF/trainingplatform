@@ -102,9 +102,7 @@ export const appMenuConfig = [
       {
         key: '/question/repository',
         label: '题库管理',
-<<<<<<< Updated upstream
         anyPermissions: [...QUESTION_BANK_PAGE_PERMISSIONS, ...AI_QUESTION_PAGE_PERMISSIONS],
-
       },
       {
         key: '/paper/repository',

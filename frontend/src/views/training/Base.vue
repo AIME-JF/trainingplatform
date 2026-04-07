@@ -37,6 +37,11 @@
     <a-card :bordered="false">
       <a-table :data-source="trainingBaseList" :columns="columns" :pagination="false" row-key="id">
         <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'status'">
+            <a-tag :color="record.status === 'active' ? 'green' : 'default'">
+              {{ record.status === 'active' ? '启用' : '停用' }}
+            </a-tag>
+          </template>
           <template v-if="column.key === 'departmentName'">
             {{ record.departmentName || '未设置' }}
           </template>
@@ -78,21 +83,66 @@
       cancel-text="取消"
     >
       <a-form :model="baseForm" layout="vertical" style="margin-top: 12px">
-        <a-form-item label="基地名称" required>
-          <a-input v-model:value="baseForm.name" />
-        </a-form-item>
-        <a-form-item label="基地地点" required>
-          <a-input v-model:value="baseForm.location" />
-        </a-form-item>
-        <a-form-item label="部门">
-          <a-select v-model:value="baseForm.departmentId" allow-clear placeholder="可选">
-            <a-select-option v-for="item in departmentOptions" :key="item.id" :value="item.id">
-              {{ item.name }}
-            </a-select-option>
-          </a-select>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="基地名称" required>
+              <a-input v-model:value="baseForm.name" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="基地地点" required>
+              <a-input v-model:value="baseForm.location" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="最大容纳人数">
+              <a-input-number v-model:value="baseForm.capacity" :min="0" style="width: 100%" placeholder="可选" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="占地面积">
+              <a-input v-model:value="baseForm.areaSize" placeholder="如：5000平方米" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="联系人">
+              <a-input v-model:value="baseForm.contactPerson" placeholder="可选" />
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="联系电话">
+              <a-input v-model:value="baseForm.contactPhone" placeholder="可选" />
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="部门">
+              <a-select v-model:value="baseForm.departmentId" allow-clear placeholder="可选">
+                <a-select-option v-for="item in departmentOptions" :key="item.id" :value="item.id">
+                  {{ item.name }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+          <a-col :span="12">
+            <a-form-item label="状态">
+              <a-select v-model:value="baseForm.status">
+                <a-select-option value="active">启用</a-select-option>
+                <a-select-option value="inactive">停用</a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <a-form-item label="设施设备">
+          <a-textarea v-model:value="baseForm.facilities" :rows="2" placeholder="如：射击场、体能训练馆、多媒体教室" />
         </a-form-item>
         <a-form-item label="备注">
-          <a-textarea v-model:value="baseForm.description" :rows="3" />
+          <a-textarea v-model:value="baseForm.description" :rows="2" />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -126,8 +176,12 @@ const editingBase = ref(null)
 const columns = [
   { title: '基地名称', dataIndex: 'name', key: 'name' },
   { title: '基地地点', dataIndex: 'location', key: 'location' },
-  { title: '部门', dataIndex: 'departmentName', key: 'departmentName', width: 180 },
-  { title: '关联培训班', key: 'linkedTrainingStatus', width: 220 },
+  { title: '容量', dataIndex: 'capacity', key: 'capacity', width: 80 },
+  { title: '联系人', dataIndex: 'contactPerson', key: 'contactPerson', width: 100 },
+  { title: '联系电话', dataIndex: 'contactPhone', key: 'contactPhone', width: 120 },
+  { title: '状态', key: 'status', width: 80 },
+  { title: '部门', dataIndex: 'departmentName', key: 'departmentName', width: 140 },
+  { title: '关联培训班', key: 'linkedTrainingStatus', width: 200 },
   { title: '操作', key: 'action', width: 140 },
 ]
 
@@ -135,6 +189,12 @@ const baseForm = reactive({
   name: '',
   location: '',
   departmentId: undefined,
+  capacity: undefined,
+  contactPerson: '',
+  contactPhone: '',
+  areaSize: '',
+  facilities: '',
+  status: 'active',
   description: '',
 })
 
@@ -143,6 +203,12 @@ function resetForm() {
     name: '',
     location: '',
     departmentId: undefined,
+    capacity: undefined,
+    contactPerson: '',
+    contactPhone: '',
+    areaSize: '',
+    facilities: '',
+    status: 'active',
     description: '',
   })
   editingBase.value = null
@@ -162,6 +228,12 @@ function openEditModal(record) {
     name: record.name || '',
     location: record.location || '',
     departmentId: record.departmentId,
+    capacity: record.capacity,
+    contactPerson: record.contactPerson || '',
+    contactPhone: record.contactPhone || '',
+    areaSize: record.areaSize || '',
+    facilities: record.facilities || '',
+    status: record.status || 'active',
     description: record.description || '',
   })
   showModal.value = true
@@ -200,6 +272,12 @@ async function handleSubmit() {
     name: baseForm.name,
     location: baseForm.location,
     departmentId: baseForm.departmentId || undefined,
+    capacity: baseForm.capacity || undefined,
+    contactPerson: baseForm.contactPerson || undefined,
+    contactPhone: baseForm.contactPhone || undefined,
+    areaSize: baseForm.areaSize || undefined,
+    facilities: baseForm.facilities || undefined,
+    status: baseForm.status || 'active',
     description: baseForm.description || undefined,
   }
 
