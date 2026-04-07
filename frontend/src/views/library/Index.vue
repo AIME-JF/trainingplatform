@@ -92,8 +92,8 @@
     <header class="library-header">
       <div>
         <div class="header-kicker">Instructor Workspace</div>
-        <h1>资源库</h1>
-        <p>正式教学文件统一归档到个人资源库，按分类和文件夹整理，再决定是否共享到公共资源。</p>
+        <h1>知识库</h1>
+        <p>正式教学文件统一归档到个人知识库，按分类和文件夹整理，再决定是否共享到公共知识。</p>
       </div>
     </header>
 

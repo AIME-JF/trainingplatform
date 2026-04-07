@@ -188,7 +188,7 @@ const router = createRouter({
           path: 'library',
           name: 'Library',
           component: () => import('../views/library/Index.vue'),
-          meta: { title: '资源库', roles: ['admin', 'instructor'] },
+          meta: { title: '知识库', roles: ['admin', 'instructor'] },
         },
         {
           path: 'resource/my',
