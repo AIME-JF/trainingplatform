@@ -24,7 +24,7 @@
     </a-modal>
 
     <a-empty
-      v-if="linkedItems.length === 0 && customItems.length === 0 && !legacyResources.length && !loading"
+      v-if="linkedItems.length === 0 && !legacyResources.length && !loading"
       description="本班暂无可展示的课程资源"
     />
 
@@ -34,11 +34,14 @@
         :key="item.trainingCourse.id"
         class="res-course-card"
       >
-        <div class="res-course-top">
+        <div
+          class="res-course-top"
+          :class="{ 'res-course-top--link': !!item.trainingCourse.course_id }"
+          @click="item.trainingCourse.course_id && goToCoursePage(item.trainingCourse.course_id)"
+        >
           <div class="res-course-info">
             <h4 class="res-course-name">{{ item.trainingCourse.name }}</h4>
             <div class="res-course-meta">
-              <span class="res-badge res-badge--linked">已绑定课程</span>
               <span v-if="!item.loading" class="meta-hint">
                 {{ item.courseResources.length }} 个课程关联资源 · {{ item.chapters.length }} 个章节 · {{ boundCount(item) }} 个章节绑定资源
               </span>
@@ -67,11 +70,9 @@
                     <div class="res-linked-resource-top">
                       <span class="res-type-icon">{{ contentTypeIcon(resource.content_type) }}</span>
                       <strong>{{ resource.title }}</strong>
-                      <a-tag :color="boundResourceStatusColor(resource)">{{ resource.status_label || resource.status || '-' }}</a-tag>
                     </div>
                     <div class="res-linked-resource-meta">
                       <span>类型：{{ contentTypeLabel(resource.content_type) }}</span>
-                      <span>来源：{{ resource.source_label || (resource.binding_type === 'library_item' ? '个人资源库' : '公共资源') }}</span>
                       <span>上传者：{{ resource.uploader_name || '-' }}</span>
                       <span>归属部门：{{ resource.owner_department_name || '-' }}</span>
                     </div>
@@ -97,12 +98,13 @@
                   v-for="ch in item.chapters"
                   :key="ch.id"
                   class="res-chapter-row"
+                  :class="{ 'res-chapter-row--link': !!item.trainingCourse.course_id }"
+                  @click="item.trainingCourse.course_id && goToCoursePage(item.trainingCourse.course_id)"
                 >
                   <span class="res-chapter-idx">{{ (ch.sort_order ?? 0) + 1 }}</span>
                   <span class="res-chapter-title">{{ ch.title }}</span>
                   <template v-if="ch.resource_id || ch.library_item_id">
                     <span class="res-chapter-resource">
-                      <span class="res-type-icon">{{ contentTypeIcon(ch.content_type) }}</span>
                       {{ ch.resource_title || ch.resource_file_name || '未命名资源' }}
                     </span>
                     <span class="res-type-tag" :class="'res-type-' + (ch.content_type || 'document')">
@@ -114,6 +116,7 @@
                       target="_blank"
                       rel="noopener noreferrer"
                       class="res-view-link"
+                      @click.stop
                     >查看</a>
                     <span v-else class="res-na">—</span>
                   </template>
@@ -166,18 +169,6 @@
           </article>
         </div>
       </div>
-
-      <div v-if="customItems.length > 0" class="res-custom-section">
-        <div class="res-custom-label">以下课程为自定义课程，未继承课程资源</div>
-        <div
-          v-for="c in customItems"
-          :key="c.id"
-          class="res-custom-row"
-        >
-          <span class="res-custom-name">{{ c.name }}</span>
-          <span class="res-badge res-badge--custom">自定义</span>
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -218,10 +209,6 @@ const loading = ref(false)
 const previewVisible = ref(false)
 const previewResource = ref<CourseBoundResourceResponse | null>(null)
 let loaded = false
-
-const customItems = computed<TrainingCourse[]>(() =>
-  props.courses.filter((course) => !course.course_id),
-)
 
 const legacyResources = computed(() => props.legacyResources || [])
 
@@ -267,6 +254,10 @@ function boundResourceStatusColor(resource: CourseBoundResourceResponse) {
 
 function goResourceDetail(resourceId: number) {
   void router.push(`/resource/detail/${resourceId}`)
+}
+
+function goToCoursePage(courseId: number) {
+  void router.push(`/resource/courses/${courseId}`)
 }
 
 function openBoundResource(resource: CourseBoundResourceResponse) {
@@ -360,11 +351,26 @@ watch(
   background: linear-gradient(135deg, rgba(75, 110, 245, 0.04) 0%, transparent 100%);
 }
 
+.res-course-top--link {
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.res-course-top--link:hover {
+  background: linear-gradient(135deg, rgba(75, 110, 245, 0.09) 0%, rgba(75, 110, 245, 0.02) 100%);
+  box-shadow: inset 0 -2px 0 rgba(75, 110, 245, 0.15);
+}
+
+.res-course-top--link:hover .res-course-name {
+  color: var(--v2-primary);
+}
+
 .res-course-name {
   font-size: 15px;
   font-weight: 600;
   color: var(--v2-text-primary);
   margin: 0 0 6px;
+  transition: color 0.15s;
 }
 
 .res-course-meta {
@@ -384,17 +390,6 @@ watch(
   font-size: 11px;
   padding: 1px 8px;
   border-radius: 20px;
-}
-
-.res-badge--linked {
-  background: rgba(52, 199, 89, 0.12);
-  color: #22a854;
-}
-
-.res-badge--custom {
-  background: var(--v2-bg);
-  color: var(--v2-text-muted);
-  border: 1px solid var(--v2-border-light);
 }
 
 .res-card-body {
@@ -503,10 +498,21 @@ watch(
   padding: 9px 4px;
   border-bottom: 1px solid var(--v2-border-light);
   font-size: 13px;
+  border-radius: 6px;
+  transition: background 0.15s, box-shadow 0.15s;
 }
 
 .res-chapter-row:last-child {
   border-bottom: none;
+}
+
+.res-chapter-row--link {
+  cursor: pointer;
+}
+
+.res-chapter-row--link:hover {
+  background: rgba(75, 110, 245, 0.04);
+  box-shadow: 0 1px 4px rgba(75, 110, 245, 0.08);
 }
 
 .res-chapter-idx {
@@ -534,9 +540,6 @@ watch(
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  display: flex;
-  align-items: center;
-  gap: 5px;
 }
 
 .res-type-icon {
@@ -575,35 +578,10 @@ watch(
   flex-shrink: 0;
 }
 
-.res-legacy-section,
-.res-custom-section {
+.res-legacy-section {
   padding: 16px 18px;
   border: 1px dashed var(--v2-border-light);
   border-radius: var(--v2-radius);
-}
-
-.res-custom-label {
-  font-size: 12px;
-  color: var(--v2-text-muted);
-  margin-bottom: 10px;
-}
-
-.res-custom-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--v2-border-light);
-}
-
-.res-custom-row:last-child {
-  border-bottom: none;
-}
-
-.res-custom-name {
-  flex: 1;
-  font-size: 13px;
-  color: var(--v2-text-secondary);
 }
 
 .resource-preview-body {
