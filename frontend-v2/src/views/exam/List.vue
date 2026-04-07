@@ -13,11 +13,16 @@
       <button v-for="tab in statusTabs" :key="tab.key" type="button" class="dark-chip" :class="{ active: filters.status === tab.key }" @click="selectStatus(tab.key)">{{ tab.label }}</button>
     </template>
     <template #actions>
-      <a-select v-model:value="filters.sort" class="dark-sort-select" @change="fetchExams">
-        <a-select-option value="latest">按最新</a-select-option>
-        <a-select-option value="upcoming">即将开始</a-select-option>
-        <a-select-option value="active">进行中</a-select-option>
-      </a-select>
+      <div class="header-actions">
+        <a-select v-model:value="filters.sort" class="dark-sort-select" @change="fetchExams">
+          <a-select-option value="latest">按最新</a-select-option>
+          <a-select-option value="upcoming">即将开始</a-select-option>
+          <a-select-option value="active">进行中</a-select-option>
+        </a-select>
+        <a-button v-if="!isStudentView" type="primary" @click="openWizardModal">
+          一站式创建
+        </a-button>
+      </div>
     </template>
   </DarkPageHeader>
 
@@ -292,11 +297,19 @@
           />
         </div>
         <div v-if="activeTab === 'admission'" class="form-field">
-          <label class="field-label">适用范围</label>
-          <AdmissionScopeSelector
-            v-model:scope-type="examForm.scopeType"
-            v-model:scope-target-ids="examForm.scopeTargetIds"
-          />
+          <label class="field-label required">关联课程</label>
+          <a-select
+            v-model:value="examForm.courseIds"
+            mode="multiple"
+            placeholder="请选择关联课程，用于关联学员"
+            style="width: 100%"
+            allow-clear
+          >
+            <a-select-option v-for="c in availableCourses" :key="c.id" :value="c.id">{{ c.title || c.name }}</a-select-option>
+          </a-select>
+          <div class="paper-hint">
+            <span class="hint-text">准入考试将根据所关联课程同步关联学员</span>
+          </div>
         </div>
       </div>
       <div class="modal-footer">
@@ -449,6 +462,39 @@
             </a-select>
           </div>
 
+          <div class="ai-input-grid">
+            <div class="ai-requirements-card">
+              <div class="type-config-header">智能组卷要求</div>
+              <a-textarea
+                v-model:value="aiRequirements"
+                :rows="6"
+                placeholder="请输入补充要求或提示词，例如：突出执法程序规范、增加案例分析场景、优先覆盖新修订制度等"
+              />
+              <div class="ai-requirements-hint">
+                提示词会和知识点、题型配置一起用于筛题；上传的附件会先解析为文本，再自动并入 AI 组卷要求。
+              </div>
+            </div>
+
+            <div class="ai-attachments-card">
+              <div class="type-config-header">参考附件</div>
+              <a-upload-dragger
+                v-model:file-list="aiAttachmentList"
+                :before-upload="handleAiAttachmentBeforeUpload"
+                :multiple="true"
+                :max-count="5"
+                :accept="aiAttachmentAccept"
+              >
+                <p class="ant-upload-drag-icon">
+                  <FileTextOutlined />
+                </p>
+                <p class="ant-upload-text">点击或拖拽上传参考材料</p>
+                <p class="ant-upload-hint">
+                  支持 PDF、DOC、DOCX、XLS、XLSX、CSV、TXT、MD、PPT、PPTX，上传后会自动解析文本。
+                </p>
+              </a-upload-dragger>
+            </div>
+          </div>
+
           <div class="type-config-section">
             <div class="type-config-header">题型配置</div>
             <a-table
@@ -484,12 +530,13 @@
           <div class="ai-summary">
             <span>总题数：<strong>{{ aiTotalCount }}</strong> 题</span>
             <span>总分：<strong>{{ aiTotalScore }}</strong> 分</span>
+            <span>附件：<strong>{{ aiAttachmentList.length }}</strong> 份</span>
           </div>
 
           <!-- AI 生成状态 -->
           <div v-if="aiGenerating" class="ai-generating">
             <a-spin size="small" />
-            <span>AI 正在生成试卷，请稍候...</span>
+            <span>{{ aiGenerationStatusText }}</span>
           </div>
         </div>
 
@@ -554,13 +601,17 @@
               <a-input-number v-model:value="paperForm.duration" :min="10" :max="300" style="width: 100%" />
             </div>
             <div class="form-field">
-              <label class="field-label">试卷说明</label>
-              <a-input v-model:value="paperForm.description" placeholder="选填" />
+              <label class="field-label">及格分数</label>
+              <a-input-number v-model:value="paperForm.passingScore" :min="1" :max="manualTotalScore || undefined" style="width: 100%" />
             </div>
+          </div>
+          <div class="form-field">
+            <label class="field-label">试卷说明</label>
+            <a-textarea v-model:value="paperForm.description" placeholder="选填" :rows="2" />
           </div>
           <div class="selected-questions-summary">
             已选 <strong>{{ wizardSelectedQuestions.length }}</strong> 题（单选 {{ getSelectedCountByType('single') }} 题，多选 {{ getSelectedCountByType('multi') }} 题，判断 {{ getSelectedCountByType('judge') }} 题），
-            总分 <strong>{{ manualTotalScore }}</strong> 分，及格分 <strong>{{ Math.round(manualTotalScore * 0.6) }}</strong> 分
+            总分 <strong>{{ manualTotalScore }}</strong> 分，当前及格分 <strong>{{ paperForm.passingScore }}</strong> 分
             <a-button type="link" size="small" @click="wizardStep = 1">返回修改</a-button>
           </div>
           <div class="modal-footer">
@@ -574,12 +625,42 @@
       <!-- Step 3: 创建考试场次 -->
       <div v-show="wizardStep === 3" class="wizard-step-content">
         <div class="form-field">
-          <label class="field-label required">场次名称</label>
-          <a-input v-model:value="examForm.title" placeholder="请输入考试场次名称" />
+          <label class="field-label required">考试名称</label>
+          <a-input v-model:value="examForm.title" placeholder="请输入考试名称" />
         </div>
         <div class="form-field">
           <label class="field-label required">关联试卷</label>
-          <a-input :value="aiPaperDraft?.title || paperForm.title" disabled placeholder="请先创建试卷" />
+          <a-select
+            v-model:value="examForm.paperId"
+            placeholder="请选择已发布试卷"
+            show-search
+            option-filter-prop="label"
+            style="width: 100%"
+            :options="availablePapers.map((item) => ({ value: item.id, label: item.title }))"
+            @change="handleWizardPaperChange"
+          />
+          <div class="paper-hint">
+            <span class="hint-text">默认带入刚创建并发布的试卷，也可切换为其他已发布试卷</span>
+          </div>
+        </div>
+        <div class="paper-preview-card">
+          <template v-if="currentWizardPaperSummary">
+            <div class="paper-preview-head">
+              <div>
+                <div class="paper-preview-title">{{ currentWizardPaperSummary.title }}</div>
+                <div class="paper-preview-meta">
+                  <span>{{ currentWizardPaperSummary.status === 'published' ? '已发布试卷' : '试卷' }}</span>
+                  <span>{{ currentWizardPaperSummary.question_count || 0 }} 题</span>
+                  <span>总分 {{ currentWizardPaperSummary.total_score || 0 }} 分</span>
+                </div>
+              </div>
+              <div class="paper-preview-stats">
+                <span>时长 {{ currentWizardPaperSummary.duration || 60 }} 分钟</span>
+                <span>及格 {{ currentWizardPaperSummary.passing_score || 0 }} 分</span>
+              </div>
+            </div>
+          </template>
+          <span v-else class="paper-preview-empty">请选择已发布试卷后继续配置考试。</span>
         </div>
         <div class="form-row">
           <div class="form-field">
@@ -610,24 +691,20 @@
             :options="availableTrainings.map((item) => ({ value: item.id, label: item.name }))"
           />
         </div>
-        <div v-if="activeTab === 'admission'" class="form-field">
-          <label class="field-label">适用范围</label>
-          <AdmissionScopeSelector
-            v-model:scope-type="examForm.scopeType"
-            v-model:scope-target-ids="examForm.scopeTargetIds"
-          />
-        </div>
         <div class="form-field">
-          <label class="field-label">关联课程</label>
+          <label class="field-label" :class="{ required: activeTab === 'admission' }">关联课程</label>
           <a-select
             v-model:value="examForm.courseIds"
             mode="multiple"
-            placeholder="请选择关联课程（可选）"
+            :placeholder="activeTab === 'admission' ? '请选择关联课程，用于关联学员' : '请选择关联课程（可选）'"
             style="width: 100%"
             allow-clear
           >
             <a-select-option v-for="c in availableCourses" :key="c.id" :value="c.id">{{ c.title || c.name }}</a-select-option>
           </a-select>
+          <div v-if="activeTab === 'admission'" class="paper-hint">
+            <span class="hint-text">准入考试将根据所关联课程同步关联学员</span>
+          </div>
         </div>
         <div class="form-field">
           <label class="field-label">考试时间</label>
@@ -652,7 +729,12 @@
           <a-textarea v-model:value="examForm.description" placeholder="选填" :rows="2" />
         </div>
         <div class="selected-questions-summary">
-          试卷预览：{{ aiPaperDraft?.questions?.length || wizardSelectedQuestions.length }} 题，总分 {{ aiPaperDraft?.total_score || aiTotalScore }} 分，及格分 {{ examForm.passingScore }} 分
+          <template v-if="currentWizardPaperSummary">
+            试卷预览：{{ currentWizardPaperSummary.question_count || 0 }} 题，总分 {{ currentWizardPaperSummary.total_score || 0 }} 分，当前及格分 {{ examForm.passingScore }} 分
+          </template>
+          <template v-else>
+            请选择已发布试卷后继续完成考试配置
+          </template>
         </div>
         <div class="modal-footer">
           <a-button @click="wizardModalVisible = false">取消</a-button>
@@ -680,9 +762,16 @@ import DarkPageHeader from '@/components/common/DarkPageHeader.vue'
 import dayjs from 'dayjs'
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+import { message, Upload } from 'ant-design-vue'
+import type { UploadFile } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
-import type { ExamResponse, KnowledgePointResponse, QuestionResponse, TrainingListResponse } from '@/api/generated/model'
+import type {
+  ExamPaperResponse,
+  ExamResponse,
+  KnowledgePointResponse,
+  QuestionResponse,
+  TrainingListResponse,
+} from '@/api/generated/model'
 import {
   getAdmissionExamsApiV1ExamsAdmissionGet,
   getExamsApiV1ExamsGet,
@@ -709,6 +798,7 @@ import {
   createPaperAssemblyTaskApiV1AiPaperAssemblyTasksPost,
   getPaperAssemblyTaskDetailApiV1AiPaperAssemblyTasksTaskIdGet,
   confirmPaperAssemblyTaskApiV1AiPaperAssemblyTasksTaskIdConfirmPost,
+  parseDocumentFileApiV1AiFilesParsePost,
 } from '@/api/generated/ai-tasks/ai-tasks'
 import type { AIPaperAssemblyTaskDetailResponse } from '@/api/generated/model'
 import {
@@ -717,7 +807,6 @@ import {
   normalizeExamStatus,
   resolveExamKind,
 } from './examDisplay'
-import AdmissionScopeSelector from './components/AdmissionScopeSelector.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -802,8 +891,6 @@ const examModalVisible = ref(false)
 const examForm = reactive({
   paperId: undefined as number | undefined,
   status: 'upcoming',
-  scopeType: 'all',
-  scopeTargetIds: [] as number[],
   courseIds: [] as number[],
   maxAttempts: 1,
   title: '',
@@ -813,7 +900,7 @@ const examForm = reactive({
   description: '',
 })
 const examDateRange = ref<[string, string] | null>(null)
-const availablePapers = ref<any[]>([])
+const availablePapers = ref<ExamPaperResponse[]>([])
 const availableCourses = ref<any[]>([])
 const availableTrainings = ref<TrainingListResponse[]>([])
 const availableKnowledgePoints = ref<KnowledgePointResponse[]>([])
@@ -849,7 +936,13 @@ const aiTaskStatus = ref<string>('pending')
 const aiPaperDraft = ref<any>(null)
 const assemblyMode = ref('balanced')
 const aiGenerating = ref(false)
+const aiAttachmentParsing = ref(false)
 const aiPollTimer = ref<ReturnType<typeof setTimeout> | null>(null)
+const aiRequirements = ref('')
+const aiAttachmentList = ref<UploadFile[]>([])
+
+const aiAttachmentAccept = '.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt,.md,.ppt,.pptx'
+const supportedAiAttachmentExtensions = ['pdf', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'txt', 'md', 'ppt', 'pptx']
 
 const aiTypeConfigs = reactive([
   { type: 'single', count: 5, difficulty: 3, score: 2 },
@@ -859,20 +952,90 @@ const aiTypeConfigs = reactive([
 
 const aiTotalCount = computed(() => aiTypeConfigs.reduce((sum, c) => sum + c.count, 0))
 const aiTotalScore = computed(() => aiTypeConfigs.reduce((sum, c) => sum + c.count * c.score, 0))
+const aiGenerationStatusText = computed(() => (
+  aiAttachmentParsing.value ? '正在解析附件内容，请稍候...' : 'AI 正在生成试卷，请稍候...'
+))
 
 const canSubmitPaper = computed(() => paperForm.title.trim() && wizardSelectedQuestions.value.length > 0)
 const canSubmitExam = computed(() => {
   if (!examForm.title.trim() || !examForm.paperId) return false
   if (activeTab.value === 'training' && !effectiveTrainingId.value) return false
-  if (activeTab.value === 'admission' && examForm.scopeType !== 'all' && examForm.scopeTargetIds.length === 0) return false
+  if (activeTab.value === 'admission' && examForm.courseIds.length === 0) return false
   return true
 })
+const currentWizardPaperId = computed(() => examForm.paperId ?? wizardPaperId.value ?? undefined)
+const currentWizardPaperSummary = computed(() => getSelectedPaperSummary(currentWizardPaperId.value))
 const canSubmitWizardExam = computed(() => {
-  if (!examForm.title.trim() || !wizardPaperId.value) return false
+  if (!examForm.title.trim() || !currentWizardPaperId.value) return false
   if (activeTab.value === 'training' && !effectiveTrainingId.value) return false
-  if (activeTab.value === 'admission' && examForm.scopeType !== 'all' && examForm.scopeTargetIds.length === 0) return false
+  if (activeTab.value === 'admission' && examForm.courseIds.length === 0) return false
   return true
 })
+
+function getFileExtension(fileName: string) {
+  return fileName.includes('.') ? fileName.split('.').pop()?.toLowerCase() || '' : ''
+}
+
+function handleAiAttachmentBeforeUpload(file: File) {
+  const extension = getFileExtension(file.name)
+  if (!supportedAiAttachmentExtensions.includes(extension)) {
+    message.warning('仅支持上传 PDF、DOC、DOCX、XLS、XLSX、CSV、TXT、MD、PPT、PPTX 文件')
+    return Upload.LIST_IGNORE
+  }
+  return false
+}
+
+function extractParsedDocumentText(payload: unknown): string {
+  if (typeof payload === 'string') return payload.trim()
+  if (!payload || typeof payload !== 'object') return ''
+
+  const record = payload as Record<string, unknown>
+  const preferredKeys = ['text', 'content', 'markdown', 'parsed_text', 'result']
+  for (const key of preferredKeys) {
+    const candidate = record[key]
+    if (typeof candidate === 'string' && candidate.trim()) {
+      return candidate.trim()
+    }
+  }
+
+  const textParts = Object.values(record).filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+  return textParts.join('\n').trim()
+}
+
+async function buildAiRequirementsPayload() {
+  const sections: string[] = []
+  const trimmedRequirements = aiRequirements.value.trim()
+  if (trimmedRequirements) {
+    sections.push(`补充要求：\n${trimmedRequirements}`)
+  }
+
+  const uploadFiles = aiAttachmentList.value
+    .map((item) => item.originFileObj)
+    .filter((item): item is File => item instanceof File)
+
+  if (uploadFiles.length === 0) {
+    return sections.join('\n\n')
+  }
+
+  aiAttachmentParsing.value = true
+  try {
+    const parsedSections: string[] = []
+    for (const file of uploadFiles) {
+      const res = await parseDocumentFileApiV1AiFilesParsePost({ file })
+      const parsedText = extractParsedDocumentText((res as any)?.data ?? res)
+      if (!parsedText) {
+        throw new Error(`${file.name} 解析结果为空`)
+      }
+      parsedSections.push(`附件《${file.name}》：\n${parsedText}`)
+    }
+    if (parsedSections.length > 0) {
+      sections.push(parsedSections.join('\n\n'))
+    }
+    return sections.join('\n\n')
+  } finally {
+    aiAttachmentParsing.value = false
+  }
+}
 
 onMounted(() => {
   void fetchExams()
@@ -1078,7 +1241,7 @@ function openQuestionBankModalForPaper() {
 // ===== 建卷相关 =====
 async function loadAvailablePapers() {
   try {
-    const res = await getExamPapersApiV1ExamsPapersGet({ status: 'published' })
+    const res = await getExamPapersApiV1ExamsPapersGet({ page: 1, size: 100, status: 'published' })
     availablePapers.value = (res as any)?.items || res?.items || []
   } catch {
     availablePapers.value = []
@@ -1123,17 +1286,80 @@ function getSelectedPaperSummary(paperId?: number) {
   return availablePapers.value.find((item) => item.id === paperId) || null
 }
 
+function resolveValidPassingScore(totalScore: number, configuredPassingScore?: number) {
+  const configured = Number(configuredPassingScore || 0)
+  if (Number.isFinite(configured) && configured > 0 && (totalScore <= 0 || configured <= totalScore)) {
+    return configured
+  }
+  if (totalScore > 0) {
+    return Math.max(1, Math.ceil(totalScore * 0.6))
+  }
+  return 60
+}
+
+function resolveRecommendedPassingScore(totalScore: number) {
+  if (totalScore > 0) {
+    return Math.max(1, Math.ceil(totalScore * 0.6))
+  }
+  return 60
+}
+
+function applyExamDefaultsFromPaper(paperId?: number, shouldResetPassingScore = false) {
+  const paper = getSelectedPaperSummary(paperId)
+  if (!paper) return
+
+  const totalScore = Number(paper.total_score || 0)
+  const nextDuration = Math.min(300, Math.max(10, Math.floor(Number(paper.duration) || 60)))
+  const nextPassingScore = resolveValidPassingScore(totalScore, paper.passing_score)
+
+  if (paper.type) {
+    examForm.type = paper.type
+  }
+  examForm.duration = nextDuration
+
+  if (
+    shouldResetPassingScore
+    || Number(examForm.passingScore) < 1
+    || (totalScore > 0 && Number(examForm.passingScore) > totalScore)
+  ) {
+    examForm.passingScore = nextPassingScore
+  }
+}
+
+function bindWizardPaper(paperId: number, paper?: Partial<ExamPaperResponse> | null) {
+  if (paper?.id) {
+    const index = availablePapers.value.findIndex((item) => item.id === paper.id)
+    if (index >= 0) {
+      availablePapers.value.splice(index, 1, {
+        ...availablePapers.value[index],
+        ...paper,
+      } as ExamPaperResponse)
+    } else {
+      availablePapers.value = [paper as ExamPaperResponse, ...availablePapers.value]
+    }
+  }
+
+  wizardPaperId.value = paperId
+  examForm.paperId = paperId
+  applyExamDefaultsFromPaper(paperId, true)
+}
+
+function handleWizardPaperChange(paperId?: number) {
+  if (!paperId) return
+  applyExamDefaultsFromPaper(paperId, true)
+}
+
 function validateExamForm(paperId: number) {
   if (!examForm.title.trim()) {
-    message.warning('请输入场次名称')
+    message.warning('请输入考试名称')
     return false
   }
   if (activeTab.value === 'training' && !effectiveTrainingId.value) {
     message.warning('请选择所属培训班')
     return false
   }
-  if (activeTab.value === 'admission' && examForm.scopeType !== 'all' && examForm.scopeTargetIds.length === 0) {
-    message.warning('请选择适用范围目标')
+  if (activeTab.value === 'admission' && examForm.courseIds.length === 0) {
+    message.warning('请选择关联课程')
     return false
   }
   if (Number(examForm.duration) < 10) {
@@ -1167,10 +1393,7 @@ function buildExamPayload(paperId: number) {
     description: examForm.description || undefined,
     course_ids: examForm.courseIds.length > 0 ? examForm.courseIds : undefined,
   }
-  if (activeTab.value === 'admission') {
-    payload.scope_type = examForm.scopeType
-    payload.scope_target_ids = examForm.scopeType === 'all' ? undefined : examForm.scopeTargetIds
-  } else {
+  if (activeTab.value !== 'admission') {
     payload.training_id = effectiveTrainingId.value
   }
   return payload
@@ -1217,8 +1440,6 @@ function openExamModal() {
   examForm.title = ''
   examForm.paperId = undefined
   examForm.status = 'upcoming'
-  examForm.scopeType = 'all'
-  examForm.scopeTargetIds = []
   examForm.courseIds = []
   examForm.maxAttempts = 1
   examForm.type = 'formal'
@@ -1268,8 +1489,6 @@ function openWizardModal() {
   examForm.title = ''
   examForm.paperId = undefined
   examForm.status = 'upcoming'
-  examForm.scopeType = 'all'
-  examForm.scopeTargetIds = []
   examForm.courseIds = []
   examForm.maxAttempts = 1
   examForm.type = 'formal'
@@ -1279,13 +1498,18 @@ function openWizardModal() {
   examDateRange.value = null
   wizardPaperId.value = null
   wizardSelectedQuestions.value = []
+  assemblyMode.value = 'balanced'
   aiKnowledgePointIds.value = []
   aiTaskId.value = null
   aiTaskStatus.value = 'pending'
   aiPaperDraft.value = null
+  aiRequirements.value = ''
+  aiAttachmentList.value = []
   aiGenerating.value = false
+  aiAttachmentParsing.value = false
   if (aiPollTimer.value) clearTimeout(aiPollTimer.value)
   loadQuestionFolders()
+  loadAvailablePapers()
   loadCourses()
   loadKnowledgePoints()
   if (activeTab.value === 'training') {
@@ -1312,9 +1536,9 @@ async function handleWizardCreatePaper() {
   try {
     // 计算总分：按各题型分值 × 已选数量
     const totalScore = manualTotalScore.value
-    const finalPassingScore = paperForm.passingScore && paperForm.passingScore < totalScore
+    const finalPassingScore = paperForm.passingScore && paperForm.passingScore <= totalScore
       ? paperForm.passingScore
-      : Math.round(totalScore * 0.6)
+      : resolveValidPassingScore(totalScore)
 
     const res = await createExamPaperApiV1ExamsPapersPost({
       title: paperForm.title,
@@ -1325,10 +1549,9 @@ async function handleWizardCreatePaper() {
     } as any)
     const paperId = (res as any)?.data?.id || (res as any)?.id
     if (paperId) {
-      await publishExamPaperApiV1ExamsPapersPaperIdPublishPost(paperId)
-      wizardPaperId.value = paperId
-      examForm.paperId = paperId
-      examForm.duration = paperForm.duration
+      const publishedPaper = await publishExamPaperApiV1ExamsPapersPaperIdPublishPost(paperId)
+      await loadAvailablePapers()
+      bindWizardPaper(paperId, ((publishedPaper as any)?.data || publishedPaper || (res as any)?.data || res) as Partial<ExamPaperResponse>)
       examForm.passingScore = finalPassingScore
     }
     wizardStep.value = 3
@@ -1343,10 +1566,12 @@ async function handleAiGeneratePaper() {
   if (aiTotalCount.value === 0) { message.warning('请设置题型数量'); return }
   if (aiPollTimer.value) clearTimeout(aiPollTimer.value)
   aiGenerating.value = true
+  aiAttachmentParsing.value = false
   aiPaperDraft.value = null
   aiTaskId.value = null
   try {
     const taskName = `组卷任务-${Date.now()}`
+    const requirements = await buildAiRequirementsPayload()
     const res = await createPaperAssemblyTaskApiV1AiPaperAssemblyTasksPost({
       task_name: taskName,
       paper_title: paperForm.title || `试卷-${Date.now()}`,
@@ -1361,6 +1586,7 @@ async function handleAiGeneratePaper() {
       })),
       duration: examForm.duration,
       passing_score: examForm.passingScore,
+      requirements: requirements || undefined,
     } as any)
     const taskId = (res as any)?.data?.id || (res as any)?.id
     if (!taskId) throw new Error('创建任务失败')
@@ -1370,6 +1596,7 @@ async function handleAiGeneratePaper() {
   } catch (e: any) {
     message.error(e?.message || 'AI 生成试卷失败')
     aiGenerating.value = false
+    aiAttachmentParsing.value = false
   }
 }
 
@@ -1404,13 +1631,8 @@ async function handleConfirmAndPublish() {
     const res = await confirmPaperAssemblyTaskApiV1AiPaperAssemblyTasksTaskIdConfirmPost(aiTaskId.value) as any
     const confirmedPaperId = res?.data?.confirmed_paper_id || res?.confirmed_paper_id
     if (!confirmedPaperId) throw new Error('确认失败，未返回试卷ID')
-    wizardPaperId.value = confirmedPaperId
-    // 计算及格分：从 AI 草稿总分按 60% 计算
-    const totalScore = aiPaperDraft.value?.total_score || aiTotalScore
-    const computedPassingScore = Math.round(totalScore * 0.6)
-    examForm.paperId = confirmedPaperId
-    examForm.duration = aiPaperDraft.value?.duration || examForm.duration
-    examForm.passingScore = computedPassingScore
+    await loadAvailablePapers()
+    bindWizardPaper(confirmedPaperId)
     wizardStep.value = 3
   } catch (e: any) {
     message.error(e?.message || '确认发布失败')
@@ -1426,11 +1648,12 @@ function handleBackToStep1() {
 }
 
 async function handleWizardCreateExam() {
-  if (!wizardPaperId.value) { message.warning('请先确认并发布试卷'); return }
-  if (!validateExamForm(wizardPaperId.value)) return
+  const paperId = currentWizardPaperId.value
+  if (!paperId) { message.warning('请先确认并发布试卷'); return }
+  if (!validateExamForm(paperId)) return
   examSubmitting.value = true
   try {
-    const payload = buildExamPayload(wizardPaperId.value)
+    const payload = buildExamPayload(paperId)
     if (activeTab.value === 'admission') {
       await createAdmissionExamApiV1ExamsAdmissionPost(payload as any)
     } else {
@@ -1449,6 +1672,14 @@ async function handleWizardCreateExam() {
 watch(routeTrainingId, () => {
   syncTrainingContext()
 }, { immediate: true })
+
+watch(manualTotalScore, (totalScore) => {
+  if (wizardSelectMode.value !== 'manual' || totalScore <= 0) return
+  const recommendedPassingScore = resolveRecommendedPassingScore(totalScore)
+  if (recommendedPassingScore !== paperForm.passingScore) {
+    paperForm.passingScore = recommendedPassingScore
+  }
+})
 </script>
 
 <style scoped>
@@ -1878,6 +2109,50 @@ watch(routeTrainingId, () => {
   border-radius: 8px;
 }
 
+.paper-hint {
+  margin-top: 6px;
+}
+
+.hint-text {
+  font-size: 12px;
+  color: var(--v2-text-muted);
+}
+
+.paper-preview-card {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #f8faff 0%, #eef3ff 100%);
+  border: 1px solid rgba(37, 99, 235, 0.12);
+}
+
+.paper-preview-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.paper-preview-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--v2-text-primary);
+}
+
+.paper-preview-meta,
+.paper-preview-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--v2-text-secondary);
+}
+
+.paper-preview-empty {
+  font-size: 13px;
+  color: var(--v2-text-muted);
+}
+
 .text-center {
   text-align: center;
 }
@@ -1925,7 +2200,97 @@ watch(routeTrainingId, () => {
   min-height: 380px;
 }
 
+@media (max-width: 768px) {
+  .header-actions {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+  }
+
+  .form-row,
+  .modal-picker-layout,
+  .paper-preview-head {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+
+  .picker-right {
+    width: 100%;
+  }
+}
+
 /* ===== AI 智能组卷 ===== */
+.ai-select-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.ai-input-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 0.8fr);
+  gap: 16px;
+  align-items: stretch;
+}
+
+.ai-requirements-card,
+.ai-attachments-card {
+  padding: 16px;
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgba(13, 110, 253, 0.06), rgba(255, 255, 255, 0.96));
+  border: 1px solid rgba(13, 110, 253, 0.12);
+}
+
+.ai-requirements-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.ai-requirements-hint {
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--v2-text-secondary);
+}
+
+:deep(.ai-requirements-card .ant-input) {
+  flex: 1;
+}
+
+:deep(.ai-attachments-card .ant-upload-wrapper .ant-upload-drag) {
+  background: rgba(255, 255, 255, 0.78);
+  border-radius: 10px;
+  border-color: rgba(13, 110, 253, 0.18);
+  min-height: 104px;
+}
+
+:deep(.ai-attachments-card .ant-upload-wrapper .ant-upload-drag .ant-upload) {
+  padding: 14px 12px;
+}
+
+:deep(.ai-attachments-card .ant-upload-wrapper .ant-upload-drag .ant-upload-drag-icon) {
+  margin-bottom: 6px;
+}
+
+:deep(.ai-attachments-card .ant-upload-wrapper .ant-upload-drag .ant-upload-drag-icon .anticon) {
+  font-size: 24px;
+}
+
+:deep(.ai-attachments-card .ant-upload-wrapper .ant-upload-drag .ant-upload-text) {
+  margin-bottom: 2px;
+  font-size: 14px;
+}
+
+:deep(.ai-attachments-card .ant-upload-wrapper .ant-upload-drag .ant-upload-hint) {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+:deep(.ai-attachments-card .ant-upload-list) {
+  margin-top: 10px;
+}
+
 .type-config-section {
   margin: 16px 0;
 }
@@ -2032,5 +2397,11 @@ watch(routeTrainingId, () => {
   flex-shrink: 0;
   color: var(--v2-primary);
   font-weight: 600;
+}
+
+@media (max-width: 960px) {
+  .ai-input-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

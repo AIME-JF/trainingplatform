@@ -107,6 +107,9 @@
 
       <!-- 操作 -->
       <div class="section-block action-row">
+        <a-button type="primary" ghost size="large" @click="openPaperPreview">
+          <FileTextOutlined /> 查看试卷题目
+        </a-button>
         <a-button size="large" @click="router.push('/exam/list')">
           <RollbackOutlined /> 返回考试列表
         </a-button>
@@ -141,6 +144,9 @@
             </div>
           </div>
           <div class="instructor-header-right">
+            <a-button class="preview-paper-btn" size="large" @click="openPaperPreview">
+              <FileTextOutlined /> 查看试卷题目
+            </a-button>
             <div class="stat-box">
               <div class="stat-box-num">{{ averageScore }}</div>
               <div class="stat-box-label">平均分</div>
@@ -203,6 +209,71 @@
     </template>
 
     <a-empty v-else description="暂无考试结果" />
+
+    <!-- 试卷题目预览 -->
+    <a-modal
+      v-model:open="paperPreviewVisible"
+      :title="paperPreviewTitle"
+      width="860px"
+      :footer="null"
+      class="paper-preview-modal"
+    >
+      <div v-if="paperPreviewLoading" class="loading-wrapper">
+        <a-spin size="large" />
+      </div>
+      <div v-else class="paper-preview-content">
+        <div class="paper-preview-summary">
+          <span>共 {{ paperQuestionDetails.length }} 题</span>
+          <span v-if="paperMeta.totalScore">总分 {{ paperMeta.totalScore }} 分</span>
+          <span v-if="paperMeta.duration">时长 {{ paperMeta.duration }} 分钟</span>
+          <span v-if="paperMeta.passingScore">及格 {{ paperMeta.passingScore }} 分</span>
+        </div>
+
+        <a-empty v-if="paperQuestionDetails.length === 0" description="暂无试卷题目" />
+
+        <div v-else class="question-list">
+          <div
+            v-for="(q, index) in paperQuestionDetails"
+            :key="`${q.id}-${index}`"
+            class="question-item paper-question-item"
+          >
+            <div class="q-header">
+              <span class="q-num">{{ index + 1 }}</span>
+              <a-tag class="type-tag" :class="getQuestionTypeClass(q.type)">
+                {{ getQuestionTypeText(q.type) }}
+              </a-tag>
+              <span class="q-score preview-score"> {{ q.score || 0 }}分 </span>
+            </div>
+            <div class="q-content">{{ q.content }}</div>
+
+            <div v-if="getQuestionOptions(q).length > 0" class="paper-options">
+              <div v-for="option in getQuestionOptions(q)" :key="`${q.id}-${option.key}`" class="paper-option-row">
+                <span class="paper-option-key">{{ option.key }}</span>
+                <span class="paper-option-text">{{ option.value }}</span>
+              </div>
+            </div>
+
+            <div class="q-answers">
+              <div class="q-answer-row">
+                <span class="answer-label">正确答案</span>
+                <span class="answer-val correct-text">{{ formatAnswer(q.answer) || '暂无答案' }}</span>
+              </div>
+            </div>
+
+            <div v-if="q.knowledge_points?.length" class="paper-kp-row">
+              <span class="answer-label">知识点</span>
+              <span class="paper-kp-tags">
+                <a-tag v-for="kp in q.knowledge_points" :key="kp" class="knowledge-tag">{{ kp }}</a-tag>
+              </span>
+            </div>
+
+            <div v-if="q.explanation" class="q-explanation">
+              <BulbOutlined /> {{ q.explanation }}
+            </div>
+          </div>
+        </div>
+      </div>
+    </a-modal>
 
     <!-- 学员答题详情弹窗 -->
     <a-modal
@@ -298,10 +369,18 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
-import type { AdmissionExamRecordResponse, ExamRecordResponse } from '@/api/generated/model'
+import type {
+  AdmissionExamDetailResponse,
+  AdmissionExamRecordResponse,
+  ExamDetailResponse,
+  ExamQuestionSnapshotResponse,
+  ExamRecordResponse,
+} from '@/api/generated/model'
 import {
+  getAdmissionExamApiV1ExamsAdmissionExamIdGet,
   getAdmissionExamResultApiV1ExamsAdmissionExamIdResultGet,
   getAdmissionExamScoresApiV1ExamsAdmissionExamIdScoresGet,
+  getExamApiV1ExamsExamIdGet,
   getExamResultApiV1ExamsExamIdResultGet,
   getExamScoresApiV1ExamsExamIdScoresGet,
 } from '@/api/generated/exam-management/exam-management'
@@ -333,6 +412,16 @@ const studentQuestionDetails = ref<Array<{
   explanation?: string | null
   score?: number
 }>>([])
+const paperPreviewVisible = ref(false)
+const paperPreviewLoading = ref(false)
+const paperQuestionDetails = ref<ExamQuestionSnapshotResponse[]>([])
+const paperPreviewTitle = ref('试卷题目')
+const paperMeta = ref({
+  totalScore: 0,
+  duration: 0,
+  passingScore: 0,
+})
+
 function getKindFromQuery(): ExamKind {
   const kind = route.query.kind
   if (Array.isArray(kind)) {
@@ -445,6 +534,30 @@ function viewStudentDetail(record: ExamRecordResponse | AdmissionExamRecordRespo
   detailModalVisible.value = true
 }
 
+async function openPaperPreview() {
+  paperPreviewVisible.value = true
+  paperPreviewLoading.value = true
+  try {
+    const detail = examKind.value === 'admission'
+      ? await getAdmissionExamApiV1ExamsAdmissionExamIdGet(examId.value)
+      : await getExamApiV1ExamsExamIdGet(examId.value)
+
+    const examDetail = detail as AdmissionExamDetailResponse | ExamDetailResponse
+    paperPreviewTitle.value = `${examDetail.paper_title || examDetail.title || '试卷题目'}`
+    paperQuestionDetails.value = examDetail.questions || []
+    paperMeta.value = {
+      totalScore: Number(examDetail.total_score || 0),
+      duration: Number(examDetail.duration || 0),
+      passingScore: Number(examDetail.passing_score || 0),
+    }
+  } catch (error) {
+    paperQuestionDetails.value = []
+    message.error(error instanceof Error ? error.message : '试卷题目加载失败')
+  } finally {
+    paperPreviewLoading.value = false
+  }
+}
+
 function formatDuration(minutes?: number) {
   if (minutes === undefined || minutes === null) return '-'
   return `${minutes} 分钟`
@@ -479,6 +592,32 @@ function getQuestionTypeClass(type?: string) {
     case 'judge': return 'type-judge'
     default: return 'type-default'
   }
+}
+
+function getQuestionOptions(question: ExamQuestionSnapshotResponse) {
+  if (question.type === 'judge') {
+    return [
+      { key: 'A', value: '正确' },
+      { key: 'B', value: '错误' },
+    ]
+  }
+  const opts = question.options
+  if (!opts || !Array.isArray(opts)) return []
+  return opts.map((item) => {
+    if (item && typeof item === 'object' && !Array.isArray(item)) {
+      const record = item as Record<string, unknown>
+      if ('key' in record) {
+        const key = String(record.key ?? '').trim()
+        const value = String(record.text ?? record.value ?? '').trim()
+        if (key) return { key, value: value || key }
+      }
+      const entry = Object.entries(record).find(([k]) => k !== 'key' && k !== 'text' && k !== 'value')
+      if (entry) {
+        return { key: String(entry[0]), value: String(entry[1] ?? '') }
+      }
+    }
+    return { key: '', value: '' }
+  }).filter((item) => item.key)
 }
 </script>
 
@@ -780,6 +919,23 @@ function getQuestionTypeClass(type?: string) {
   font-weight: 600;
 }
 
+.preview-paper-btn {
+  border-radius: 12px;
+  height: 48px;
+  padding: 0 18px;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.12);
+}
+
+.preview-paper-btn:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
 .top-bar {
   margin-bottom: 16px;
 }
@@ -1010,6 +1166,23 @@ function getQuestionTypeClass(type?: string) {
   gap: 16px;
 }
 
+.paper-preview-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.paper-preview-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: var(--v2-bg);
+  color: var(--v2-text-secondary);
+  font-size: 13px;
+}
+
 .detail-summary {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -1059,6 +1232,10 @@ function getQuestionTypeClass(type?: string) {
   transition: all 0.2s;
 }
 
+.paper-question-item {
+  background: var(--v2-bg-card);
+}
+
 .question-item.correct {
   border-color: rgba(52, 199, 89, 0.3);
   background: rgba(52, 199, 89, 0.04);
@@ -1100,6 +1277,10 @@ function getQuestionTypeClass(type?: string) {
   font-weight: 700;
 }
 
+.preview-score {
+  color: var(--v2-primary);
+}
+
 .correct-text {
   color: var(--v2-success);
 }
@@ -1127,6 +1308,42 @@ function getQuestionTypeClass(type?: string) {
   margin-bottom: 12px;
 }
 
+.paper-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.paper-option-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.04);
+}
+
+.paper-option-key {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  background: var(--v2-primary-light);
+  color: var(--v2-primary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.paper-option-text {
+  flex: 1;
+  line-height: 1.7;
+  color: var(--v2-text-primary);
+}
+
 .q-answers {
   display: flex;
   flex-direction: column;
@@ -1147,6 +1364,27 @@ function getQuestionTypeClass(type?: string) {
   color: var(--v2-text-secondary);
   width: 70px;
   flex-shrink: 0;
+}
+
+.paper-kp-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.paper-kp-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.knowledge-tag {
+  margin: 0;
+  border-radius: 999px;
+  background: rgba(75, 110, 245, 0.08);
+  color: var(--v2-primary);
+  border-color: rgba(75, 110, 245, 0.16);
 }
 
 .q-explanation {
@@ -1227,6 +1465,7 @@ function getQuestionTypeClass(type?: string) {
   .instructor-header-right {
     width: 100%;
     justify-content: space-between;
+    flex-wrap: wrap;
   }
 
   .stat-box {
