@@ -216,29 +216,15 @@ class AIService:
             )
             task.result_payload = self._build_paper_assembly_result_payload(parsed_request=parsed_request)
             self.db.commit()
-
-            topic = normalized_request.knowledge_points[0] if normalized_request.knowledge_points else normalized_request.paper_title
-            gen_request = AIPaperGenerationTaskCreateRequest(
-                task_name=normalized_request.task_name,
-                paper_title=normalized_request.paper_title,
-                paper_type=normalized_request.paper_type,
-                description=normalized_request.description,
-                duration=normalized_request.duration,
-                passing_score=normalized_request.passing_score,
-                topic=topic,
-                source_text=normalized_request.requirements,
-                knowledge_points=normalized_request.knowledge_points,
-                difficulty=3,
-                police_type_id=normalized_request.police_type_id,
-                type_configs=normalized_request.type_configs,
-                requirements=normalized_request.requirements,
+            paper_draft, selection_notes = self._assemble_paper_from_question_bank(
+                normalized_request,
+                parsed_request,
+                task.created_by or 0,
             )
-
-            paper_generator = AIPaperGenerator()
-            paper_draft = paper_generator.generate_paper(gen_request)
             task.result_payload = self._build_paper_assembly_result_payload(
                 paper_draft=paper_draft,
                 parsed_request=parsed_request,
+                selection_notes=selection_notes,
             )
             self._mark_task_completed(task)
             self.db.commit()
@@ -807,6 +793,12 @@ class AIService:
             seen_question_ids.add(question_id)
             exclude_question_ids.append(question_id)
 
+        folder_ids = self._normalize_positive_ints(data.folder_ids)
+        if folder_ids:
+            folder_names = self._resolve_question_folder_names(folder_ids)
+        else:
+            folder_names = self._normalize_question_folder_names(data.folder_names)
+
         knowledge_point_ids = self._normalize_positive_ints(data.knowledge_point_ids)
         if knowledge_point_ids:
             knowledge_points = self._resolve_knowledge_point_names(knowledge_point_ids)
@@ -819,6 +811,8 @@ class AIService:
         payload["paper_type"] = str(data.paper_type or "formal").strip() or "formal"
         payload["description"] = (data.description or "").strip() or None
         payload["requirements"] = (data.requirements or "").strip() or None
+        payload["folder_ids"] = folder_ids
+        payload["folder_names"] = folder_names
         payload["knowledge_point_ids"] = knowledge_point_ids
         payload["knowledge_points"] = knowledge_points
         payload["allow_relaxation"] = bool(data.allow_relaxation)
@@ -979,6 +973,7 @@ class AIService:
         drafts: List[AITaskQuestionDraft] = []
         used_question_ids = {int(item) for item in (data.exclude_question_ids or []) if item}
         selection_notes: List[str] = []
+        selected_folder_ids = self._expand_question_folder_ids(data.folder_ids)
         selected_knowledge_point_ids = self._normalize_positive_ints(data.knowledge_point_ids)
 
         parsed_type_configs = parsed_request.type_configs or [
@@ -997,6 +992,7 @@ class AIService:
             selected_questions, notes = self._select_questions_for_assembly_type(
                 config=config,
                 global_police_type_id=parsed_request.police_type_id,
+                global_folder_ids=selected_folder_ids,
                 global_knowledge_point_ids=selected_knowledge_point_ids,
                 global_knowledge_points=parsed_request.knowledge_points,
                 allow_relaxation=bool(data.allow_relaxation),
@@ -1025,7 +1021,11 @@ class AIService:
                         question_type=config.type,
                         count=missing_count,
                         difficulty=config.difficulty or 3,
-                        knowledge_points=config.knowledge_points or parsed_request.knowledge_points,
+                        knowledge_points=(
+                            config.knowledge_points
+                            or parsed_request.knowledge_points
+                            or data.folder_names
+                        ),
                         police_type_id=config.police_type_id or parsed_request.police_type_id,
                         score=config.score,
                         requirements=data.requirements,
@@ -1058,6 +1058,7 @@ class AIService:
         self,
         config: AIPaperAssemblyParsedTypeConfig,
         global_police_type_id: Optional[int],
+        global_folder_ids: Iterable[int],
         global_knowledge_point_ids: Iterable[int],
         global_knowledge_points: Iterable[str],
         allow_relaxation: bool,
@@ -1068,6 +1069,7 @@ class AIService:
         selection_notes: List[str] = []
         question_type_label = self._type_label(config.type)
         target_police_type_id = config.police_type_id if config.police_type_id is not None else global_police_type_id
+        target_folder_ids = self._normalize_positive_ints(global_folder_ids)
         target_knowledge_point_ids = self._normalize_positive_ints(global_knowledge_point_ids)
         target_keywords = (
             []
@@ -1078,6 +1080,7 @@ class AIService:
         for step_index, step in enumerate(
             self._build_assembly_relaxation_steps(
                 difficulty=config.difficulty,
+                folder_ids=target_folder_ids,
                 knowledge_point_ids=target_knowledge_point_ids,
                 knowledge_points=target_keywords,
                 police_type_id=target_police_type_id,
@@ -1093,6 +1096,7 @@ class AIService:
                 question_type=config.type,
                 police_type_id=target_police_type_id,
                 difficulties=step["difficulties"],
+                folder_ids=step["folder_ids"],
                 knowledge_point_ids=step["knowledge_point_ids"],
                 knowledge_points=step["knowledge_points"],
                 exclude_question_ids=used_question_ids | {item.id for item in selected_questions},
@@ -1127,6 +1131,7 @@ class AIService:
         self,
         *,
         difficulty: Optional[int],
+        folder_ids: List[int],
         knowledge_point_ids: List[int],
         knowledge_points: List[str],
         police_type_id: Optional[int],
@@ -1142,9 +1147,15 @@ class AIService:
                 if not normalized_difficulties:
                     normalized_difficulties = None
 
+            normalized_folder_ids = self._normalize_positive_ints(folder_ids)
             point_ids = knowledge_point_ids if use_knowledge_filter else []
             keywords = knowledge_points if use_knowledge_filter and not point_ids else []
-            key = (tuple(normalized_difficulties or []), tuple(point_ids), tuple(keywords))
+            key = (
+                tuple(normalized_difficulties or []),
+                tuple(normalized_folder_ids),
+                tuple(point_ids),
+                tuple(keywords),
+            )
             if key in seen_keys:
                 return
             seen_keys.add(key)
@@ -1153,9 +1164,11 @@ class AIService:
                     "label": self._describe_assembly_step(
                         police_type_id,
                         normalized_difficulties,
+                        bool(normalized_folder_ids),
                         bool(point_ids),
                         bool(keywords),
                     ),
+                    "folder_ids": normalized_folder_ids,
                     "difficulties": normalized_difficulties,
                     "knowledge_point_ids": point_ids,
                     "knowledge_points": keywords,
@@ -1190,10 +1203,13 @@ class AIService:
         self,
         police_type_id: Optional[int],
         difficulties: Optional[List[int]],
+        has_folder_filter: bool,
         has_knowledge_point_ids: bool,
         has_keywords: bool,
     ) -> str:
         parts = ["题型"]
+        if has_folder_filter:
+            parts.append("题库")
         if police_type_id is not None:
             parts.append("警种")
         if difficulties:
@@ -1234,6 +1250,7 @@ class AIService:
         question_type: str,
         police_type_id: Optional[int],
         difficulties: Optional[List[int]],
+        folder_ids: Iterable[int],
         knowledge_point_ids: Iterable[int],
         knowledge_points: Iterable[str],
         exclude_question_ids: Iterable[int],
@@ -1255,6 +1272,10 @@ class AIService:
         excluded = [int(item) for item in exclude_question_ids if int(item or 0) > 0]
         if excluded:
             query = query.filter(~Question.id.in_(excluded))
+
+        normalized_folder_ids = self._expand_question_folder_ids(folder_ids)
+        if normalized_folder_ids:
+            query = query.filter(Question.folder_id.in_(normalized_folder_ids))
 
         normalized_knowledge_point_ids = self._normalize_positive_ints(knowledge_point_ids)
         if normalized_knowledge_point_ids:
@@ -1307,6 +1328,59 @@ class AIService:
             seen.add(name)
             ordered_names.append(name[:100])
         return ordered_names
+
+    def _resolve_question_folder_names(self, folder_ids: Iterable[int]) -> List[str]:
+        normalized_ids = self._normalize_positive_ints(folder_ids)
+        if not normalized_ids:
+            return []
+
+        folders = self.db.query(QuestionFolder).filter(
+            QuestionFolder.id.in_(normalized_ids)
+        ).all()
+        folder_map = {item.id: item for item in folders}
+        missing_ids = [item for item in normalized_ids if item not in folder_map]
+        if missing_ids:
+            missing_text = "、".join(str(item) for item in missing_ids)
+            raise ValueError(f"所选题库不存在：{missing_text}")
+
+        ordered_names: List[str] = []
+        seen = set()
+        for folder_id in normalized_ids:
+            folder = folder_map[folder_id]
+            name = str(folder.name or "").strip()
+            if not name or name in seen:
+                continue
+            seen.add(name)
+            ordered_names.append(name[:100])
+        return ordered_names
+
+    def _expand_question_folder_ids(self, folder_ids: Iterable[int]) -> List[int]:
+        pending_ids = self._normalize_positive_ints(folder_ids)
+        if not pending_ids:
+            return []
+
+        expanded_ids: List[int] = []
+        seen = set()
+        while pending_ids:
+            current_batch = [item for item in pending_ids if item not in seen]
+            pending_ids = []
+            if not current_batch:
+                continue
+
+            for folder_id in current_batch:
+                seen.add(folder_id)
+                expanded_ids.append(folder_id)
+
+            child_ids = [
+                int(item)
+                for item, in self.db.query(QuestionFolder.id).filter(
+                    QuestionFolder.parent_id.in_(current_batch)
+                ).all()
+                if int(item or 0) > 0 and int(item) not in seen
+            ]
+            pending_ids.extend(child_ids)
+
+        return expanded_ids
 
     @staticmethod
     def _normalize_positive_ints(values: Iterable[int]) -> List[int]:
@@ -1633,6 +1707,18 @@ class AIService:
         normalized: List[str] = []
         seen = set()
         for raw_item in knowledge_points or []:
+            item = str(raw_item or "").strip()
+            if not item or item in seen:
+                continue
+            seen.add(item)
+            normalized.append(item[:100])
+        return normalized
+
+    @staticmethod
+    def _normalize_question_folder_names(folder_names: Iterable[str]) -> List[str]:
+        normalized: List[str] = []
+        seen = set()
+        for raw_item in folder_names or []:
             item = str(raw_item or "").strip()
             if not item or item in seen:
                 continue

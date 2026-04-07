@@ -200,12 +200,38 @@ class AIPaperAssemblyTaskCreateRequest(BaseModel):
     passing_score: int = Field(60, ge=1, description="及格分")
     assembly_mode: str = Field("balanced", description="组卷模式: balanced/practice/exam")
     police_type_id: Optional[int] = Field(None, description="警种 ID")
+    folder_ids: List[int] = Field(default_factory=list, description="题库 ID 列表")
+    folder_names: List[str] = Field(default_factory=list, description="题库名称列表")
     knowledge_point_ids: List[int] = Field(default_factory=list, description="知识点 ID 列表")
     knowledge_points: List[str] = Field(default_factory=list, description="知识点名称列表")
     allow_relaxation: bool = Field(True, description="未匹配到时是否允许放宽条件")
     exclude_question_ids: List[int] = Field(default_factory=list, description="排除题目 ID 列表")
     type_configs: List[AIPaperAssemblyTypeConfig] = Field(default_factory=list, description="题型配置")
     requirements: Optional[str] = Field(None, max_length=1000, description="补充要求")
+
+    @field_validator("folder_ids", mode="before")
+    @classmethod
+    def validate_folder_ids(cls, value: Any) -> List[int]:
+        if value is None:
+            return []
+        raw_items = [value] if isinstance(value, (str, int)) else list(value or [])
+        normalized: List[int] = []
+        seen = set()
+        for raw_item in raw_items:
+            try:
+                item = int(raw_item)
+            except (TypeError, ValueError):
+                continue
+            if item <= 0 or item in seen:
+                continue
+            seen.add(item)
+            normalized.append(item)
+        return normalized
+
+    @field_validator("folder_names", mode="before")
+    @classmethod
+    def validate_folder_names(cls, value: Any) -> List[str]:
+        return _normalize_short_string_list(value, max_length=100)
 
     @field_validator("knowledge_point_ids", mode="before")
     @classmethod

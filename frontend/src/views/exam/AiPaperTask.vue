@@ -36,7 +36,7 @@
                   style="width: 140px"
                   @change="loadTasks"
                 >
-                  <a-select-option value="assembly">知识点AI组卷</a-select-option>
+                  <a-select-option value="assembly">题库AI组卷</a-select-option>
                   <a-select-option value="topic">AI提示词生成</a-select-option>
                   <a-select-option value="document">文档AI生成</a-select-option>
                 </a-select>
@@ -175,7 +175,7 @@
                   <span class="section-indicator indigo"></span> 核心出卷方式
                 </h2>
                 <div class="mode-cards">
-                  <!-- 方式 1: 知识点组卷 -->
+                  <!-- 方式 1: 题库组卷 -->
                   <div
                     class="mode-card"
                     :class="{ active: activeMode === 'assemble' }"
@@ -187,7 +187,7 @@
                       </svg>
                     </div>
                     <div class="mode-title">题库智能组卷</div>
-                    <div class="mode-desc">从现有题库按知识点筛选</div>
+                    <div class="mode-desc">从现有题库直接筛选组卷</div>
                   </div>
 
                   <!-- 方式 2: 提示词生成 -->
@@ -233,19 +233,17 @@
                 <!-- 面板 A: 题库提取条件 -->
                 <div v-show="activeMode === 'assemble'" class="source-panel">
                   <div class="form-field">
-                    <label class="field-label">限制知识点</label>
+                    <label class="field-label">题库范围</label>
                     <a-select
-                      v-model:value="formData.knowledgePointIds"
+                      v-model:value="formData.folderIds"
                       mode="multiple"
                       allow-clear
                       show-search
-                      :filter-option="false"
-                      :loading="knowledgePointLoading"
-                      placeholder="搜索并选择知识点，留空则在全库抽取"
+                      option-filter-prop="label"
+                      :loading="questionFolderLoading"
+                      placeholder="选择题库，留空则在全部题库抽题"
                       class="input-minimal input-select"
-                      :options="knowledgePointSelectOptions"
-                      @search="handleKnowledgePointSearch"
-                      @focus="handleKnowledgePointFocus"
+                      :options="questionFolderOptions"
                     />
                   </div>
                   <div class="form-field">
@@ -556,6 +554,9 @@
               <a-tag :color="getTaskTypeColor(activeTask.taskType)">{{ getTaskTypeLabel(activeTask.taskType) }}</a-tag>
             </a-descriptions-item>
             <a-descriptions-item label="试卷名称">{{ activeTask.requestPayload?.paperTitle }}</a-descriptions-item>
+            <a-descriptions-item v-if="activeTask.taskType === 'paper_assembly'" label="题库范围" :span="2">
+              {{ formatFolderNames(activeTask.requestPayload?.folderNames) }}
+            </a-descriptions-item>
             <a-descriptions-item label="题型配置" :span="2">
               {{ formatTypeConfigs(activeTask.requestPayload?.typeConfigs) }}
             </a-descriptions-item>
@@ -644,10 +645,10 @@ import {
   parseAiDocumentFile,
 } from '@/api/ai'
 import { getPoliceTypes } from '@/api/user'
+import { getQuestionFolders } from '@/api/question'
 import AiTaskTimeline from './components/AiTaskTimeline.vue'
 import PaperDraftEditor from './components/PaperDraftEditor.vue'
 import QuestionFormModal from './components/QuestionFormModal.vue'
-import { createKnowledgePointRemoteSelect } from './utils/knowledgePointRemoteSelect'
 import { formatPaperTypeConfigs } from './utils/paperTypeConfig'
 import { sortQuestionsByType } from './utils/questionSort'
 
@@ -678,12 +679,8 @@ const batchDeleting = ref(false)
 const batchConfirming = ref(false)
 
 const policeTypeOptions = ref([])
-const {
-  knowledgePointLoading,
-  knowledgePointSelectOptions,
-  handleKnowledgePointSearch,
-  handleKnowledgePointFocus,
-} = createKnowledgePointRemoteSelect('name')
+const questionFolderLoading = ref(false)
+const questionFolderOptions = ref([])
 
 const statusLabels = { pending: '待处理', processing: '处理中', completed: '已完成', confirmed: '已确认', failed: '创建失败' }
 const statusColors = { pending: 'default', processing: 'blue', completed: 'green', confirmed: 'green', failed: 'red' }
@@ -695,7 +692,7 @@ const formData = reactive({
   paperType: 'formal',
   assemblyMode: 'balanced',
   policeTypeId: undefined,
-  knowledgePointIds: [],
+  folderIds: [],
   allowRelaxation: true,
   sourceText: '',
   topic: '',
@@ -749,7 +746,7 @@ const hasSelectedConfirmable = computed(() => {
 
 // 任务类型相关
 function getTaskTypeLabel(taskType) {
-  const map = { paper_assembly: '知识点AI组卷', paper_generation: 'AI提示词生成', paper_document_generation: '文档AI生成' }
+  const map = { paper_assembly: '题库AI组卷', paper_generation: 'AI提示词生成', paper_document_generation: '文档AI生成' }
   return map[taskType] || taskType
 }
 
@@ -766,6 +763,22 @@ function formatTypeConfigs(configs = []) {
   }).join(' / ')
 }
 
+function flattenQuestionFolderOptions(folders = [], parentNames = []) {
+  return folders.flatMap(folder => {
+    const currentNames = [...parentNames, folder.name].filter(Boolean)
+    const option = {
+      value: folder.id,
+      label: currentNames.join(' / '),
+    }
+    return [option, ...flattenQuestionFolderOptions(folder.children || [], currentNames)]
+  })
+}
+
+function formatFolderNames(folderNames = []) {
+  const normalizedNames = (folderNames || []).filter(Boolean)
+  return normalizedNames.length ? normalizedNames.join(' / ') : '全部题库'
+}
+
 // 加载警种选项
 async function loadPoliceTypeOptions() {
   try {
@@ -773,6 +786,18 @@ async function loadPoliceTypeOptions() {
     policeTypeOptions.value = result.items || result || []
   } catch {
     policeTypeOptions.value = []
+  }
+}
+
+async function loadQuestionFolderOptions() {
+  questionFolderLoading.value = true
+  try {
+    const result = await getQuestionFolders()
+    questionFolderOptions.value = flattenQuestionFolderOptions(result || [])
+  } catch {
+    questionFolderOptions.value = []
+  } finally {
+    questionFolderLoading.value = false
   }
 }
 
@@ -845,7 +870,7 @@ function resetForm() {
   formData.paperType = 'formal'
   formData.assemblyMode = 'balanced'
   formData.policeTypeId = undefined
-  formData.knowledgePointIds = []
+  formData.folderIds = []
   formData.allowRelaxation = true
   formData.sourceText = ''
   formData.topic = ''
@@ -888,7 +913,7 @@ async function handleCreateTask() {
         paperType: formData.paperType,
         assemblyMode: formData.assemblyMode,
         policeTypeId: formData.policeTypeId,
-        knowledgePointIds: formData.knowledgePointIds,
+        folderIds: formData.folderIds,
         allowRelaxation: formData.allowRelaxation,
         duration: formData.duration,
         passingScore: formData.passingScore,
@@ -1268,6 +1293,7 @@ onMounted(() => {
     viewMode.value = 'list'
   }
   loadPoliceTypeOptions()
+  loadQuestionFolderOptions()
   loadTasks()
 })
 </script>
