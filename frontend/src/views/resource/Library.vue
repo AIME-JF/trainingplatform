@@ -1,9 +1,15 @@
 <template>
   <div class="resource-library-page">
     <div class="page-header">
-      <h2>{{ COMMUNITY_RESOURCE_MANAGE_TITLE }}</h2>
-      <a-space>
-        <a-button @click="$router.push('/resource/my')">{{ MY_UPLOAD_TITLE }}</a-button>
+      <div>
+        <h2>{{ COMMUNITY_MANAGEMENT_TITLE }}</h2>
+        <p class="page-sub">统一管理社区已发布内容，后续会在此接入我的上传、提交审核和审核轨迹能力。</p>
+      </div>
+      <a-space wrap>
+        <a-button @click="$router.push('/resource/my')">{{ COMMUNITY_BOARD_TITLE }}</a-button>
+        <a-button @click="handlePendingFeature('我的上传')">我的上传</a-button>
+        <a-button @click="handlePendingFeature('提交审核')">提交审核</a-button>
+        <a-button @click="handlePendingFeature('审核轨迹')">审核轨迹</a-button>
         <permissions-tooltip
           v-if="!isStudentOnly"
           :allowed="canUploadResource"
@@ -105,7 +111,7 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { getResources, offlineResource, deleteResource } from '@/api/resource'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
-import { COMMUNITY_RESOURCE_MANAGE_TITLE, MY_UPLOAD_TITLE } from '@/constants/navigationTitles'
+import { COMMUNITY_BOARD_TITLE, COMMUNITY_MANAGEMENT_TITLE } from '@/constants/navigationTitles'
 import ResourceUploadModal from './components/ResourceUploadModal.vue'
 
 const router = useRouter()
@@ -137,6 +143,10 @@ function contentTypeLabel(type) {
     document: '文档',
   }
   return map[type] || type || '-'
+}
+
+function handlePendingFeature(label) {
+  message.info(`${label}功能入口已预留，后续会并入社区管理。`)
 }
 
 async function fetchResources() {
@@ -202,6 +212,7 @@ function handleUploadSuccess() {
 <style scoped>
 .resource-library-page { padding: 0; }
 .page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+.page-sub { margin: 6px 0 0; color:#8c8c8c; font-size:13px; }
 .resource-card { cursor:pointer; }
 .resource-card:focus-visible { outline:2px solid rgba(22, 119, 255, 0.45); outline-offset:2px; }
 .title-line { display:flex; justify-content:space-between; align-items:center; gap:8px; }
@@ -209,4 +220,12 @@ function handleUploadSuccess() {
 .summary { color:#666; min-height:40px; }
 .meta { font-size:12px; color:#888; margin-bottom:6px; }
 .actions { margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; }
+
+@media (max-width: 768px) {
+  .page-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+}
 </style>
