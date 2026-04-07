@@ -26,6 +26,7 @@ LIBRARY_CONTENT_TYPE_CHOICES = {
 
 LIBRARY_SOURCE_KIND_FILE = "file"
 LIBRARY_SOURCE_KIND_KNOWLEDGE = "knowledge"
+LIBRARY_SOURCE_KIND_AI_GENERATED = "ai_generated"
 
 
 def _normalize_int_list(value: Any, allow_none: bool = False) -> Optional[List[int]]:
@@ -232,6 +233,7 @@ __all__ = [
     "LIBRARY_CONTENT_TYPE_KNOWLEDGE",
     "LIBRARY_SOURCE_KIND_FILE",
     "LIBRARY_SOURCE_KIND_KNOWLEDGE",
+    "LIBRARY_SOURCE_KIND_AI_GENERATED",
     "LibraryFolderCreate",
     "LibraryFolderUpdate",
     "LibraryFolderResponse",

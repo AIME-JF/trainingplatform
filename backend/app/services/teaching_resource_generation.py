@@ -23,6 +23,7 @@ from app.schemas import (
     ResourceCreate,
 )
 from app.services.media import MediaService
+from app.services.library import LibraryService
 from app.services.resource import ResourceService
 from app.services.teaching_resource_renderer import TeachingResourceRenderer
 from app.services.teaching_resource_template_registry import (
@@ -128,7 +129,7 @@ class TeachingResourceGenerationService:
             page_plan=page_plan,
             html_content=result_payload.get("html_content"),
             preview_title=result_payload.get("preview_title"),
-            confirmed_resource_id=result_payload.get("confirmed_resource_id"),
+            confirmed_library_item_id=result_payload.get("confirmed_library_item_id"),
             error_message=task.error_message,
         )
 
@@ -222,12 +223,18 @@ class TeachingResourceGenerationService:
             raise ValueError("任务结果中没有可确认的 HTML 课件")
 
         media_service = MediaService(self.db)
+        library_service = LibraryService(self.db)
         resource_service = ResourceService(self.db)
         media_file = media_service.create_generated_text_file(
             filename=self._build_html_filename(task.id, resource_meta.resource_title),
             content=html_content,
             uploader_id=current_user_id,
             mime_type="text/html; charset=utf-8",
+        )
+        library_item = library_service.create_ai_generated_item(
+            current_user_id,
+            media_file,
+            title=resource_meta.resource_title,
         )
 
         resource = resource_service.create_resource_entity(
@@ -252,6 +259,7 @@ class TeachingResourceGenerationService:
         resource.metadata_json = {
             "ai_generated": True,
             "source_task_id": task.id,
+            "library_item_id": library_item.id,
             "template_code": (task.request_payload or {}).get("template_code") or GENERAL_TEACHING_TEMPLATE_CODE,
         }
         self.db.flush()
@@ -275,6 +283,7 @@ class TeachingResourceGenerationService:
         self.db.flush()
 
         result_payload["confirmed_resource_id"] = resource.id
+        result_payload["confirmed_library_item_id"] = library_item.id
         result_payload["confirmed_snapshot_id"] = snapshot.id
         task.result_payload = result_payload
         task.status = "confirmed"
@@ -363,6 +372,7 @@ class TeachingResourceGenerationService:
             confirmed_question_ids=list(task.confirmed_question_ids or []),
             confirmed_paper_id=task.confirmed_paper_id,
             confirmed_snapshot_id=result_payload.get("confirmed_snapshot_id"),
+            confirmed_resource_id=result_payload.get("confirmed_resource_id"),
             created_at=task.created_at,
             completed_at=task.completed_at,
             confirmed_at=task.confirmed_at,

@@ -7,14 +7,31 @@ export interface LibraryTreeNode {
   children: LibraryTreeNode[]
 }
 
-export const LIBRARY_CATEGORIES = [
+export interface LibraryCategoryOption {
+  key: string
+  label: string
+  hint: string
+  category?: LibraryItemResponse['content_type']
+  sourceKind?: LibraryItemResponse['source_kind']
+}
+
+export const LIBRARY_CATEGORIES: ReadonlyArray<LibraryCategoryOption> = [
   { key: 'all', label: '全部类型', hint: '查看当前范围内全部资源' },
-  { key: 'video', label: '视频', hint: 'MP4 课件视频' },
-  { key: 'document', label: '文档', hint: 'PDF / PPT / DOC' },
-  { key: 'image', label: '图片', hint: 'JPG / PNG / WEBP / GIF' },
-  { key: 'audio', label: '音频', hint: 'MP3 / WAV / M4A' },
-  { key: 'knowledge', label: '知识点', hint: '富文本知识卡片' },
-] as const
+  { key: 'video', label: '视频', hint: 'MP4 课件视频', category: 'video' },
+  { key: 'document', label: '文档', hint: 'PDF / PPT / DOC', category: 'document' },
+  { key: 'image', label: '图片', hint: 'JPG / PNG / WEBP / GIF', category: 'image' },
+  { key: 'audio', label: '音频', hint: 'MP3 / WAV / M4A', category: 'audio' },
+  { key: 'knowledge', label: '知识点', hint: '富文本知识卡片', category: 'knowledge' },
+  { key: 'ai_generated', label: 'AI教学资源', hint: '教学资源生成后自动入库的课件', sourceKind: 'ai_generated' },
+]
+
+export function resolveLibraryCategoryFilter(categoryKey: string) {
+  const matched = LIBRARY_CATEGORIES.find((item) => item.key === categoryKey)
+  return {
+    category: matched?.category,
+    source_kind: matched?.sourceKind,
+  }
+}
 
 export function buildLibraryTreeData(nodes: LibraryFolderResponse[]): LibraryTreeNode[] {
   return (nodes || []).map((node) => ({

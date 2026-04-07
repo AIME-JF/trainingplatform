@@ -18,7 +18,7 @@ export interface LibraryItemResponse {
   folder_name?: string | null
   title: string
   content_type: 'video' | 'document' | 'image' | 'audio' | 'knowledge'
-  source_kind: 'file' | 'knowledge'
+  source_kind: 'file' | 'knowledge' | 'ai_generated'
   media_file_id?: number | null
   file_name?: string | null
   file_url?: string | null
@@ -52,7 +52,7 @@ export interface LibraryItemQuery {
   category?: string
   folder_id?: number | null
   search?: string
-  source_kind?: string
+  source_kind?: LibraryItemResponse['source_kind']
 }
 
 export interface LibraryMovePayload {

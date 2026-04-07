@@ -259,13 +259,21 @@
 
             <!-- Confirmed: read-only display -->
             <template v-if="activeTask.status === 'confirmed'">
-              <a-result status="success" title="已保存为资源草稿" :sub-title="`可继续在${MY_UPLOAD_TITLE}中走审核流程`">
+              <a-result
+                status="success"
+                title="已保存为资源草稿并加入资源库"
+                :sub-title="`可在资源库的 AI教学资源 分类中查看，也可继续在${MY_UPLOAD_TITLE}中走审核流程`"
+              >
                 <template #extra>
                   <a-button
                     v-if="activeTask.confirmedResourceId"
                     type="primary"
                     @click="$router.push(`/resource/detail/${activeTask.confirmedResourceId}`)"
                   >查看资源</a-button>
+                  <a-button
+                    v-if="activeTask.confirmedLibraryItemId"
+                    @click="$router.push('/library')"
+                  >打开资源库</a-button>
                 </template>
               </a-result>
               <a-descriptions :column="2" size="small" bordered>
@@ -346,7 +354,7 @@ const detailVisible = ref(false)
 const createModalVisible = ref(false)
 const currentDetailStep = ref(0)
 
-const statusLabels = { pending: '排队中', processing: '智能生成中', completed: '生成完成', confirmed: '已保存草稿', failed: '生成失败' }
+const statusLabels = { pending: '排队中', processing: '智能生成中', completed: '生成完成', confirmed: '已保存并入库', failed: '生成失败' }
 const statusColors = { pending: 'default', processing: 'processing', completed: 'blue', confirmed: 'green', failed: 'red' }
 const detailStepLabels = ['任务请求', '智能生成', '查看结果', '预览', '确认完成']
 
@@ -537,7 +545,7 @@ async function handleConfirmTask() {
     syncResourceMetaForm(result)
     currentDetailStep.value = 4
     await loadTasks()
-    message.success('已确认保存为资源草稿，可继续走审核流程')
+    message.success('已确认保存为资源草稿，并自动加入资源库的 AI教学资源')
   } catch (error) {
     message.error(error.message || '确认失败')
   } finally {

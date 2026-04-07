@@ -674,6 +674,7 @@ class AITaskSummaryResponse(BaseModel):
     confirmed_question_ids: List[int] = Field(default_factory=list)
     confirmed_paper_id: Optional[int] = None
     confirmed_snapshot_id: Optional[int] = None
+    confirmed_resource_id: Optional[int] = None
     can_delete: bool = False
     created_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
@@ -764,5 +765,5 @@ class TeachingResourceGenerationTaskDetailResponse(AITaskSummaryResponse):
     page_plan: List[TeachingResourceGenerationPagePlan] = Field(default_factory=list)
     html_content: Optional[str] = None
     preview_title: Optional[str] = None
-    confirmed_resource_id: Optional[int] = None
+    confirmed_library_item_id: Optional[int] = None
     error_message: Optional[str] = None

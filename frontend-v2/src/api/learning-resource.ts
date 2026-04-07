@@ -1,5 +1,5 @@
 import type {
-  AITaskSummaryResponse,
+  AITaskSummaryResponse as GeneratedAITaskSummaryResponse,
   CourseCreate,
   CourseLearningStatusResponse,
   CourseListResponse as GeneratedCourseListResponse,
@@ -47,7 +47,7 @@ import type {
   RoleSimpleResponse,
   TeachingResourceGenerationMetaUpdateRequest,
   TeachingResourceGenerationTaskCreateRequest,
-  TeachingResourceGenerationTaskDetailResponse,
+  TeachingResourceGenerationTaskDetailResponse as GeneratedTeachingResourceGenerationTaskDetailResponse,
   UserSimpleResponse,
 } from '@/api/generated/model'
 import {
@@ -113,7 +113,6 @@ import {
 } from '@/api/generated/user-management/user-management'
 
 export type {
-  AITaskSummaryResponse,
   CourseCreate,
   CourseLearningStatusResponse,
   CourseNoteResponse,
@@ -143,9 +142,17 @@ export type {
   RoleSimpleResponse,
   TeachingResourceGenerationMetaUpdateRequest,
   TeachingResourceGenerationTaskCreateRequest,
-  TeachingResourceGenerationTaskDetailResponse,
   ResourceShareStatusResponse,
   UserSimpleResponse,
+}
+
+export type AITaskSummaryResponse = GeneratedAITaskSummaryResponse & {
+  confirmed_resource_id?: number | null
+}
+
+export type TeachingResourceGenerationTaskDetailResponse = GeneratedTeachingResourceGenerationTaskDetailResponse & {
+  confirmed_resource_id?: number | null
+  confirmed_library_item_id?: number | null
 }
 
 export type ResourceListItemResponse = GeneratedResourceListItemResponse
@@ -217,6 +224,10 @@ export type PaginatedCourseListResponse = Omit<PaginatedResponseCourseListRespon
 }
 
 export type PaginatedResourceListResponse = PaginatedResponseResourceListItemResponse
+
+export type PaginatedAITaskSummaryResult = Omit<PaginatedResponseAITaskSummaryResponse, 'items'> & {
+  items: AITaskSummaryResponse[]
+}
 
 export type ResourceRecommendationItem = GeneratedResourceRecommendationItem
 
@@ -384,7 +395,7 @@ export async function getCourseLearningStatus(courseId: number) {
 }
 
 export async function listTeachingResourceGenerationTasks(params?: { page?: number; size?: number; status?: string }) {
-  return (await listTeachingResourceGenerationTasksApiV1AiTeachingResourceGenerationTasksGet(params)) as PaginatedResponseAITaskSummaryResponse
+  return (await listTeachingResourceGenerationTasksApiV1AiTeachingResourceGenerationTasksGet(params)) as PaginatedAITaskSummaryResult
 }
 
 export async function createTeachingResourceGenerationTask(payload: TeachingResourceGenerationTaskCreateRequest) {

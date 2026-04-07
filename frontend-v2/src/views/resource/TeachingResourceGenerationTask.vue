@@ -182,10 +182,18 @@
               </PermissionsTooltip>
             </a-form>
 
-            <a-result v-else status="success" title="已保存为资源草稿" sub-title="可继续在我的空间中走审核流程">
+            <a-result
+              v-else
+              status="success"
+              title="已保存为资源草稿并加入资源库"
+              sub-title="可在资源库的 AI教学资源 分类中查看，也可继续在我的空间中走审核流程"
+            >
               <template #extra>
                 <a-button v-if="activeTask.confirmed_resource_id" type="primary" @click="router.push(`/resource/detail/${activeTask.confirmed_resource_id}`)">
                   查看资源
+                </a-button>
+                <a-button v-if="activeTask.confirmed_library_item_id" @click="router.push('/library')">
+                  打开资源库
                 </a-button>
               </template>
             </a-result>
@@ -405,7 +413,7 @@ async function handleConfirmTask() {
     activeTask.value = await confirmTeachingResourceGenerationTask(updatedTask.id)
     syncResourceMetaForm(activeTask.value)
     currentDetailStep.value = 4
-    message.success('已保存为资源草稿')
+    message.success('已保存为资源草稿，并自动加入资源库的 AI教学资源')
     await loadTasks()
   } catch (error) {
     message.error(error instanceof Error ? error.message : '确认保存失败')
