@@ -7,7 +7,7 @@
         <p class="page-sub">描述教学需求，系统智能生成课件资源</p>
       </div>
       <div class="page-header-actions">
-        <a-button @click="$router.push('/resource/my')">返回{{ MY_UPLOAD_TITLE }}</a-button>
+        <a-button @click="$router.push('/resource/uploads')">返回{{ MY_UPLOAD_TITLE }}</a-button>
         <a-tag color="blue">建议型任务</a-tag>
       </div>
     </div>

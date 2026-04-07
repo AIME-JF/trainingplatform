@@ -29,10 +29,11 @@ import {
   MY_RESOURCE_PAGE_PERMISSIONS,
 } from '../constants/pagePermissions'
 import {
-  COMMUNITY_RESOURCE_MANAGE_TITLE,
+  COMMUNITY_ASSISTANT_TITLE,
+  COMMUNITY_BOARD_TITLE,
+  COMMUNITY_MANAGEMENT_TITLE,
   COURSE_RESOURCES_TITLE,
   MY_UPLOAD_TITLE,
-  RESOURCE_BROWSE_TITLE,
 } from '../constants/navigationTitles'
 
 const router = createRouter({
@@ -184,16 +185,26 @@ const router = createRouter({
           meta: { title: '资源库', roles: ['admin', 'instructor'] },
         },
         {
-          path: 'resource/library',
-          name: 'ResourceLibrary',
-          component: () => import('../views/resource/Library.vue'),
-          meta: { title: COMMUNITY_RESOURCE_MANAGE_TITLE },
+          path: 'resource/my',
+          name: 'CommunityBoard',
+          component: () => import('../views/resource/CommunityBoard.vue'),
+          meta: { title: COMMUNITY_BOARD_TITLE },
+        },
+        {
+          path: 'resource/assistant',
+          name: 'CommunityAssistant',
+          component: () => import('../views/resource/CommunityAssistant.vue'),
+          meta: { title: COMMUNITY_ASSISTANT_TITLE },
         },
         {
           path: 'resource/recommend',
-          name: 'ResourceRecommend',
-          component: () => import('../views/resource/Recommend.vue'),
-          meta: { title: RESOURCE_BROWSE_TITLE },
+          redirect: { name: 'CommunityAssistant' },
+        },
+        {
+          path: 'resource/library',
+          name: 'CommunityManagement',
+          component: () => import('../views/resource/Library.vue'),
+          meta: { title: COMMUNITY_MANAGEMENT_TITLE },
         },
         {
           path: 'resource/detail/:id',
@@ -202,7 +213,7 @@ const router = createRouter({
           meta: { title: '资源详情' },
         },
         {
-          path: 'resource/my',
+          path: 'resource/uploads',
           name: 'MyResources',
           component: () => import('../views/resource/MyResources.vue'),
           meta: { title: MY_UPLOAD_TITLE, anyPermissions: MY_RESOURCE_PAGE_PERMISSIONS },

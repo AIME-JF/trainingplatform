@@ -6,7 +6,7 @@
     @touchend.capture="onTouchEnd"
   >
     <div class="recommend-top-actions">
-      <a-button size="small" @click="$router.push('/resource/library')">{{ COMMUNITY_RESOURCE_MANAGE_TITLE }}</a-button>
+      <a-button size="small" @click="$router.push('/resource/library')">{{ COMMUNITY_MANAGEMENT_TITLE }}</a-button>
       <a-button v-if="!isMobile" size="small" type="primary" @click="nextRecommendation">下一个</a-button>
     </div>
 
@@ -38,7 +38,7 @@ import { message } from 'ant-design-vue'
 import { useRouter } from 'vue-router'
 import { getRecommendationFeed, recordResourceEvent } from '@/api/recommendation'
 import { getResource } from '@/api/resource'
-import { COMMUNITY_RESOURCE_MANAGE_TITLE } from '@/constants/navigationTitles'
+import { COMMUNITY_MANAGEMENT_TITLE } from '@/constants/navigationTitles'
 import ResourceViewer from './components/ResourceViewer.vue'
 
 const router = useRouter()

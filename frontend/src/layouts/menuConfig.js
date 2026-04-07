@@ -32,15 +32,14 @@ import {
   TRAINING_SCHEDULE_PAGE_PERMISSIONS,
   USER_ARCHIVE_PAGE_PERMISSIONS,
   USER_MANAGE_PAGE_PERMISSIONS,
-  MY_RESOURCE_PAGE_PERMISSIONS,
 } from '@/constants/pagePermissions'
 import {
+  COMMUNITY_ASSISTANT_TITLE,
+  COMMUNITY_BOARD_TITLE,
+  COMMUNITY_CENTER_TITLE,
   COMMUNITY_MANAGEMENT_TITLE,
-  COMMUNITY_RESOURCE_MANAGE_TITLE,
   COURSE_RESOURCES_TITLE,
   LEARNING_CENTER_TITLE,
-  MY_UPLOAD_TITLE,
-  RESOURCE_BROWSE_TITLE,
 } from '@/constants/navigationTitles'
 
 export const appMenuConfig = [
@@ -147,23 +146,23 @@ export const appMenuConfig = [
   },
   {
     key: 'community',
-    label: COMMUNITY_MANAGEMENT_TITLE,
+    label: COMMUNITY_CENTER_TITLE,
     icon: AppstoreOutlined,
     children: [
       {
-        key: '/resource/library',
-        label: COMMUNITY_RESOURCE_MANAGE_TITLE,
-        anyPermissions: [],
-      },
-      {
-        key: '/resource/recommend',
-        label: RESOURCE_BROWSE_TITLE,
-        anyPermissions: [],
-      },
-      {
         key: '/resource/my',
-        label: MY_UPLOAD_TITLE,
-        anyPermissions: MY_RESOURCE_PAGE_PERMISSIONS,
+        label: COMMUNITY_BOARD_TITLE,
+        anyPermissions: [],
+      },
+      {
+        key: '/resource/assistant',
+        label: COMMUNITY_ASSISTANT_TITLE,
+        anyPermissions: [],
+      },
+      {
+        key: '/resource/library',
+        label: COMMUNITY_MANAGEMENT_TITLE,
+        anyPermissions: [],
       },
     ],
   },

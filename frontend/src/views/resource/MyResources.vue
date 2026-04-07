@@ -3,7 +3,7 @@
     <div class="page-header">
       <h2>{{ MY_UPLOAD_TITLE }}</h2>
       <a-space>
-        <a-button @click="$router.push('/resource/library')">{{ COMMUNITY_RESOURCE_MANAGE_TITLE }}</a-button>
+        <a-button @click="$router.push('/resource/library')">{{ COMMUNITY_MANAGEMENT_TITLE }}</a-button>
         <permissions-tooltip
           :allowed="canUseTeachingGeneration"
           tips="需要 USE_TEACHING_RESOURCE_GENERATION 权限"
@@ -130,7 +130,7 @@ import { useAuthStore } from '@/stores/auth'
 import { getResources, publishResource, offlineResource, deleteResource } from '@/api/resource'
 import { submitResource, getReviewWorkflow } from '@/api/review'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
-import { COMMUNITY_RESOURCE_MANAGE_TITLE, MY_UPLOAD_TITLE } from '@/constants/navigationTitles'
+import { COMMUNITY_MANAGEMENT_TITLE, MY_UPLOAD_TITLE } from '@/constants/navigationTitles'
 import ResourceUploadModal from './components/ResourceUploadModal.vue'
 
 const router = useRouter()
