@@ -266,6 +266,44 @@ class CourseResourceBindRequest(BaseModel):
 
 
 class TrainingResourceBindRequest(BaseModel):
-    resource_id: int
+    resource_id: Optional[int] = None
+    library_item_id: Optional[int] = None
     usage_type: str = Field('required', description='用途')
     sort_order: int = Field(0, description='排序')
+
+    @model_validator(mode='after')
+    def validate_binding_target(self):
+        has_resource_id = self.resource_id is not None
+        has_library_item_id = self.library_item_id is not None
+        if has_resource_id == has_library_item_id:
+            raise ValueError('培训绑定资源必须且只能传 resource_id 或 library_item_id 其中之一')
+        return self
+
+
+class TrainingBoundResourceResponse(BaseModel):
+    id: int = Field(..., description="绑定ID")
+    ref_id: int = Field(..., description="关联记录ID")
+    binding_type: str = Field(..., description="绑定类型: resource/library_item")
+    resource_id: Optional[int] = None
+    library_item_id: Optional[int] = None
+    title: str
+    summary: Optional[str] = None
+    content_type: str
+    source_type: Optional[str] = None
+    status: Optional[str] = None
+    status_label: Optional[str] = None
+    uploader_id: Optional[int] = None
+    uploader_name: Optional[str] = None
+    owner_department_id: Optional[int] = None
+    owner_department_name: Optional[str] = None
+    cover_url: Optional[str] = None
+    tags: List[str] = Field(default_factory=list)
+    file_id: Optional[int] = None
+    file_name: Optional[str] = None
+    file_url: Optional[str] = None
+    mime_type: Optional[str] = None
+    duration_seconds: int = 0
+    knowledge_content_html: Optional[str] = None
+    is_public: Optional[bool] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None

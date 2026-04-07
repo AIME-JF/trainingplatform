@@ -1,32 +1,12 @@
 <template>
   <div>
-    <!-- 知识库/班级资源相关弹窗 -->
-    <a-modal
+    <!-- 知识库资源选择弹窗 -->
+    <LibraryItemPickerModal
       v-model:open="libraryModalVisible"
-      title="选择知识库资源"
-      ok-text="确认添加"
-      cancel-text="取消"
-      :width="560"
-      @ok="confirmLibraryAdd"
-    >
-      <a-input-search placeholder="搜索知识库资源名称" style="margin-bottom: 16px" />
-      <a-empty description="知识库资源绑定功能开发中，敬请期待" style="padding: 24px 0" />
-    </a-modal>
-
-    <a-modal
-      v-model:open="uploadModalVisible"
-      title="上传班级资源"
-      ok-text="确认上传"
-      cancel-text="取消"
-      :width="520"
-      @ok="confirmUpload"
-    >
-      <a-upload-dragger :before-upload="() => false" multiple style="margin-bottom: 8px">
-        <p class="ant-upload-drag-icon" style="font-size: 32px">📁</p>
-        <p class="ant-upload-text">点击或拖拽文件到此区域</p>
-        <p class="ant-upload-hint">支持文档、图片、视频等各类格式，班级资源上传功能开发中</p>
-      </a-upload-dragger>
-    </a-modal>
+      :confirm-loading="libraryConfirmLoading"
+      :bound-item-ids="boundLibraryItemIds"
+      @confirm="onLibraryConfirm"
+    />
 
     <!-- 课程资源预览弹窗 -->
     <a-modal
@@ -56,11 +36,58 @@
     <div class="class-res-section">
       <div class="class-res-section-header">
         <h4 class="class-res-section-title">知识库资源</h4>
-        <a-button size="small" @click="libraryModalVisible = true">
+        <a-button v-if="canManage" size="small" @click="libraryModalVisible = true">
           + 添加知识库资源
         </a-button>
       </div>
-      <a-empty description="暂无已添加的知识库资源" class="section-empty" />
+
+      <div v-if="trainingResourcesLoading" class="res-loading">
+        <a-spin size="small" /> 加载中…
+      </div>
+      <template v-else-if="trainingResources.length">
+        <div class="res-linked-resource-list">
+          <article
+            v-for="res in trainingResources"
+            :key="res.ref_id"
+            class="res-linked-resource-card"
+          >
+            <div class="res-linked-resource-main">
+              <div class="res-linked-resource-top">
+                <span class="res-type-icon">{{ contentTypeIcon(res.content_type) }}</span>
+                <strong>{{ res.title }}</strong>
+                <a-tag v-if="res.binding_type === 'library_item'" color="blue" size="small">知识库</a-tag>
+                <a-tag v-else color="default" size="small">资源库</a-tag>
+              </div>
+              <div class="res-linked-resource-meta">
+                <span>类型：{{ contentTypeLabel(res.content_type) }}</span>
+                <span v-if="res.uploader_name">上传者：{{ res.uploader_name }}</span>
+                <span v-if="res.owner_department_name">归属部门：{{ res.owner_department_name }}</span>
+              </div>
+              <div v-if="res.tags?.length" class="res-linked-resource-tags">
+                <a-tag v-for="tag in res.tags" :key="tag">{{ tag }}</a-tag>
+              </div>
+            </div>
+
+            <div class="res-card-actions">
+              <a-button type="link" class="res-view-link-btn" @click="openTrainingResource(res)">
+                查看资源
+              </a-button>
+              <a-button
+                v-if="canManage"
+                type="link"
+                danger
+                size="small"
+                class="res-remove-btn"
+                :loading="removingRefId === res.ref_id"
+                @click="removeTrainingRes(res)"
+              >
+                移除
+              </a-button>
+            </div>
+          </article>
+        </div>
+      </template>
+      <a-empty v-else description="暂无已添加的知识库资源" class="section-empty" />
     </div>
 
     <div class="res-divider" />
@@ -220,29 +247,23 @@
         </div>
       </div>
     </div>
-
-    <div class="res-divider" />
-
-    <!-- ===== 班级资源 ===== -->
-    <div class="class-res-section">
-      <div class="class-res-section-header">
-        <h4 class="class-res-section-title">班级资源</h4>
-        <a-button size="small" @click="uploadModalVisible = true">
-          + 上传班级资源
-        </a-button>
-      </div>
-      <a-empty description="暂无已上传的班级资源" class="section-empty" />
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+import { message, Modal } from 'ant-design-vue'
 import type { ChapterResponse } from '@/api/generated/model'
 import type { CourseBoundResourceResponse, CourseResponse, ResourceListItemResponse } from '@/api/learning-resource'
 import { getCourseDetail } from '@/api/learning-resource'
+import type { TrainingBoundResourceResponse } from '@/api/learning-resource'
+import {
+  listTrainingResources,
+  bindTrainingResource,
+  unbindTrainingResource,
+} from '@/api/learning-resource'
+import LibraryItemPickerModal from '@/components/library/LibraryItemPickerModal.vue'
 
 interface TrainingCourse {
   id: number
@@ -259,35 +280,44 @@ interface CourseResourceItem {
 }
 
 const props = withDefaults(defineProps<{
+  trainingId: number
   courses: TrainingCourse[]
   active: boolean
   legacyResources?: ResourceListItemResponse[]
+  canManage?: boolean
 }>(), {
   legacyResources: () => [],
+  canManage: false,
 })
 
 const router = useRouter()
+
+// ===== 课程资源相关 =====
 const linkedItems = ref<CourseResourceItem[]>([])
 const loading = ref(false)
+let courseLoaded = false
+
+// ===== 培训知识库资源相关 =====
+const trainingResources = ref<TrainingBoundResourceResponse[]>([])
+const trainingResourcesLoading = ref(false)
+let trainingResLoaded = false
+
+// ===== 弹窗相关 =====
+const libraryModalVisible = ref(false)
+const libraryConfirmLoading = ref(false)
+const removingRefId = ref<number | null>(null)
+
+// ===== 预览弹窗 =====
 const previewVisible = ref(false)
 const previewResource = ref<CourseBoundResourceResponse | null>(null)
-let loaded = false
-
-// 知识库资源弹窗
-const libraryModalVisible = ref(false)
-function confirmLibraryAdd() {
-  message.success('知识库资源绑定功能开发中')
-  libraryModalVisible.value = false
-}
-
-// 班级资源上传弹窗
-const uploadModalVisible = ref(false)
-function confirmUpload() {
-  message.success('班级资源上传功能开发中')
-  uploadModalVisible.value = false
-}
 
 const legacyResources = computed(() => props.legacyResources || [])
+
+const boundLibraryItemIds = computed(() =>
+  trainingResources.value
+    .filter((r) => r.binding_type === 'library_item' && r.library_item_id)
+    .map((r) => r.library_item_id as number),
+)
 
 function boundCount(item: CourseResourceItem): number {
   return item.chapters.filter((chapter) => chapter.resource_id || chapter.library_item_id).length
@@ -322,11 +352,11 @@ function resourceStatusColor(status?: string | null) {
   return colorMap[status || ''] || 'default'
 }
 
-function boundResourceStatusColor(resource: CourseBoundResourceResponse) {
-  if (resource.binding_type === 'library_item') {
+function boundResourceStatusColor(resource: CourseBoundResourceResponse | TrainingBoundResourceResponse) {
+  if ('binding_type' in resource && resource.binding_type === 'library_item') {
     return resource.status === 'public' ? 'gold' : 'blue'
   }
-  return resourceStatusColor(resource.status)
+  return resourceStatusColor((resource as CourseBoundResourceResponse).status)
 }
 
 function goResourceDetail(resourceId: number) {
@@ -354,9 +384,96 @@ function openBoundResource(resource: CourseBoundResourceResponse) {
   message.warning('当前资源暂无可预览内容')
 }
 
+function openTrainingResource(res: TrainingBoundResourceResponse) {
+  if (res.binding_type === 'resource' && res.resource_id) {
+    void router.push(`/resource/detail/${res.resource_id}`)
+    return
+  }
+  if (res.content_type === 'knowledge' && res.knowledge_content_html) {
+    previewResource.value = res as unknown as CourseBoundResourceResponse
+    previewVisible.value = true
+    return
+  }
+  if (res.file_url) {
+    window.open(res.file_url, '_blank', 'noopener,noreferrer')
+    return
+  }
+  message.warning('当前资源暂无可预览内容')
+}
+
+// ===== 加载培训资源 =====
+async function loadTrainingResources() {
+  if (trainingResLoaded) return
+  trainingResLoaded = true
+  trainingResourcesLoading.value = true
+  try {
+    trainingResources.value = await listTrainingResources(props.trainingId)
+  } catch {
+    trainingResources.value = []
+    message.error('加载班级资源失败')
+  } finally {
+    trainingResourcesLoading.value = false
+  }
+}
+
+// ===== 确认添加知识库资源 =====
+async function onLibraryConfirm(selectedIds: number[]) {
+  libraryConfirmLoading.value = true
+  let successCount = 0
+  const errors: string[] = []
+
+  for (const libraryItemId of selectedIds) {
+    try {
+      const result = await bindTrainingResource(props.trainingId, {
+        library_item_id: libraryItemId,
+        usage_type: 'required',
+        sort_order: trainingResources.value.length,
+      })
+      trainingResources.value = [...trainingResources.value, result]
+      successCount++
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : '绑定失败')
+    }
+  }
+
+  libraryConfirmLoading.value = false
+  libraryModalVisible.value = false
+
+  if (successCount > 0) {
+    message.success(`成功添加 ${successCount} 个知识库资源`)
+  }
+  if (errors.length) {
+    message.error(`${errors.length} 个资源添加失败`)
+  }
+}
+
+// ===== 移除培训资源 =====
+async function removeTrainingRes(res: TrainingBoundResourceResponse) {
+  Modal.confirm({
+    title: '移除资源',
+    content: `确认移除「${res.title}」吗？`,
+    okText: '确认移除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      removingRefId.value = res.ref_id
+      try {
+        await unbindTrainingResource(props.trainingId, res.ref_id)
+        trainingResources.value = trainingResources.value.filter((r) => r.ref_id !== res.ref_id)
+        message.success('已移除')
+      } catch (e) {
+        message.error(e instanceof Error ? e.message : '移除失败')
+      } finally {
+        removingRefId.value = null
+      }
+    },
+  })
+}
+
+// ===== 加载课程资源 =====
 async function loadResources() {
-  if (loaded) return
-  loaded = true
+  if (courseLoaded) return
+  courseLoaded = true
   loading.value = true
 
   const linked = props.courses.filter((course) => course.course_id)
@@ -387,11 +504,15 @@ async function loadResources() {
   loading.value = false
 }
 
+async function loadAll() {
+  await Promise.all([loadTrainingResources(), loadResources()])
+}
+
 watch(
   () => props.active,
   (active) => {
     if (active) {
-      void loadResources()
+      void loadAll()
     }
   },
   { immediate: true },
@@ -400,10 +521,21 @@ watch(
 watch(
   () => props.courses,
   () => {
-    loaded = false
+    courseLoaded = false
     linkedItems.value = []
     if (props.active) {
       void loadResources()
+    }
+  },
+)
+
+watch(
+  () => props.trainingId,
+  () => {
+    trainingResLoaded = false
+    trainingResources.value = []
+    if (props.active) {
+      void loadTrainingResources()
     }
   },
 )
@@ -437,6 +569,70 @@ watch(
 
 .section-empty {
   padding: 20px 0;
+}
+
+/* ===== 资源卡片通用 ===== */
+.res-linked-resource-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.res-linked-resource-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--v2-border-light);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.86);
+}
+
+.res-linked-resource-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.res-linked-resource-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: var(--v2-text-primary);
+}
+
+.res-linked-resource-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--v2-text-secondary);
+}
+
+.res-linked-resource-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.res-card-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.res-view-link-btn {
+  flex-shrink: 0;
+  padding-inline: 0;
+}
+
+.res-remove-btn {
+  padding-inline: 0;
 }
 
 /* ===== 课程资源内部 ===== */
@@ -533,57 +729,6 @@ watch(
   color: var(--v2-text-muted);
   padding: 12px 0;
   text-align: center;
-}
-
-.res-linked-resource-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.res-linked-resource-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  padding: 12px 14px;
-  border: 1px solid var(--v2-border-light);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.86);
-}
-
-.res-linked-resource-main {
-  flex: 1;
-  min-width: 0;
-}
-
-.res-linked-resource-top {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  color: var(--v2-text-primary);
-}
-
-.res-linked-resource-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--v2-text-secondary);
-}
-
-.res-linked-resource-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.res-view-link-btn {
-  flex-shrink: 0;
-  padding-inline: 0;
 }
 
 .res-chapter-list {
@@ -720,6 +865,11 @@ watch(
   .res-linked-resource-card {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .res-card-actions {
+    flex-direction: row;
+    align-items: center;
   }
 
   .res-section-head {

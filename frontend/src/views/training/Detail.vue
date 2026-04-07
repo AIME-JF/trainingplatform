@@ -240,6 +240,7 @@
             <TrainingResourcesContent
               :training-data="trainingData"
               :active="activeTab === 'resources'"
+              :can-manage="canEdit"
             />
           </div>
 

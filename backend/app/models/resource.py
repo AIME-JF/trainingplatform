@@ -138,16 +138,19 @@ class TrainingResourceRef(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     training_id = Column(Integer, ForeignKey('trainings.id', ondelete='CASCADE'), nullable=False, index=True)
-    resource_id = Column(Integer, ForeignKey('resources.id', ondelete='CASCADE'), nullable=False, index=True)
+    resource_id = Column(Integer, ForeignKey('resources.id', ondelete='CASCADE'), nullable=True, index=True)
+    library_item_id = Column(Integer, ForeignKey('library_items.id', ondelete='CASCADE'), nullable=True, index=True)
     usage_type = Column(String(30), nullable=False, default='required', comment='用途: required/optional/extension')
     sort_order = Column(Integer, default=0, comment='排序')
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment='创建时间')
 
     __table_args__ = (
         UniqueConstraint('training_id', 'resource_id', name='uq_training_resource_ref'),
+        UniqueConstraint('training_id', 'library_item_id', name='uq_training_library_item_ref'),
     )
 
     resource = relationship('Resource', foreign_keys=[resource_id])
+    library_item = relationship('LibraryItem', foreign_keys=[library_item_id])
 
 
 class ResourceLike(Base):

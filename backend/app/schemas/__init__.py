@@ -139,7 +139,7 @@ from .resource import (
     ResourceListItemResponse, ResourceDetailResponse, CourseBoundResourceResponse,
     ResourceCommentCreate, ResourceCommentResponse,
     ResourceLikeStatusResponse, ResourceShareStatusResponse,
-    CourseResourceBindRequest, TrainingResourceBindRequest
+    CourseResourceBindRequest, TrainingResourceBindRequest, TrainingBoundResourceResponse
 )
 from .library import (
     LibraryFolderCreate, LibraryFolderUpdate, LibraryFolderResponse,

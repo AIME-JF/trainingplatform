@@ -155,9 +155,11 @@
           <!-- ========== 资源 ========== -->
           <div v-if="activeTab === 'resources'" class="tab-panel">
             <ClassResourcesTab
+              :training-id="trainingId"
               :courses="courses"
               :active="activeTab === 'resources'"
               :legacy-resources="detail?.resources || []"
+              :can-manage="detail?.can_manage_training || false"
             />
           </div>
 

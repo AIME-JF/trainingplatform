@@ -35,6 +35,7 @@ from app.schemas import (
     TrainingListResponse,
     TrainingStatsResponse,
     CalendarEventResponse,
+    TrainingBoundResourceResponse,
     TrainingResourceBindRequest,
     TrainingResponse,
     TrainingRosterAssignment,
@@ -884,7 +885,7 @@ def get_training_course_change_logs(
     return StandardResponse(data=data)
 
 
-@router.post("/{training_id}/resources", response_model=StandardResponse[ResourceListItemResponse], summary="培训绑定资源")
+@router.post("/{training_id}/resources", response_model=StandardResponse[TrainingBoundResourceResponse], summary="培训绑定资源")
 def add_training_resource(
     training_id: int,
     data: TrainingResourceBindRequest,
@@ -893,11 +894,14 @@ def add_training_resource(
 ):
     _require_training_manager(db, training_id, current_user.user_id)
     service = TrainingService(db)
-    result = service.add_training_resource(training_id, data)
+    try:
+        result = service.add_training_resource(training_id, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return StandardResponse(data=result)
 
 
-@router.get("/{training_id}/resources", response_model=StandardResponse[List[ResourceListItemResponse]], summary="培训资源列表")
+@router.get("/{training_id}/resources", response_model=StandardResponse[List[TrainingBoundResourceResponse]], summary="培训资源列表")
 def list_training_resources(
     training_id: int,
     current_user: TokenData = Depends(get_current_user),
@@ -908,16 +912,16 @@ def list_training_resources(
     return StandardResponse(data=result)
 
 
-@router.delete("/{training_id}/resources/{resource_id}", response_model=StandardResponse, summary="培训解绑资源")
+@router.delete("/{training_id}/resources/{ref_id}", response_model=StandardResponse, summary="培训解绑资源")
 def remove_training_resource(
     training_id: int,
-    resource_id: int,
+    ref_id: int,
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     _require_training_manager(db, training_id, current_user.user_id)
     service = TrainingService(db)
-    ok = service.remove_training_resource(training_id, resource_id)
+    ok = service.remove_training_resource(training_id, ref_id)
     if not ok:
         return StandardResponse(code=404, message="绑定关系不存在")
     return StandardResponse(message="解绑成功")

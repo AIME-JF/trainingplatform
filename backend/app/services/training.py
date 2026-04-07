@@ -34,8 +34,9 @@ from app.models import (
     User,
 )
 from app.models.resource import Resource, ResourceTagRelation, TrainingResourceRef
+from app.models.library import LibraryItem
 from app.schemas import PaginatedResponse
-from app.schemas.resource import ResourceListItemResponse, TrainingResourceBindRequest
+from app.schemas.resource import ResourceListItemResponse, TrainingBoundResourceResponse, TrainingResourceBindRequest
 from app.schemas.training import (
     CalendarEventResponse,
     CheckinCreate,
@@ -65,6 +66,7 @@ from app.schemas.training import (
 )
 from app.schemas.notice import NoticeResponse
 from app.services.batch_import import BatchImportService
+from app.services.media import MediaService
 from app.services.system_exchange import SystemExchangeService
 from app.services.training_course_change import TrainingCourseChangeService
 from app.services.training_schedule_rule import TrainingScheduleRuleService
@@ -1656,45 +1658,76 @@ class TrainingService:
         ).order_by(TrainingHistory.archived_at.desc(), TrainingHistory.id.desc()).all()
         return [self._history_to_response(row) for row in rows]
 
-    def add_training_resource(self, training_id: int, data: TrainingResourceBindRequest) -> ResourceListItemResponse:
+    def add_training_resource(self, training_id: int, data: TrainingResourceBindRequest) -> TrainingBoundResourceResponse:
         training = self.db.query(Training).filter(Training.id == training_id).first()
         if not training:
             raise ValueError("培训班不存在")
 
-        resource = self.db.query(Resource).options(
-            joinedload(Resource.uploader),
-            joinedload(Resource.owner_department),
-            joinedload(Resource.cover_media),
-            joinedload(Resource.tag_relations).joinedload(ResourceTagRelation.tag),
-        ).filter(Resource.id == data.resource_id).first()
-        if not resource:
-            raise ValueError("资源不存在")
+        if data.resource_id is not None:
+            resource = self.db.query(Resource).options(
+                joinedload(Resource.uploader),
+                joinedload(Resource.owner_department),
+                joinedload(Resource.cover_media),
+                joinedload(Resource.tag_relations).joinedload(ResourceTagRelation.tag),
+            ).filter(Resource.id == data.resource_id).first()
+            if not resource:
+                raise ValueError("资源不存在")
 
-        ref = self.db.query(TrainingResourceRef).filter(
-            TrainingResourceRef.training_id == training_id,
-            TrainingResourceRef.resource_id == data.resource_id,
-        ).first()
-        if not ref:
-            ref = TrainingResourceRef(
-                training_id=training_id,
-                resource_id=data.resource_id,
-                usage_type=data.usage_type,
-                sort_order=data.sort_order,
-            )
-            self.db.add(ref)
+            ref = self.db.query(TrainingResourceRef).filter(
+                TrainingResourceRef.training_id == training_id,
+                TrainingResourceRef.resource_id == data.resource_id,
+            ).first()
+            if not ref:
+                ref = TrainingResourceRef(
+                    training_id=training_id,
+                    resource_id=data.resource_id,
+                    usage_type=data.usage_type,
+                    sort_order=data.sort_order,
+                )
+                self.db.add(ref)
+            else:
+                ref.usage_type = data.usage_type
+                ref.sort_order = data.sort_order
+
+            self.db.commit()
+            self.db.refresh(ref)
+            return self._training_ref_to_response(ref)
         else:
-            ref.usage_type = data.usage_type
-            ref.sort_order = data.sort_order
+            library_item = self.db.query(LibraryItem).options(
+                joinedload(LibraryItem.owner),
+                joinedload(LibraryItem.media_file),
+            ).filter(LibraryItem.id == data.library_item_id).first()
+            if not library_item:
+                raise ValueError("知识库资源不存在")
 
-        self.db.commit()
-        return self._resource_to_response(resource)
+            ref = self.db.query(TrainingResourceRef).filter(
+                TrainingResourceRef.training_id == training_id,
+                TrainingResourceRef.library_item_id == data.library_item_id,
+            ).first()
+            if not ref:
+                ref = TrainingResourceRef(
+                    training_id=training_id,
+                    library_item_id=data.library_item_id,
+                    usage_type=data.usage_type,
+                    sort_order=data.sort_order,
+                )
+                self.db.add(ref)
+            else:
+                ref.usage_type = data.usage_type
+                ref.sort_order = data.sort_order
 
-    def list_training_resources(self, training_id: int) -> List[ResourceListItemResponse]:
+            self.db.commit()
+            self.db.refresh(ref)
+            return self._training_ref_to_response(ref)
+
+    def list_training_resources(self, training_id: int) -> List[TrainingBoundResourceResponse]:
         refs = self.db.query(TrainingResourceRef).options(
             joinedload(TrainingResourceRef.resource).joinedload(Resource.uploader),
             joinedload(TrainingResourceRef.resource).joinedload(Resource.owner_department),
             joinedload(TrainingResourceRef.resource).joinedload(Resource.cover_media),
             joinedload(TrainingResourceRef.resource).joinedload(Resource.tag_relations).joinedload(ResourceTagRelation.tag),
+            joinedload(TrainingResourceRef.library_item).joinedload(LibraryItem.owner),
+            joinedload(TrainingResourceRef.library_item).joinedload(LibraryItem.media_file),
         ).filter(
             TrainingResourceRef.training_id == training_id,
         ).order_by(
@@ -1702,22 +1735,88 @@ class TrainingService:
             TrainingResourceRef.id.asc(),
         ).all()
 
-        items = []
-        for ref in refs:
-            if ref.resource:
-                items.append(self._resource_to_response(ref.resource))
-        return items
+        return [self._training_ref_to_response(ref) for ref in refs if ref.resource or ref.library_item]
 
-    def remove_training_resource(self, training_id: int, resource_id: int) -> bool:
+    def remove_training_resource(self, training_id: int, ref_id: int) -> bool:
+        """按 ref_id（TrainingResourceRef.id）删除绑定关系"""
         ref = self.db.query(TrainingResourceRef).filter(
+            TrainingResourceRef.id == ref_id,
             TrainingResourceRef.training_id == training_id,
-            TrainingResourceRef.resource_id == resource_id,
         ).first()
         if not ref:
             return False
         self.db.delete(ref)
         self.db.commit()
         return True
+
+    def _training_ref_to_response(self, ref: TrainingResourceRef) -> TrainingBoundResourceResponse:
+        if ref.resource_id and ref.resource:
+            r = ref.resource
+            tags = [rel.tag.name for rel in (r.tag_relations or []) if rel.tag]
+            return TrainingBoundResourceResponse(
+                id=ref.resource_id,
+                ref_id=ref.id,
+                binding_type='resource',
+                resource_id=ref.resource_id,
+                library_item_id=None,
+                title=r.title,
+                summary=r.summary,
+                content_type=r.content_type,
+                source_type=r.source_type,
+                status=r.status,
+                status_label=None,
+                uploader_id=r.uploader_id,
+                uploader_name=r.uploader.nickname if r.uploader else None,
+                owner_department_id=r.owner_department_id,
+                owner_department_name=r.owner_department.name if r.owner_department else None,
+                cover_url=None,
+                tags=tags,
+                file_id=None,
+                file_name=None,
+                file_url=None,
+                mime_type=None,
+                duration_seconds=0,
+                knowledge_content_html=None,
+                is_public=None,
+                created_at=r.created_at,
+                updated_at=r.updated_at,
+            )
+        else:
+            li = ref.library_item
+            media_svc = MediaService(self.db)
+            file_id = li.media_file_id if li else None
+            file_name = li.media_file.filename if (li and li.media_file) else None
+            file_url = media_svc.build_url(li.media_file) if (li and li.media_file) else None
+            mime_type = li.media_file.mime_type if (li and li.media_file) else None
+            duration = li.media_file.duration_seconds if (li and li.media_file) else 0
+            return TrainingBoundResourceResponse(
+                id=ref.library_item_id,
+                ref_id=ref.id,
+                binding_type='library_item',
+                resource_id=None,
+                library_item_id=ref.library_item_id,
+                title=li.title if li else '未知资源',
+                summary=None,
+                content_type=li.content_type if li else 'document',
+                source_type='library',
+                status='public' if (li and li.is_public) else 'private',
+                status_label='公开' if (li and li.is_public) else '私有',
+                uploader_id=li.owner_user_id if li else None,
+                uploader_name=li.owner.nickname if (li and li.owner) else None,
+                owner_department_id=None,
+                owner_department_name=None,
+                cover_url=None,
+                tags=[],
+                file_id=file_id,
+                file_name=file_name,
+                file_url=file_url,
+                mime_type=mime_type,
+                duration_seconds=duration or 0,
+                knowledge_content_html=li.knowledge_content_html if li else None,
+                is_public=li.is_public if li else False,
+                created_at=li.created_at if li else None,
+                updated_at=li.updated_at if li else None,
+            )
 
     def _replace_courses(self, training_id: int, courses: List[Any]) -> None:
         self.db.query(TrainingCourse).filter(

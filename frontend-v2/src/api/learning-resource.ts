@@ -58,6 +58,11 @@ import {
   updateTeachingResourceGenerationTaskMetaApiV1AiTeachingResourceGenerationTasksTaskIdResourceMetaPut,
 } from '@/api/generated/ai-tasks/ai-tasks'
 import {
+  addTrainingResourceApiV1TrainingsTrainingIdResourcesPost,
+  listTrainingResourcesApiV1TrainingsTrainingIdResourcesGet,
+  removeTrainingResourceApiV1TrainingsTrainingIdResourcesResourceIdDelete,
+} from '@/api/generated/training-management/training-management'
+import {
   createCourseApiV1CoursesPost,
   createCourseQaApiV1CoursesCourseIdQaPost,
   createCourseTagApiV1CoursesTagsPost,
@@ -416,6 +421,62 @@ export async function confirmTeachingResourceGenerationTask(taskId: number) {
 
 export async function listUsers(params?: GetUsersApiV1UsersGetParams) {
   return (await getUsersApiV1UsersGet(params)) as PaginatedResponseUserSimpleResponse
+}
+
+// ===== 班级（培训）资源绑定 =====
+
+export interface TrainingBoundResourceResponse {
+  id: number
+  ref_id: number
+  binding_type: 'resource' | 'library_item'
+  resource_id?: number | null
+  library_item_id?: number | null
+  title: string
+  summary?: string | null
+  content_type: string
+  source_type?: string | null
+  status?: string | null
+  status_label?: string | null
+  uploader_id?: number | null
+  uploader_name?: string | null
+  owner_department_id?: number | null
+  owner_department_name?: string | null
+  cover_url?: string | null
+  tags?: string[]
+  file_id?: number | null
+  file_name?: string | null
+  file_url?: string | null
+  mime_type?: string | null
+  duration_seconds?: number
+  knowledge_content_html?: string | null
+  is_public?: boolean | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export interface TrainingResourceBindRequest {
+  resource_id?: number | null
+  library_item_id?: number | null
+  usage_type?: string
+  sort_order?: number
+}
+
+export async function listTrainingResources(trainingId: number): Promise<TrainingBoundResourceResponse[]> {
+  return (await listTrainingResourcesApiV1TrainingsTrainingIdResourcesGet(trainingId)) as TrainingBoundResourceResponse[]
+}
+
+export async function bindTrainingResource(
+  trainingId: number,
+  payload: TrainingResourceBindRequest,
+): Promise<TrainingBoundResourceResponse> {
+  return (await addTrainingResourceApiV1TrainingsTrainingIdResourcesPost(
+    trainingId,
+    payload as never,
+  )) as TrainingBoundResourceResponse
+}
+
+export async function unbindTrainingResource(trainingId: number, refId: number): Promise<void> {
+  await removeTrainingResourceApiV1TrainingsTrainingIdResourcesResourceIdDelete(trainingId, refId)
 }
 
 export async function listDepartments(params?: GetDepartmentListApiV1DepartmentsListGetParams) {
