@@ -1,46 +1,20 @@
 <template>
-  <div class="page-content">
-    <h1 class="page-title">我的班级</h1>
-
-    <!-- 筛选栏 -->
-    <div class="toolbar">
-      <div class="toolbar-filters">
-        <a-select
-          v-model:value="filterStatus"
-          mode="multiple"
-          placeholder="班级状态"
-          style="min-width: 180px"
-          allow-clear
-          :max-tag-count="1"
-          @change="onFilterChange"
-        >
-          <a-select-option v-for="s in statusOptions" :key="s.value" :value="s.value">
-            {{ s.label }}
-          </a-select-option>
-        </a-select>
-
-        <a-select
-          v-model:value="filterType"
-          placeholder="全部类型"
-          style="width: 140px"
-          allow-clear
-          @change="onFilterChange"
-        >
-          <a-select-option value="">全部类型</a-select-option>
-          <a-select-option v-for="t in typeOptions" :key="t.value" :value="t.value">
-            {{ t.label }}
-          </a-select-option>
-        </a-select>
-      </div>
-
-      <a-input-search
-        v-model:value="searchText"
-        placeholder="搜索班级名称"
-        style="width: 220px"
-        allow-clear
-        @search="onFilterChange"
-      />
-    </div>
+  <DarkPageHeader
+    title="我的班级"
+    search-placeholder="搜索班级名称"
+    v-model="searchText"
+    @search="onFilterChange"
+  >
+    <template #filters>
+      <button type="button" class="dark-chip" :class="{ active: filterStatus.length === 0 }" @click="setStatus([])">全部</button>
+      <button v-for="s in statusOptions" :key="s.value" type="button" class="dark-chip" :class="{ active: filterStatus.length === 1 && filterStatus[0] === s.value }" @click="setStatus([s.value])">{{ s.label }}</button>
+    </template>
+    <template #actions>
+      <a-select v-if="typeOptions.length" v-model:value="filterType" placeholder="全部类型" style="width: 140px" allow-clear popup-class-name="dark-select-popup" @change="onFilterChange">
+        <a-select-option value="">全部类型</a-select-option>
+        <a-select-option v-for="t in typeOptions" :key="t.value" :value="t.value">{{ t.label }}</a-select-option>
+      </a-select>
+    </template>
 
     <!-- 加载 -->
     <div v-if="loading" class="loading-wrapper">
@@ -122,7 +96,7 @@
         @showSizeChange="onPageSizeChange"
       />
     </div>
-  </div>
+  </DarkPageHeader>
 </template>
 
 <script setup lang="ts">
@@ -136,6 +110,7 @@ import {
 } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
 import axiosInstance from '@/api/custom-instance'
+import DarkPageHeader from '@/components/common/DarkPageHeader.vue'
 
 const router = useRouter()
 
@@ -206,6 +181,11 @@ const coverColors = [
   'var(--v2-cover-rose)',
 ]
 
+function setStatus(values: string[]) {
+  filterStatus.value = values
+  onFilterChange()
+}
+
 function onFilterChange() {
   page.value = 1
   fetchList()
@@ -271,28 +251,16 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.page-title {
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--v2-text-primary);
-  margin-bottom: 20px;
+/* -- actions 区深色下拉适配 -- */
+:deep(.ant-select:not(.ant-select-customize-input) .ant-select-selector) {
+  background: rgba(255,255,255,0.08) !important;
+  border-color: rgba(255,255,255,0.18) !important;
+  color: rgba(255,255,255,0.88) !important;
+  border-radius: 20px !important;
 }
-
-/* -- 工具栏 -- */
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.toolbar-filters {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-}
+:deep(.ant-select-arrow) { color: rgba(255,255,255,0.58) !important; }
+:deep(.ant-select-selection-placeholder) { color: rgba(255,255,255,0.50) !important; }
+:deep(.ant-select-clear) { background: transparent !important; color: rgba(255,255,255,0.58) !important; }
 
 /* -- 加载 -- */
 .loading-wrapper {

@@ -1,49 +1,24 @@
 <template>
-  <div class="page-content exam-page">
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">在线考试</h1>
-        <p class="page-subtitle">检验学习成果，提升执法能力。</p>
-      </div>
-    </div>
-
-    <a-card :bordered="false" class="filter-card">
-      <div class="filter-shell">
-        <div class="filter-top">
-          <div class="filter-search">
-            <a-input-search
-              v-model:value="filters.search"
-              :placeholder="searchPlaceholder"
-              @search="fetchExams"
-            />
-          </div>
-          <div class="filter-top-actions">
-            <a-select v-model:value="filters.sort" class="sort-select" @change="fetchExams">
-              <a-select-option value="latest">按最新</a-select-option>
-              <a-select-option value="upcoming">即将开始</a-select-option>
-              <a-select-option value="active">进行中</a-select-option>
-            </a-select>
-          </div>
-        </div>
-
-        <div class="category-tabs">
-          <a-tag
-            v-for="tab in statusTabs"
-            :key="tab.key"
-            class="cat-tag"
-            :class="{ active: filters.status === tab.key }"
-            @click="selectStatus(tab.key)"
-          >
-            {{ tab.label }}
-          </a-tag>
-        </div>
-      </div>
-    </a-card>
-
-    <a-tabs v-model:activeKey="activeTab" class="exam-tabs" @change="fetchExams">
-      <a-tab-pane key="admission" tab="准入考试" />
-      <a-tab-pane key="training" tab="培训班考试" />
-    </a-tabs>
+  <DarkPageHeader
+    title="在线考试"
+    subtitle="检验学习成果，提升执法能力。"
+    :search-placeholder="searchPlaceholder"
+    v-model="filters.search"
+    @search="fetchExams"
+  >
+    <template #filters>
+      <button type="button" class="dark-chip" :class="{ active: activeTab === 'admission' }" @click="switchTab('admission')">准入考试</button>
+      <button type="button" class="dark-chip" :class="{ active: activeTab === 'training' }" @click="switchTab('training')">培训班考试</button>
+      <span class="dark-chip-sep" />
+      <button v-for="tab in statusTabs" :key="tab.key" type="button" class="dark-chip" :class="{ active: filters.status === tab.key }" @click="selectStatus(tab.key)">{{ tab.label }}</button>
+    </template>
+    <template #actions>
+      <a-select v-model:value="filters.sort" class="dark-sort-select" @change="fetchExams">
+        <a-select-option value="latest">按最新</a-select-option>
+        <a-select-option value="upcoming">即将开始</a-select-option>
+        <a-select-option value="active">进行中</a-select-option>
+      </a-select>
+    </template>
 
     <div class="exam-stats">
       <span>共 <strong>{{ exams.length }}</strong> 场考试</span>
@@ -150,7 +125,7 @@
         </div>
       </div>
     </div>
-  </div>
+  </DarkPageHeader>
 </template>
 
 <script setup lang="ts">
@@ -163,6 +138,7 @@ import {
   SafetyCertificateOutlined,
   SafetyOutlined,
 } from '@ant-design/icons-vue'
+import DarkPageHeader from '@/components/common/DarkPageHeader.vue'
 import dayjs from 'dayjs'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -250,6 +226,11 @@ async function fetchExams() {
 
 function selectStatus(status: string) {
   filters.status = status
+  void fetchExams()
+}
+
+function switchTab(tab: 'admission' | 'training') {
+  activeTab.value = tab
   void fetchExams()
 }
 
@@ -345,98 +326,21 @@ function getExamCoverBackground(exam: ExamResponse, index: number) {
 </script>
 
 <style scoped>
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 24px;
+/* ── dark chip separator ── */
+.dark-chip-sep {
+  display: inline-block; width: 1px; height: 20px;
+  background: rgba(255,255,255,0.16); margin: 0 4px;
+  flex-shrink: 0; align-self: center;
 }
 
-.page-title {
-  margin: 0 0 6px;
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--v2-text-primary);
+/* ── dark sort select ── */
+.dark-sort-select { width: 130px; }
+:deep(.dark-sort-select .ant-select-selector) {
+  background: rgba(255,255,255,0.08) !important; border-color: rgba(255,255,255,0.18) !important;
+  color: rgba(255,255,255,0.88) !important; border-radius: 20px !important;
 }
-
-.page-subtitle {
-  margin: 0;
-  color: var(--v2-text-secondary);
-}
-
-.filter-card {
-  margin-bottom: 20px;
-  border-radius: 24px;
-  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.06);
-}
-
-.filter-shell {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.filter-top {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.filter-search {
-  flex: 1;
-}
-
-.filter-top-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.sort-select {
-  width: 150px;
-}
-
-.category-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-:deep(.cat-tag.ant-tag) {
-  cursor: pointer;
-  margin: 0;
-  padding: 7px 14px;
-  border-radius: 999px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--v2-text-secondary);
-  border: 1px solid rgba(75, 110, 245, 0.12);
-  background: rgba(255, 255, 255, 0.92);
-  transition:
-    color 0.2s ease,
-    border-color 0.2s ease,
-    background 0.2s ease,
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-:deep(.cat-tag.ant-tag:hover),
-:deep(.cat-tag.active.ant-tag) {
-  color: var(--v2-primary);
-  border-color: rgba(75, 110, 245, 0.28);
-  background: var(--v2-primary-light);
-  box-shadow: 0 10px 24px rgba(75, 110, 245, 0.12);
-  transform: translateY(-1px);
-}
-
-.exam-tabs {
-  margin-bottom: 20px;
-}
-
-.exam-tabs :deep(.ant-tabs-nav::before) {
-  border-bottom: none;
-}
+:deep(.dark-sort-select .ant-select-arrow) { color: rgba(255,255,255,0.5) !important; }
+:deep(.dark-sort-select .ant-select-selection-item) { color: rgba(255,255,255,0.88) !important; }
 
 .exam-stats {
   display: flex;
@@ -666,20 +570,12 @@ function getExamCoverBackground(exam: ExamResponse, index: number) {
 }
 
 @media (max-width: 768px) {
-  .filter-top {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .sort-select {
-    width: 100%;
-  }
-
-  .filter-grid,
   .exam-grid,
   .meta-grid {
     grid-template-columns: 1fr;
   }
+
+  .dark-chip-sep { display: none; }
 
   .card-cover {
     height: 164px;

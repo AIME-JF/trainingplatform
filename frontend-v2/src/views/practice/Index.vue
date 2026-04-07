@@ -1,50 +1,20 @@
 <template>
-  <div class="page-content practice-page">
-    <!-- ========== 教官模式 ========== -->
-    <template v-if="isInstructor">
-      <div class="page-header">
-        <div>
-          <h1 class="page-title">题库管理</h1>
-          <p class="page-subtitle">管理个人题库，上传材料生成题目。</p>
-        </div>
-        <a-space>
-          <a-button @click="openAiTaskListModal">
-            任务列表
-          </a-button>
-          <a-button type="primary" @click="openCreateAiModal">
-            <template #icon><PlusOutlined /></template>
-            新建题库
-          </a-button>
-        </a-space>
-      </div>
-
-      <!-- 筛选卡片 -->
-      <a-card :bordered="false" class="filter-card">
-        <div class="filter-shell">
-          <div class="filter-top">
-            <div class="filter-search">
-              <a-input-search
-                v-model:value="searchKeyword"
-                placeholder="搜索题库名称..."
-                @search="() => {}"
-              />
-            </div>
-            <div class="filter-top-actions">
-              <a-select
-                v-model:value="instructorCourseId"
-                placeholder="按关联课程筛选"
-                allow-clear
-                style="width: 200px"
-                @change="handleCourseSelectChange"
-              >
-                <a-select-option v-for="item in courses" :key="item.id" :value="item.id">
-                  {{ item.title }}
-                </a-select-option>
-              </a-select>
-            </div>
-          </div>
-        </div>
-      </a-card>
+  <!-- ========== 教官模式 ========== -->
+  <DarkPageHeader
+    v-if="isInstructor"
+    title="题库管理"
+    subtitle="管理个人题库，上传材料生成题目。"
+    search-placeholder="搜索题库名称..."
+    v-model="searchKeyword"
+    @search="() => {}"
+  >
+    <template #actions>
+      <a-select v-model:value="instructorCourseId" placeholder="按课程筛选" allow-clear class="dark-course-select" @change="handleCourseSelectChange">
+        <a-select-option v-for="item in courses" :key="item.id" :value="item.id">{{ item.title }}</a-select-option>
+      </a-select>
+      <a-button ghost @click="openAiTaskListModal">任务列表</a-button>
+      <a-button type="primary" ghost @click="openCreateAiModal"><PlusOutlined /> 新建题库</a-button>
+    </template>
 
       <!-- 统计 -->
       <div class="practice-stats">
@@ -119,82 +89,51 @@
           </div>
         </div>
       </div>
-    </template>
+  </DarkPageHeader>
 
     <!-- ========== 学员模式 ========== -->
-    <template v-else>
-      <div class="page-header">
-        <div>
-          <h1 class="page-title">刷题练习</h1>
-          <p class="page-subtitle">选择知识点或题库，开启专项练习。</p>
-        </div>
+  <DarkPageHeader
+    v-else
+    title="刷题练习"
+    subtitle="选择知识点或题库，开启专项练习。"
+    search-placeholder="搜索知识点名称..."
+    v-model="searchKeyword"
+    @search="handleSearch"
+  >
+    <template #filters>
+      <button type="button" class="dark-chip" :class="{ active: activeSourceType === 'knowledge-point' }" @click="selectSourceType('knowledge-point')">按知识点</button>
+      <button type="button" class="dark-chip" :class="{ active: activeSourceType === 'question-folder' }" @click="selectSourceType('question-folder')">按题库/科目</button>
+    </template>
+    <template #actions>
+      <a-select v-model:value="questionLimitMode" class="dark-sort-select">
+        <a-select-option value="10">最多 10 题</a-select-option>
+        <a-select-option value="20">最多 20 题</a-select-option>
+        <a-select-option value="50">最多 50 题</a-select-option>
+        <a-select-option value="all">题量不限</a-select-option>
+      </a-select>
+    </template>
+    <template #extra>
+      <div class="dark-adv-row">
+        <a-select v-model:value="selectedQuestionType" mode="multiple" placeholder="全部题型" allow-clear class="dark-adv-select">
+          <a-select-option value="single">单选题</a-select-option>
+          <a-select-option value="multi">多选题</a-select-option>
+          <a-select-option value="judge">判断题</a-select-option>
+        </a-select>
+        <a-select v-model:value="selectedDifficulty" mode="multiple" placeholder="全部难度" allow-clear class="dark-adv-select">
+          <a-select-option value="1">难度 1</a-select-option>
+          <a-select-option value="2">难度 2</a-select-option>
+          <a-select-option value="3">难度 3</a-select-option>
+          <a-select-option value="4">难度 4</a-select-option>
+          <a-select-option value="5">难度 5</a-select-option>
+        </a-select>
+        <a-select v-model:value="selectedPoliceTypeId" placeholder="全部警种" allow-clear class="dark-adv-select">
+          <a-select-option v-for="item in policeTypes" :key="item.id" :value="String(item.id)">{{ item.name }}</a-select-option>
+        </a-select>
+        <a-select v-model:value="selectedCourseId" placeholder="全部课程" allow-clear class="dark-adv-select">
+          <a-select-option v-for="item in courses" :key="item.id" :value="String(item.id)">{{ item.title }}</a-select-option>
+        </a-select>
       </div>
-
-      <!-- 筛选卡片 -->
-      <a-card :bordered="false" class="filter-card">
-        <div class="filter-shell">
-          <div class="filter-top">
-            <div class="filter-search">
-              <a-input-search
-                v-model:value="searchKeyword"
-                placeholder="搜索知识点名称..."
-                @search="handleSearch"
-              />
-            </div>
-            <div class="filter-top-actions">
-              <a-select v-model:value="questionLimitMode" class="sort-select">
-                <a-select-option value="10">最多 10 题</a-select-option>
-                <a-select-option value="20">最多 20 题</a-select-option>
-                <a-select-option value="50">最多 50 题</a-select-option>
-                <a-select-option value="all">题量不限</a-select-option>
-              </a-select>
-            </div>
-          </div>
-
-          <div class="filter-row">
-            <a-select v-model:value="selectedQuestionType" mode="multiple" placeholder="全部题型" allow-clear class="filter-select">
-              <a-select-option value="single">单选题</a-select-option>
-              <a-select-option value="multi">多选题</a-select-option>
-              <a-select-option value="judge">判断题</a-select-option>
-            </a-select>
-            <a-select v-model:value="selectedDifficulty" mode="multiple" placeholder="全部难度" allow-clear class="filter-select">
-              <a-select-option value="1">难度 1</a-select-option>
-              <a-select-option value="2">难度 2</a-select-option>
-              <a-select-option value="3">难度 3</a-select-option>
-              <a-select-option value="4">难度 4</a-select-option>
-              <a-select-option value="5">难度 5</a-select-option>
-            </a-select>
-            <a-select v-model:value="selectedPoliceTypeId" placeholder="全部警种" allow-clear class="filter-select">
-              <a-select-option v-for="item in policeTypes" :key="item.id" :value="String(item.id)">
-                {{ item.name }}
-              </a-select-option>
-            </a-select>
-            <a-select v-model:value="selectedCourseId" placeholder="全部课程" allow-clear class="filter-select">
-              <a-select-option v-for="item in courses" :key="item.id" :value="String(item.id)">
-                {{ item.title }}
-              </a-select-option>
-            </a-select>
-          </div>
-        </div>
-      </a-card>
-
-      <!-- 模式切换 -->
-      <div class="category-tabs">
-        <a-tag
-          class="cat-tag"
-          :class="{ active: activeSourceType === 'knowledge-point' }"
-          @click="selectSourceType('knowledge-point')"
-        >
-          按知识点
-        </a-tag>
-        <a-tag
-          class="cat-tag"
-          :class="{ active: activeSourceType === 'question-folder' }"
-          @click="selectSourceType('question-folder')"
-        >
-          按题库/科目
-        </a-tag>
-      </div>
+    </template>
 
       <!-- 统计 -->
       <div class="practice-stats">
@@ -264,7 +203,7 @@
         </div>
       </div>
     </div>
-    </template>
+  </DarkPageHeader>
 
     <!-- 练习设置弹窗 -->
     <a-modal
@@ -842,7 +781,6 @@
         </div>
       </div>
     </a-modal>
-  </div>
 </template>
 
 <script setup lang="ts">
@@ -873,6 +811,7 @@ import type { PoliceTypeSimpleResponse } from '@/api/generated/model'
 import type { CourseListResponse } from '@/api/generated/model'
 import type { QuestionResponse } from '@/api/generated/model'
 import { useAuthStore } from '@/stores/auth'
+import DarkPageHeader from '@/components/common/DarkPageHeader.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -1771,101 +1710,30 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 24px;
-}
+/* ── dark select overrides (actions + extra) ── */
+.dark-sort-select { width: 140px; }
+.dark-course-select { width: 180px; }
+.dark-adv-row { display: flex; flex-wrap: wrap; gap: 10px; }
+.dark-adv-select { width: 150px; }
 
-.page-title {
-  margin: 0 0 6px;
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--v2-text-primary);
+:deep(.dark-sort-select .ant-select-selector),
+:deep(.dark-course-select .ant-select-selector),
+.dark-adv-row :deep(.ant-select:not(.ant-select-customize-input) .ant-select-selector) {
+  background: rgba(255,255,255,0.08) !important;
+  border-color: rgba(255,255,255,0.16) !important;
+  color: rgba(255,255,255,0.88) !important;
+  border-radius: 20px !important;
 }
-
-.page-subtitle {
-  margin: 0;
-  color: var(--v2-text-secondary);
-}
-
-.filter-card {
-  margin-bottom: 20px;
-  border-radius: 24px;
-  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.06);
-}
-
-.filter-shell {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.filter-top {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.filter-search {
-  flex: 1;
-}
-
-.filter-top-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.sort-select {
-  width: 150px;
-}
-
-.filter-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.filter-select {
-  min-width: 140px;
-}
-
-.category-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-bottom: 20px;
-}
-
-:deep(.cat-tag.ant-tag) {
-  cursor: pointer;
-  margin: 0;
-  padding: 7px 14px;
-  border-radius: 999px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--v2-text-secondary);
-  border: 1px solid rgba(75, 110, 245, 0.12);
-  background: rgba(255, 255, 255, 0.92);
-  transition:
-    color 0.2s ease,
-    border-color 0.2s ease,
-    background 0.2s ease,
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
-}
-
-:deep(.cat-tag.ant-tag:hover),
-:deep(.cat-tag.active.ant-tag) {
-  color: var(--v2-primary);
-  border-color: rgba(75, 110, 245, 0.28);
-  background: var(--v2-primary-light);
-  box-shadow: 0 10px 24px rgba(75, 110, 245, 0.12);
-  transform: translateY(-1px);
-}
+:deep(.dark-sort-select .ant-select-arrow),
+:deep(.dark-course-select .ant-select-arrow),
+.dark-adv-row :deep(.ant-select-arrow) { color: rgba(255,255,255,0.5) !important; }
+:deep(.dark-sort-select .ant-select-selection-item),
+:deep(.dark-course-select .ant-select-selection-item) { color: rgba(255,255,255,0.88) !important; }
+:deep(.dark-sort-select .ant-select-selection-placeholder),
+:deep(.dark-course-select .ant-select-selection-placeholder),
+.dark-adv-row :deep(.ant-select-selection-placeholder) { color: rgba(255,255,255,0.44) !important; }
+.dark-adv-row :deep(.ant-select-clear),
+:deep(.dark-course-select .ant-select-clear) { background: transparent !important; color: rgba(255,255,255,0.5) !important; }
 
 .practice-stats {
   display: flex;
@@ -2048,15 +1916,8 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
-  .filter-top {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .sort-select,
-  .filter-select {
-    width: 100%;
-  }
+  .dark-adv-row { flex-direction: column; }
+  .dark-adv-select { width: 100%; }
 
   .practice-grid,
   .meta-grid {

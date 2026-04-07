@@ -1,11 +1,45 @@
 <template>
-  <div class="page-content resource-page">
-    <div class="page-header">
-      <div>
-        <h1 class="page-title">课程</h1>
-      </div>
-      <a-button v-if="canCreateCourse" type="primary" @click="openCreate">创建课程</a-button>
-    </div>
+  <DarkPageHeader
+    title="课程"
+    search-placeholder="搜索课程名称、简介、章节或标签..."
+    v-model="filters.search"
+    @search="fetchCourses"
+  >
+    <template #filters>
+      <button v-for="ft in fileTypeChips" :key="ft.value ?? 'all'" type="button" class="dark-chip" :class="{ active: filters.file_type === ft.value }" @click="setFileType(ft.value)">{{ ft.label }}</button>
+    </template>
+    <template #actions>
+      <button type="button" class="dark-advanced-toggle" :class="{ expanded: advancedFiltersVisible }" @click="toggleAdvancedFilters">
+        <FilterOutlined /><span class="toggle-label">筛选</span>
+        <component :is="advancedFiltersVisible ? UpOutlined : DownOutlined" class="toggle-arrow" />
+      </button>
+      <a-button v-if="canCreateCourse" type="primary" ghost @click="openCreate">创建课程</a-button>
+    </template>
+    <template #extra>
+      <transition name="advanced-filters">
+        <div v-show="advancedFiltersVisible" class="dark-adv-row">
+          <a-select v-model:value="filters.sort" class="dark-adv-select" @change="fetchCourses">
+            <a-select-option value="latest">按最新上线</a-select-option>
+            <a-select-option value="learning_priority">按学习进度</a-select-option>
+            <a-select-option value="required_first">按必修优先</a-select-option>
+            <a-select-option value="duration_asc">按课程时长</a-select-option>
+            <a-select-option value="rating">按评分</a-select-option>
+            <a-select-option value="students">按学员数</a-select-option>
+          </a-select>
+          <a-select v-model:value="filters.instructor_id" :options="instructorOptions" allow-clear placeholder="按教官" class="dark-adv-select" @change="fetchCourses" />
+          <a-select v-model:value="filters.is_required" allow-clear placeholder="必修/选修" class="dark-adv-select" @change="fetchCourses">
+            <a-select-option :value="true">仅看必修</a-select-option>
+            <a-select-option :value="false">仅看选修</a-select-option>
+          </a-select>
+          <a-select v-model:value="filters.learning_status" allow-clear placeholder="学习状态" class="dark-adv-select" @change="fetchCourses">
+            <a-select-option value="not_started">未开始</a-select-option>
+            <a-select-option value="in_progress">进行中</a-select-option>
+            <a-select-option value="completed">已完成</a-select-option>
+          </a-select>
+          <a-range-picker v-model:value="dateRange" class="dark-adv-date" @change="handleDateRangeChange" />
+        </div>
+      </transition>
+    </template>
 
     <CourseEditorModal
       v-model:open="editorVisible"
@@ -13,77 +47,6 @@
       :can-manage="editingCourseCanManage"
       @success="fetchCourses"
     />
-
-    <a-card :bordered="false" class="filter-card">
-      <div class="filter-shell">
-        <div class="filter-search-panel">
-          <ResourceSearchInput
-            v-model:value="filters.search"
-            placeholder="搜索课程名称、简介、章节或标签..."
-            @search="fetchCourses"
-          />
-
-          <button
-            type="button"
-            class="advanced-toggle"
-            :class="{ expanded: advancedFiltersVisible }"
-            :aria-expanded="advancedFiltersVisible"
-            @click="toggleAdvancedFilters"
-          >
-            <span class="advanced-toggle-copy">
-              <FilterOutlined />
-              <span>高级检索</span>
-            </span>
-            <component :is="advancedFiltersVisible ? UpOutlined : DownOutlined" class="advanced-toggle-arrow" />
-          </button>
-        </div>
-
-        <transition name="advanced-filters">
-          <div v-show="advancedFiltersVisible" class="advanced-filters">
-            <div class="advanced-top-actions">
-              <a-select v-model:value="filters.sort" class="sort-select" @change="fetchCourses">
-                <a-select-option value="latest">按最新上线</a-select-option>
-                <a-select-option value="learning_priority">按学习进度</a-select-option>
-                <a-select-option value="required_first">按必修优先</a-select-option>
-                <a-select-option value="duration_asc">按课程时长</a-select-option>
-                <a-select-option value="rating">按评分</a-select-option>
-                <a-select-option value="students">按学员数</a-select-option>
-              </a-select>
-            </div>
-
-            <div class="filter-grid">
-              <a-select
-                v-model:value="filters.instructor_id"
-                :options="instructorOptions"
-                allow-clear
-                placeholder="按教官筛选"
-                @change="fetchCourses"
-              />
-              <a-select v-model:value="filters.is_required" allow-clear placeholder="必修/选修" @change="fetchCourses">
-                <a-select-option :value="true">仅看必修</a-select-option>
-                <a-select-option :value="false">仅看选修</a-select-option>
-              </a-select>
-              <a-select v-model:value="filters.learning_status" allow-clear placeholder="学习状态" @change="fetchCourses">
-                <a-select-option value="not_started">未开始</a-select-option>
-                <a-select-option value="in_progress">进行中</a-select-option>
-                <a-select-option value="completed">已完成</a-select-option>
-              </a-select>
-              <a-select v-model:value="filters.file_type" allow-clear placeholder="内容类型" @change="fetchCourses">
-                <a-select-option value="video">视频型</a-select-option>
-                <a-select-option value="document">文档型</a-select-option>
-                <a-select-option value="image">图片型</a-select-option>
-                <a-select-option value="mixed">混合型</a-select-option>
-              </a-select>
-              <a-range-picker
-                v-model:value="dateRange"
-                class="date-range"
-                @change="handleDateRangeChange"
-              />
-            </div>
-          </div>
-        </transition>
-      </div>
-    </a-card>
 
     <div class="course-stats">
       <span>共 <strong>{{ courses.length }}</strong> 门课程</span>
@@ -180,7 +143,7 @@
         </div>
       </div>
     </div>
-  </div>
+  </DarkPageHeader>
 </template>
 
 <script setup lang="ts">
@@ -206,7 +169,7 @@ import type { CourseListResponse } from '@/api/learning-resource'
 import { deleteCourse, listCourses, listUsers } from '@/api/learning-resource'
 import { useAuthStore } from '@/stores/auth'
 import CourseEditorModal from '@/components/resource/CourseEditorModal.vue'
-import ResourceSearchInput from '@/components/resource/ResourceSearchInput.vue'
+import DarkPageHeader from '@/components/common/DarkPageHeader.vue'
 import {
   formatCourseDuration,
   formatDate,
@@ -304,6 +267,19 @@ const courseCoverVisualMap: Record<string, CourseCoverVisual> = {
     accent: '#c19475',
   glow: 'rgba(193, 148, 117, 0.12)',
   },
+}
+
+const fileTypeChips = [
+  { value: undefined as string | undefined, label: '全部' },
+  { value: 'video', label: '视频' },
+  { value: 'document', label: '文档' },
+  { value: 'image', label: '图片' },
+  { value: 'mixed', label: '混合' },
+]
+
+function setFileType(value: string | undefined) {
+  filters.file_type = value
+  void fetchCourses()
 }
 
 const completedCount = computed(() => courses.value.filter((course) => course.learning_status === 'completed').length)
@@ -411,132 +387,45 @@ async function handleDelete(courseId: number) {
 </script>
 
 <style scoped>
-.page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 24px;
+/* ── dark advanced toggle ── */
+.dark-advanced-toggle {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 36px; padding: 0 14px;
+  border: 1px solid rgba(255,255,255,0.16); border-radius: 999px;
+  background: transparent; color: rgba(255,255,255,0.72);
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
 }
+.dark-advanced-toggle:hover { color: #fff; border-color: rgba(255,255,255,0.24); }
+.dark-advanced-toggle.expanded { background: rgba(255,255,255,0.08); color: #fff; }
+.toggle-label { display: inline; }
+.toggle-arrow { font-size: 11px; }
 
-.page-title {
-  margin: 0 0 6px;
-  font-size: 28px;
-  font-weight: 700;
-  color: var(--v2-text-primary);
-}
+/* ── dark advanced panel ── */
+.dark-adv-row { display: flex; flex-wrap: wrap; gap: 10px; padding: 2px 0 0; }
+.dark-adv-select { width: 160px; }
+.dark-adv-date { width: auto; }
 
-.page-subtitle {
-  margin: 0;
-  color: var(--v2-text-secondary);
+.dark-adv-row :deep(.ant-select:not(.ant-select-customize-input) .ant-select-selector) {
+  background: rgba(255,255,255,0.08) !important; border-color: rgba(255,255,255,0.16) !important;
+  color: rgba(255,255,255,0.88) !important; border-radius: 20px !important;
 }
-
-.filter-card {
-  margin-bottom: 20px;
-  border-radius: 24px;
-  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.06);
+.dark-adv-row :deep(.ant-select-arrow),
+.dark-adv-row :deep(.ant-select-clear) { color: rgba(255,255,255,0.5) !important; background: transparent !important; }
+.dark-adv-row :deep(.ant-select-selection-placeholder) { color: rgba(255,255,255,0.44) !important; }
+.dark-adv-row :deep(.ant-picker) {
+  background: rgba(255,255,255,0.08) !important; border-color: rgba(255,255,255,0.16) !important;
+  border-radius: 20px !important; color: rgba(255,255,255,0.88) !important;
 }
-
-.filter-shell {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.filter-search-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.advanced-toggle {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  align-self: flex-end;
-  min-height: 40px;
-  padding: 0 16px;
-  border: 1px solid rgba(75, 110, 245, 0.16);
-  border-radius: 999px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(243, 246, 255, 0.96));
-  color: var(--v2-text-secondary);
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 10px 24px rgba(75, 110, 245, 0.08);
-  transition:
-    color 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    transform 0.2s ease,
-    background 0.2s ease;
-}
-
-.advanced-toggle:hover {
-  color: var(--v2-primary);
-  border-color: rgba(75, 110, 245, 0.28);
-  box-shadow: 0 14px 28px rgba(75, 110, 245, 0.12);
-  transform: translateY(-1px);
-}
-
-.advanced-toggle.expanded {
-  color: var(--v2-primary);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(236, 242, 255, 0.96));
-  border-color: rgba(75, 110, 245, 0.24);
-}
-
-.advanced-toggle-copy {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.advanced-toggle-copy :deep(.anticon) {
-  font-size: 15px;
-}
-
-.advanced-toggle-arrow {
-  font-size: 12px;
-}
-
-.advanced-filters {
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.advanced-top-actions {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.sort-select {
-  width: 180px;
-  max-width: 100%;
-}
-
-.filter-grid {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.date-range {
-  width: 100%;
-}
+.dark-adv-row :deep(.ant-picker input) { color: rgba(255,255,255,0.88) !important; }
+.dark-adv-row :deep(.ant-picker-suffix),
+.dark-adv-row :deep(.ant-picker-separator),
+.dark-adv-row :deep(.ant-picker-clear) { color: rgba(255,255,255,0.44) !important; background: transparent !important; }
 
 .advanced-filters-enter-active,
-.advanced-filters-leave-active {
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease;
-}
-
+.advanced-filters-leave-active { transition: opacity 0.2s ease, transform 0.2s ease; }
 .advanced-filters-enter-from,
-.advanced-filters-leave-to {
-  opacity: 0;
-  transform: translateY(-6px);
-}
+.advanced-filters-leave-to { opacity: 0; transform: translateY(-6px); }
 
 .course-stats {
   display: flex;
@@ -788,30 +677,16 @@ async function handleDelete(courseId: number) {
   border-radius: 999px;
 }
 
-@media (max-width: 1200px) {
-  .filter-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 @media (max-width: 768px) {
-  .page-header,
   .card-head {
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .advanced-top-actions,
-  .sort-select {
-    width: 100%;
-  }
+  .dark-adv-row { flex-direction: column; }
+  .dark-adv-select, .dark-adv-date { width: 100%; }
+  .toggle-label { display: none; }
 
-  .advanced-toggle {
-    min-height: 38px;
-    padding: 0 14px;
-  }
-
-  .filter-grid,
   .meta-grid,
   .course-grid {
     grid-template-columns: 1fr;
