@@ -15,6 +15,7 @@ celery_app = Celery(
         "app.tasks.ai_paper_assembly",
         "app.tasks.ai_paper_generation",
         "app.tasks.teaching_resource_generation",
+        "app.tasks.schedule_file_parse",
     ]
 )
 
