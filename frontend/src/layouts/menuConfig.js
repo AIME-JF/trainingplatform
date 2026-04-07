@@ -27,7 +27,6 @@ import {
   RESOURCE_POLICY_PAGE_PERMISSIONS,
   RESOURCE_REVIEW_PAGE_PERMISSIONS,
   ROLE_MANAGE_PAGE_PERMISSIONS,
-  TALENT_PAGE_PERMISSIONS,
   TEACHING_RESOURCE_GENERATION_PAGE_PERMISSIONS,
   TRAINING_BASE_PAGE_PERMISSIONS,
   TRAINING_PAGE_PERMISSIONS,
@@ -58,19 +57,90 @@ export const appMenuConfig = [
     icon: ReadOutlined,
     children: [
       {
-        key: '/courses',
-        label: COURSE_RESOURCES_TITLE,
-        anyPermissions: COURSE_PAGE_PERMISSIONS,
-      },
-      {
         key: '/library',
-        label: '资源库',
+        label: '知识库',
         roles: ['admin', 'instructor'],
       },
       {
         key: '/resource/teaching-generate',
-        label: '教学资源生成',
+        label: '教学助手',
         anyPermissions: TEACHING_RESOURCE_GENERATION_PAGE_PERMISSIONS,
+      },
+      {
+        key: '/courses',
+        label: COURSE_RESOURCES_TITLE,
+        anyPermissions: COURSE_PAGE_PERMISSIONS,
+      },
+    ],
+  },
+  {
+    key: 'train',
+    label: '培训中心',
+    icon: TeamOutlined,
+    children: [
+      {
+        key: '/training',
+        label: '培训班管理',
+        anyPermissions: TRAINING_PAGE_PERMISSIONS,
+      },
+      {
+        key: '/training/base',
+        label: '培训基地管理',
+        anyPermissions: TRAINING_BASE_PAGE_PERMISSIONS,
+      },
+      {
+        key: '/training/schedule',
+        label: '培训计划管理',
+        anyPermissions: TRAINING_SCHEDULE_PAGE_PERMISSIONS,
+      },
+    ],
+  },
+  {
+    key: 'exam',
+    label: '考试中心',
+    icon: EditOutlined,
+    children: [
+      {
+        key: '/question/repository',
+        label: '题库管理',
+        anyPermissions: [...QUESTION_BANK_PAGE_PERMISSIONS, ...AI_QUESTION_PAGE_PERMISSIONS, ...KNOWLEDGE_POINT_PAGE_PERMISSIONS],
+      },
+      {
+        key: '/paper/repository',
+        label: '试卷管理',
+        anyPermissions: [...PAPER_PAGE_PERMISSIONS, ...AI_PAPER_ASSEMBLE_PAGE_PERMISSIONS, ...AI_PAPER_GENERATE_PAGE_PERMISSIONS],
+      },
+      {
+        key: '/exam/manage',
+        label: '考试管理',
+        anyPermissions: EXAM_MANAGE_PAGE_PERMISSIONS,
+      },
+    ],
+  },
+  {
+    key: 'evaluate',
+    label: '数据中心',
+    icon: BarChartOutlined,
+    children: [
+      {
+        key: '/report',
+        label: '数据看板',
+        anyPermissions: REPORT_PAGE_PERMISSIONS,
+      },
+      {
+        key: '/trainee',
+        label: '学员统计',
+        anyPermissions: USER_ARCHIVE_PAGE_PERMISSIONS,
+      },
+      {
+        key: '/instructor',
+        label: '教官统计',
+        anyPermissions: USER_ARCHIVE_PAGE_PERMISSIONS,
+      },
+      {
+        key: '/certificate',
+        label: '结业证书',
+        anyPermissions: CERTIFICATE_PAGE_PERMISSIONS,
       },
     ],
   },
@@ -97,89 +167,8 @@ export const appMenuConfig = [
     ],
   },
   {
-    key: 'train',
-    label: '培训组织',
-    icon: TeamOutlined,
-    children: [
-      {
-        key: '/training',
-        label: '培训班列表',
-        anyPermissions: TRAINING_PAGE_PERMISSIONS,
-      },
-      {
-        key: '/training/base',
-        label: '培训基地',
-        anyPermissions: TRAINING_BASE_PAGE_PERMISSIONS,
-      },
-      {
-        key: '/training/schedule',
-        label: '周训练计划',
-        anyPermissions: TRAINING_SCHEDULE_PAGE_PERMISSIONS,
-      },
-    ],
-  },
-  {
-    key: 'exam',
-    label: '考试测评',
-    icon: EditOutlined,
-    children: [
-      {
-        key: '/question/repository',
-        label: '题库中心',
-        anyPermissions: [...QUESTION_BANK_PAGE_PERMISSIONS, ...AI_QUESTION_PAGE_PERMISSIONS, ...KNOWLEDGE_POINT_PAGE_PERMISSIONS],
-      },
-      {
-        key: '/paper/ai-assemble',
-        label: '智能出卷',
-        anyPermissions: [...AI_PAPER_ASSEMBLE_PAGE_PERMISSIONS, ...AI_PAPER_GENERATE_PAGE_PERMISSIONS],
-      },
-      {
-        key: '/paper/repository',
-        label: '试卷中心',
-        anyPermissions: [...PAPER_PAGE_PERMISSIONS, ...AI_PAPER_ASSEMBLE_PAGE_PERMISSIONS, ...AI_PAPER_GENERATE_PAGE_PERMISSIONS],
-      },
-      {
-        key: '/exam/manage',
-        label: '考试场次',
-        anyPermissions: EXAM_MANAGE_PAGE_PERMISSIONS,
-      },
-    ],
-  },
-  {
-    key: 'evaluate',
-    label: '评估分析',
-    icon: BarChartOutlined,
-    children: [
-      {
-        key: '/report',
-        label: '数据看板',
-        anyPermissions: REPORT_PAGE_PERMISSIONS,
-      },
-      {
-        key: '/trainee',
-        label: '学员库',
-        anyPermissions: USER_ARCHIVE_PAGE_PERMISSIONS,
-      },
-      {
-        key: '/instructor',
-        label: '教官库',
-        anyPermissions: USER_ARCHIVE_PAGE_PERMISSIONS,
-      },
-      {
-        key: '/talent',
-        label: '人才库',
-        anyPermissions: TALENT_PAGE_PERMISSIONS,
-      },
-      {
-        key: '/certificate',
-        label: '结业证书',
-        anyPermissions: CERTIFICATE_PAGE_PERMISSIONS,
-      },
-    ],
-  },
-  {
     key: 'review',
-    label: '审核管理',
+    label: '审核中心',
     icon: AuditOutlined,
     children: [
       {

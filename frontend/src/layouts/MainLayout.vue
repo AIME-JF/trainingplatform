@@ -395,7 +395,6 @@ const primaryTrainingRoute = computed(() => {
 const primaryExamRoute = computed(() => {
   const preferredRoutes = [
     '/question/repository',
-    '/paper/ai-assemble',
     '/paper/repository',
     '/exam/manage',
   ]
@@ -415,7 +414,7 @@ function getSelectedMenuKeyByPath(path) {
   if (path.startsWith('/question/repository')) return '/question/repository'
   if (path.startsWith('/question/knowledge-points')) return '/question/repository'
   if (path.startsWith('/question/ai')) return '/question/repository'
-  if (path.startsWith('/paper/ai-assemble')) return '/paper/ai-assemble'
+  if (path.startsWith('/paper/ai-assemble')) return '/paper/repository'
   if (path.startsWith('/paper/repository')) return '/paper/repository'
   if (path.startsWith('/training/base')) return '/training/base'
   if (path.startsWith('/training/schedule')) return '/training/schedule'
