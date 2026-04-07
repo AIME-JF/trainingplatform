@@ -8,18 +8,10 @@
         <div class="sub-nav-bar">
           <div class="sub-nav-left">
             <span
-              v-if="canManageQuestionBank"
               :class="['sub-nav-item', { active: activeNav === 'bank' }]"
               @click="switchNav('bank')"
             >
-              题库中心
-            </span>
-            <span
-              v-if="canManageKnowledgePoints"
-              :class="['sub-nav-item', { active: activeNav === 'knowledge' }]"
-              @click="switchNav('knowledge')"
-            >
-              知识点
+              题库管理
             </span>
           </div>
         </div>
@@ -41,7 +33,6 @@
               <div class="toolbar-right">
                 <!-- 筛选控件 -->
                 <a-input-search v-model:value="pickerSearch" placeholder="搜索题干" style="width:180px" allow-clear />
-                <a-select v-model:value="pickerKpName" allow-clear show-search placeholder="按知识点" :options="kpSelectOptions" style="width:160px" />
                 <a-select v-model:value="pickerType" style="width:120px">
                   <a-select-option value="all">全部题型</a-select-option>
                   <a-select-option value="single">单选题</a-select-option>
@@ -49,6 +40,18 @@
                   <a-select-option value="judge">判断题</a-select-option>
                 </a-select>
                 <div class="divider-v"></div>
+                <a-dropdown v-if="!pickMode">
+                  <button type="button" class="btn-primary upload-trigger-btn">
+                    手动上传
+                    <DownOutlined class="upload-trigger-icon" />
+                  </button>
+                  <template #overlay>
+                    <a-menu @click="handleUploadMenuClick">
+                      <a-menu-item key="manual">手动输入</a-menu-item>
+                      <a-menu-item key="document">上传文档</a-menu-item>
+                    </a-menu>
+                  </template>
+                </a-dropdown>
                 <button v-if="!pickMode" class="btn-primary" @click="enterPickMode">
                   从题库选题
                 </button>
@@ -61,9 +64,18 @@
             </template>
             <template v-else>
               <div class="toolbar-left">
-                <button class="btn-primary" @click="openCreateFolderModal">
-                添加题库
-                </button>
+                <a-dropdown>
+                  <button type="button" class="btn-primary upload-trigger-btn">
+                    手动上传
+                    <DownOutlined class="upload-trigger-icon" />
+                  </button>
+                  <template #overlay>
+                    <a-menu @click="handleUploadMenuClick">
+                      <a-menu-item key="manual">手动输入</a-menu-item>
+                      <a-menu-item key="document">上传文档</a-menu-item>
+                    </a-menu>
+                  </template>
+                </a-dropdown>
                 <button v-if="canUseAiQuestion" class="btn-primary" @click="goToAiQuestion">
                   上传材料生成题库
                 </button>
@@ -73,9 +85,21 @@
                 </div>
               </div>
               <div class="toolbar-right">
+                <a-select
+                  v-model="quickSelectFolderId"
+                  placeholder="选择题库操作..."
+                  style="width: 180px"
+                  allow-clear
+                >
+                  <a-select-option v-for="folder in folderListForSelect" :key="folder.id" :value="folder.id">
+                    {{ folder.name }}
+                  </a-select-option>
+                </a-select>
                 <select class="input-minimal filter-select" v-model="filterCategory">
                   <option value="">题库分类 (全部)</option>
-                  <option value="default">默认分类</option>
+                  <option v-for="category in categoryOptions" :key="category" :value="category">
+                    {{ category }}
+                  </option>
                 </select>
               </div>
             </template>
@@ -149,14 +173,13 @@
                   <th class="col-content">题干</th>
                   <th class="col-answer">答案</th>
                   <th class="col-difficulty text-center">难度</th>
-                  <th class="col-kp">知识点</th>
                   <th class="col-time">添加时间</th>
                   <th class="col-action text-center">操作</th>
                 </tr>
               </thead>
               <tbody v-if="questionLoading">
                 <tr>
-                  <td :colspan="pickMode ? 9 : 8" class="empty-row">加载中...</td>
+                  <td :colspan="pickMode ? 8 : 7" class="empty-row">加载中...</td>
                 </tr>
               </tbody>
               <tbody v-else>
@@ -180,9 +203,6 @@
                   <td class="col-difficulty text-center">
                     <span class="difficulty-badge">{{ q.difficulty || 1 }}</span>
                   </td>
-                  <td class="col-kp">
-                    <span class="kp-text">{{ formatKps(q.knowledgePointNames) }}</span>
-                  </td>
                   <td class="col-time">{{ q.createdAt || '-' }}</td>
                   <td class="col-action text-center">
                     <div class="action-btns">
@@ -193,7 +213,7 @@
                   </td>
                 </tr>
                 <tr v-if="questionList.length === 0">
-                  <td :colspan="pickMode ? 9 : 8" class="empty-row">该题库暂无题目</td>
+                  <td :colspan="pickMode ? 8 : 7" class="empty-row">该题库暂无题目</td>
                 </tr>
               </tbody>
             </table>
@@ -280,8 +300,6 @@
             </div>
           </div>
           </template>
-          <knowledge-point-panel v-else />
-
         </div>
       </div>
     </main>
@@ -299,11 +317,12 @@
           <a-input v-model:value="folderForm.name" placeholder="请输入题库名称" :maxlength="100" />
         </a-form-item>
         <a-form-item label="题库分类">
-          <a-select v-model:value="folderForm.category" placeholder="请选择分类">
-            <a-select-option value="默认分类">默认分类</a-select-option>
-            <a-select-option value="科目">科目</a-select-option>
-            <a-select-option value="legacy">legacy</a-select-option>
-          </a-select>
+          <a-auto-complete
+            v-model:value="folderForm.category"
+            placeholder="请选择或输入新分类"
+            :options="categorySelectOptions"
+            allow-clear
+          />
         </a-form-item>
         <a-form-item label="关联课程">
           <a-select v-model:value="folderForm.courseId" placeholder="不关联课程时仅自己可见" allow-clear show-search option-filter-prop="label">
@@ -348,8 +367,218 @@
       :title="editingQuestion ? '编辑题目' : '新增题目'"
       :question="editingQuestion"
       :police-type-options="policeTypeOptions"
+      :default-folder-id="selectedFolderId"
+      :show-bank-fields="!editingQuestion"
+      :bank-name="manualQuestionDraft.bankName"
+      :bank-category="manualQuestionDraft.bankCategory"
+      :bank-course-id="manualQuestionDraft.bankCourseId"
+      :bank-name-options="folderNameSelectOptions"
+      :bank-category-options="categorySelectOptions"
+      :course-options="courseOptions"
       @submit="handleSubmitQuestion"
     />
+
+    <!-- 选择或新建题库弹窗 -->
+    <a-modal
+      v-model:open="targetFolderModalVisible"
+      :title="targetFolderModalTitle"
+      :confirm-loading="targetFolderSubmitting"
+      ok-text="继续"
+      @ok="handleTargetFolderSubmit"
+      @cancel="resetTargetFolderModal"
+      width="560px"
+    >
+      <a-form :model="targetFolderForm" layout="vertical">
+        <a-form-item label="题库名称" required>
+          <a-auto-complete
+            v-model:value="targetFolderForm.name"
+            placeholder="选择已有题库，或直接输入新题库名称"
+            :options="folderNameSelectOptions"
+            allow-clear
+          />
+        </a-form-item>
+        <a-alert
+          v-if="matchedTargetFolder"
+          type="info"
+          show-icon
+          :message="`将使用已有题库：${matchedTargetFolder.name}`"
+          :description="matchedTargetFolder.courseName ? `关联课程：${matchedTargetFolder.courseName}` : '未关联课程，仅自己可见'"
+          style="margin-bottom: 16px"
+        />
+        <template v-else>
+          <a-alert
+            type="warning"
+            show-icon
+            message="未找到同名题库，将自动创建新题库后继续"
+            description="可在下方补充题库分类与关联课程；不关联课程时仅自己可见。"
+            style="margin-bottom: 16px"
+          />
+          <a-form-item label="题库分类">
+            <a-auto-complete
+              v-model:value="targetFolderForm.category"
+              placeholder="可输入新的题库分类"
+              :options="categorySelectOptions"
+              allow-clear
+            />
+          </a-form-item>
+          <a-form-item label="关联课程">
+            <a-select
+              v-model:value="targetFolderForm.courseId"
+              placeholder="不关联课程时仅自己可见"
+              allow-clear
+              show-search
+              option-filter-prop="label"
+            >
+              <a-select-option v-for="item in courseOptions" :key="item.id" :value="item.id" :label="item.title">
+                {{ item.title }}
+              </a-select-option>
+            </a-select>
+          </a-form-item>
+        </template>
+      </a-form>
+    </a-modal>
+
+    <!-- 批量上传题目弹窗 -->
+    <a-modal
+      v-model:open="batchUploadModalVisible"
+      title="批量上传题目"
+      width="600px"
+      :confirm-loading="batchUploadLoading"
+      @ok="handleBatchUpload"
+    >
+      <div class="batch-upload-content">
+        <div class="upload-tip">
+          <p>请上传结构化题目文件，目前支持以下格式：</p>
+          <ul>
+            <li>JSON 文件（.json）</li>
+          </ul>
+          <p class="mt-4">如需上传 Word、PDF、Excel、TXT 等文档并自动生成题目，请使用“手动上传”中的“上传文档”。</p>
+          <p class="mt-4">文件格式示例（JSON）：</p>
+          <pre class="code-block">{{ batchUploadExample }}</pre>
+        </div>
+        <div class="upload-area" @click="triggerFileInput">
+          <input
+            ref="fileInputRef"
+            type="file"
+            accept=".xlsx,.xls,.json"
+            style="display:none"
+            @change="handleFileSelect"
+          >
+          <div v-if="!selectedFile" class="upload-placeholder">
+            <svg class="w-12 h-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+            </svg>
+            <p class="mt-2">点击选择文件或拖拽文件到此处</p>
+          </div>
+          <div v-else class="selected-file">
+            <svg class="w-8 h-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+            <span class="ml-2">{{ selectedFile.name }}</span>
+            <span class="ml-2 text-gray-500">({{ formatFileSize(selectedFile.size) }})</span>
+          </div>
+        </div>
+        <div v-if="batchPreviewQuestions.length > 0" class="preview-section">
+          <h4>预览（共 {{ batchPreviewQuestions.length }} 道题目）</h4>
+          <div class="preview-list">
+            <div v-for="(q, idx) in batchPreviewQuestions.slice(0, 10)" :key="idx" class="preview-item">
+              <span class="preview-type">{{ typeLabels[q.type] || q.type }}</span>
+              <span class="preview-content">{{ q.content?.substring(0, 50) }}{{ q.content?.length > 50 ? '...' : '' }}</span>
+            </div>
+            <div v-if="batchPreviewQuestions.length > 10" class="preview-more">
+              还有 {{ batchPreviewQuestions.length - 10 }} 道题目...
+            </div>
+          </div>
+        </div>
+      </div>
+    </a-modal>
+
+    <!-- 上传文档弹窗 -->
+    <a-modal
+      v-model:open="documentImportModalVisible"
+      title="上传文档"
+      width="720px"
+      :confirm-loading="documentImportLoading"
+      ok-text="同步导入"
+      @ok="handleDocumentImportSubmit"
+      @cancel="resetDocumentImportModal"
+    >
+      <a-form :model="documentImportForm" layout="vertical">
+        <a-row :gutter="16">
+          <a-col :span="12">
+            <a-form-item label="题库名称" required>
+              <a-auto-complete
+                v-model:value="documentImportForm.bankName"
+                placeholder="选择已有题库，或直接输入新题库名称"
+                :options="folderNameSelectOptions"
+                allow-clear
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="6">
+            <a-form-item label="题库分类">
+              <a-auto-complete
+                v-model:value="documentImportForm.bankCategory"
+                placeholder="可输入新分类"
+                :options="categorySelectOptions"
+                allow-clear
+              />
+            </a-form-item>
+          </a-col>
+          <a-col :span="6">
+            <a-form-item label="关联课程">
+              <a-select
+                v-model:value="documentImportForm.bankCourseId"
+                allow-clear
+                show-search
+                option-filter-prop="label"
+                placeholder="不关联课程时仅自己可见"
+              >
+                <a-select-option v-for="item in courseOptions" :key="item.id" :value="item.id" :label="item.title">
+                  {{ item.title }}
+                </a-select-option>
+              </a-select>
+            </a-form-item>
+          </a-col>
+        </a-row>
+        <div class="upload-tip document-upload-tip">
+          <p>请按模板整理题目后上传，系统会先同步提取文档文本，再按模板规则直接导入题库。</p>
+          <p class="mt-4">
+            <a :href="documentTemplateUrl" download class="template-link">下载题目模板</a>
+            <span class="template-hint">支持 `.txt/.doc/.docx/.pdf/.xls/.xlsx/.csv`，推荐优先使用模板后另存为 Word 或 TXT 上传。</span>
+          </p>
+        </div>
+        <a-form-item label="上传文档">
+          <input
+            ref="documentFileInputRef"
+            type="file"
+            accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
+            style="display:none"
+            @change="handleDocumentFileSelect"
+          >
+          <div class="upload-area" @click="triggerDocumentFileInput">
+            <div v-if="!documentImportForm.sourceMaterialName" class="upload-placeholder">
+              <svg class="w-12 h-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+              </svg>
+              <p class="mt-2">{{ documentParsing ? '文档解析中...' : '点击选择文档并同步解析' }}</p>
+            </div>
+            <div v-else class="selected-file">
+              <svg class="w-8 h-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+              </svg>
+              <span class="ml-2">{{ documentImportForm.sourceMaterialName }}</span>
+            </div>
+          </div>
+        </a-form-item>
+        <a-form-item label="解析结果" extra="上传文档后会自动提取文本；如有识别偏差，可直接在这里微调后再提交。">
+          <a-textarea v-model:value="documentImportForm.sourceText" :rows="12" placeholder="请输入或上传文档后自动填充模板文本" />
+        </a-form-item>
+        <a-form-item label="模板格式说明">
+          <pre class="code-block">{{ documentTemplatePreview }}</pre>
+        </a-form-item>
+      </a-form>
+    </a-modal>
 
   </div>
 </template>
@@ -357,10 +586,13 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { DownOutlined } from '@ant-design/icons-vue'
 import { message, Modal } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
-import { AI_QUESTION_PAGE_PERMISSIONS, KNOWLEDGE_POINT_PAGE_PERMISSIONS, QUESTION_BANK_PAGE_PERMISSIONS } from '@/constants/pagePermissions'
+import { AI_QUESTION_PAGE_PERMISSIONS, QUESTION_BANK_PAGE_PERMISSIONS } from '@/constants/pagePermissions'
+import { parseAiDocumentFile } from '@/api/ai'
 import {
+  batchCreateQuestions,
   createQuestion,
   createQuestionFolder,
   deleteQuestion,
@@ -373,16 +605,14 @@ import {
 } from '@/api/question'
 import { getCourses } from '@/api/course'
 import { getPoliceTypes } from '@/api/user'
-import { getKnowledgePoints } from '@/api/knowledgePoint'
 import QuestionFormModal from './components/QuestionFormModal.vue'
-import KnowledgePointPanel from './components/KnowledgePointPanel.vue'
 
 const authStore = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 
 // ============ 导航 ============
-const activeNav = computed(() => (route.path.startsWith('/question/knowledge-points') ? 'knowledge' : 'bank'))
+const activeNav = ref('bank')
 
 // ============ 搜索与筛选 ============
 const searchText = ref('')
@@ -393,11 +623,11 @@ const typeLabels = { single: '单选题', multi: '多选题', judge: '判断题'
 const typeTagColors = { single: 'tag-blue', multi: 'tag-purple', judge: 'tag-orange', gap: 'tag-cyan' }
 const canUseAiQuestion = computed(() => authStore.hasAnyPermission(AI_QUESTION_PAGE_PERMISSIONS))
 const canManageQuestionBank = computed(() => authStore.hasAnyPermission([...QUESTION_BANK_PAGE_PERMISSIONS, ...AI_QUESTION_PAGE_PERMISSIONS]))
-const canManageKnowledgePoints = computed(() => authStore.hasAnyPermission(KNOWLEDGE_POINT_PAGE_PERMISSIONS))
 
 // ============ 题库列表数据 ============
 const loading = ref(false)
 const folderList = ref([])
+const folderTreeSource = ref([])
 const selectedIds = ref([])
 
 // 文件夹内题目查看模式
@@ -409,9 +639,7 @@ const courseOptions = ref([])
 
 // 题目筛选与选题模式
 const pickerSearch = ref('')
-const pickerKpName = ref(null)
 const pickerType = ref('all')
-const kpSelectOptions = ref([])
 const pickMode = ref(false)
 const pickSelectedKeys = ref([])
 
@@ -427,11 +655,311 @@ const folderForm = reactive({ name: '', category: '', parentId: null, courseId: 
 const moveQuestionModalVisible = ref(false)
 const moveQuestionTargetFolderId = ref(null)
 const currentMovingQuestion = ref(null)
+const targetFolderModalVisible = ref(false)
+const targetFolderSubmitting = ref(false)
+const targetFolderAction = ref('manual')
+const targetFolderForm = reactive({ name: '', category: '', courseId: undefined })
 
 // ============ 题目弹窗 ============
 const modalOpen = ref(false)
 const editingQuestion = ref(null)
 const policeTypeOptions = ref([])
+const manualQuestionDraft = reactive({
+  bankName: '',
+  bankCategory: '',
+  bankCourseId: undefined,
+})
+
+// ============ 批量上传 ============
+const batchUploadModalVisible = ref(false)
+const batchUploadLoading = ref(false)
+const selectedFile = ref(null)
+const batchPreviewQuestions = ref([])
+const fileInputRef = ref(null)
+const quickSelectFolderId = ref(null)
+const documentImportModalVisible = ref(false)
+const documentImportLoading = ref(false)
+const documentParsing = ref(false)
+const documentFileInputRef = ref(null)
+const documentImportForm = reactive({
+  bankName: '',
+  bankCategory: '',
+  bankCourseId: undefined,
+  sourceText: '',
+  sourceMaterialName: '',
+})
+const documentTemplateUrl = '/trainingplatform/templates/question-document-import-template.txt'
+const documentTemplatePreview = `题目1
+题型：单选题
+题干：请输入题干
+A：选项A
+B：选项B
+C：选项C
+D：选项D
+答案：A
+解析：请输入解析
+难度：2
+分值：2
+知识点：知识点1, 知识点2
+警种：治安
+---
+题目2
+题型：判断题
+题干：请输入题干
+答案：正确
+解析：请输入解析`
+const batchUploadExample = JSON.stringify([
+  {
+    type: "single",
+    content: "题目内容",
+    options: [
+      { key: "A", text: "选项A" },
+      { key: "B", text: "选项B" },
+      { key: "C", text: "选项C" },
+      { key: "D", text: "选项D" }
+    ],
+    answer: "A",
+    explanation: "解析",
+    difficulty: 1
+  }
+], null, 2)
+
+function appendMultilineValue(current, next) {
+  if (!next) return current || ''
+  return current ? `${current}\n${next}` : next
+}
+
+function normalizeDocumentLabel(label) {
+  return String(label || '').trim().replace(/\s+/g, '')
+}
+
+function normalizeDocumentQuestionType(value) {
+  const text = String(value || '').trim().toLowerCase()
+  if (!text) return ''
+  if (['single', '单选', '单选题'].includes(text)) return 'single'
+  if (['multi', 'multiple', '多选', '多选题'].includes(text)) return 'multi'
+  if (['judge', '判断', '判断题'].includes(text)) return 'judge'
+  return ''
+}
+
+function normalizeDocumentAnswer(type, value) {
+  const text = String(value || '').trim()
+  if (type === 'judge') {
+    if (['正确', '对', 'true', '是', 'a'].includes(text.toLowerCase())) return 'A'
+    if (['错误', '错', 'false', '否', 'b'].includes(text.toLowerCase())) return 'B'
+    return text || 'A'
+  }
+
+  const answers = text
+    .split(/[,，、/\s]+/)
+    .map(item => item.trim().toUpperCase())
+    .filter(Boolean)
+
+  if (type === 'multi') {
+    return [...new Set(answers)]
+  }
+  return answers[0] || text.toUpperCase()
+}
+
+function normalizeQuestionOptions(type, options) {
+  if (type === 'judge') {
+    return [
+      { key: 'A', text: '正确' },
+      { key: 'B', text: '错误' },
+    ]
+  }
+
+  return (options || [])
+    .map((item, index) => ({
+      key: String(item?.key || String.fromCharCode(65 + index)).trim().toUpperCase(),
+      text: String(item?.text || '').trim(),
+    }))
+    .filter(item => item.key && item.text)
+}
+
+function resolvePoliceTypeIdByName(name) {
+  const normalized = String(name || '').trim()
+  if (!normalized) return undefined
+  const exactMatch = policeTypeOptions.value.find(item => item.name === normalized)
+  if (exactMatch) return exactMatch.id
+  const fuzzyMatch = policeTypeOptions.value.find(item => item.name?.includes(normalized) || normalized.includes(item.name))
+  return fuzzyMatch?.id
+}
+
+function finalizeDocumentQuestion(rawQuestion, index) {
+  const type = normalizeDocumentQuestionType(rawQuestion.type)
+  if (!type) {
+    throw new Error(`第 ${index + 1} 道题缺少有效题型，请按模板填写“题型”`)
+  }
+
+  const content = String(rawQuestion.content || '').trim()
+  if (!content) {
+    throw new Error(`第 ${index + 1} 道题缺少题干`)
+  }
+
+  const options = normalizeQuestionOptions(type, rawQuestion.options)
+  const answer = normalizeDocumentAnswer(type, rawQuestion.answer)
+  const optionKeys = options.map(item => item.key)
+
+  if (type === 'judge') {
+    if (!['A', 'B'].includes(String(answer || '').toUpperCase())) {
+      throw new Error(`第 ${index + 1} 道判断题答案仅支持“正确/错误”`)
+    }
+  } else {
+    if (options.length < 2) {
+      throw new Error(`第 ${index + 1} 道题至少需要 2 个选项`)
+    }
+    if (type === 'multi') {
+      if (!Array.isArray(answer) || answer.length === 0) {
+        throw new Error(`第 ${index + 1} 道多选题至少需要一个正确答案`)
+      }
+      if (answer.some(item => !optionKeys.includes(item))) {
+        throw new Error(`第 ${index + 1} 道题存在未匹配选项的答案`)
+      }
+    } else if (!optionKeys.includes(String(answer || '').toUpperCase())) {
+      throw new Error(`第 ${index + 1} 道题答案未匹配到选项`)
+    }
+  }
+
+  const knowledgePointNames = String(rawQuestion.knowledgePoints || '')
+    .split(/[,，、]/)
+    .map(item => item.trim())
+    .filter(Boolean)
+
+  return {
+    type,
+    content,
+    options,
+    answer,
+    explanation: String(rawQuestion.explanation || '').trim() || undefined,
+    difficulty: Math.min(5, Math.max(1, Number(rawQuestion.difficulty) || 1)),
+    score: Math.max(1, Number(rawQuestion.score) || 1),
+    knowledge_point_names: knowledgePointNames,
+    police_type_id: resolvePoliceTypeIdByName(rawQuestion.policeTypeName),
+  }
+}
+
+function parseQuestionBlock(block, index) {
+  const question = {
+    type: '',
+    content: '',
+    answer: '',
+    explanation: '',
+    difficulty: 1,
+    score: 1,
+    knowledgePoints: '',
+    policeTypeName: '',
+    options: [],
+  }
+  let currentField = ''
+
+  const pushOption = (key, value) => {
+    if (!key) return
+    const optionKey = String(key).trim().toUpperCase()
+    const existing = question.options.find(item => item.key === optionKey)
+    if (existing) {
+      existing.text = value
+      return
+    }
+    question.options.push({ key: optionKey, text: value })
+  }
+
+  block.split('\n').forEach((rawLine) => {
+    const line = rawLine.trim()
+    if (!line || /^题目\s*\d*\s*$/u.test(line)) {
+      return
+    }
+
+    const optionMatch = line.match(/^([A-F])(?:[\.．、:：\)])\s*(.+)$/i)
+    if (optionMatch) {
+      pushOption(optionMatch[1], optionMatch[2].trim())
+      currentField = `option:${String(optionMatch[1]).toUpperCase()}`
+      return
+    }
+
+    const fieldMatch = line.match(/^([^:：]+)\s*[:：]\s*(.*)$/)
+    if (fieldMatch) {
+      const label = normalizeDocumentLabel(fieldMatch[1])
+      const value = fieldMatch[2].trim()
+      if (['题型', '类型'].includes(label)) {
+        question.type = value
+        currentField = 'type'
+        return
+      }
+      if (['题干', '题目', '题目内容', '内容'].includes(label)) {
+        question.content = value
+        currentField = 'content'
+        return
+      }
+      if (['答案', '正确答案'].includes(label)) {
+        question.answer = value
+        currentField = 'answer'
+        return
+      }
+      if (['解析', '说明'].includes(label)) {
+        question.explanation = value
+        currentField = 'explanation'
+        return
+      }
+      if (label === '难度') {
+        question.difficulty = value
+        currentField = 'difficulty'
+        return
+      }
+      if (['分值', '分数'].includes(label)) {
+        question.score = value
+        currentField = 'score'
+        return
+      }
+      if (['知识点', '知识点名称'].includes(label)) {
+        question.knowledgePoints = value
+        currentField = 'knowledgePoints'
+        return
+      }
+      if (['警种', '适用警种'].includes(label)) {
+        question.policeTypeName = value
+        currentField = 'policeTypeName'
+        return
+      }
+      if (/^[A-F]$/i.test(label)) {
+        pushOption(label, value)
+        currentField = `option:${label.toUpperCase()}`
+      }
+      return
+    }
+
+    if (currentField === 'content') {
+      question.content = appendMultilineValue(question.content, line)
+      return
+    }
+    if (currentField === 'explanation') {
+      question.explanation = appendMultilineValue(question.explanation, line)
+      return
+    }
+    if (currentField.startsWith('option:')) {
+      const optionKey = currentField.split(':')[1]
+      const existing = question.options.find(item => item.key === optionKey)
+      if (existing) {
+        existing.text = appendMultilineValue(existing.text, line)
+      }
+    }
+  })
+
+  return finalizeDocumentQuestion(question, index)
+}
+
+function parseDocumentQuestions(text) {
+  const normalizedText = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim()
+  if (!normalizedText) return []
+
+  const blocks = normalizedText
+    .split(/\n\s*(?:---+|===+|———+)\s*\n/g)
+    .map(item => item.trim())
+    .filter(Boolean)
+
+  if (!blocks.length) return []
+  return blocks.map((block, index) => parseQuestionBlock(block, index))
+}
 
 // ============ 计算属性 ============
 
@@ -452,6 +980,21 @@ const filteredList = computed(() => {
   return list
 })
 
+const categoryOptions = computed(() => {
+  const values = new Set()
+  folderList.value.forEach((item) => {
+    const next = (item.category || '默认分类').trim()
+    if (next) values.add(next)
+  })
+  return Array.from(values)
+})
+
+const categorySelectOptions = computed(() => categoryOptions.value.map((item) => ({ value: item })))
+
+const folderNameSelectOptions = computed(() => (
+  folderListForSelect.value.map((item) => ({ value: item.name }))
+))
+
 // 分页后的展示列表
 const displayedList = computed(() => {
   const start = (pagination.current - 1) * pagination.pageSize
@@ -460,7 +1003,7 @@ const displayedList = computed(() => {
 })
 
 // 总页数
-const totalPages = computed(() => Math.ceil(pagination.total / pagination.pageSize) || 1)
+const totalPages = computed(() => Math.ceil(filteredList.value.length / pagination.pageSize) || 1)
 
 const visiblePages = computed(() => {
   const pages = [], total = totalPages.value, cur = pagination.current
@@ -477,6 +1020,16 @@ const isAllSelected = computed(() => {
 })
 
 const allFolderList = computed(() => [...folderList.value])
+const folderListForSelect = computed(() => folderList.value.filter(f => !f.isSystem))
+const matchedTargetFolder = computed(() => findFolderByExactName(targetFolderForm.name))
+const targetFolderModalTitle = computed(() => {
+  const titleMap = {
+    manual: '选择题库后手动输入',
+    batch: '选择题库后批量上传',
+    document: '选择题库后上传文档',
+  }
+  return titleMap[targetFolderAction.value] || '选择题库'
+})
 
 // 文件夹树形数据（用于选择父文件夹）
 const folderTreeData = computed(() => {
@@ -489,7 +1042,7 @@ const folderTreeData = computed(() => {
         children: f.children ? convert(f.children) : []
       }))
   }
-  return convert(folderList.value)
+  return convert(folderTreeSource.value)
 })
 
 // ============ 方法 ============
@@ -538,8 +1091,12 @@ function buildBankList(folders) {
     const createdAt = folder.created_at ?? folder.createdAt
     const createdBy = folder.created_by ?? folder.createdBy
     const parentId = folder.parent_id ?? folder.parentId ?? null
-    const courseName = folder.course_name ?? folder.courseName ?? ''
-    const courseId = folder.course_id ?? folder.courseId ?? undefined
+    const courseNames = folder.course_names ?? folder.courseNames ?? []
+    const courseIds = folder.course_ids ?? folder.courseIds ?? []
+    const fallbackCourseName = folder.course_name ?? folder.courseName ?? ''
+    const fallbackCourseId = folder.course_id ?? folder.courseId ?? undefined
+    const resolvedCourseNames = courseNames.length ? courseNames : (fallbackCourseName ? [fallbackCourseName] : [])
+    const resolvedCourseIds = courseIds.length ? courseIds : (fallbackCourseId ? [fallbackCourseId] : [])
 
     return {
       id: folder.id,
@@ -555,8 +1112,10 @@ function buildBankList(folders) {
       statusText: status,
       createdAt: formatDate(createdAt),
       createdBy,
-      courseId,
-      courseName,
+      courseId: resolvedCourseIds[0],
+      courseIds: resolvedCourseIds,
+      courseName: resolvedCourseNames.join('、'),
+      courseNames: resolvedCourseNames,
     }
   })
 }
@@ -565,7 +1124,8 @@ async function loadData() {
   loading.value = true
   try {
     const folders = await getQuestionFolders()
-    const bankList = buildBankList(folders || [])
+    folderTreeSource.value = folders || []
+    const bankList = buildBankList(folderTreeSource.value)
     folderList.value = bankList.map(b => ({ ...b, children: [] }))
     pagination.total = bankList.length
   } catch (error) {
@@ -607,13 +1167,6 @@ const displayedQuestionList = computed(() => {
   if (pickerSearch.value) {
     const kw = pickerSearch.value.toLowerCase()
     list = list.filter(q => q.content?.toLowerCase().includes(kw))
-  }
-  // 知识点筛选
-  if (pickerKpName.value) {
-    list = list.filter(q => {
-      const kps = q.knowledgePointNames || []
-      return kps.some(kp => String(kp).includes(pickerKpName.value))
-    })
   }
   // 题型筛选
   if (pickerType.value !== 'all') {
@@ -672,6 +1225,16 @@ function goToAiQuestion() {
   router.push({ path: '/question/ai' })
 }
 
+function handleUploadMenuClick({ key }) {
+  if (key === 'manual') {
+    openAddQuestionModal()
+    return
+  }
+  if (key === 'document') {
+    openDocumentImportModal()
+  }
+}
+
 function handleCreateClick(key) {
   if (key === 'manual') {
     router.push({ path: '/paper/repository' })
@@ -682,10 +1245,6 @@ function handleCreateClick(key) {
 
 function switchNav(target) {
   if (target === activeNav.value) return
-  if (target === 'knowledge') {
-    router.push({ path: '/question/knowledge-points' })
-    return
-  }
   router.push({ path: '/question/repository' })
 }
 
@@ -705,6 +1264,132 @@ function resetFolderFormModal() {
   folderForm.parentId = null
   folderForm.courseId = undefined
   folderFormModalVisible.value = false
+}
+
+function findFolderById(folderId) {
+  return folderList.value.find((item) => String(item.id) === String(folderId)) || null
+}
+
+function findFolderByExactName(name) {
+  const normalized = String(name || '').trim()
+  if (!normalized) return null
+  return folderListForSelect.value.find((item) => item.name === normalized) || null
+}
+
+function applySelectedFolder(folder) {
+  if (!folder) return
+  selectedFolderId.value = folder.id
+  selectedFolderName.value = folder.name
+  quickSelectFolderId.value = folder.id
+}
+
+function fillManualQuestionDraft(folder = null) {
+  manualQuestionDraft.bankName = folder?.name || ''
+  manualQuestionDraft.bankCategory = folder?.category === '默认分类' ? '' : (folder?.category || '')
+  manualQuestionDraft.bankCourseId = folder?.courseId
+}
+
+function fillDocumentTargetDraft(folder = null) {
+  documentImportForm.bankName = folder?.name || ''
+  documentImportForm.bankCategory = folder?.category === '默认分类' ? '' : (folder?.category || '')
+  documentImportForm.bankCourseId = folder?.courseId
+}
+
+function openTargetFolderModal(action) {
+  targetFolderAction.value = action
+  const currentFolder = findFolderById(selectedFolderId.value || quickSelectFolderId.value)
+  targetFolderForm.name = currentFolder?.name || ''
+  targetFolderForm.category = currentFolder?.category === '默认分类' ? '' : (currentFolder?.category || '')
+  targetFolderForm.courseId = currentFolder?.courseId
+  targetFolderModalVisible.value = true
+}
+
+function resetTargetFolderModal() {
+  targetFolderAction.value = 'manual'
+  targetFolderForm.name = ''
+  targetFolderForm.category = ''
+  targetFolderForm.courseId = undefined
+  targetFolderSubmitting.value = false
+  targetFolderModalVisible.value = false
+}
+
+async function handleTargetFolderSubmit() {
+  const folderName = String(targetFolderForm.name || '').trim()
+  if (!folderName) {
+    message.warning('请输入题库名称')
+    return
+  }
+
+  targetFolderSubmitting.value = true
+  try {
+    const currentAction = targetFolderAction.value
+    let folder = findFolderByExactName(folderName)
+    if (!folder) {
+      await createQuestionFolder({
+        name: folderName,
+        category: targetFolderForm.category || null,
+        sort_order: 0,
+        course_id: targetFolderForm.courseId ?? null,
+      })
+      await loadData()
+      folder = findFolderByExactName(folderName)
+      message.success('题库已创建')
+    }
+
+    if (!folder) {
+      throw new Error('题库创建成功，但未获取到题库信息，请刷新后重试')
+    }
+
+    applySelectedFolder(folder)
+    resetTargetFolderModal()
+
+    if (currentAction === 'manual') {
+      editingQuestion.value = null
+      modalOpen.value = true
+      return
+    }
+    if (currentAction === 'batch') {
+      selectedFile.value = null
+      batchPreviewQuestions.value = []
+      batchUploadModalVisible.value = true
+      return
+    }
+    if (currentAction === 'document') {
+      primeDocumentImportForm()
+      documentImportModalVisible.value = true
+    }
+  } catch (error) {
+    message.error(error.message || '题库处理失败')
+  } finally {
+    targetFolderSubmitting.value = false
+  }
+}
+
+async function resolveOrCreateTargetFolder({ bankName, bankCategory, bankCourseId }) {
+  const normalizedBankName = String(bankName || '').trim()
+  if (!normalizedBankName) {
+    throw new Error('请填写题库名称')
+  }
+
+  let folder = findFolderByExactName(normalizedBankName)
+  if (!folder) {
+    await createQuestionFolder({
+      name: normalizedBankName,
+      category: bankCategory || null,
+      sort_order: 0,
+      course_id: bankCourseId ?? null,
+    })
+    await loadData()
+    folder = findFolderByExactName(normalizedBankName)
+    message.success('题库已创建')
+  }
+
+  if (!folder) {
+    throw new Error('题库创建成功，但未获取到题库信息，请刷新后重试')
+  }
+
+  applySelectedFolder(folder)
+  return folder
 }
 
 async function handleFolderSubmit() {
@@ -765,11 +1450,9 @@ function handleViewQuestions(item) {
   pickMode.value = false
   pickSelectedKeys.value = []
   pickerSearch.value = ''
-  pickerKpName.value = null
   pickerType.value = 'all'
   router.replace({ path: '/question/repository', query: { folderId: item.id } })
   loadQuestionsForFolder(item.id)
-  loadKpOptionsForPicker()
 }
 
 async function loadQuestionsForFolder(folderId) {
@@ -777,7 +1460,6 @@ async function loadQuestionsForFolder(folderId) {
   questionList.value = []
   questionPagination.current = 1
   pickerSearch.value = ''
-  pickerKpName.value = null
   pickerType.value = 'all'
   try {
     const result = await getQuestions({ folder_id: folderId, recursive: true, size: -1 })
@@ -788,13 +1470,6 @@ async function loadQuestionsForFolder(folderId) {
   } finally {
     questionLoading.value = false
   }
-}
-
-async function loadKpOptionsForPicker() {
-  try {
-    const result = await getKnowledgePoints({ size: -1 })
-    kpSelectOptions.value = (result.items || []).map(kp => ({ label: kp.name, value: kp.name }))
-  } catch { kpSelectOptions.value = [] }
 }
 
 function enterPickMode() {
@@ -831,11 +1506,6 @@ function confirmPick() {
   exitPickMode()
 }
 
-function formatKps(kps = []) {
-  if (!Array.isArray(kps)) return '-'
-  return kps.length > 0 ? kps.join('、') : '-'
-}
-
 function handleBackToFolders() {
   selectedFolderId.value = null
   selectedFolderName.value = ''
@@ -843,7 +1513,6 @@ function handleBackToFolders() {
   pickMode.value = false
   pickSelectedKeys.value = []
   pickerSearch.value = ''
-  pickerKpName.value = null
   pickerType.value = 'all'
   router.replace({ path: '/question/repository' })
 }
@@ -920,18 +1589,216 @@ function handleDeleteQuestion(q) {
 // 题目相关
 async function handleSubmitQuestion(payload) {
   try {
+    const { bankName, bankCategory, bankCourseId, ...questionPayload } = payload
     if (editingQuestion.value?.id) {
-      await updateQuestion(editingQuestion.value.id, payload)
+      await updateQuestion(editingQuestion.value.id, questionPayload)
       message.success('题目已更新')
     } else {
-      await createQuestion(payload)
+      const targetFolder = await resolveOrCreateTargetFolder({
+        bankName,
+        bankCategory,
+        bankCourseId,
+      })
+      const resolvedFolderId = targetFolder.id
+      const finalPayload = { ...questionPayload, folderId: resolvedFolderId, folder_id: resolvedFolderId }
+      await createQuestion(finalPayload)
       message.success('题目已创建')
+      fillManualQuestionDraft(targetFolder)
     }
     modalOpen.value = false
     editingQuestion.value = null
+    if (selectedFolderId.value) {
+      await loadQuestionsForFolder(selectedFolderId.value)
+    }
     await loadData()
   } catch (error) {
     message.error(error.message || '保存失败')
+  }
+}
+
+function openAddQuestionModal() {
+  const folder = findFolderById(selectedFolderId.value || quickSelectFolderId.value)
+  fillManualQuestionDraft(folder)
+  editingQuestion.value = null
+  modalOpen.value = true
+}
+
+function openBatchUploadModal() {
+  const folder = findFolderById(selectedFolderId.value || quickSelectFolderId.value)
+  if (folder) {
+    applySelectedFolder(folder)
+  } else {
+    openTargetFolderModal('batch')
+    return
+  }
+  selectedFile.value = null
+  batchPreviewQuestions.value = []
+  batchUploadModalVisible.value = true
+}
+
+function primeDocumentImportForm() {
+  const folder = findFolderById(selectedFolderId.value || quickSelectFolderId.value)
+  fillDocumentTargetDraft(folder)
+  documentImportForm.sourceText = ''
+  documentImportForm.sourceMaterialName = ''
+}
+
+function resetDocumentImportModal() {
+  documentImportModalVisible.value = false
+  documentImportLoading.value = false
+  documentParsing.value = false
+  primeDocumentImportForm()
+}
+
+function openDocumentImportModal() {
+  primeDocumentImportForm()
+  documentImportModalVisible.value = true
+}
+
+function triggerFileInput() {
+  fileInputRef.value?.click()
+}
+
+function triggerDocumentFileInput() {
+  documentFileInputRef.value?.click()
+}
+
+function formatFileSize(bytes) {
+  if (!bytes) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i]
+}
+
+async function handleFileSelect(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  selectedFile.value = file
+  batchPreviewQuestions.value = []
+
+  try {
+    const text = await file.text()
+    let questions = []
+
+    if (file.name.endsWith('.json')) {
+      questions = JSON.parse(text)
+      if (!Array.isArray(questions)) {
+        questions = [questions]
+      }
+    } else {
+      message.error('仅支持 JSON 格式文件')
+      selectedFile.value = null
+      return
+    }
+
+    // 验证题目格式
+    questions = questions.filter(q => q.type && q.content && (q.answer || q.answer === false || q.answer === 0))
+    batchPreviewQuestions.value = questions
+  } catch (error) {
+    message.error('文件解析失败：' + error.message)
+    selectedFile.value = null
+  }
+}
+
+async function handleDocumentFileSelect(event) {
+  const file = event.target.files?.[0]
+  if (!file) return
+
+  documentParsing.value = true
+  try {
+    const result = await parseAiDocumentFile(file)
+    const text = result?.text || result?.data?.text || ''
+    documentImportForm.sourceMaterialName = file.name
+    documentImportForm.sourceText = text || ''
+    message.success('文档解析完成')
+  } catch (error) {
+    message.error(error.message || '文档解析失败')
+  } finally {
+    documentParsing.value = false
+    if (event.target) {
+      event.target.value = ''
+    }
+  }
+}
+
+async function handleBatchUpload() {
+  if (!selectedFile.value || batchPreviewQuestions.value.length === 0) {
+    message.warning('请先选择有效的题目文件')
+    return
+  }
+
+  batchUploadLoading.value = true
+  try {
+    const questions = batchPreviewQuestions.value.map(q => ({
+      type: q.type,
+      content: q.content,
+      options: q.options || [],
+      answer: q.answer,
+      explanation: q.explanation || null,
+      difficulty: q.difficulty || 1,
+      police_type_id: q.police_type_id || null,
+      knowledge_point_names: q.knowledge_point_names || [],
+      folder_id: selectedFolderId.value,
+    }))
+
+    await batchCreateQuestions({ questions })
+    message.success(`成功上传 ${questions.length} 道题目`)
+
+    batchUploadModalVisible.value = false
+    selectedFile.value = null
+    batchPreviewQuestions.value = []
+
+    if (selectedFolderId.value) {
+      await loadQuestionsForFolder(selectedFolderId.value)
+    }
+  } catch (error) {
+    message.error(error.message || '批量上传失败')
+  } finally {
+    batchUploadLoading.value = false
+  }
+}
+
+async function handleDocumentImportSubmit() {
+  if (!documentImportForm.bankName?.trim()) {
+    message.warning('请填写题库名称')
+    return
+  }
+  if (!documentImportForm.sourceText?.trim()) {
+    message.warning('请先上传文档或填写模板内容')
+    return
+  }
+
+  documentImportLoading.value = true
+  try {
+    const targetFolder = await resolveOrCreateTargetFolder({
+      bankName: documentImportForm.bankName,
+      bankCategory: documentImportForm.bankCategory,
+      bankCourseId: documentImportForm.bankCourseId,
+    })
+    const parsedQuestions = parseDocumentQuestions(documentImportForm.sourceText)
+    if (!parsedQuestions.length) {
+      throw new Error('未识别到题目，请先下载模板并按模板格式整理后再上传')
+    }
+
+    const questions = parsedQuestions.map(item => ({
+      ...item,
+      folder_id: targetFolder.id,
+    }))
+
+    await batchCreateQuestions({ questions })
+
+    message.success(`已同步导入 ${questions.length} 道题目`)
+    resetDocumentImportModal()
+    await loadData()
+    if (selectedFolderId.value || targetFolder.id) {
+      await loadQuestionsForFolder(targetFolder.id)
+    }
+  } catch (error) {
+    message.error(error.message || '同步导入失败')
+  } finally {
+    documentImportLoading.value = false
   }
 }
 
@@ -961,24 +1828,7 @@ function clearQuestionSelection() {
   questionPagination.current = 1
 }
 
-function ensureActiveViewAccess() {
-  if (activeNav.value === 'knowledge' && !canManageKnowledgePoints.value && canManageQuestionBank.value) {
-    router.replace({ path: '/question/repository' })
-    return false
-  }
-  if (activeNav.value === 'bank' && !canManageQuestionBank.value && canManageKnowledgePoints.value) {
-    router.replace({ path: '/question/knowledge-points' })
-    return false
-  }
-  return true
-}
-
 async function syncFolderState(folderId) {
-  if (activeNav.value !== 'bank') {
-    clearQuestionSelection()
-    return
-  }
-
   if (!folderId) {
     clearQuestionSelection()
     return
@@ -1001,23 +1851,32 @@ onMounted(async () => {
     await loadPoliceTypeOptions()
     await loadCourseOptions()
   }
-  if (!ensureActiveViewAccess()) return
   await syncFolderState(route.query.folderId)
 })
 
 watch(() => route.path, () => {
-  if (!ensureActiveViewAccess()) return
   syncFolderState(route.query.folderId)
 })
 
 watch(() => route.query.folderId, (newVal) => {
-  if (!ensureActiveViewAccess()) return
   syncFolderState(newVal)
 })
 
-watch([pickerSearch, pickerKpName, pickerType], () => {
+watch([pickerSearch, pickerType], () => {
   questionPagination.current = 1
 })
+
+watch(
+  () => filteredList.value.length,
+  (value) => {
+    pagination.total = value
+    const maxPage = Math.ceil(value / pagination.pageSize) || 1
+    if (pagination.current > maxPage) {
+      pagination.current = maxPage
+    }
+  },
+  { immediate: true }
+)
 
 onUnmounted(() => {
   const mainLayout = document.querySelector('.main-layout')
@@ -1160,6 +2019,16 @@ onUnmounted(() => {
   transform: scale(0.98);
 }
 
+.upload-trigger-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.upload-trigger-icon {
+  font-size: 12px;
+}
+
 .search-wrapper {
   position: relative;
   width: 256px;
@@ -1211,6 +2080,12 @@ onUnmounted(() => {
   font-size: 15px;
   font-weight: 600;
   color: #334155;
+}
+
+.toolbar-hint {
+  font-size: 12px;
+  color: #94A3B8;
+  font-style: italic;
 }
 
 .pick-hint {
@@ -1830,5 +2705,145 @@ onUnmounted(() => {
 ::-webkit-scrollbar-thumb {
   background: #E2E8F0;
   border-radius: 10px;
+}
+
+/* ============ 批量上传 ============ */
+.batch-upload-content {
+  padding: 8px 0;
+}
+
+.upload-tip {
+  font-size: 13px;
+  color: #64748B;
+  margin-bottom: 16px;
+}
+
+.upload-tip ul {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.upload-tip li {
+  margin: 4px 0;
+}
+
+.document-upload-tip {
+  margin-bottom: 20px;
+}
+
+.template-link {
+  color: #2563EB;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.template-link:hover {
+  color: #1D4ED8;
+  text-decoration: underline;
+}
+
+.template-hint {
+  margin-left: 10px;
+  color: #64748B;
+}
+
+.code-block {
+  background: #F1F5F9;
+  padding: 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: monospace;
+}
+
+.upload-area {
+  border: 2px dashed #E2E8F0;
+  border-radius: 8px;
+  padding: 32px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.upload-area:hover {
+  border-color: #CBD5E1;
+  background: #F8FAFC;
+}
+
+.upload-placeholder {
+  color: #94A3B8;
+}
+
+.upload-placeholder svg {
+  width: 10%;
+  height: 10%;
+}
+
+.upload-placeholder p {
+  margin: 8px 0 0;
+  font-size: 14px;
+}
+
+.selected-file {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #059669;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.preview-section {
+  margin-top: 16px;
+  border-top: 1px solid #F1F5F9;
+  padding-top: 16px;
+}
+
+.preview-section h4 {
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+  margin: 0 0 12px;
+}
+
+.preview-list {
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.preview-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid #F8FAFC;
+}
+
+.preview-item:last-child {
+  border-bottom: none;
+}
+
+.preview-type {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #EFF6FF;
+  color: #2563EB;
+}
+
+.preview-content {
+  font-size: 13px;
+  color: #64748B;
+}
+
+.preview-more {
+  padding: 8px;
+  text-align: center;
+  color: #94A3B8;
+  font-size: 12px;
 }
 </style>

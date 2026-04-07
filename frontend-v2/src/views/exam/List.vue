@@ -19,6 +19,7 @@
         <a-select-option value="active">进行中</a-select-option>
       </a-select>
     </template>
+  </DarkPageHeader>
 
     <div class="exam-stats">
       <span>共 <strong>{{ exams.length }}</strong> 场考试</span>
@@ -125,7 +126,543 @@
         </div>
       </div>
     </div>
-  </DarkPageHeader>
+
+    <!-- ===== 选题弹窗 ===== -->
+    <a-modal
+      v-model:open="questionBankModalVisible"
+      title="选题"
+      width="900px"
+      :footer="null"
+      @cancel="questionBankModalVisible = false"
+    >
+      <div class="modal-section">
+        <div class="modal-filter-row">
+          <a-select v-model:value="questionFilters.folderId" placeholder="选择题库" allow-clear style="width: 200px" @change="loadQuestionsForPicker">
+            <a-select-option v-for="f in questionFolders" :key="f.id" :value="f.id">{{ f.name }}</a-select-option>
+          </a-select>
+          <a-select v-model:value="questionFilters.type" placeholder="题型" allow-clear style="width: 140px" @change="loadQuestionsForPicker">
+            <a-select-option value="single">单选题</a-select-option>
+            <a-select-option value="multi">多选题</a-select-option>
+            <a-select-option value="judge">判断题</a-select-option>
+          </a-select>
+          <a-input-search v-model:value="questionFilters.search" placeholder="搜索题目内容..." style="width: 240px" @search="loadQuestionsForPicker" />
+        </div>
+        <div class="modal-picker-layout">
+          <div class="picker-left">
+            <div v-if="questionLoading" class="text-center" style="padding: 40px">加载中...</div>
+            <a-table
+              v-else
+              :dataSource="questionList"
+              :columns="questionPickerColumns"
+              :pagination="{ pageSize: 10 }"
+              :scroll="{ y: 320 }"
+              row-key="id"
+              size="small"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'select'">
+                  <a-checkbox :checked="isQuestionSelected(record.id)" @change="toggleQuestionSelect(record)" />
+                </template>
+                <template v-else-if="column.key === 'type'">
+                  <a-tag :color="record.type === 'single' ? 'blue' : record.type === 'multi' ? 'purple' : 'orange'">
+                    {{ record.type === 'single' ? '单选' : record.type === 'multi' ? '多选' : '判断' }}
+                  </a-tag>
+                </template>
+                <template v-else-if="column.key === 'content'">
+                  <div class="table-q-content">{{ record.content }}</div>
+                </template>
+              </template>
+            </a-table>
+          </div>
+          <div class="picker-right">
+            <div class="picker-right-header">已选 <strong>{{ selectedQuestions.length }}</strong> 题</div>
+            <div class="picker-right-list">
+              <div v-for="q in selectedQuestions" :key="q.id" class="picker-right-item">
+                <span class="picker-right-q-type">{{ q.type === 'single' ? '单' : q.type === 'multi' ? '多' : '判' }}</span>
+                <span class="picker-right-q-text">{{ q.content?.slice(0, 20) }}...</span>
+                <a-button type="text" size="small" danger @click="toggleQuestionSelect(q)">
+                  <template #icon><CloseOutlined /></template>
+                </a-button>
+              </div>
+              <div v-if="selectedQuestions.length === 0" class="text-center text-muted" style="padding: 20px; color: #94a3b8">未选择题目</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <a-button @click="questionBankModalVisible = false">取消</a-button>
+        <a-button type="primary" :disabled="selectedQuestions.length === 0" @click="confirmQuestionSelection">
+          确认选择 {{ selectedQuestions.length }} 题
+        </a-button>
+      </div>
+    </a-modal>
+
+    <!-- ===== 建卷弹窗 ===== -->
+    <a-modal
+      v-model:open="paperModalVisible"
+      title="创建试卷"
+      width="700px"
+      :footer="null"
+      @cancel="paperModalVisible = false"
+    >
+      <div class="modal-section">
+        <div class="form-field">
+          <label class="field-label required">试卷标题</label>
+          <a-input v-model:value="paperForm.title" placeholder="请输入试卷标题" />
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label class="field-label">考试时长（分钟）</label>
+            <a-input-number v-model:value="paperForm.duration" :min="10" :max="300" style="width: 100%" />
+          </div>
+          <div class="form-field">
+            <label class="field-label">及格分数</label>
+            <a-input-number v-model:value="paperForm.passingScore" :min="1" style="width: 100%" />
+          </div>
+        </div>
+        <div class="form-field">
+          <label class="field-label">试卷说明</label>
+          <a-textarea v-model:value="paperForm.description" placeholder="选填" :rows="2" />
+        </div>
+        <div class="form-field">
+          <label class="field-label">关联题目</label>
+          <div class="selected-questions-summary">
+            <span v-if="wizardSelectedQuestions.length > 0">已选 {{ wizardSelectedQuestions.length }} 题</span>
+            <a-button type="link" size="small" @click="openQuestionBankModalForPaper">+ 继续选题</a-button>
+            <a-button type="link" size="small" @click="wizardSelectedQuestions = []">清空</a-button>
+          </div>
+          <div v-if="wizardSelectedQuestions.length === 0" class="text-muted" style="color: #94a3b8; font-size: 13px">请先在「选题」中选择题目录入题目</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <a-button @click="paperModalVisible = false">取消</a-button>
+        <a-button type="primary" :loading="paperSubmitting" :disabled="!canSubmitPaper" @click="handleCreatePaper">
+          创建并发布试卷
+        </a-button>
+      </div>
+    </a-modal>
+
+    <!-- ===== 建场次弹窗 ===== -->
+    <a-modal
+      v-model:open="examModalVisible"
+      :title="activeTab === 'admission' ? '创建准入考试' : '创建培训班考试'"
+      width="700px"
+      :footer="null"
+      @cancel="examModalVisible = false"
+    >
+      <div class="modal-section">
+        <div class="form-field">
+          <label class="field-label required">场次名称</label>
+          <a-input v-model:value="examForm.title" placeholder="请输入考试场次名称" />
+        </div>
+        <div class="form-field">
+          <label class="field-label required">关联试卷</label>
+          <a-select v-model:value="examForm.paperId" placeholder="请选择已发布试卷" show-search style="width: 100%">
+            <a-select-option v-for="p in availablePapers" :key="p.id" :value="p.id">{{ p.title }}</a-select-option>
+          </a-select>
+        </div>
+        <div class="form-field">
+          <label class="field-label">考试时间</label>
+          <a-range-picker v-model:value="examDateRange" show-time format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm" style="width: 100%" />
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label class="field-label">状态</label>
+            <a-select v-model:value="examForm.status" style="width: 100%">
+              <a-select-option value="upcoming">未开始</a-select-option>
+              <a-select-option value="active">进行中</a-select-option>
+              <a-select-option value="ended">已结束</a-select-option>
+            </a-select>
+          </div>
+          <div class="form-field">
+            <label class="field-label">最大次数</label>
+            <a-input-number v-model:value="examForm.maxAttempts" :min="1" :max="10" style="width: 100%" />
+          </div>
+        </div>
+        <div v-if="activeTab === 'training'" class="form-field">
+          <label class="field-label required">所属培训班</label>
+          <a-select
+            v-model:value="selectedTrainingId"
+            placeholder="请选择培训班"
+            show-search
+            option-filter-prop="label"
+            style="width: 100%"
+            :disabled="isRouteTrainingLocked"
+            :options="availableTrainings.map((item) => ({ value: item.id, label: item.name }))"
+          />
+        </div>
+        <div v-if="activeTab === 'admission'" class="form-field">
+          <label class="field-label">适用范围</label>
+          <AdmissionScopeSelector
+            v-model:scope-type="examForm.scopeType"
+            v-model:scope-target-ids="examForm.scopeTargetIds"
+          />
+        </div>
+      </div>
+      <div class="modal-footer">
+        <a-button @click="examModalVisible = false">取消</a-button>
+        <a-button type="primary" :loading="examSubmitting" :disabled="!canSubmitExam" @click="handleCreateExam">
+          创建考试
+        </a-button>
+      </div>
+    </a-modal>
+
+    <!-- ===== 一站式创建向导 ===== -->
+    <a-modal
+      v-model:open="wizardModalVisible"
+      :title="null"
+      width="900px"
+      :footer="null"
+      centered
+      class="wizard-modal"
+      @cancel="wizardModalVisible = false"
+    >
+      <div class="wizard-header">
+        <h2 class="wizard-title">一站式创建考试</h2>
+        <p class="wizard-subtitle">选择题目 → 创建试卷 → 创建考试场次</p>
+      </div>
+      <a-steps :current="wizardStep - 1" size="small" class="wizard-steps">
+        <a-step title="选题" />
+        <a-step title="创建试卷" />
+        <a-step title="创建场次" />
+      </a-steps>
+
+      <!-- Step 1: 选题 -->
+      <div v-show="wizardStep === 1" class="wizard-step-content">
+        <!-- 模式切换 -->
+        <div class="step1-mode-tabs">
+          <a-radio-group v-model:value="wizardSelectMode" size="small">
+            <a-radio-button value="manual">手动选题</a-radio-button>
+            <a-radio-button value="ai">智能组卷</a-radio-button>
+          </a-radio-group>
+          <a-input v-model:value="paperForm.title" placeholder="请输入试卷标题" style="width: 240px; margin-left: 12px" />
+        </div>
+
+        <!-- 手动选题模式 -->
+        <div v-if="wizardSelectMode === 'manual'" class="manual-select-section">
+          <div class="modal-filter-row">
+            <a-select v-model:value="questionFilters.folderId" placeholder="选择题库" allow-clear style="width: 200px" @change="loadQuestionsForPicker">
+              <a-select-option v-for="f in questionFolders" :key="f.id" :value="f.id">{{ f.name }}</a-select-option>
+            </a-select>
+            <a-select v-model:value="questionFilters.type" placeholder="题型" allow-clear style="width: 140px" @change="loadQuestionsForPicker">
+              <a-select-option value="single">单选题</a-select-option>
+              <a-select-option value="multi">多选题</a-select-option>
+              <a-select-option value="judge">判断题</a-select-option>
+            </a-select>
+            <a-input-search v-model:value="questionFilters.search" placeholder="搜索题目内容..." style="width: 240px" @search="loadQuestionsForPicker" />
+          </div>
+          <div class="modal-picker-layout">
+            <div class="picker-left">
+              <div v-if="questionLoading" class="text-center" style="padding: 40px">加载中...</div>
+              <a-table
+                v-else
+                :dataSource="questionList"
+                :columns="questionPickerColumns"
+                :pagination="{ pageSize: 10 }"
+                :scroll="{ y: 280 }"
+                row-key="id"
+                size="small"
+              >
+                <template #bodyCell="{ column, record }">
+                  <template v-if="column.key === 'select'">
+                    <a-checkbox :checked="isQuestionSelected(record.id)" @change="toggleQuestionSelect(record)" />
+                  </template>
+                  <template v-else-if="column.key === 'type'">
+                    <a-tag :color="record.type === 'single' ? 'blue' : record.type === 'multi' ? 'purple' : 'orange'">
+                      {{ record.type === 'single' ? '单选' : record.type === 'multi' ? '多选' : '判断' }}
+                    </a-tag>
+                  </template>
+                  <template v-else-if="column.key === 'content'">
+                    <div class="table-q-content">{{ record.content }}</div>
+                  </template>
+                </template>
+              </a-table>
+            </div>
+            <div class="picker-right">
+              <div class="picker-right-header">已选 <strong>{{ wizardSelectedQuestions.length }}</strong> 题</div>
+              <div class="picker-right-list">
+                <div v-for="q in wizardSelectedQuestions" :key="q.id" class="picker-right-item">
+                  <span class="picker-right-q-type">{{ q.type === 'single' ? '单' : q.type === 'multi' ? '多' : '判' }}</span>
+                  <span class="picker-right-q-text">{{ q.content?.slice(0, 18) }}...</span>
+                  <a-button type="text" size="small" danger @click="toggleQuestionSelect(q)">
+                    <template #icon><CloseOutlined /></template>
+                  </a-button>
+                </div>
+                <div v-if="wizardSelectedQuestions.length === 0" class="text-center" style="padding: 20px; color: #94a3b8">请选择题目</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 手动模式：题型分值配置 -->
+          <div class="type-config-section">
+            <div class="type-config-header">题型分值设置</div>
+            <a-table
+              :dataSource="manualTypeScoreConfigs"
+              :columns="manualScoreColumns"
+              :pagination="false"
+              size="small"
+              row-key="type"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'type'">
+                  <a-tag :color="record.type === 'single' ? 'blue' : record.type === 'multi' ? 'purple' : 'orange'">
+                    {{ record.type === 'single' ? '单选题' : record.type === 'multi' ? '多选题' : '判断题' }}
+                  </a-tag>
+                </template>
+                <template v-else-if="column.key === 'score'">
+                  <a-input-number v-model:value="record.score" :min="1" :max="10" size="small" style="width: 70px" />
+                </template>
+                <template v-else-if="column.key === 'count'">
+                  <span>{{ getSelectedCountByType(record.type) }}</span>
+                </template>
+                <template v-else-if="column.key === 'subtotal'">
+                  <span class="type-subtotal">{{ getSelectedCountByType(record.type) * record.score }} 分</span>
+                </template>
+              </template>
+            </a-table>
+          </div>
+
+          <div class="ai-summary">
+            <span>已选 <strong>{{ wizardSelectedQuestions.length }}</strong> 题</span>
+            <span>总分 <strong>{{ manualTotalScore }}</strong> 分</span>
+          </div>
+        </div>
+
+        <!-- 智能组卷模式 -->
+        <div v-if="wizardSelectMode === 'ai'" class="ai-select-section">
+          <div class="modal-filter-row">
+            <a-select
+              v-model:value="aiKnowledgePointIds"
+              mode="multiple"
+              placeholder="选择知识点范围"
+              allow-clear
+              style="width: 260px"
+            >
+              <a-select-option v-for="item in availableKnowledgePoints" :key="item.id" :value="item.id">
+                {{ item.name }}
+              </a-select-option>
+            </a-select>
+            <a-select v-model:value="assemblyMode" placeholder="出卷模式" style="width: 180px">
+              <a-select-option value="balanced">均衡抽题</a-select-option>
+              <a-select-option value="practice">练习导向</a-select-option>
+              <a-select-option value="exam">考试导向</a-select-option>
+            </a-select>
+          </div>
+
+          <div class="type-config-section">
+            <div class="type-config-header">题型配置</div>
+            <a-table
+              :dataSource="aiTypeConfigs"
+              :columns="typeConfigColumns"
+              :pagination="false"
+              size="small"
+              row-key="type"
+            >
+              <template #bodyCell="{ column, record }">
+                <template v-if="column.key === 'type'">
+                  <a-tag :color="record.type === 'single' ? 'blue' : record.type === 'multi' ? 'purple' : 'orange'">
+                    {{ record.type === 'single' ? '单选题' : record.type === 'multi' ? '多选题' : '判断题' }}
+                  </a-tag>
+                </template>
+                <template v-else-if="column.key === 'count'">
+                  <a-input-number v-model:value="record.count" :min="0" :max="50" size="small" style="width: 70px" />
+                </template>
+                <template v-else-if="column.key === 'score'">
+                  <a-input-number v-model:value="record.score" :min="1" :max="10" size="small" style="width: 70px" />
+                </template>
+                <template v-else-if="column.key === 'difficulty'">
+                  <a-select v-model:value="record.difficulty" size="small" style="width: 80px">
+                    <a-select-option :value="1">1级</a-select-option>
+                    <a-select-option :value="2">2级</a-select-option>
+                    <a-select-option :value="3">3级</a-select-option>
+                  </a-select>
+                </template>
+              </template>
+            </a-table>
+          </div>
+
+          <div class="ai-summary">
+            <span>总题数：<strong>{{ aiTotalCount }}</strong> 题</span>
+            <span>总分：<strong>{{ aiTotalScore }}</strong> 分</span>
+          </div>
+
+          <!-- AI 生成状态 -->
+          <div v-if="aiGenerating" class="ai-generating">
+            <a-spin size="small" />
+            <span>AI 正在生成试卷，请稍候...</span>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <a-button @click="wizardModalVisible = false">取消</a-button>
+          <a-button type="primary" :loading="aiGenerating" :disabled="!canProceedStep1" @click="handleProceedStep1">
+            {{ wizardSelectMode === 'manual' ? '下一步：创建试卷' : 'AI 生成试卷' }}
+          </a-button>
+        </div>
+      </div>
+
+      <!-- Step 2: 创建试卷（手动）/ 确认预览（AI） -->
+      <div v-show="wizardStep === 2" class="wizard-step-content">
+        <!-- AI 模式：试卷草稿预览 -->
+        <div v-if="wizardSelectMode === 'ai'">
+          <div v-if="aiPaperDraft" class="paper-draft-preview">
+            <div class="paper-draft-header">
+              <h3 class="paper-draft-title">{{ aiPaperDraft.title }}</h3>
+              <div class="paper-draft-meta">
+                <a-tag v-if="aiPaperDraft.type === 'formal'" color="blue">正式考试</a-tag>
+                <a-tag v-else color="green">测验</a-tag>
+                <span>时长：{{ aiPaperDraft.duration || 60 }} 分钟</span>
+                <span>总分：{{ aiPaperDraft.total_score || aiTotalScore }} 分</span>
+                <span>及格分：{{ Math.round((aiPaperDraft.total_score || aiTotalScore) * 0.6) }} 分</span>
+              </div>
+            </div>
+            <div class="paper-draft-questions">
+              <div v-for="(q, idx) in (aiPaperDraft.questions || [])" :key="idx" class="paper-draft-q-item">
+                <span class="paper-draft-q-num">{{ idx + 1 }}.</span>
+                <a-tag :color="q.type === 'single' ? 'blue' : q.type === 'multi' ? 'purple' : 'orange'" size="small">
+                  {{ q.type === 'single' ? '单选' : q.type === 'multi' ? '多选' : '判断' }}
+                </a-tag>
+                <span class="paper-draft-q-text">{{ q.content }}</span>
+                <span class="paper-draft-q-score">{{ q.score || 0 }}分</span>
+              </div>
+              <div v-if="!aiPaperDraft.questions?.length" class="text-center text-muted" style="padding: 40px">
+                暂无题目数据
+              </div>
+            </div>
+          </div>
+          <div v-else class="text-center text-muted" style="padding: 60px">
+            暂无试卷预览数据，请返回重新生成
+          </div>
+          <div class="modal-footer">
+            <a-button @click="wizardModalVisible = false">取消</a-button>
+            <a-button @click="handleBackToStep1">返回修改</a-button>
+            <a-button type="primary" :loading="paperSubmitting" :disabled="!aiPaperDraft" @click="handleConfirmAndPublish">
+              确认并发布
+            </a-button>
+          </div>
+        </div>
+
+        <!-- 手动模式：创建试卷表单 -->
+        <div v-if="wizardSelectMode === 'manual'" class="modal-section">
+          <div class="form-field">
+            <label class="field-label required">试卷标题</label>
+            <a-input v-model:value="paperForm.title" placeholder="请输入试卷标题" />
+          </div>
+          <div class="form-row">
+            <div class="form-field">
+              <label class="field-label">考试时长（分钟）</label>
+              <a-input-number v-model:value="paperForm.duration" :min="10" :max="300" style="width: 100%" />
+            </div>
+            <div class="form-field">
+              <label class="field-label">试卷说明</label>
+              <a-input v-model:value="paperForm.description" placeholder="选填" />
+            </div>
+          </div>
+          <div class="selected-questions-summary">
+            已选 <strong>{{ wizardSelectedQuestions.length }}</strong> 题（单选 {{ getSelectedCountByType('single') }} 题，多选 {{ getSelectedCountByType('multi') }} 题，判断 {{ getSelectedCountByType('judge') }} 题），
+            总分 <strong>{{ manualTotalScore }}</strong> 分，及格分 <strong>{{ Math.round(manualTotalScore * 0.6) }}</strong> 分
+            <a-button type="link" size="small" @click="wizardStep = 1">返回修改</a-button>
+          </div>
+          <div class="modal-footer">
+            <a-button @click="wizardModalVisible = false">取消</a-button>
+            <a-button @click="wizardStep = 1">上一步</a-button>
+            <a-button type="primary" :loading="paperSubmitting" :disabled="!canSubmitPaper" @click="handleWizardCreatePaper">创建并发布试卷</a-button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 3: 创建考试场次 -->
+      <div v-show="wizardStep === 3" class="wizard-step-content">
+        <div class="form-field">
+          <label class="field-label required">场次名称</label>
+          <a-input v-model:value="examForm.title" placeholder="请输入考试场次名称" />
+        </div>
+        <div class="form-field">
+          <label class="field-label required">关联试卷</label>
+          <a-input :value="aiPaperDraft?.title || paperForm.title" disabled placeholder="请先创建试卷" />
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label class="field-label">展示类型</label>
+            <a-select v-model:value="examForm.type" style="width: 100%">
+              <a-select-option value="formal">正式考试</a-select-option>
+              <a-select-option value="quiz">测验</a-select-option>
+            </a-select>
+          </div>
+          <div class="form-field">
+            <label class="field-label">状态</label>
+            <a-select v-model:value="examForm.status" style="width: 100%">
+              <a-select-option value="upcoming">未开始</a-select-option>
+              <a-select-option value="active">进行中</a-select-option>
+              <a-select-option value="ended">已结束</a-select-option>
+            </a-select>
+          </div>
+        </div>
+        <div v-if="activeTab === 'training'" class="form-field">
+          <label class="field-label required">所属培训班</label>
+          <a-select
+            v-model:value="selectedTrainingId"
+            placeholder="请选择培训班"
+            show-search
+            option-filter-prop="label"
+            style="width: 100%"
+            :disabled="isRouteTrainingLocked"
+            :options="availableTrainings.map((item) => ({ value: item.id, label: item.name }))"
+          />
+        </div>
+        <div v-if="activeTab === 'admission'" class="form-field">
+          <label class="field-label">适用范围</label>
+          <AdmissionScopeSelector
+            v-model:scope-type="examForm.scopeType"
+            v-model:scope-target-ids="examForm.scopeTargetIds"
+          />
+        </div>
+        <div class="form-field">
+          <label class="field-label">关联课程</label>
+          <a-select
+            v-model:value="examForm.courseIds"
+            mode="multiple"
+            placeholder="请选择关联课程（可选）"
+            style="width: 100%"
+            allow-clear
+          >
+            <a-select-option v-for="c in availableCourses" :key="c.id" :value="c.id">{{ c.title || c.name }}</a-select-option>
+          </a-select>
+        </div>
+        <div class="form-field">
+          <label class="field-label">考试时间</label>
+          <a-range-picker v-model:value="examDateRange" show-time format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm" style="width: 100%" />
+        </div>
+        <div class="form-row">
+          <div class="form-field">
+            <label class="field-label">考试时长（分钟）</label>
+            <a-input-number v-model:value="examForm.duration" :min="10" :max="300" style="width: 100%" />
+          </div>
+          <div class="form-field">
+            <label class="field-label">及格分数</label>
+            <a-input-number v-model:value="examForm.passingScore" :min="1" style="width: 100%" />
+          </div>
+        </div>
+        <div class="form-field">
+          <label class="field-label">最大次数</label>
+          <a-input-number v-model:value="examForm.maxAttempts" :min="1" :max="10" style="width: 100%" />
+        </div>
+        <div class="form-field">
+          <label class="field-label">考试说明</label>
+          <a-textarea v-model:value="examForm.description" placeholder="选填" :rows="2" />
+        </div>
+        <div class="selected-questions-summary">
+          试卷预览：{{ aiPaperDraft?.questions?.length || wizardSelectedQuestions.length }} 题，总分 {{ aiPaperDraft?.total_score || aiTotalScore }} 分，及格分 {{ examForm.passingScore }} 分
+        </div>
+        <div class="modal-footer">
+          <a-button @click="wizardModalVisible = false">取消</a-button>
+          <a-button @click="wizardStep = 2">上一步</a-button>
+          <a-button type="primary" :loading="examSubmitting" :disabled="!canSubmitWizardExam" @click="handleWizardCreateExam">
+            创建考试
+          </a-button>
+        </div>
+      </div>
+    </a-modal>
 </template>
 
 <script setup lang="ts">
@@ -137,26 +674,53 @@ import {
   QuestionCircleOutlined,
   SafetyCertificateOutlined,
   SafetyOutlined,
+  CloseOutlined,
 } from '@ant-design/icons-vue'
 import DarkPageHeader from '@/components/common/DarkPageHeader.vue'
 import dayjs from 'dayjs'
-import { computed, onMounted, reactive, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
-import type { ExamResponse } from '@/api/generated/model'
+import type { ExamResponse, KnowledgePointResponse, QuestionResponse, TrainingListResponse } from '@/api/generated/model'
 import {
   getAdmissionExamsApiV1ExamsAdmissionGet,
   getExamsApiV1ExamsGet,
+  getExamPapersApiV1ExamsPapersGet,
+  createExamPaperApiV1ExamsPapersPost,
+  publishExamPaperApiV1ExamsPapersPaperIdPublishPost,
+  createExamApiV1ExamsPost,
+  createAdmissionExamApiV1ExamsAdmissionPost,
 } from '@/api/generated/exam-management/exam-management'
+import {
+  getQuestionsApiV1QuestionsGet,
+  getQuestionFoldersApiV1QuestionsFoldersGet,
+} from '@/api/generated/question-management/question-management'
+import {
+  getCoursesApiV1CoursesGet,
+} from '@/api/generated/course-management/course-management'
+import {
+  getTrainingsApiV1TrainingsGet,
+} from '@/api/generated/training-management/training-management'
+import {
+  getKnowledgePointsApiV1KnowledgePointsGet,
+} from '@/api/generated/knowledge-point-management/knowledge-point-management'
+import {
+  createPaperAssemblyTaskApiV1AiPaperAssemblyTasksPost,
+  getPaperAssemblyTaskDetailApiV1AiPaperAssemblyTasksTaskIdGet,
+  confirmPaperAssemblyTaskApiV1AiPaperAssemblyTasksTaskIdConfirmPost,
+} from '@/api/generated/ai-tasks/ai-tasks'
+import type { AIPaperAssemblyTaskDetailResponse } from '@/api/generated/model'
 import {
   getExamStatusClass,
   getExamStatusText,
   normalizeExamStatus,
   resolveExamKind,
 } from './examDisplay'
+import AdmissionScopeSelector from './components/AdmissionScopeSelector.vue'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const loading = ref(false)
 const activeTab = ref<'admission' | 'training'>('admission')
@@ -181,6 +745,134 @@ const statusTabs = [
 
 const ongoingCount = computed(() => exams.value.filter((e) => normalizeExamStatus(e.status) === 'active').length)
 const upcomingCount = computed(() => exams.value.filter((e) => normalizeExamStatus(e.status) === 'upcoming').length)
+
+// ===== 选题状态 =====
+const questionBankModalVisible = ref(false)
+const questionList = ref<QuestionResponse[]>([])
+const questionFolders = ref<any[]>([])
+const selectedQuestions = ref<QuestionResponse[]>([])
+const wizardSelectedQuestions = ref<QuestionResponse[]>([])
+const questionFilters = reactive({ search: '', type: '', folderId: null })
+const questionLoading = ref(false)
+
+const questionPickerColumns = [
+  { title: '', key: 'select', width: 50 },
+  { title: '题型', key: 'type', width: 80 },
+  { title: '题目内容', key: 'content' },
+]
+
+const typeConfigColumns = [
+  { title: '题型', key: 'type', width: 100 },
+  { title: '数量', key: 'count', width: 100 },
+  { title: '分/题', key: 'score', width: 100 },
+  { title: '目标难度', key: 'difficulty', width: 120 },
+]
+
+const manualScoreColumns = [
+  { title: '题型', key: 'type', width: 120 },
+  { title: '已选', key: 'count', width: 80 },
+  { title: '分/题', key: 'score', width: 100 },
+  { title: '小计', key: 'subtotal', width: 100 },
+]
+
+const manualTypeScoreConfigs = reactive([
+  { type: 'single', score: 2 },
+  { type: 'multi', score: 3 },
+  { type: 'judge', score: 1 },
+])
+
+function getSelectedCountByType(type: string) {
+  return wizardSelectedQuestions.value.filter((q) => q.type === type).length
+}
+
+const manualTotalScore = computed(() => {
+  return wizardSelectedQuestions.value.reduce((sum, q) => {
+    const config = manualTypeScoreConfigs.find((c) => c.type === q.type)
+    return sum + (config?.score || 0)
+  }, 0)
+})
+
+// ===== 建卷状态 =====
+const paperModalVisible = ref(false)
+const paperForm = reactive({ title: '', duration: 60, passingScore: 60, description: '' })
+const paperSubmitting = ref(false)
+
+// ===== 建场次状态 =====
+const examModalVisible = ref(false)
+const examForm = reactive({
+  paperId: undefined as number | undefined,
+  status: 'upcoming',
+  scopeType: 'all',
+  scopeTargetIds: [] as number[],
+  courseIds: [] as number[],
+  maxAttempts: 1,
+  title: '',
+  type: 'formal',
+  duration: 60,
+  passingScore: 60,
+  description: '',
+})
+const examDateRange = ref<[string, string] | null>(null)
+const availablePapers = ref<any[]>([])
+const availableCourses = ref<any[]>([])
+const availableTrainings = ref<TrainingListResponse[]>([])
+const availableKnowledgePoints = ref<KnowledgePointResponse[]>([])
+const selectedTrainingId = ref<number | undefined>(undefined)
+const examSubmitting = ref(false)
+
+// ===== 向导状态 =====
+const wizardModalVisible = ref(false)
+const wizardStep = ref(1)
+const wizardPaperId = ref<number | null>(null)
+const wizardSelectMode = ref<'manual' | 'ai'>('manual')
+const aiKnowledgePointIds = ref<number[]>([])
+
+function parsePositiveInt(raw: unknown) {
+  const value = Number(Array.isArray(raw) ? raw[0] : raw)
+  return Number.isInteger(value) && value > 0 ? value : undefined
+}
+
+const routeTrainingId = computed(() => parsePositiveInt(route.query.trainingId))
+const isRouteTrainingLocked = computed(() => !!routeTrainingId.value)
+const effectiveTrainingId = computed(() => routeTrainingId.value ?? selectedTrainingId.value)
+
+const canProceedStep1 = computed(() => {
+  if (wizardSelectMode.value === 'manual') {
+    return wizardSelectedQuestions.value.length > 0
+  }
+  return aiTotalCount.value > 0
+})
+
+// ===== AI 智能组卷状态 =====
+const aiTaskId = ref<number | null>(null)
+const aiTaskStatus = ref<string>('pending')
+const aiPaperDraft = ref<any>(null)
+const assemblyMode = ref('balanced')
+const aiGenerating = ref(false)
+const aiPollTimer = ref<ReturnType<typeof setTimeout> | null>(null)
+
+const aiTypeConfigs = reactive([
+  { type: 'single', count: 5, difficulty: 3, score: 2 },
+  { type: 'multi', count: 3, difficulty: 3, score: 3 },
+  { type: 'judge', count: 2, difficulty: 2, score: 1 },
+])
+
+const aiTotalCount = computed(() => aiTypeConfigs.reduce((sum, c) => sum + c.count, 0))
+const aiTotalScore = computed(() => aiTypeConfigs.reduce((sum, c) => sum + c.count * c.score, 0))
+
+const canSubmitPaper = computed(() => paperForm.title.trim() && wizardSelectedQuestions.value.length > 0)
+const canSubmitExam = computed(() => {
+  if (!examForm.title.trim() || !examForm.paperId) return false
+  if (activeTab.value === 'training' && !effectiveTrainingId.value) return false
+  if (activeTab.value === 'admission' && examForm.scopeType !== 'all' && examForm.scopeTargetIds.length === 0) return false
+  return true
+})
+const canSubmitWizardExam = computed(() => {
+  if (!examForm.title.trim() || !wizardPaperId.value) return false
+  if (activeTab.value === 'training' && !effectiveTrainingId.value) return false
+  if (activeTab.value === 'admission' && examForm.scopeType !== 'all' && examForm.scopeTargetIds.length === 0) return false
+  return true
+})
 
 onMounted(() => {
   void fetchExams()
@@ -210,12 +902,12 @@ async function fetchExams() {
     exams.value = [...items].sort((left, right) => {
       const leftStatus = normalizeExamStatus(left.status)
       const rightStatus = normalizeExamStatus(right.status)
-      if (filters.sort === 'latest') {
-        const leftTime = left.start_time ? dayjs(left.start_time).valueOf() : 0
-        const rightTime = right.start_time ? dayjs(right.start_time).valueOf() : 0
-        return rightTime - leftTime
-      }
-      return statusRank[leftStatus] - statusRank[rightStatus]
+      const statusDiff = statusRank[leftStatus] - statusRank[rightStatus]
+      if (statusDiff !== 0) return statusDiff
+      // 同状态内按时间排序
+      const leftTime = left.start_time ? dayjs(left.start_time).valueOf() : 0
+      const rightTime = right.start_time ? dayjs(right.start_time).valueOf() : 0
+      return rightTime - leftTime
     })
   } catch (error) {
     message.error(error instanceof Error ? error.message : '考试列表加载失败')
@@ -323,6 +1015,440 @@ function getExamCoverBackground(exam: ExamResponse, index: number) {
   }
   return coverGradients[index % coverGradients.length]
 }
+
+// ===== 选题相关 =====
+async function loadQuestionsForPicker() {
+  questionLoading.value = true
+  try {
+    const params: any = {}
+    if (questionFilters.folderId) params.folder_id = questionFilters.folderId
+    if (questionFilters.type) params.type = questionFilters.type
+    if (questionFilters.search) params.search = questionFilters.search
+    const res = await getQuestionsApiV1QuestionsGet(params)
+    questionList.value = (res as any)?.items || res?.items || []
+  } catch {
+    questionList.value = []
+  } finally {
+    questionLoading.value = false
+  }
+}
+
+async function loadQuestionFolders() {
+  try {
+    const res = await getQuestionFoldersApiV1QuestionsFoldersGet()
+    questionFolders.value = (res as any)?.data || res || []
+  } catch {
+    questionFolders.value = []
+  }
+}
+
+function toggleQuestionSelect(q: QuestionResponse) {
+  const idx = wizardSelectedQuestions.value.findIndex((item) => item.id === q.id)
+  if (idx >= 0) {
+    wizardSelectedQuestions.value.splice(idx, 1)
+  } else {
+    wizardSelectedQuestions.value.push(q)
+  }
+}
+
+function isQuestionSelected(id: number) {
+  return wizardSelectedQuestions.value.some((q) => q.id === id)
+}
+
+function confirmQuestionSelection() {
+  selectedQuestions.value = [...wizardSelectedQuestions.value]
+  questionBankModalVisible.value = false
+}
+
+function openQuestionBankModal() {
+  wizardSelectedQuestions.value = [...selectedQuestions.value]
+  questionBankModalVisible.value = true
+  loadQuestionFolders()
+  loadQuestionsForPicker()
+}
+
+function openQuestionBankModalForPaper() {
+  paperModalVisible.value = false
+  wizardModalVisible.value = true
+  if (wizardStep.value < 1) wizardStep.value = 1
+  loadQuestionFolders()
+  loadQuestionsForPicker()
+}
+
+// ===== 建卷相关 =====
+async function loadAvailablePapers() {
+  try {
+    const res = await getExamPapersApiV1ExamsPapersGet({ status: 'published' })
+    availablePapers.value = (res as any)?.items || res?.items || []
+  } catch {
+    availablePapers.value = []
+  }
+}
+
+async function loadCourses() {
+  try {
+    const res = await getCoursesApiV1CoursesGet({ size: 100 })
+    availableCourses.value = (res as any)?.items || res?.items || []
+  } catch {
+    availableCourses.value = []
+  }
+}
+
+async function loadTrainings() {
+  try {
+    const res = await getTrainingsApiV1TrainingsGet({ page: 1, size: 100 })
+    availableTrainings.value = (res as any)?.items || res?.items || []
+  } catch {
+    availableTrainings.value = []
+  }
+}
+
+async function loadKnowledgePoints() {
+  try {
+    const res = await getKnowledgePointsApiV1KnowledgePointsGet({ page: 1, size: 200 })
+    availableKnowledgePoints.value = (res as any)?.items || res?.items || []
+  } catch {
+    availableKnowledgePoints.value = []
+  }
+}
+
+function syncTrainingContext() {
+  if (routeTrainingId.value) {
+    selectedTrainingId.value = routeTrainingId.value
+  }
+}
+
+function getSelectedPaperSummary(paperId?: number) {
+  if (!paperId) return null
+  return availablePapers.value.find((item) => item.id === paperId) || null
+}
+
+function validateExamForm(paperId: number) {
+  if (!examForm.title.trim()) {
+    message.warning('请输入场次名称')
+    return false
+  }
+  if (activeTab.value === 'training' && !effectiveTrainingId.value) {
+    message.warning('请选择所属培训班')
+    return false
+  }
+  if (activeTab.value === 'admission' && examForm.scopeType !== 'all' && examForm.scopeTargetIds.length === 0) {
+    message.warning('请选择适用范围目标')
+    return false
+  }
+  if (Number(examForm.duration) < 10) {
+    message.warning('考试时长不能少于10分钟')
+    return false
+  }
+  if (Number(examForm.passingScore) < 1) {
+    message.warning('及格分不能小于1分')
+    return false
+  }
+  const paper = getSelectedPaperSummary(paperId)
+  const totalScore = Number(paper?.total_score ?? paper?.totalScore ?? 0)
+  if (totalScore > 0 && Number(examForm.passingScore) > totalScore) {
+    message.warning('及格分不能超过试卷总分')
+    return false
+  }
+  return true
+}
+
+function buildExamPayload(paperId: number) {
+  const payload: any = {
+    title: examForm.title.trim(),
+    paper_id: paperId,
+    status: examForm.status,
+    type: examForm.type,
+    max_attempts: examForm.maxAttempts,
+    start_time: examDateRange.value?.[0] || null,
+    end_time: examDateRange.value?.[1] || null,
+    duration: examForm.duration,
+    passing_score: examForm.passingScore,
+    description: examForm.description || undefined,
+    course_ids: examForm.courseIds.length > 0 ? examForm.courseIds : undefined,
+  }
+  if (activeTab.value === 'admission') {
+    payload.scope_type = examForm.scopeType
+    payload.scope_target_ids = examForm.scopeType === 'all' ? undefined : examForm.scopeTargetIds
+  } else {
+    payload.training_id = effectiveTrainingId.value
+  }
+  return payload
+}
+
+function openPaperModal() {
+  wizardSelectedQuestions.value = []
+  paperForm.title = ''
+  paperForm.duration = 60
+  paperForm.passingScore = 60
+  paperForm.description = ''
+  paperModalVisible.value = true
+}
+
+async function handleCreatePaper() {
+  if (!paperForm.title.trim()) { message.warning('请输入试卷标题'); return }
+  if (wizardSelectedQuestions.value.length === 0) { message.warning('请先选择题目'); return }
+  paperSubmitting.value = true
+  try {
+    const res = await createExamPaperApiV1ExamsPapersPost({
+      title: paperForm.title,
+      duration: paperForm.duration,
+      passing_score: paperForm.passingScore,
+      description: paperForm.description || undefined,
+      question_ids: wizardSelectedQuestions.value.map((q) => q.id),
+    } as any)
+    const paperId = (res as any)?.data?.id || (res as any)?.id
+    if (paperId) {
+      await publishExamPaperApiV1ExamsPapersPaperIdPublishPost(paperId)
+    }
+    message.success('试卷创建并发布成功')
+    paperModalVisible.value = false
+    await void fetchExams()
+  } catch (e: any) {
+    message.error(e?.message || '创建试卷失败')
+  } finally {
+    paperSubmitting.value = false
+  }
+}
+
+// ===== 建场次相关 =====
+function openExamModal() {
+  syncTrainingContext()
+  examForm.title = ''
+  examForm.paperId = undefined
+  examForm.status = 'upcoming'
+  examForm.scopeType = 'all'
+  examForm.scopeTargetIds = []
+  examForm.courseIds = []
+  examForm.maxAttempts = 1
+  examForm.type = 'formal'
+  examForm.duration = 60
+  examForm.passingScore = 60
+  examForm.description = ''
+  examDateRange.value = null
+  examSubmitting.value = false
+  loadAvailablePapers()
+  loadCourses()
+  if (activeTab.value === 'training') {
+    loadTrainings()
+  }
+  examModalVisible.value = true
+}
+
+async function handleCreateExam() {
+  if (!examForm.paperId) { message.warning('请选择试卷'); return }
+  if (!validateExamForm(examForm.paperId)) return
+  examSubmitting.value = true
+  try {
+    const payload = buildExamPayload(examForm.paperId)
+    if (activeTab.value === 'admission') {
+      await createAdmissionExamApiV1ExamsAdmissionPost(payload as any)
+    } else {
+      await createExamApiV1ExamsPost(payload as any)
+    }
+    message.success('考试创建成功')
+    examModalVisible.value = false
+    await void fetchExams()
+  } catch (e: any) {
+    message.error(e?.message || '创建考试失败')
+  } finally {
+    examSubmitting.value = false
+  }
+}
+
+// ===== 向导相关 =====
+function openWizardModal() {
+  syncTrainingContext()
+  wizardStep.value = 1
+  wizardSelectMode.value = 'manual'
+  paperForm.title = ''
+  paperForm.duration = 60
+  paperForm.passingScore = 60
+  paperForm.description = ''
+  examForm.title = ''
+  examForm.paperId = undefined
+  examForm.status = 'upcoming'
+  examForm.scopeType = 'all'
+  examForm.scopeTargetIds = []
+  examForm.courseIds = []
+  examForm.maxAttempts = 1
+  examForm.type = 'formal'
+  examForm.duration = 60
+  examForm.passingScore = 60
+  examForm.description = ''
+  examDateRange.value = null
+  wizardPaperId.value = null
+  wizardSelectedQuestions.value = []
+  aiKnowledgePointIds.value = []
+  aiTaskId.value = null
+  aiTaskStatus.value = 'pending'
+  aiPaperDraft.value = null
+  aiGenerating.value = false
+  if (aiPollTimer.value) clearTimeout(aiPollTimer.value)
+  loadQuestionFolders()
+  loadCourses()
+  loadKnowledgePoints()
+  if (activeTab.value === 'training') {
+    loadTrainings()
+  }
+  wizardModalVisible.value = true
+}
+
+async function handleProceedStep1() {
+  if (!paperForm.title.trim()) { message.warning('请输入试卷标题'); return }
+  if (wizardSelectMode.value === 'manual') {
+    // 手动选题模式 → 跳到 Step 2 创建试卷
+    wizardStep.value = 2
+  } else {
+    // 智能组卷模式 → AI 生成
+    await handleAiGeneratePaper()
+  }
+}
+
+async function handleWizardCreatePaper() {
+  if (!paperForm.title.trim()) { message.warning('请输入试卷标题'); return }
+  if (wizardSelectedQuestions.value.length === 0) { message.warning('请先选择题目'); return }
+  paperSubmitting.value = true
+  try {
+    // 计算总分：按各题型分值 × 已选数量
+    const totalScore = manualTotalScore.value
+    const finalPassingScore = paperForm.passingScore && paperForm.passingScore < totalScore
+      ? paperForm.passingScore
+      : Math.round(totalScore * 0.6)
+
+    const res = await createExamPaperApiV1ExamsPapersPost({
+      title: paperForm.title,
+      duration: paperForm.duration,
+      passing_score: finalPassingScore,
+      description: paperForm.description || undefined,
+      question_ids: wizardSelectedQuestions.value.map((q) => q.id),
+    } as any)
+    const paperId = (res as any)?.data?.id || (res as any)?.id
+    if (paperId) {
+      await publishExamPaperApiV1ExamsPapersPaperIdPublishPost(paperId)
+      wizardPaperId.value = paperId
+      examForm.paperId = paperId
+      examForm.duration = paperForm.duration
+      examForm.passingScore = finalPassingScore
+    }
+    wizardStep.value = 3
+  } catch (e: any) {
+    message.error(e?.message || '创建试卷失败')
+  } finally {
+    paperSubmitting.value = false
+  }
+}
+
+async function handleAiGeneratePaper() {
+  if (aiTotalCount.value === 0) { message.warning('请设置题型数量'); return }
+  if (aiPollTimer.value) clearTimeout(aiPollTimer.value)
+  aiGenerating.value = true
+  aiPaperDraft.value = null
+  aiTaskId.value = null
+  try {
+    const taskName = `组卷任务-${Date.now()}`
+    const res = await createPaperAssemblyTaskApiV1AiPaperAssemblyTasksPost({
+      task_name: taskName,
+      paper_title: paperForm.title || `试卷-${Date.now()}`,
+      paper_type: examForm.type,
+      assembly_mode: assemblyMode.value,
+      knowledge_point_ids: aiKnowledgePointIds.value.length > 0 ? aiKnowledgePointIds.value : undefined,
+      type_configs: aiTypeConfigs.map((c) => ({
+        type: c.type,
+        count: c.count,
+        difficulty: c.difficulty,
+        score: c.score,
+      })),
+      duration: examForm.duration,
+      passing_score: examForm.passingScore,
+    } as any)
+    const taskId = (res as any)?.data?.id || (res as any)?.id
+    if (!taskId) throw new Error('创建任务失败')
+    aiTaskId.value = taskId
+    aiTaskStatus.value = 'processing'
+    pollAiTaskStatus(taskId)
+  } catch (e: any) {
+    message.error(e?.message || 'AI 生成试卷失败')
+    aiGenerating.value = false
+  }
+}
+
+function pollAiTaskStatus(taskId: number) {
+  if (aiPollTimer.value) clearTimeout(aiPollTimer.value)
+  aiPollTimer.value = setTimeout(async () => {
+    try {
+      const res = await getPaperAssemblyTaskDetailApiV1AiPaperAssemblyTasksTaskIdGet(taskId) as any
+      const data = res?.data || res
+      aiTaskStatus.value = data?.status || 'processing'
+      if (data?.status === 'completed') {
+        aiPaperDraft.value = data?.paper_draft || null
+        paperForm.title = data?.paper_title || data?.paper_draft?.title || ''
+        aiGenerating.value = false
+        wizardStep.value = 2
+      } else if (data?.status === 'failed') {
+        message.error(data?.error_message || 'AI 生成失败')
+        aiGenerating.value = false
+      } else {
+        pollAiTaskStatus(taskId)
+      }
+    } catch {
+      pollAiTaskStatus(taskId)
+    }
+  }, 2000)
+}
+
+async function handleConfirmAndPublish() {
+  if (!aiTaskId.value) { message.warning('无有效任务'); return }
+  paperSubmitting.value = true
+  try {
+    const res = await confirmPaperAssemblyTaskApiV1AiPaperAssemblyTasksTaskIdConfirmPost(aiTaskId.value) as any
+    const confirmedPaperId = res?.data?.confirmed_paper_id || res?.confirmed_paper_id
+    if (!confirmedPaperId) throw new Error('确认失败，未返回试卷ID')
+    wizardPaperId.value = confirmedPaperId
+    // 计算及格分：从 AI 草稿总分按 60% 计算
+    const totalScore = aiPaperDraft.value?.total_score || aiTotalScore
+    const computedPassingScore = Math.round(totalScore * 0.6)
+    examForm.paperId = confirmedPaperId
+    examForm.duration = aiPaperDraft.value?.duration || examForm.duration
+    examForm.passingScore = computedPassingScore
+    wizardStep.value = 3
+  } catch (e: any) {
+    message.error(e?.message || '确认发布失败')
+  } finally {
+    paperSubmitting.value = false
+  }
+}
+
+function handleBackToStep1() {
+  wizardStep.value = 1
+  aiPaperDraft.value = null
+  aiTaskId.value = null
+}
+
+async function handleWizardCreateExam() {
+  if (!wizardPaperId.value) { message.warning('请先确认并发布试卷'); return }
+  if (!validateExamForm(wizardPaperId.value)) return
+  examSubmitting.value = true
+  try {
+    const payload = buildExamPayload(wizardPaperId.value)
+    if (activeTab.value === 'admission') {
+      await createAdmissionExamApiV1ExamsAdmissionPost(payload as any)
+    } else {
+      await createExamApiV1ExamsPost(payload as any)
+    }
+    message.success('考试创建成功')
+    wizardModalVisible.value = false
+    await void fetchExams()
+  } catch (e: any) {
+    message.error(e?.message || '创建考试失败')
+  } finally {
+    examSubmitting.value = false
+  }
+}
+
+watch(routeTrainingId, () => {
+  syncTrainingContext()
+}, { immediate: true })
 </script>
 
 <style scoped>
@@ -588,5 +1714,323 @@ function getExamCoverBackground(exam: ExamResponse, index: number) {
   .cover-tag-stack {
     justify-content: flex-start;
   }
+}
+
+/* ===== header 操作按钮 ===== */
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.header-actions :deep(.ant-btn) {
+  border-radius: 8px;
+  font-weight: 600;
+  height: 36px;
+  padding: 0 20px;
+  border: 1px solid rgba(37, 99, 235, 0.3);
+  color: var(--v2-primary);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.header-actions :deep(.ant-btn:hover) {
+  border-color: var(--v2-primary);
+  background: var(--v2-primary-light);
+}
+
+.header-actions :deep(.ant-btn-primary) {
+  background: #2563EB;
+  color: white;
+  border-color: #2563EB;
+}
+
+.header-actions :deep(.ant-btn-primary:hover) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+/* ===== 弹窗通用 ===== */
+.modal-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.modal-filter-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.modal-picker-layout {
+  display: flex;
+  gap: 16px;
+}
+
+.picker-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.picker-right {
+  width: 220px;
+  flex-shrink: 0;
+  border: 1px solid #f0f0f0;
+  border-radius: 12px;
+  padding: 12px;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.picker-right-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--v2-text-secondary);
+  margin-bottom: 12px;
+}
+
+.picker-right-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.picker-right-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: #f8f9ff;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.picker-right-q-type {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: #2563EB;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.picker-right-q-text {
+  flex: 1;
+  color: var(--v2-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-q-content {
+  font-size: 13px;
+  color: var(--v2-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 400px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #f0f0f0;
+}
+
+/* ===== 表单字段 ===== */
+.form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.field-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--v2-text-secondary);
+}
+
+.field-label.required::after {
+  content: ' *';
+  color: #ef4444;
+}
+
+.selected-questions-summary {
+  font-size: 13px;
+  color: var(--v2-text-secondary);
+  padding: 8px 12px;
+  background: #f8f9ff;
+  border-radius: 8px;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.text-muted {
+  color: var(--v2-text-muted);
+}
+
+/* ===== 向导弹窗 ===== */
+.wizard-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.wizard-title {
+  margin: 0 0 4px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--v2-text-primary);
+}
+
+.wizard-subtitle {
+  margin: 0;
+  font-size: 13px;
+  color: var(--v2-text-secondary);
+}
+
+.wizard-steps {
+  margin-bottom: 24px;
+}
+
+.wizard-step-content {
+  min-height: 400px;
+}
+
+/* ===== Step 1 模式切换 ===== */
+.step1-mode-tabs {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.manual-select-section,
+.ai-select-section {
+  min-height: 380px;
+}
+
+/* ===== AI 智能组卷 ===== */
+.type-config-section {
+  margin: 16px 0;
+}
+
+.type-config-header {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--v2-text-secondary);
+  margin-bottom: 10px;
+}
+
+.ai-summary {
+  display: flex;
+  gap: 24px;
+  font-size: 14px;
+  color: var(--v2-text-secondary);
+  padding: 10px 14px;
+  background: #f8f9ff;
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.ai-summary strong {
+  color: var(--v2-primary);
+}
+
+.ai-generating {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+  border-radius: 8px;
+  color: #d46b08;
+  font-size: 13px;
+  margin: 12px 0;
+}
+
+/* ===== 试卷草稿预览 ===== */
+.paper-draft-preview {
+  border: 1px solid #f0f0f0;
+  border-radius: 12px;
+  overflow: hidden;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.paper-draft-header {
+  padding: 16px 20px;
+  background: #fafafa;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.paper-draft-title {
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--v2-text-primary);
+}
+
+.paper-draft-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--v2-text-secondary);
+  align-items: center;
+}
+
+.paper-draft-questions {
+  padding: 12px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.paper-draft-q-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #f8f9ff;
+  border-radius: 6px;
+  font-size: 13px;
+}
+
+.paper-draft-q-num {
+  flex-shrink: 0;
+  font-weight: 700;
+  color: var(--v2-text-secondary);
+  min-width: 24px;
+}
+
+.paper-draft-q-text {
+  flex: 1;
+  color: var(--v2-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.paper-draft-q-score {
+  flex-shrink: 0;
+  color: var(--v2-primary);
+  font-weight: 600;
 }
 </style>

@@ -41,8 +41,9 @@ class QuestionController:
                 visibility_mode,
             )
         except Exception as e:
-            logger.error(f"获取题目列表异常: {e}")
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取题目列表失败")
+            import traceback
+            logger.error(f"获取题目列表异常: {e}\n{traceback.format_exc()}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"获取题目列表失败: {str(e)}")
 
     def create_question(self, data: QuestionCreate, user_id: int):
         try:

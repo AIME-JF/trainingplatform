@@ -2,6 +2,11 @@
   <div class="ai-paper-page">
     <!-- 顶栏 -->
     <header class="page-header">
+      <div class="header-left">
+        <a-button type="text" @click="router.push({ name: 'PaperManage' })">
+          <template #icon><LeftOutlined /></template>
+        </a-button>
+      </div>
       <div class="header-title">
         <h1 class="header-h1">{{ viewMode === 'list' ? '任务列表' : '智能出卷' }}</h1>
         <p class="header-desc">{{ viewMode === 'list' ? '查看和管理您的智能出卷任务' : '选择生成模式并设定规则，AI 将自动为您生成高质量试卷草稿。' }}</p>
@@ -613,8 +618,9 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
+import { LeftOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import {
   confirmAiPaperAssemblyTask,
@@ -647,6 +653,7 @@ import { sortQuestionsByType } from './utils/questionSort'
 
 const authStore = useAuthStore()
 const route = useRoute()
+const router = useRouter()
 
 // 状态
 const activeMode = ref('assemble')

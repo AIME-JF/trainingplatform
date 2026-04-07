@@ -3,6 +3,9 @@
     <!-- 顶部通栏 Header -->
     <header class="page-header">
       <div class="header-left">
+        <a-button type="text" @click="router.push({ name: 'QuestionBank' })">
+          <template #icon><LeftOutlined /></template>
+        </a-button>
         <div class="header-logo">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
         </div>
@@ -386,7 +389,9 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
+import { LeftOutlined } from '@ant-design/icons-vue'
 import { useAuthStore } from '@/stores/auth'
 import {
   confirmAiQuestionTask,
@@ -404,6 +409,7 @@ import { createKnowledgePointRemoteSelect } from './utils/knowledgePointRemoteSe
 import { sortQuestionsByType } from './utils/questionSort'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 
+const router = useRouter()
 const authStore = useAuthStore()
 const difficultyLabels = { 1: '1级', 2: '2级', 3: '3级', 4: '4级', 5: '5级' }
 const typeLabels = { single: '单选题', multi: '多选题', judge: '判断题' }

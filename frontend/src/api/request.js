@@ -55,7 +55,7 @@ function extractErrorMessage(payload) {
 
 const request = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
-  timeout: 15000,
+  timeout: 30000,
 })
 
 // Request interceptor: attach JWT token & convert keys to snake_case

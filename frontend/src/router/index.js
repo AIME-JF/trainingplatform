@@ -12,7 +12,6 @@ import {
   ENROLL_MANAGE_PAGE_PERMISSIONS,
   EXAM_LIST_PAGE_PERMISSIONS,
   EXAM_MANAGE_PAGE_PERMISSIONS,
-  KNOWLEDGE_POINT_PAGE_PERMISSIONS,
   PAPER_PAGE_PERMISSIONS,
   QUESTION_BANK_PAGE_PERMISSIONS,
   REPORT_PAGE_PERMISSIONS,
@@ -78,13 +77,13 @@ const router = createRouter({
           path: 'exam/manage',
           name: 'ExamManage',
           component: () => import('../views/exam/ExamManage.vue'),
-          meta: { title: '考试场次', anyPermissions: EXAM_MANAGE_PAGE_PERMISSIONS },
+          meta: { title: '考试管理', anyPermissions: EXAM_MANAGE_PAGE_PERMISSIONS },
         },
         {
           path: 'paper/repository',
           name: 'PaperManage',
           component: () => import('../views/exam/PaperManage.vue'),
-          meta: { title: '试卷中心', anyPermissions: PAPER_PAGE_PERMISSIONS },
+          meta: { title: '试卷管理', anyPermissions: PAPER_PAGE_PERMISSIONS },
         },
         {
           path: 'paper/repository/:id',
@@ -96,13 +95,7 @@ const router = createRouter({
           path: 'question/repository',
           name: 'QuestionBank',
           component: () => import('../views/exam/QuestionBank.vue'),
-          meta: { title: '题库中心', anyPermissions: [...QUESTION_BANK_PAGE_PERMISSIONS, ...AI_QUESTION_PAGE_PERMISSIONS, ...KNOWLEDGE_POINT_PAGE_PERMISSIONS] },
-        },
-        {
-          path: 'question/knowledge-points',
-          name: 'KnowledgePointManage',
-          component: () => import('../views/exam/QuestionBank.vue'),
-          meta: { title: '知识点', anyPermissions: [...QUESTION_BANK_PAGE_PERMISSIONS, ...AI_QUESTION_PAGE_PERMISSIONS, ...KNOWLEDGE_POINT_PAGE_PERMISSIONS] },
+          meta: { title: '题库管理', anyPermissions: [...QUESTION_BANK_PAGE_PERMISSIONS, ...AI_QUESTION_PAGE_PERMISSIONS] },
         },
         {
           path: 'exam/do/:id',
