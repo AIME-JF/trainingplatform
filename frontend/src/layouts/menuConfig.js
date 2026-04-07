@@ -1,4 +1,5 @@
 import {
+  AppstoreOutlined,
   HomeOutlined,
   ReadOutlined,
   TeamOutlined,
@@ -35,6 +36,14 @@ import {
   USER_MANAGE_PAGE_PERMISSIONS,
   MY_RESOURCE_PAGE_PERMISSIONS,
 } from '@/constants/pagePermissions'
+import {
+  COMMUNITY_MANAGEMENT_TITLE,
+  COMMUNITY_RESOURCE_MANAGE_TITLE,
+  COURSE_RESOURCES_TITLE,
+  LEARNING_CENTER_TITLE,
+  MY_UPLOAD_TITLE,
+  RESOURCE_BROWSE_TITLE,
+} from '@/constants/navigationTitles'
 
 export const appMenuConfig = [
   {
@@ -45,12 +54,12 @@ export const appMenuConfig = [
   },
   {
     key: 'learn',
-    label: '课程',
+    label: LEARNING_CENTER_TITLE,
     icon: ReadOutlined,
     children: [
       {
         key: '/courses',
-        label: '课程',
+        label: COURSE_RESOURCES_TITLE,
         anyPermissions: COURSE_PAGE_PERMISSIONS,
       },
       {
@@ -59,24 +68,31 @@ export const appMenuConfig = [
         roles: ['admin', 'instructor'],
       },
       {
+        key: '/resource/teaching-generate',
+        label: '教学资源生成',
+        anyPermissions: TEACHING_RESOURCE_GENERATION_PAGE_PERMISSIONS,
+      },
+    ],
+  },
+  {
+    key: 'community',
+    label: COMMUNITY_MANAGEMENT_TITLE,
+    icon: AppstoreOutlined,
+    children: [
+      {
         key: '/resource/library',
-        label: '社区精选',
+        label: COMMUNITY_RESOURCE_MANAGE_TITLE,
         anyPermissions: [],
       },
       {
         key: '/resource/recommend',
-        label: '资源推荐',
+        label: RESOURCE_BROWSE_TITLE,
         anyPermissions: [],
       },
       {
         key: '/resource/my',
-        label: '我的空间',
+        label: MY_UPLOAD_TITLE,
         anyPermissions: MY_RESOURCE_PAGE_PERMISSIONS,
-      },
-      {
-        key: '/resource/teaching-generate',
-        label: '教学资源生成',
-        anyPermissions: TEACHING_RESOURCE_GENERATION_PAGE_PERMISSIONS,
       },
     ],
   },

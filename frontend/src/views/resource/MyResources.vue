@@ -1,9 +1,9 @@
 <template>
   <div class="my-resources-page">
     <div class="page-header">
-      <h2>我的空间</h2>
+      <h2>{{ MY_UPLOAD_TITLE }}</h2>
       <a-space>
-        <a-button @click="$router.push('/resource/library')">社区精选</a-button>
+        <a-button @click="$router.push('/resource/library')">{{ COMMUNITY_RESOURCE_MANAGE_TITLE }}</a-button>
         <permissions-tooltip
           :allowed="canUseTeachingGeneration"
           tips="需要 USE_TEACHING_RESOURCE_GENERATION 权限"
@@ -32,7 +32,7 @@
           <a-select-option value="rejected">已驳回</a-select-option>
           <a-select-option value="offline">已下线</a-select-option>
         </a-select>
-        <a-input-search v-model:value="query.search" class="resource-search-input" placeholder="搜索我的空间资源" @search="fetchMine" />
+        <a-input-search v-model:value="query.search" class="resource-search-input" placeholder="搜索我的上传资源" @search="fetchMine" />
       </a-space>
     </a-card>
 
@@ -130,6 +130,7 @@ import { useAuthStore } from '@/stores/auth'
 import { getResources, publishResource, offlineResource, deleteResource } from '@/api/resource'
 import { submitResource, getReviewWorkflow } from '@/api/review'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
+import { COMMUNITY_RESOURCE_MANAGE_TITLE, MY_UPLOAD_TITLE } from '@/constants/navigationTitles'
 import ResourceUploadModal from './components/ResourceUploadModal.vue'
 
 const router = useRouter()

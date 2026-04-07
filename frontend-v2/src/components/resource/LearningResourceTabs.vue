@@ -21,6 +21,7 @@ import {
   COURSE_PERMISSIONS,
   TEACHING_RESOURCE_GENERATION_PERMISSIONS,
 } from '@/constants/permissions'
+import { COURSE_RESOURCES_TITLE } from '@/constants/navigationTitles'
 
 interface TabItem {
   path: string
@@ -33,7 +34,7 @@ const route = useRoute()
 const authStore = useAuthStore()
 
 const tabs: TabItem[] = [
-  { path: '/resource/courses', label: '课程', permissions: COURSE_PERMISSIONS },
+  { path: '/resource/courses', label: COURSE_RESOURCES_TITLE, permissions: COURSE_PERMISSIONS },
   { path: '/resource/teaching-generate', label: '教学资源生成', permissions: TEACHING_RESOURCE_GENERATION_PERMISSIONS },
 ]
 

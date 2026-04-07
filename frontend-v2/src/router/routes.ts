@@ -6,6 +6,7 @@ import {
   COURSE_PERMISSIONS,
   TEACHING_RESOURCE_GENERATION_PERMISSIONS,
 } from '@/constants/permissions'
+import { COURSE_RESOURCES_TITLE } from '@/constants/navigationTitles'
 
 const MobileLayout = () => import('@/layouts/MobileLayout.vue')
 const AuthLayout = () => import('@/layouts/AuthLayout.vue')
@@ -132,7 +133,7 @@ export const routes: RouteRecordRaw[] = [
         path: 'resource/courses',
         name: 'LearningCourses',
         component: () => import('@/views/resource/Courses.vue'),
-        meta: { title: '课程', anyPermissions: COURSE_PERMISSIONS },
+        meta: { title: COURSE_RESOURCES_TITLE, anyPermissions: COURSE_PERMISSIONS },
       },
       {
         path: 'resource/courses/:id',

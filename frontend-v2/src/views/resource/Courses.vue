@@ -2,7 +2,7 @@
   <div class="page-content resource-page">
     <div class="page-header">
       <div>
-        <h1 class="page-title">课程</h1>
+        <h1 class="page-title">{{ COURSE_RESOURCES_TITLE }}</h1>
       </div>
       <a-button v-if="canCreateCourse" type="primary" @click="openCreate">创建课程</a-button>
     </div>
@@ -207,6 +207,7 @@ import { deleteCourse, listCourses, listUsers } from '@/api/learning-resource'
 import { useAuthStore } from '@/stores/auth'
 import CourseEditorModal from '@/components/resource/CourseEditorModal.vue'
 import ResourceSearchInput from '@/components/resource/ResourceSearchInput.vue'
+import { COURSE_RESOURCES_TITLE } from '@/constants/navigationTitles'
 import {
   formatCourseDuration,
   formatDate,

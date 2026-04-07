@@ -29,6 +29,12 @@ import {
   USER_MANAGE_PAGE_PERMISSIONS,
   MY_RESOURCE_PAGE_PERMISSIONS,
 } from '../constants/pagePermissions'
+import {
+  COMMUNITY_RESOURCE_MANAGE_TITLE,
+  COURSE_RESOURCES_TITLE,
+  MY_UPLOAD_TITLE,
+  RESOURCE_BROWSE_TITLE,
+} from '../constants/navigationTitles'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -54,7 +60,7 @@ const router = createRouter({
           path: 'courses',
           name: 'CourseList',
           component: () => import('../views/courses/List.vue'),
-          meta: { title: '课程', icon: 'PlayCircleOutlined', anyPermissions: COURSE_PAGE_PERMISSIONS },
+          meta: { title: COURSE_RESOURCES_TITLE, icon: 'PlayCircleOutlined', anyPermissions: COURSE_PAGE_PERMISSIONS },
         },
         {
           path: 'courses/:id',
@@ -188,13 +194,13 @@ const router = createRouter({
           path: 'resource/library',
           name: 'ResourceLibrary',
           component: () => import('../views/resource/Library.vue'),
-          meta: { title: '社区精选' },
+          meta: { title: COMMUNITY_RESOURCE_MANAGE_TITLE },
         },
         {
           path: 'resource/recommend',
           name: 'ResourceRecommend',
           component: () => import('../views/resource/Recommend.vue'),
-          meta: { title: '资源推荐' },
+          meta: { title: RESOURCE_BROWSE_TITLE },
         },
         {
           path: 'resource/detail/:id',
@@ -206,7 +212,7 @@ const router = createRouter({
           path: 'resource/my',
           name: 'MyResources',
           component: () => import('../views/resource/MyResources.vue'),
-          meta: { title: '我的空间', anyPermissions: MY_RESOURCE_PAGE_PERMISSIONS },
+          meta: { title: MY_UPLOAD_TITLE, anyPermissions: MY_RESOURCE_PAGE_PERMISSIONS },
         },
         {
           path: 'resource/teaching-generate',

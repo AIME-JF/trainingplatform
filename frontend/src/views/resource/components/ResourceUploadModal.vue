@@ -90,12 +90,12 @@
           </a-button>
         </permissions-tooltip>
         <permissions-tooltip
-          :allowed="canSubmitReview"
-          tips="需要同时具备 CREATE_RESOURCE 和 SUBMIT_RESOURCE_REVIEW 权限"
+          :allowed="canPrimarySubmit"
+          :tips="primaryActionTips"
           v-slot="{ disabled }"
         >
-          <a-button type="primary" :loading="submitting" :disabled="disabled" @click="submitAndSubmitReview">
-            提交审核
+          <a-button type="primary" :loading="submitting" :disabled="disabled" @click="handlePrimarySubmit">
+            {{ primaryActionLabel }}
           </a-button>
         </permissions-tooltip>
       </div>
@@ -126,8 +126,16 @@ const emit = defineEmits(['update:open', 'success'])
 const authStore = useAuthStore()
 const submitting = ref(false)
 const fileList = ref([])
+const isAdminUser = computed(() => authStore.isAdmin || (authStore.currentUser?.roleCodes || []).includes('admin'))
 const canSaveDraft = computed(() => authStore.hasAnyPermission(['CREATE_RESOURCE', 'VIEW_RESOURCE_ALL']))
 const canSubmitReview = computed(() => authStore.hasAllPermissions(['CREATE_RESOURCE', 'SUBMIT_RESOURCE_REVIEW']))
+const canPrimarySubmit = computed(() => (isAdminUser.value ? canSaveDraft.value : canSubmitReview.value))
+const primaryActionLabel = computed(() => (isAdminUser.value ? '直接上传' : '提交审核'))
+const primaryActionTips = computed(() => (
+  isAdminUser.value
+    ? '需要 CREATE_RESOURCE 或 VIEW_RESOURCE_ALL 权限；管理员手动上传后将直接发布'
+    : '需要同时具备 CREATE_RESOURCE 和 SUBMIT_RESOURCE_REVIEW 权限'
+))
 
 const ALLOWED_EXTENSIONS = {
   video: ['mp4'],
@@ -250,7 +258,7 @@ function beforeUpload(file) {
   return false
 }
 
-async function createDraft() {
+async function createDraft({ directPublish = false } = {}) {
   if (!form.title.trim()) {
     message.warning('请输入资源标题')
     return null
@@ -294,6 +302,7 @@ async function createDraft() {
   const payload = {
     title: form.title,
     summary: form.summary,
+    directPublish,
     contentType: form.contentType,
     scopeType: form.scopeType,
     scopeTargetIds: form.scopeTargetIds,
@@ -339,6 +348,29 @@ async function submitAndSubmitReview() {
   } finally {
     submitting.value = false
   }
+}
+
+async function submitAndDirectPublish() {
+  if (!canPrimarySubmit.value) return
+  submitting.value = true
+  try {
+    const resource = await createDraft({ directPublish: true })
+    if (!resource) return
+    message.success('资源已直接上传并发布')
+    emit('success', { resource, action: 'direct_publish' })
+    closeModal()
+  } catch (error) {
+    message.error(error.message || '直接上传失败')
+  } finally {
+    submitting.value = false
+  }
+}
+
+function handlePrimarySubmit() {
+  if (isAdminUser.value) {
+    return submitAndDirectPublish()
+  }
+  return submitAndSubmitReview()
 }
 </script>
 

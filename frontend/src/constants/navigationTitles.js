@@ -1,0 +1,6 @@
+export const LEARNING_CENTER_TITLE = '学习中心'
+export const COURSE_RESOURCES_TITLE = '课程资源'
+export const COMMUNITY_MANAGEMENT_TITLE = '社区管理'
+export const COMMUNITY_RESOURCE_MANAGE_TITLE = '社区资源管理'
+export const RESOURCE_BROWSE_TITLE = '资源浏览'
+export const MY_UPLOAD_TITLE = '我的上传'

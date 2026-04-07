@@ -6,8 +6,8 @@
         <p class="header-subtitle">左侧查看资源，右侧查看资源信息</p>
       </div>
       <a-space>
-        <a-button @click="$router.push('/resource/recommend')">返回推荐</a-button>
-        <a-button @click="$router.push('/resource/library')">返回精选</a-button>
+        <a-button @click="$router.push('/resource/recommend')">返回{{ RESOURCE_BROWSE_TITLE }}</a-button>
+        <a-button @click="$router.push('/resource/library')">返回{{ COMMUNITY_RESOURCE_MANAGE_TITLE }}</a-button>
       </a-space>
     </div>
 
@@ -99,6 +99,7 @@ import { message } from 'ant-design-vue'
 import { useRoute } from 'vue-router'
 import { getResource } from '@/api/resource'
 import { recordResourceEvent } from '@/api/recommendation'
+import { COMMUNITY_RESOURCE_MANAGE_TITLE, RESOURCE_BROWSE_TITLE } from '@/constants/navigationTitles'
 import ResourceViewer from './components/ResourceViewer.vue'
 
 const route = useRoute()

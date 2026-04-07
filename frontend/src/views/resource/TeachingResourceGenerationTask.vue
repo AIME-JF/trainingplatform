@@ -7,7 +7,7 @@
         <p class="page-sub">描述教学需求，系统智能生成课件资源</p>
       </div>
       <div class="page-header-actions">
-        <a-button @click="$router.push('/resource/my')">返回我的空间</a-button>
+        <a-button @click="$router.push('/resource/my')">返回{{ MY_UPLOAD_TITLE }}</a-button>
         <a-tag color="blue">建议型任务</a-tag>
       </div>
     </div>
@@ -259,7 +259,7 @@
 
             <!-- Confirmed: read-only display -->
             <template v-if="activeTask.status === 'confirmed'">
-              <a-result status="success" title="已保存为资源草稿" sub-title="可继续在我的空间中走审核流程">
+              <a-result status="success" title="已保存为资源草稿" :sub-title="`可继续在${MY_UPLOAD_TITLE}中走审核流程`">
                 <template #extra>
                   <a-button
                     v-if="activeTask.confirmedResourceId"
@@ -331,6 +331,7 @@ import {
 } from '@/api/ai'
 import { createResourceTag, getResourceTags } from '@/api/resource'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
+import { MY_UPLOAD_TITLE } from '@/constants/navigationTitles'
 import AdmissionScopeSelector from '@/views/exam/components/AdmissionScopeSelector.vue'
 import AiTaskTimeline from '@/views/exam/components/AiTaskTimeline.vue'
 import { useCreatableTagSelect } from '@/utils/creatableTagSelect'

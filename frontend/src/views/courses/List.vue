@@ -1,7 +1,7 @@
 <template>
   <div class="course-list-page">
     <div class="page-header">
-      <h2>课程</h2>
+      <h2>课程资源</h2>
       <a-button v-if="canCreateCourse" type="primary" @click="openCreate">
         <template #icon><PlusOutlined /></template>创建课程
       </a-button>

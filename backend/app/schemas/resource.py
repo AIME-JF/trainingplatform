@@ -55,6 +55,7 @@ class ResourceTagCreate(BaseModel):
 class ResourceCreate(BaseModel):
     title: str = Field(..., max_length=200, description='资源标题')
     summary: Optional[str] = Field(None, description='资源摘要')
+    direct_publish: bool = Field(False, description='管理员手动上传时是否直接发布')
     content_type: str = Field('video', description='内容类型')
     source_type: str = Field('ugc', description='来源类型')
     scope: Optional[str] = Field(None, description='可见范围摘要')
