@@ -105,7 +105,14 @@ export function getCourseCategoryLabel(category?: string | null) {
   return COURSE_CATEGORIES.find((item) => item.key === category)?.label ?? category ?? '-'
 }
 
-export function getCourseFileTypeLabel(fileType?: string | null) {
+export function isCourseStructurePending(fileType?: string | null, chapterCount?: number | null) {
+  return Number(chapterCount || 0) <= 0 || fileType === 'pending'
+}
+
+export function getCourseFileTypeLabel(fileType?: string | null, chapterCount?: number | null) {
+  if (isCourseStructurePending(fileType, chapterCount)) {
+    return '未配置'
+  }
   if (fileType === 'video') {
     return '视频型'
   }
@@ -124,7 +131,10 @@ export function getCourseFileTypeLabel(fileType?: string | null) {
   return '文档型'
 }
 
-export function getCourseFileTypeColor(fileType?: string | null) {
+export function getCourseFileTypeColor(fileType?: string | null, chapterCount?: number | null) {
+  if (isCourseStructurePending(fileType, chapterCount)) {
+    return 'default'
+  }
   if (fileType === 'video') {
     return 'purple'
   }

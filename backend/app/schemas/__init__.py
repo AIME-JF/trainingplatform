@@ -42,6 +42,7 @@ from .course import (
     CourseNoteUpdate, CourseNoteResponse,
     CourseQACreate, CourseQAResponse,
     CourseTagCreate, CourseTagResponse, CourseLearningStatusResponse,
+    CourseRelatedTrainingResponse,
 )
 # 培训相关
 from .training import (
@@ -135,7 +136,7 @@ from .resource import (
     ResourceCreate, ResourceUpdate,
     ResourceTagCreate, ResourceTagResponse,
     ResourceMediaLinkPayload, ResourceMediaLinkResponse,
-    ResourceListItemResponse, ResourceDetailResponse,
+    ResourceListItemResponse, ResourceDetailResponse, CourseBoundResourceResponse,
     ResourceCommentCreate, ResourceCommentResponse,
     ResourceLikeStatusResponse, ResourceShareStatusResponse,
     CourseResourceBindRequest, TrainingResourceBindRequest
@@ -187,6 +188,7 @@ __all__ = [
     "ChapterCreate", "ChapterUpdate", "ChapterResponse",
     "CourseProgressUpdate", "CourseProgressResponse", "CourseNoteUpdate", "CourseNoteResponse",
     "CourseQACreate", "CourseQAResponse", "CourseTagCreate", "CourseTagResponse", "CourseLearningStatusResponse",
+    "CourseRelatedTrainingResponse",
     # 培训相关
     "TrainingCreate", "TrainingUpdate", "TrainingResponse", "TrainingListResponse", "TrainingStatsResponse",
     "TrainingBaseCreate", "TrainingBaseUpdate", "TrainingBaseResponse",
@@ -260,7 +262,7 @@ __all__ = [
     "ResourceCreate", "ResourceUpdate",
     "ResourceTagCreate", "ResourceTagResponse",
     "ResourceMediaLinkPayload", "ResourceMediaLinkResponse",
-    "ResourceListItemResponse", "ResourceDetailResponse",
+    "ResourceListItemResponse", "ResourceDetailResponse", "CourseBoundResourceResponse",
     "ResourceCommentCreate", "ResourceCommentResponse",
     "ResourceLikeStatusResponse", "ResourceShareStatusResponse",
     "CourseResourceBindRequest", "TrainingResourceBindRequest",

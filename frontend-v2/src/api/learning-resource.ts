@@ -2,14 +2,13 @@ import type {
   AITaskSummaryResponse,
   CourseCreate,
   CourseLearningStatusResponse,
-  CourseListResponse,
+  CourseListResponse as GeneratedCourseListResponse,
   CourseNoteResponse,
   CourseNoteUpdate,
   CourseProgressUpdate,
   CourseQACreate,
   CourseQAResponse,
-  CourseResourceBindRequest,
-  CourseResponse,
+  CourseResponse as GeneratedCourseResponse,
   CourseTagCreate,
   CourseTagResponse,
   CourseUpdate,
@@ -117,14 +116,11 @@ export type {
   AITaskSummaryResponse,
   CourseCreate,
   CourseLearningStatusResponse,
-  CourseListResponse,
   CourseNoteResponse,
   CourseNoteUpdate,
   CourseProgressUpdate,
   CourseQACreate,
   CourseQAResponse,
-  CourseResourceBindRequest,
-  CourseResponse,
   CourseTagResponse,
   CourseUpdate,
   DepartmentSimpleResponse,
@@ -155,6 +151,70 @@ export type {
 export type ResourceListItemResponse = GeneratedResourceListItemResponse
 
 export type ResourceDetailResponse = GeneratedResourceDetailResponse
+
+export interface CourseRelatedTrainingResponse {
+  id: number
+  name: string
+  class_code?: string | null
+  status?: string
+  start_date?: string | null
+  end_date?: string | null
+  instructor_name?: string | null
+  relation_roles?: string[]
+}
+
+export interface CourseBoundResourceResponse {
+  id: number
+  ref_id: number
+  binding_type: 'resource' | 'library_item'
+  resource_id?: number | null
+  library_item_id?: number | null
+  title: string
+  summary?: string | null
+  content_type: string
+  source_type?: string | null
+  source_label?: string | null
+  status?: string | null
+  status_label?: string | null
+  visibility_type?: string | null
+  uploader_id?: number | null
+  uploader_name?: string | null
+  owner_department_id?: number | null
+  owner_department_name?: string | null
+  cover_media_file_id?: number | null
+  cover_url?: string | null
+  tags?: string[]
+  file_id?: number | null
+  file_name?: string | null
+  file_url?: string | null
+  mime_type?: string | null
+  duration_seconds?: number
+  knowledge_content_html?: string | null
+  is_public?: boolean | null
+  created_at?: string | null
+  updated_at?: string | null
+}
+
+export interface CourseResourceBindRequest {
+  resource_id?: number | null
+  library_item_id?: number | null
+  usage_type?: string
+  sort_order?: number
+}
+
+export type CourseListResponse = GeneratedCourseListResponse & {
+  can_manage_course?: boolean
+}
+
+export type CourseResponse = Omit<GeneratedCourseResponse, 'resources'> & {
+  can_manage_course?: boolean
+  related_trainings?: CourseRelatedTrainingResponse[]
+  resources?: CourseBoundResourceResponse[]
+}
+
+export type PaginatedCourseListResponse = Omit<PaginatedResponseCourseListResponse, 'items'> & {
+  items: CourseListResponse[]
+}
 
 export type PaginatedResourceListResponse = PaginatedResponseResourceListItemResponse
 
@@ -257,7 +317,7 @@ export async function deleteResourceComment(resourceId: number, commentId: numbe
 }
 
 export async function listCourses(params?: GetCoursesApiV1CoursesGetParams) {
-  return (await getCoursesApiV1CoursesGet(params)) as PaginatedResponseCourseListResponse
+  return (await getCoursesApiV1CoursesGet(params)) as PaginatedCourseListResponse
 }
 
 export async function getCourseDetail(courseId: number) {
@@ -285,11 +345,14 @@ export async function createCourseTag(tag: CourseTagCreate) {
 }
 
 export async function listCourseResources(courseId: number) {
-  return (await listCourseResourcesApiV1CoursesCourseIdResourcesGet(courseId)) as ResourceListItemResponse[]
+  return (await listCourseResourcesApiV1CoursesCourseIdResourcesGet(courseId)) as CourseBoundResourceResponse[]
 }
 
 export async function bindCourseResource(courseId: number, payload: CourseResourceBindRequest) {
-  return (await addCourseResourceApiV1CoursesCourseIdResourcesPost(courseId, payload)) as ResourceListItemResponse
+  return (await addCourseResourceApiV1CoursesCourseIdResourcesPost(
+    courseId,
+    payload as never,
+  )) as CourseBoundResourceResponse
 }
 
 export async function unbindCourseResource(courseId: number, resourceId: number) {

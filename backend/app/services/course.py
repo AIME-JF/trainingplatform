@@ -16,12 +16,13 @@ from app.models.library import LibraryItem
 from app.models.media import MediaFile
 from app.models.resource import Resource, ResourceMediaLink, CourseResourceRef, ResourceTagRelation
 from app.models.role import Role
+from app.models.training import Training, TrainingCourse
 from app.models.user import User
 from app.schemas import PaginatedResponse
 from app.schemas.course import (
     ChapterResponse, CourseCreate, CourseLearningStatusResponse, CourseListResponse,
     CourseNoteResponse, CourseNoteUpdate, CourseProgressResponse, CourseProgressUpdate,
-    CourseQAResponse, CourseQACreate, CourseResponse, CourseTagResponse, CourseUpdate,
+    CourseQAResponse, CourseQACreate, CourseRelatedTrainingResponse, CourseResponse, CourseTagResponse, CourseUpdate,
 )
 from app.schemas.exam import (
     ADMISSION_SCOPE_ALL,
@@ -29,7 +30,7 @@ from app.schemas.exam import (
     ADMISSION_SCOPE_ROLE,
     ADMISSION_SCOPE_USER,
 )
-from app.schemas.resource import CourseResourceBindRequest, ResourceListItemResponse
+from app.schemas.resource import CourseBoundResourceResponse, CourseResourceBindRequest
 from app.services.auth import auth_service
 from app.services.course_progress import CourseProgressService
 from app.utils.data_scope import DataScopeContext, build_data_scope_context, can_access_scoped_object
@@ -154,7 +155,7 @@ class CourseService:
                     id=course.id,
                     title=course.title,
                     category=course.category,
-                    file_type=course.file_type,
+                    file_type=self._resolve_course_file_type_for_response(course, course.chapters or []),
                     description=course.description,
                     created_by=course.created_by,
                     instructor_id=course.instructor_id,
@@ -180,6 +181,7 @@ class CourseService:
                     chapter_count=resolved_chapter_count,
                     completed_chapter_count=resolved_completed_chapter_count,
                     last_studied_at=summary.last_studied_at if summary else None,
+                    can_manage_course=self._can_manage_course(course, current_user),
                     created_at=course.created_at,
                 )
             )
@@ -231,7 +233,7 @@ class CourseService:
             created_by=user_id,
             instructor_id=data.instructor_id,
             duration=0,
-            difficulty=data.difficulty,
+            difficulty=self._normalize_course_difficulty(getattr(data, "difficulty", None)),
             is_required=data.is_required,
             cover_color=data.cover_color,
             scope=scope_summary,
@@ -243,6 +245,11 @@ class CourseService:
 
         self._sync_course_tags(course, data.tags)
         self._upsert_course_chapters(course, data.chapters or [], actor_user_id=user_id)
+        self._sync_course_shell_state(
+            course,
+            preferred_file_type=data.file_type,
+            infer_from_chapters=bool(data.chapters),
+        )
 
         self.db.commit()
         course = self._get_course_entity(course.id)
@@ -283,6 +290,11 @@ class CourseService:
         next_scope_type = update_data.pop("scope_type", course.scope_type or ADMISSION_SCOPE_ALL)
         next_scope_target_ids = update_data.pop("scope_target_ids", course.scope_target_ids or [])
         update_data.pop("scope", None)
+        if "difficulty" in update_data:
+            update_data["difficulty"] = self._normalize_course_difficulty(
+                update_data.get("difficulty"),
+                default=course.difficulty or 1,
+            )
 
         for field, value in update_data.items():
             setattr(course, field, value)
@@ -299,11 +311,16 @@ class CourseService:
             self._sync_course_tags(course, tags)
         if chapters_data is not None:
             self._upsert_course_chapters(course, chapters_data, actor_user_id=actor_user_id)
+        self._sync_course_shell_state(
+            course,
+            preferred_file_type=update_data.get("file_type"),
+            infer_from_chapters=chapters_data is not None,
+        )
 
         self.db.commit()
         course = self._get_course_entity(course_id)
         logger.info(f"更新课程: {course.title}")
-        return self._to_response(course)
+        return self._to_response(course, user_id=actor_user_id)
 
     def delete_course(self, course_id: int) -> bool:
         """删除课程及其关联的章节、笔记、进度记录"""
@@ -446,59 +463,154 @@ class CourseService:
         items = self.progress_service.get_course_learning_status(course)
         return [CourseLearningStatusResponse(**item) for item in items]
 
-    def add_course_resource(self, course_id: int, data: CourseResourceBindRequest) -> ResourceListItemResponse:
+    def list_related_trainings(
+        self,
+        course_id: int,
+        current_user_id: int,
+        current_user: Optional[User] = None,
+    ) -> List[CourseRelatedTrainingResponse]:
+        user = current_user or self._get_scope_user(current_user_id)
+        if not user or not user.is_active:
+            return []
+
+        training_courses = (
+            self.db.query(TrainingCourse)
+            .options(
+                joinedload(TrainingCourse.training).joinedload(Training.instructor),
+            )
+            .filter(TrainingCourse.course_id == course_id)
+            .order_by(TrainingCourse.id.desc())
+            .all()
+        )
+
+        grouped: dict[int, CourseRelatedTrainingResponse] = {}
+        is_admin = self._is_admin_user(user)
+        for training_course in training_courses:
+            training = training_course.training
+            if not training:
+                continue
+
+            relation_roles = self._resolve_training_relation_roles(
+                training,
+                training_course,
+                current_user_id,
+                is_admin=is_admin,
+            )
+            if not relation_roles:
+                continue
+
+            existing = grouped.get(training.id)
+            if existing:
+                existing.relation_roles = list(dict.fromkeys([*existing.relation_roles, *relation_roles]))
+                continue
+
+            grouped[training.id] = CourseRelatedTrainingResponse(
+                id=training.id,
+                name=training.name,
+                class_code=training.class_code,
+                status=training.status or "upcoming",
+                start_date=training.start_date,
+                end_date=training.end_date,
+                instructor_name=training.instructor.nickname if training.instructor else None,
+                relation_roles=relation_roles,
+            )
+
+        return sorted(
+            grouped.values(),
+            key=lambda item: (
+                item.start_date or datetime.min.date(),
+                item.id,
+            ),
+            reverse=True,
+        )
+
+    def add_course_resource(
+        self,
+        course_id: int,
+        data: CourseResourceBindRequest,
+        actor_user_id: Optional[int] = None,
+    ) -> CourseBoundResourceResponse:
         course = self.db.query(Course).filter(Course.id == course_id).first()
         if not course:
             raise ValueError("课程不存在")
 
-        resource = self.db.query(Resource).options(
-            joinedload(Resource.uploader),
-            joinedload(Resource.owner_department),
-            joinedload(Resource.cover_media),
-            joinedload(Resource.tag_relations).joinedload(ResourceTagRelation.tag),
-        ).filter(Resource.id == data.resource_id).first()
-        if not resource:
-            raise ValueError("资源不存在")
+        actor_user = self._get_scope_user(actor_user_id) if actor_user_id else None
+        is_admin = self._is_admin_user(actor_user)
+        ref = None
 
-        ref = self.db.query(CourseResourceRef).filter(
-            CourseResourceRef.course_id == course_id,
-            CourseResourceRef.resource_id == data.resource_id,
-        ).first()
+        if data.library_item_id is not None:
+            library_item = self.db.query(LibraryItem).options(
+                joinedload(LibraryItem.media_file),
+                joinedload(LibraryItem.owner).selectinload(User.departments),
+            ).filter(LibraryItem.id == data.library_item_id).first()
+            if not library_item:
+                raise ValueError("资源库资源不存在")
 
-        if not ref:
-            ref = CourseResourceRef(
-                course_id=course_id,
-                resource_id=data.resource_id,
-                usage_type=data.usage_type,
-                sort_order=data.sort_order,
-            )
-            self.db.add(ref)
+            if actor_user_id and actor_user and not is_admin and library_item.owner_user_id != actor_user_id:
+                raise ValueError("只能关联当前用户自己的资源库资源")
+
+            ref = self.db.query(CourseResourceRef).filter(
+                CourseResourceRef.course_id == course_id,
+                CourseResourceRef.library_item_id == data.library_item_id,
+            ).first()
+
+            if not ref:
+                ref = CourseResourceRef(
+                    course_id=course_id,
+                    resource_id=None,
+                    library_item_id=data.library_item_id,
+                    usage_type=data.usage_type,
+                    sort_order=data.sort_order,
+                )
+                self.db.add(ref)
+            else:
+                ref.usage_type = data.usage_type
+                ref.sort_order = data.sort_order
         else:
-            ref.usage_type = data.usage_type
-            ref.sort_order = data.sort_order
+            resource = self.db.query(Resource).options(
+                joinedload(Resource.uploader),
+                joinedload(Resource.owner_department),
+                joinedload(Resource.cover_media),
+                joinedload(Resource.tag_relations).joinedload(ResourceTagRelation.tag),
+                selectinload(Resource.media_links).joinedload(ResourceMediaLink.media_file),
+            ).filter(Resource.id == data.resource_id).first()
+            if not resource:
+                raise ValueError("资源不存在")
+
+            if actor_user_id and actor_user and not is_admin:
+                if resource.uploader_id != actor_user_id:
+                    raise ValueError("只能关联当前用户自己上传的已发布资源")
+                if resource.status != "published":
+                    raise ValueError("只能关联已发布资源")
+
+            ref = self.db.query(CourseResourceRef).filter(
+                CourseResourceRef.course_id == course_id,
+                CourseResourceRef.resource_id == data.resource_id,
+            ).first()
+
+            if not ref:
+                ref = CourseResourceRef(
+                    course_id=course_id,
+                    resource_id=data.resource_id,
+                    library_item_id=None,
+                    usage_type=data.usage_type,
+                    sort_order=data.sort_order,
+                )
+                self.db.add(ref)
+            else:
+                ref.usage_type = data.usage_type
+                ref.sort_order = data.sort_order
 
         self.db.commit()
-        tags = [rel.tag.name for rel in (resource.tag_relations or []) if rel.tag]
-        return ResourceListItemResponse(
-            id=resource.id,
-            title=resource.title,
-            summary=resource.summary,
-            content_type=resource.content_type,
-            source_type=resource.source_type,
-            status=resource.status,
-            visibility_type=resource.visibility_type,
-            uploader_id=resource.uploader_id,
-            uploader_name=resource.uploader.nickname if resource.uploader else None,
-            owner_department_id=resource.owner_department_id,
-            owner_department_name=resource.owner_department.name if resource.owner_department else None,
-            cover_media_file_id=resource.cover_media_file_id,
-            cover_url=None,
-            tags=tags,
-            created_at=resource.created_at,
-            updated_at=resource.updated_at,
-        )
+        loaded_ref = self._get_course_resource_ref(course_id, ref.id)
+        if not loaded_ref:
+            raise ValueError("课程资源绑定结果不存在")
+        response = self._course_resource_ref_to_response(loaded_ref)
+        if not response:
+            raise ValueError("课程资源绑定结果无效")
+        return response
 
-    def list_course_resources(self, course_id: int) -> List[ResourceListItemResponse]:
+    def list_course_resources(self, course_id: int) -> List[CourseBoundResourceResponse]:
         refs = (
             self.db.query(CourseResourceRef)
             .options(
@@ -508,45 +620,34 @@ class CourseService:
                 joinedload(CourseResourceRef.resource)
                 .selectinload(Resource.tag_relations)
                 .joinedload(ResourceTagRelation.tag),
+                joinedload(CourseResourceRef.resource)
+                .selectinload(Resource.media_links)
+                .joinedload(ResourceMediaLink.media_file),
+                joinedload(CourseResourceRef.library_item).joinedload(LibraryItem.media_file),
+                joinedload(CourseResourceRef.library_item).joinedload(LibraryItem.owner).selectinload(User.departments),
             )
             .filter(CourseResourceRef.course_id == course_id)
             .order_by(CourseResourceRef.sort_order.asc(), CourseResourceRef.id.asc())
             .all()
         )
 
-        items = []
+        items: List[CourseBoundResourceResponse] = []
         for ref in refs:
-            resource = ref.resource
-            if not resource:
-                continue
-            tags = [rel.tag.name for rel in (resource.tag_relations or []) if rel.tag]
-            items.append(
-                ResourceListItemResponse(
-                    id=resource.id,
-                    title=resource.title,
-                    summary=resource.summary,
-                    content_type=resource.content_type,
-                    source_type=resource.source_type,
-                    status=resource.status,
-                    visibility_type=resource.visibility_type,
-                    uploader_id=resource.uploader_id,
-                    uploader_name=resource.uploader.nickname if resource.uploader else None,
-                    owner_department_id=resource.owner_department_id,
-                    owner_department_name=resource.owner_department.name if resource.owner_department else None,
-                    cover_media_file_id=resource.cover_media_file_id,
-                    cover_url=None,
-                    tags=tags,
-                    created_at=resource.created_at,
-                    updated_at=resource.updated_at,
-                )
-            )
+            response = self._course_resource_ref_to_response(ref)
+            if response:
+                items.append(response)
         return items
 
     def remove_course_resource(self, course_id: int, resource_id: int) -> bool:
-        ref = self.db.query(CourseResourceRef).filter(
-            CourseResourceRef.course_id == course_id,
-            CourseResourceRef.resource_id == resource_id,
-        ).first()
+        ref = self._get_course_resource_ref(course_id, resource_id)
+        if not ref:
+            ref = self.db.query(CourseResourceRef).filter(
+                CourseResourceRef.course_id == course_id,
+                or_(
+                    CourseResourceRef.resource_id == resource_id,
+                    CourseResourceRef.library_item_id == resource_id,
+                ),
+            ).order_by(CourseResourceRef.id.desc()).first()
         if not ref:
             return False
         self.db.delete(ref)
@@ -1235,6 +1336,70 @@ class CourseService:
             return "image"
         return content_type
 
+    def _normalize_course_file_type(self, file_type: Optional[str]) -> Optional[str]:
+        normalized = (file_type or "").strip().lower()
+        if normalized == "image_text":
+            normalized = "image"
+        if normalized in {"video", "audio", "image", "document", "knowledge", "mixed", "pending"}:
+            return normalized
+        return None
+
+    def _normalize_course_difficulty(self, difficulty: Optional[Any], default: int = 1) -> int:
+        try:
+            normalized = int(difficulty if difficulty is not None else default)
+        except (TypeError, ValueError):
+            normalized = default
+        return min(max(normalized, 1), 5)
+
+    def _infer_course_file_type_from_chapters(self, chapters: List[Chapter]) -> str:
+        content_types = {
+            self._normalize_course_resource_content_type(self._resolve_chapter_media_context(chapter)["content_type"])
+            for chapter in (chapters or [])
+        }
+        normalized_types = {
+            item for item in content_types
+            if item in {"video", "audio", "image", "document", "knowledge"}
+        }
+        if not normalized_types:
+            return "document"
+        if len(normalized_types) > 1:
+            return "mixed"
+        return next(iter(normalized_types))
+
+    def _sync_course_shell_state(
+        self,
+        course: Course,
+        preferred_file_type: Optional[str] = None,
+        infer_from_chapters: bool = False,
+    ) -> None:
+        chapters = sorted(course.chapters or [], key=lambda item: (item.sort_order, item.id or 0))
+        if not chapters:
+            course.duration = 0
+            course.file_type = "pending"
+            return
+
+        if infer_from_chapters:
+            course.file_type = self._infer_course_file_type_from_chapters(chapters)
+            return
+
+        normalized_preferred = self._normalize_course_file_type(preferred_file_type)
+        if normalized_preferred and normalized_preferred != "pending":
+            course.file_type = normalized_preferred
+            return
+
+        normalized_current = self._normalize_course_file_type(course.file_type)
+        if not normalized_current or normalized_current == "pending":
+            course.file_type = self._infer_course_file_type_from_chapters(chapters)
+
+    def _resolve_course_file_type_for_response(self, course: Course, chapters: Optional[List[Chapter]] = None) -> str:
+        normalized_current = self._normalize_course_file_type(course.file_type)
+        ordered_chapters = list(chapters if chapters is not None else (course.chapters or []))
+        if not ordered_chapters:
+            return "pending"
+        if normalized_current and normalized_current != "pending":
+            return normalized_current
+        return self._infer_course_file_type_from_chapters(ordered_chapters)
+
     def _build_resource_file_label(
         self,
         media_links: List[ResourceMediaLink],
@@ -1246,6 +1411,136 @@ class CourseService:
             if item.id == current_link.id:
                 return f"文件{index}"
         return "文件"
+
+    def _resolve_training_relation_roles(
+        self,
+        training: Optional[Training],
+        training_course: Optional[TrainingCourse],
+        user_id: int,
+        is_admin: bool = False,
+    ) -> List[str]:
+        roles: List[str] = []
+        if is_admin:
+            roles.append("管理员")
+        if training and training.instructor_id == user_id:
+            roles.append("班主任")
+        if training_course and training_course.primary_instructor_id == user_id:
+            roles.append("主讲教官")
+        if training_course and user_id in (training_course.assistant_instructor_ids or []):
+            roles.append("助教")
+        return roles
+
+    def _get_course_resource_ref(self, course_id: int, ref_id: int) -> Optional[CourseResourceRef]:
+        return self.db.query(CourseResourceRef).options(
+            joinedload(CourseResourceRef.resource).joinedload(Resource.uploader),
+            joinedload(CourseResourceRef.resource).joinedload(Resource.owner_department),
+            joinedload(CourseResourceRef.resource).joinedload(Resource.cover_media),
+            joinedload(CourseResourceRef.resource)
+            .selectinload(Resource.tag_relations)
+            .joinedload(ResourceTagRelation.tag),
+            joinedload(CourseResourceRef.resource)
+            .selectinload(Resource.media_links)
+            .joinedload(ResourceMediaLink.media_file),
+            joinedload(CourseResourceRef.library_item).joinedload(LibraryItem.media_file),
+            joinedload(CourseResourceRef.library_item).joinedload(LibraryItem.owner).selectinload(User.departments),
+        ).filter(
+            CourseResourceRef.course_id == course_id,
+            CourseResourceRef.id == ref_id,
+        ).first()
+
+    def _course_resource_ref_to_response(self, ref: CourseResourceRef) -> Optional[CourseBoundResourceResponse]:
+        if ref.library_item:
+            item = ref.library_item
+            media = item.media_file
+            owner = item.owner
+            owner_department = (owner.departments or [None])[0] if owner else None
+            return CourseBoundResourceResponse(
+                id=ref.id,
+                ref_id=ref.id,
+                binding_type="library_item",
+                resource_id=None,
+                library_item_id=item.id,
+                title=item.title,
+                summary=None,
+                content_type=item.content_type,
+                source_type=item.source_kind,
+                source_label="个人资源库",
+                status="public" if item.is_public else "private",
+                status_label="公共资源" if item.is_public else "私人资源",
+                visibility_type="public" if item.is_public else "private",
+                uploader_id=item.owner_user_id,
+                uploader_name=(owner.nickname or owner.username) if owner else None,
+                owner_department_id=owner_department.id if owner_department else None,
+                owner_department_name=owner_department.name if owner_department else None,
+                cover_media_file_id=None,
+                cover_url=None,
+                tags=[],
+                file_id=item.media_file_id,
+                file_name=media.filename if media else None,
+                file_url=self._resolve_file_url(media.id, media.storage_path) if media else None,
+                mime_type=media.mime_type if media else None,
+                duration_seconds=int(media.duration_seconds or 0) if media else 0,
+                knowledge_content_html=item.knowledge_content_html,
+                is_public=bool(item.is_public),
+                created_at=item.created_at,
+                updated_at=item.updated_at,
+            )
+
+        resource = ref.resource
+        if not resource:
+            return None
+
+        cover_media = resource.cover_media
+        media_links = sorted(
+            resource.media_links or [],
+            key=lambda item: (item.sort_order or 0, item.id or 0),
+        )
+        primary_media = next((link.media_file for link in media_links if link.media_file), None)
+        tags = [rel.tag.name for rel in (resource.tag_relations or []) if rel.tag]
+        return CourseBoundResourceResponse(
+            id=ref.id,
+            ref_id=ref.id,
+            binding_type="resource",
+            resource_id=resource.id,
+            library_item_id=None,
+            title=resource.title,
+            summary=resource.summary,
+            content_type=self._normalize_course_resource_content_type(resource.content_type) or resource.content_type,
+            source_type=resource.source_type,
+            source_label="公共资源",
+            status=resource.status,
+            status_label=self._get_course_resource_status_label(resource.status),
+            visibility_type=resource.visibility_type,
+            uploader_id=resource.uploader_id,
+            uploader_name=resource.uploader.nickname if resource.uploader else None,
+            owner_department_id=resource.owner_department_id,
+            owner_department_name=resource.owner_department.name if resource.owner_department else None,
+            cover_media_file_id=resource.cover_media_file_id,
+            cover_url=self._resolve_file_url(cover_media.id, cover_media.storage_path) if cover_media else None,
+            tags=tags,
+            file_id=primary_media.id if primary_media else None,
+            file_name=primary_media.filename if primary_media else None,
+            file_url=self._resolve_file_url(primary_media.id, primary_media.storage_path) if primary_media else None,
+            mime_type=primary_media.mime_type if primary_media else None,
+            duration_seconds=int(primary_media.duration_seconds or 0) if primary_media else 0,
+            knowledge_content_html=None,
+            is_public=None,
+            created_at=resource.created_at,
+            updated_at=resource.updated_at,
+        )
+
+    def _get_course_resource_status_label(self, status: Optional[str]) -> Optional[str]:
+        status_map = {
+            "draft": "草稿",
+            "pending_review": "待审核",
+            "reviewing": "审核中",
+            "published": "已发布",
+            "rejected": "已驳回",
+            "offline": "已下线",
+        }
+        if not status:
+            return None
+        return status_map.get(status, status)
 
     def _chapter_to_response(
         self,
@@ -1302,6 +1597,7 @@ class CourseService:
         resolved_chapter_count = progress_summary.chapter_count if progress_summary else len(sorted_chapters)
         resolved_completed_chapter_count = progress_summary.completed_chapter_count if progress_summary else 0
         resolved_progress_percent = progress_summary.progress_percent if progress_summary else 0
+        current_user = self._get_scope_user(user_id) if user_id else None
         has_learning_activity = bool(
             progress_summary and (
                 progress_summary.last_studied_at
@@ -1317,7 +1613,7 @@ class CourseService:
             id=course.id,
             title=course.title,
             category=course.category,
-            file_type=course.file_type,
+            file_type=self._resolve_course_file_type_for_response(course, sorted_chapters),
             description=course.description,
             created_by=course.created_by,
             created_by_name=course.creator.nickname if course.creator else None,
@@ -1352,10 +1648,16 @@ class CourseService:
                 if user_id
                 else False
             ),
+            can_manage_course=self._can_manage_course(course, current_user),
             chapters=chapters,
             note=note,
             qa_list=qa_list,
             resources=resources,
+            related_trainings=(
+                self.list_related_trainings(course.id, user_id, current_user=current_user)
+                if user_id and current_user
+                else []
+            ),
             created_at=course.created_at,
             updated_at=course.updated_at,
         )

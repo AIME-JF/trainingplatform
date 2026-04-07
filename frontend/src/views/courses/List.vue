@@ -63,8 +63,8 @@
         <div class="course-card-head">
           <div class="course-badges">
             <a-tag color="blue">{{ getCategoryLabel(course.category) }}</a-tag>
-            <a-tag :color="getCourseTypeTagColor(course.fileType)">
-              {{ getCourseTypeTagLabel(course.fileType) }}
+            <a-tag :color="getCourseTypeTagColor(course.fileType, course.chapterCount)">
+              {{ getCourseTypeTagLabel(course.fileType, course.chapterCount) }}
             </a-tag>
             <a-tag v-if="course.isRequired" color="red">必修</a-tag>
           </div>
@@ -271,7 +271,10 @@ function formatDate(value) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
-function getCourseTypeTagLabel(fileType) {
+function getCourseTypeTagLabel(fileType, chapterCount) {
+  if (Number(chapterCount || 0) <= 0 || fileType === 'pending') {
+    return '未配置'
+  }
   if (fileType === 'video') {
     return '视频型'
   }
@@ -290,7 +293,10 @@ function getCourseTypeTagLabel(fileType) {
   return '文档型'
 }
 
-function getCourseTypeTagColor(fileType) {
+function getCourseTypeTagColor(fileType, chapterCount) {
+  if (Number(chapterCount || 0) <= 0 || fileType === 'pending') {
+    return 'default'
+  }
   if (fileType === 'video') {
     return 'purple'
   }

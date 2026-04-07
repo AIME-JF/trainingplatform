@@ -81,25 +81,31 @@
         <div class="chapter-header">
           <div>
             <h3>章节资源</h3>
-            <p>每章从资源库选择当前用户自己的资源；文件类资源默认直接使用原始文件，知识点卡片可直接作为章节内容。</p>
+            <p>可先创建不含章节的课程，后续再由任课教官补充章节与资源；已添加章节时，每章仍需绑定自己的资源。</p>
           </div>
-          <a-button type="dashed" @click="addChapter">添加章节</a-button>
+          <a-button type="dashed" @click="addChapter">{{ form.chapters.length ? '添加章节' : '添加第一章' }}</a-button>
         </div>
 
-        <CourseChapterResourceSelector
-          v-for="(chapter, index) in form.chapters"
-          :key="chapter.local_key"
-          :chapter="chapter"
-          :index="index"
-          :can-remove="form.chapters.length > 1"
-          :resource-options="resourceOptions"
-          :file-options="chapterFileOptions[chapter.local_key] || []"
-          :resource-loading="resourceLoading"
-          :file-loading="chapterFileLoading[chapter.local_key] || false"
-          @remove="removeChapter(index)"
-          @change-resource="(value) => handleChapterResourceChange(index, value)"
-          @change-file="(value) => handleChapterFileChange(index, value)"
-        />
+        <div v-if="!form.chapters.length" class="chapter-empty-state">
+          <a-empty description="当前还没有章节。系统管理员可以先创建课程，后续再由任课教官补充章节资源。" />
+        </div>
+
+        <template v-else>
+          <CourseChapterResourceSelector
+            v-for="(chapter, index) in form.chapters"
+            :key="chapter.local_key"
+            :chapter="chapter"
+            :index="index"
+            :can-remove="canRemoveChapter(chapter)"
+            :resource-options="resourceOptions"
+            :file-options="chapterFileOptions[chapter.local_key] || []"
+            :resource-loading="resourceLoading"
+            :file-loading="chapterFileLoading[chapter.local_key] || false"
+            @remove="removeChapter(index)"
+            @change-resource="(value) => handleChapterResourceChange(index, value)"
+            @change-file="(value) => handleChapterFileChange(index, value)"
+          />
+        </template>
 
         <div class="modal-footer">
           <a-button @click="closeModal">取消</a-button>
@@ -155,9 +161,11 @@ interface EditableChapter {
 const props = withDefaults(defineProps<{
   open?: boolean
   courseId?: number | null
+  canManage?: boolean
 }>(), {
   open: false,
   courseId: null,
+  canManage: false,
 })
 
 const emit = defineEmits<{
@@ -167,7 +175,7 @@ const emit = defineEmits<{
 
 const authStore = useAuthStore()
 const canCreateCourse = computed(() => authStore.hasPermission('CREATE_COURSE'))
-const canManageCourse = computed(() => authStore.role === 'admin' || authStore.roleCodes.includes('admin'))
+const canManageCourse = computed(() => props.canManage)
 const categoryOptions = COURSE_CATEGORIES.filter((item) => item.key !== 'all')
 const loading = ref(false)
 const submitting = ref(false)
@@ -209,7 +217,7 @@ watch(() => props.open, async (open) => {
     return
   }
   if (props.courseId ? !canManageCourse.value : !canCreateCourse.value) {
-    message.warning(props.courseId ? '仅管理员可编辑课程' : '您没有创建课程权限')
+    message.warning(props.courseId ? '您没有编辑该课程的权限' : '您没有创建课程权限')
     emit('update:open', false)
     return
   }
@@ -223,8 +231,6 @@ watch(() => props.open, async (open) => {
     ])
     if (props.courseId) {
       await loadCourse(props.courseId)
-    } else if (!form.chapters.length) {
-      addChapter()
     }
   } finally {
     loading.value = false
@@ -259,6 +265,13 @@ function resetForm() {
   form.scope_target_ids = []
   form.tags = []
   form.chapters = []
+  for (const key of Object.keys(chapterFileOptions)) {
+    delete chapterFileOptions[key]
+  }
+  for (const key of Object.keys(chapterFileLoading)) {
+    delete chapterFileLoading[key]
+  }
+  resourceDetailCache.clear()
 }
 
 async function loadInstructors() {
@@ -361,6 +374,10 @@ function removeChapter(index: number) {
   form.chapters.splice(index, 1)
 }
 
+function canRemoveChapter(chapter?: EditableChapter) {
+  return form.chapters.length > 1 || !chapter?.id
+}
+
 async function handleChapterResourceChange(index: number, value: number | null) {
   const chapter = form.chapters[index]
   chapter.resource_id = value
@@ -400,6 +417,9 @@ function getContentTypeLabel(contentType?: string | null) {
 }
 
 function computeFileType() {
+  if (!form.chapters.length) {
+    return 'pending'
+  }
   const types = new Set(form.chapters.map((item) => item.content_type).filter(Boolean))
   if (!types.size) {
     return 'document'
@@ -417,10 +437,6 @@ function buildPayload(): CourseCreate | CourseUpdate | null {
   }
   if (!form.category) {
     message.warning('请选择课程分类')
-    return null
-  }
-  if (!form.chapters.length) {
-    message.warning('请至少保留一个章节')
     return null
   }
   for (const [index, chapter] of form.chapters.entries()) {
@@ -458,8 +474,11 @@ function buildPayload(): CourseCreate | CourseUpdate | null {
 }
 
 async function submitForm() {
+  if (submitting.value) {
+    return
+  }
   if (props.courseId ? !canManageCourse.value : !canCreateCourse.value) {
-    message.warning(props.courseId ? '仅管理员可编辑课程' : '您没有创建课程权限')
+    message.warning(props.courseId ? '您没有编辑该课程的权限' : '您没有创建课程权限')
     return
   }
   const payload = buildPayload()
@@ -507,6 +526,14 @@ function closeModal() {
 .chapter-header p {
   color: var(--v2-text-secondary);
   font-size: 13px;
+}
+
+.chapter-empty-state {
+  border: 1px dashed var(--v2-border);
+  border-radius: var(--v2-radius);
+  background: rgba(29, 78, 216, 0.02);
+  padding: 12px 0;
+  margin-bottom: 12px;
 }
 
 .modal-footer {
