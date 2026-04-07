@@ -518,7 +518,7 @@
             </div>
             <div class="paper-draft-questions">
               <div v-for="(q, idx) in (aiPaperDraft.questions || [])" :key="idx" class="paper-draft-q-item">
-                <span class="paper-draft-q-num">{{ idx + 1 }}.</span>
+                <span class="paper-draft-q-num">{{ Number(idx) + 1 }}.</span>
                 <a-tag :color="q.type === 'single' ? 'blue' : q.type === 'multi' ? 'purple' : 'orange'" size="small">
                   {{ q.type === 'single' ? '单选' : q.type === 'multi' ? '多选' : '判断' }}
                 </a-tag>
