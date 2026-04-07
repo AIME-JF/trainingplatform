@@ -43,13 +43,13 @@
 
     <div class="chapter-meta">
       <span v-if="chapter.legacyFileOnly" class="chapter-meta-item legacy">
-        当前章节保留了历史资源引用；如需调整，请改为选择资源库中的新资源。
+        当前章节保留了历史资源引用；如需调整，请改为选择知识库中的新资源。
       </span>
       <span v-else-if="summaryText" class="chapter-meta-item bound">
         已引用：{{ summaryText }}
       </span>
       <span v-else class="chapter-meta-item hint">
-        每章从资源库选择当前用户自己的资源；文件类资源默认直接使用原始文件。
+        每章从知识库选择当前用户自己的资源；文件类资源默认直接使用原始文件。
       </span>
       <a-tag v-if="chapter.contentType === 'video'" color="purple">视频</a-tag>
       <a-tag v-else-if="chapter.contentType === 'audio'" color="magenta">音频</a-tag>

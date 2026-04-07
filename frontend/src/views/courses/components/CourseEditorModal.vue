@@ -99,7 +99,7 @@
           v-if="!resourceListLoading && !resourceOptions.length"
           type="warning"
           show-icon
-          message="当前账号下暂无资源。请先在【资源库】导入文件或创建知识点，再回来配置课程章节。"
+          message="当前账号下暂无资源。请先在【知识库】导入文件或创建知识点，再回来配置课程章节。"
           style="margin-bottom: 16px; font-size: 12px"
         />
 
@@ -690,7 +690,7 @@ async function handleSubmit() {
       return
     }
     if (form.chapters.some((chapter) => !chapter.resourceId && !chapter.legacyResourceId && !chapter.legacyFileOnly)) {
-      message.warning('每个章节都需要从资源库选择资源')
+      message.warning('每个章节都需要从知识库选择资源')
       return
     }
   }

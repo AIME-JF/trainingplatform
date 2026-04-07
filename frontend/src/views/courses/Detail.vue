@@ -30,6 +30,12 @@
       :course-id="courseId"
       @success="handleEditorSuccess"
     />
+    <LibraryItemPickerModal
+      v-model:open="pickerVisible"
+      :confirm-loading="pickerSubmitting"
+      :bound-item-ids="boundLibraryItemIds"
+      @confirm="handlePickerConfirm"
+    />
 
     <a-row :gutter="20">
       <a-col :span="16">
@@ -138,23 +144,21 @@
 
             <a-tab-pane key="resources" tab="关联资源" v-if="canManageCourse">
               <div class="resource-bind-toolbar">
-                <a-select
-                  v-model:value="selectedResourceId"
-                  show-search
-                  :options="resourceOptions"
-                  :filter-option="(input, option) => (option?.label || '').toLowerCase().includes(input.toLowerCase())"
-                  placeholder="选择资源后绑定到课程"
-                  class="resource-bind-select"
-                />
-                <a-button type="primary" @click="bindSelectedResource">绑定资源</a-button>
+                <a-button type="primary" class="resource-picker-btn" @click="openLibraryPicker">
+                  从知识库中选择资源
+                </a-button>
                 <a-button @click="fetchCourse">刷新</a-button>
               </div>
+              <div class="resource-bind-hint">在弹窗中按住 Ctrl + 鼠标左键可多选，点“确定关联”后直接完成批量关联。</div>
               <a-table :data-source="courseResources" :columns="resourceColumns" row-key="id" :pagination="false">
                 <template #bodyCell="{ column, record }">
                   <template v-if="column.key === 'tags'">
                     <a-space wrap>
                       <a-tag v-for="tag in (record.tags || [])" :key="tag">{{ tag }}</a-tag>
                     </a-space>
+                  </template>
+                  <template v-else-if="column.key === 'contentType'">
+                    {{ getLibraryTypeLabel(record.contentType) }}
                   </template>
                   <template v-else-if="column.key === 'status'">
                     <a-tag :color="getCourseResourceStatusColor(record)">
@@ -239,9 +243,10 @@ import {
   unbindCourseResource,
   updateChapterProgress,
 } from '@/api/course'
-import { getLibraryItems } from '@/api/library'
 import { useAuthStore } from '@/stores/auth'
+import { getLibraryTypeLabel } from '@/utils/library-browser'
 import CourseEditorModal from './components/CourseEditorModal.vue'
+import LibraryItemPickerModal from '@/views/library/components/LibraryItemPickerModal.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -278,13 +283,18 @@ const qaInput = ref('')
 const qaSubmitting = ref(false)
 
 const courseResources = ref([])
-const availableResources = ref([])
-const selectedResourceId = ref(undefined)
+const pickerVisible = ref(false)
+const pickerSubmitting = ref(false)
 const learningStatus = ref([])
 const learningStatusLoading = ref(false)
 const learningStatusLoaded = ref(false)
 
 const canManageCourse = computed(() => !!localCourse.value.canManageCourse)
+const boundLibraryItemIds = computed(() =>
+  courseResources.value
+    .filter((item) => item.bindingType === 'library_item' && item.libraryItemId)
+    .map((item) => Number(item.libraryItemId))
+)
 const currentChapter = computed(() => localCourse.value.chapters[currentChapterIdx.value] || {})
 const viewerType = computed(() => {
   if (!currentChapter.value?.id) {
@@ -329,10 +339,6 @@ const learningStatusColumns = [
   { title: '最近章节', dataIndex: 'lastStudiedChapterTitle', key: 'lastStudiedChapterTitle' },
   { title: '最近学习时间', dataIndex: 'lastStudiedAt', key: 'lastStudiedAt', width: 180 },
 ]
-const resourceOptions = computed(() => (availableResources.value || []).map((item) => ({
-  value: item.id,
-  label: formatLibraryItemLabel(item),
-})))
 
 function getNoteCacheKey() {
   return `course_note_${authStore.currentUser?.id || 'guest'}_${courseId.value}`
@@ -486,39 +492,57 @@ async function loadCourseLearningStatus() {
   }
 }
 
-async function loadResourceCandidates() {
-  if (!canManageCourse.value) {
-    return
-  }
-  try {
-    const response = await getLibraryItems({ page: 1, size: -1, scope: 'private' })
-    availableResources.value = response.items || []
-  } catch {
-    availableResources.value = []
-  }
-}
-
-async function bindSelectedResource() {
+function openLibraryPicker() {
   if (!canManageCourse.value) {
     message.warning('仅课程管理者可绑定课程资源')
     return
   }
-  if (!selectedResourceId.value) {
-    message.warning('请选择资源库项')
+  pickerVisible.value = true
+}
+
+async function handlePickerConfirm(selectedIds) {
+  if (!canManageCourse.value) {
+    message.warning('仅课程管理者可绑定课程资源')
     return
   }
-
+  if (!selectedIds?.length) {
+    message.warning('请先选择资源')
+    return
+  }
+  pickerSubmitting.value = true
   try {
-    await bindCourseResource(courseId.value, {
-      libraryItemId: selectedResourceId.value,
-      usageType: 'required',
-      sortOrder: courseResources.value.length || 0,
-    })
-    selectedResourceId.value = undefined
-    await fetchCourse()
-    message.success('资源绑定成功')
+    const startSortOrder = courseResources.value.length
+    const results = await Promise.allSettled(
+      selectedIds.map((libraryItemId, index) => bindCourseResource(courseId.value, {
+        libraryItemId,
+        usageType: 'required',
+        sortOrder: startSortOrder + index,
+      })),
+    )
+    const succeeded = results.filter((item) => item.status === 'fulfilled').length
+    const failed = results.filter((item) => item.status === 'rejected')
+
+    if (succeeded > 0) {
+      pickerVisible.value = false
+      await fetchCourse()
+    }
+
+    if (!failed.length) {
+      message.success(`已关联 ${succeeded} 个资源`)
+      return
+    }
+
+    if (succeeded > 0) {
+      message.warning(`已关联 ${succeeded} 个资源，另有 ${failed.length} 个关联失败`)
+      return
+    }
+
+    const firstError = failed[0]
+    message.error(firstError?.reason?.message || '关联失败')
   } catch (error) {
     message.error(error?.message || '绑定失败')
+  } finally {
+    pickerSubmitting.value = false
   }
 }
 
@@ -534,19 +558,6 @@ async function removeResource(resourceId) {
   } catch (error) {
     message.error(error?.message || '解绑失败')
   }
-}
-
-function formatLibraryItemLabel(item) {
-  const typeMap = {
-    video: '视频',
-    document: '文档',
-    image: '图片',
-    audio: '音频',
-    knowledge: '知识点',
-  }
-  const typeText = typeMap[item?.contentType] || item?.contentType || '资源'
-  const extra = item?.fileName ? ` · ${item.fileName}` : ''
-  return `${item?.title || '未命名资源'}（${typeText}）${extra}`
 }
 
 function getCourseResourceStatusColor(record) {
@@ -769,9 +780,6 @@ function handleBeforeUnload() {
 }
 
 watch(activeTab, (tab) => {
-  if (tab === 'resources' && canManageCourse.value) {
-    loadResourceCandidates()
-  }
   if (tab === 'learning') {
     loadCourseLearningStatus()
   }
@@ -844,7 +852,10 @@ onBeforeRouteLeave(() => {
 .qa-text { font-size: 13px; color: #333; }
 .qa-answer { margin-top: 6px; font-size: 13px; color: #555; background: #fffbe6; padding: 6px 10px; border-radius: 4px; }
 .resource-bind-toolbar { margin-bottom: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.resource-bind-select { flex: 1; min-width: 320px; }
+.resource-picker-btn {
+  min-width: 220px;
+}
+.resource-bind-hint { margin-bottom: 12px; color: #7a8699; font-size: 13px; }
 .learning-progress-cell { min-width: 180px; }
 
 @media (max-width: 768px) {
@@ -857,6 +868,6 @@ onBeforeRouteLeave(() => {
   .image-stage { min-height: 360px; padding: 16px; }
   .course-image { max-height: 320px; }
   .meta-grid { grid-template-columns: 1fr; }
-  .resource-bind-select { width: 100%; min-width: 0; }
+  .resource-picker-btn { width: 100%; min-width: 0; }
 }
 </style>

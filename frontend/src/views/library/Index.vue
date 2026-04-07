@@ -58,7 +58,7 @@
     >
       <div v-if="previewItem" class="preview-panel">
         <div class="preview-meta">
-          <a-tag color="blue">{{ getTypeLabel(previewItem.contentType) }}</a-tag>
+          <a-tag color="blue">{{ getLibraryTypeLabel(previewItem.contentType) }}</a-tag>
           <a-tag v-if="previewItem.sourceKind === 'ai_generated'" color="cyan">AI教学资源</a-tag>
           <a-tag v-if="previewItem.isPublic" color="gold">公共资源</a-tag>
           <span>{{ previewItem.ownerName || '-' }}</span>
@@ -93,7 +93,7 @@
       <div>
         <div class="header-kicker">Instructor Workspace</div>
         <h1>知识库</h1>
-        <p>正式教学文件统一归档到个人知识库，按分类和文件夹整理，再决定是否共享到公共知识。</p>
+        <p>正式教学文件统一归档到个人知识库，按分类和文件夹整理，再决定是否共享到公共资源。</p>
       </div>
     </header>
 
@@ -220,7 +220,7 @@
               @contextmenu.prevent="showContextMenu($event, item)"
             >
               <div class="item-cover" :class="`type-${item.contentType}`">
-                <span>{{ getTypeIcon(item.contentType) }}</span>
+                <span>{{ getLibraryTypeIcon(item.contentType) }}</span>
               </div>
               <div class="item-content">
                 <div class="item-top">
@@ -235,9 +235,9 @@
                 </div>
                 <div class="item-bottom">
                   <div class="item-bottom-meta">
-                    <span>{{ getTypeLabel(item.contentType) }}</span>
+                    <span>{{ getLibraryTypeLabel(item.contentType) }}</span>
                     <span>{{ item.ownerName || '-' }}</span>
-                    <span>{{ formatFileMeta(item) }}</span>
+                    <span>{{ formatLibraryFileMeta(item) }}</span>
                   </div>
                   <a-button
                     v-if="scopeTab === 'private'"
@@ -293,19 +293,20 @@ import {
   shareLibraryItem,
   unshareLibraryItem,
 } from '@/api/library'
+import {
+  LIBRARY_CATEGORIES,
+  buildLibraryTreeData,
+  findLibraryFolderName,
+  formatLibraryFileMeta,
+  getLibraryTypeIcon,
+  getLibraryTypeLabel,
+  resolveLibraryCategoryFilter,
+} from '@/utils/library-browser'
 import QuickUploadModal from './components/QuickUploadModal.vue'
 import KnowledgeCardModal from './components/KnowledgeCardModal.vue'
 import MoveItemModal from './components/MoveItemModal.vue'
 
-const categories = [
-  { key: 'all', label: '全部类型', hint: '查看当前范围内全部资源' },
-  { key: 'video', label: '视频', hint: 'MP4 课件视频', category: 'video' },
-  { key: 'document', label: '文档', hint: 'PDF / PPT / DOC', category: 'document' },
-  { key: 'image', label: '图片', hint: 'JPG / PNG / WEBP / GIF', category: 'image' },
-  { key: 'audio', label: '音频', hint: 'MP3 / WAV / M4A', category: 'audio' },
-  { key: 'knowledge', label: '知识点', hint: '富文本知识卡片', category: 'knowledge' },
-  { key: 'aiGenerated', label: 'AI教学资源', hint: '教学资源生成后自动入库的课件', sourceKind: 'ai_generated' },
-]
+const categories = LIBRARY_CATEGORIES
 
 const loading = ref(false)
 const folderLoading = ref(false)
@@ -339,7 +340,7 @@ const contextMenu = reactive({
   item: null,
 })
 
-const treeData = computed(() => buildTreeData(folders.value))
+const treeData = computed(() => buildLibraryTreeData(folders.value))
 const selectedFolderKeys = computed(() => selectedFolderId.value ? [selectedFolderId.value] : [])
 const folderOptions = computed(() => flattenFolders(folders.value))
 const currentFilterDescription = computed(() => {
@@ -348,7 +349,7 @@ const currentFilterDescription = computed(() => {
     return `当前查看所有教官共享的${category}`
   }
   const folderName = selectedFolderId.value
-    ? findFolderName(folders.value, selectedFolderId.value)
+    ? findLibraryFolderName(folders.value, selectedFolderId.value)
     : '根目录'
   return `当前查看${folderName}下的${category}`
 })
@@ -387,7 +388,7 @@ async function fetchFolders() {
 async function fetchItems() {
   loading.value = true
   try {
-    const filters = resolveCategoryFilter(selectedCategory.value)
+    const filters = resolveLibraryCategoryFilter(selectedCategory.value)
     const response = await getLibraryItems({
       page: 1,
       size: -1,
@@ -424,14 +425,6 @@ function setScopeTab(nextScope) {
 
 function handleCategorySelect(category) {
   selectedCategory.value = category
-}
-
-function resolveCategoryFilter(categoryKey) {
-  const currentCategory = categories.find((item) => item.key === categoryKey)
-  return {
-    category: currentCategory?.category,
-    sourceKind: currentCategory?.sourceKind,
-  }
 }
 
 function handleFolderSelect(keys) {
@@ -476,15 +469,6 @@ async function handleCreateFolder() {
   }
 }
 
-function buildTreeData(nodes) {
-  return (nodes || []).map((node) => ({
-    key: node.id,
-    title: node.name,
-    itemCount: node.itemCount || 0,
-    children: buildTreeData(node.children || []),
-  }))
-}
-
 function flattenFolders(nodes, depth = 0) {
   const result = []
   ;(nodes || []).forEach((node) => {
@@ -495,19 +479,6 @@ function flattenFolders(nodes, depth = 0) {
     result.push(...flattenFolders(node.children || [], depth + 1))
   })
   return result
-}
-
-function findFolderName(nodes, folderId) {
-  for (const node of nodes || []) {
-    if (Number(node.id) === Number(folderId)) {
-      return node.name
-    }
-    const child = findFolderName(node.children || [], folderId)
-    if (child) {
-      return child
-    }
-  }
-  return ''
 }
 
 async function openPreview(item) {
@@ -646,41 +617,6 @@ function formatDateTime(value) {
   return String(value).replace('T', ' ').slice(0, 16)
 }
 
-function formatFileMeta(item) {
-  if (item.contentType === 'knowledge') {
-    return '知识卡片'
-  }
-  const size = Number(item.size || 0)
-  if (size >= 1024 * 1024) {
-    return `${(size / 1024 / 1024).toFixed(1)} MB`
-  }
-  if (size >= 1024) {
-    return `${Math.round(size / 1024)} KB`
-  }
-  return `${size} B`
-}
-
-function getTypeLabel(contentType) {
-  const map = {
-    video: '视频',
-    document: '文档',
-    image: '图片',
-    audio: '音频',
-    knowledge: '知识点',
-  }
-  return map[contentType] || contentType || '资源'
-}
-
-function getTypeIcon(contentType) {
-  const map = {
-    video: 'VID',
-    document: 'DOC',
-    image: 'IMG',
-    audio: 'AUD',
-    knowledge: 'TXT',
-  }
-  return map[contentType] || 'FILE'
-}
 </script>
 
 <style scoped>
