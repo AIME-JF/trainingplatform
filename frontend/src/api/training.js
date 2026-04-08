@@ -16,6 +16,14 @@ export function getTraining(id) {
   return request.get(`/trainings/${id}`)
 }
 
+export function getTrainingReportSnapshots(id) {
+  return request.get(`/trainings/${id}/report-snapshots`)
+}
+
+export function getLatestTrainingReportSnapshot(id) {
+  return request.get(`/trainings/${id}/report-snapshots/latest`)
+}
+
 export function getTrainingBases(params) {
   return request.get('/training-bases', { params })
 }

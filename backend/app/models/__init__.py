@@ -28,6 +28,7 @@ from .exam import (
 from .ai_task import AITask
 from .teaching_resource_generation_snapshot import TeachingResourceGenerationSnapshot
 from .personal_training_plan_snapshot import PersonalTrainingPlanSnapshot
+from .training_report_snapshot import TrainingReportSnapshot
 from .certificate import Certificate
 from .media import MediaFile
 from .notice import Notice, NoticeRead
@@ -82,6 +83,7 @@ __all__ = [
     "AITask",
     "TeachingResourceGenerationSnapshot",
     "PersonalTrainingPlanSnapshot",
+    "TrainingReportSnapshot",
     # 证书
     "Certificate",
     # 文件

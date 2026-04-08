@@ -23,6 +23,7 @@ AITaskType = Literal[
     "resource_generation",
     "schedule_generation",
     "personal_training_plan_generation",
+    "training_report_generation",
     "schedule_file_parse",
 ]
 AITaskStatus = Literal["pending", "processing", "completed", "confirmed", "failed"]
@@ -667,6 +668,50 @@ class AIPersonalTrainingTaskUpdateRequest(BaseModel):
     plan: AIPersonalTrainingPlan = Field(..., description="训练方案")
 
 
+class AITrainingReportTaskCreateRequest(BaseModel):
+    """培训班总结报告任务创建请求"""
+
+    training_id: int = Field(..., description="培训班 ID")
+    task_name: Optional[str] = Field(None, max_length=200, description="任务名称")
+    focus_points: List[str] = Field(default_factory=list, description="重点关注项")
+    extra_requirements: Optional[str] = Field(None, max_length=1000, description="补充要求")
+
+    @field_validator("focus_points", mode="before")
+    @classmethod
+    def validate_focus_points(cls, value: Any) -> List[str]:
+        return _normalize_short_string_list(value, max_length=100)
+
+
+class TrainingReportKpiItem(BaseModel):
+    """培训班报告 KPI 卡片"""
+
+    key: str = Field(..., description="指标键")
+    label: str = Field(..., description="指标名称")
+    value: str = Field(..., description="指标值")
+    unit: Optional[str] = Field(None, description="单位")
+    highlight: Optional[str] = Field(None, description="辅助说明")
+
+
+class TrainingReportDraft(BaseModel):
+    """培训班总结报告草稿"""
+
+    title: str = Field(..., max_length=200, description="报告标题")
+    report_markdown: str = Field(..., description="Markdown 正文")
+    kpi_overview: List[TrainingReportKpiItem] = Field(default_factory=list, description="KPI 概览")
+    attendance_summary: dict = Field(default_factory=dict, description="出勤分析")
+    exam_summary: dict = Field(default_factory=dict, description="考试分析")
+    risk_items: List[str] = Field(default_factory=list, description="风险提示")
+    suggestions: List[str] = Field(default_factory=list, description="建议项")
+
+
+class AITrainingReportTaskUpdateRequest(BaseModel):
+    """培训班总结报告任务结果更新请求"""
+
+    task_name: Optional[str] = Field(None, max_length=200, description="任务名称")
+    title: Optional[str] = Field(None, max_length=200, description="报告标题")
+    report_markdown: Optional[str] = Field(None, description="Markdown 正文")
+
+
 class AIQuestionTaskUpdateRequest(BaseModel):
     """AI 智能出题结果更新请求"""
 
@@ -778,6 +823,14 @@ class AIPersonalTrainingTaskDetailResponse(AITaskSummaryResponse):
     request_payload: AIPersonalTrainingTaskCreateRequest
     portrait: Optional[AIPersonalTrainingPortrait] = None
     plan: Optional[AIPersonalTrainingPlan] = None
+    error_message: Optional[str] = None
+
+
+class AITrainingReportTaskDetailResponse(AITaskSummaryResponse):
+    """培训班总结报告任务详情响应"""
+
+    request_payload: AITrainingReportTaskCreateRequest
+    draft: Optional[TrainingReportDraft] = None
     error_message: Optional[str] = None
 
 

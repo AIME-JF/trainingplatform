@@ -81,6 +81,10 @@
             <a-menu-item key="exams">考试安排</a-menu-item>
             <a-menu-item key="quiz">随堂测验</a-menu-item>
           </a-sub-menu>
+          <a-menu-item key="reports" v-if="!authStore.isStudent && canManageTrainingReports">
+            <template #icon><FileSearchOutlined /></template>
+            总结报告
+          </a-menu-item>
           <a-sub-menu key="config-group" v-if="!authStore.isStudent">
             <template #icon><SettingOutlined /></template>
             <template #title>班级配置</template>
@@ -267,6 +271,17 @@
               :training-data="trainingData"
               :is-student="authStore.isStudent"
               @go-question-bank="goQuestionBank"
+            />
+          </div>
+
+          <div v-show="activeTab === 'reports'" v-if="!authStore.isStudent && canManageTrainingReports">
+            <TrainingReportContent
+              :training-id="trainingData.id"
+              :training-name="trainingData.name"
+              :can-manage="canManageTrainingReports"
+              :latest-report-confirmed-at="trainingData.latestReportConfirmedAt"
+              :has-pending-report-task="trainingData.hasPendingReportTask"
+              @refresh="loadTrainingDetail"
             />
           </div>
 
@@ -961,7 +976,7 @@
 import { ref, computed, reactive, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
-import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QuestionCircleOutlined, AppstoreOutlined, ReadOutlined, FileTextOutlined, SettingOutlined, PlusOutlined, TeamOutlined, FolderOutlined } from '@ant-design/icons-vue'
+import { CalendarOutlined, EnvironmentOutlined, UserOutlined, QuestionCircleOutlined, AppstoreOutlined, ReadOutlined, FileTextOutlined, FileSearchOutlined, SettingOutlined, PlusOutlined, TeamOutlined, FolderOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
 import {
   getTraining,
@@ -1000,6 +1015,7 @@ import TrainingScheduleContent from './components/TrainingScheduleContent.vue'
 import TrainingScheduleRuleContent from './components/TrainingScheduleRuleContent.vue'
 import TrainingExamsContent from './components/TrainingExamsContent.vue'
 import TrainingQuizContent from './components/TrainingQuizContent.vue'
+import TrainingReportContent from './components/TrainingReportContent.vue'
 import QuickCreateExamModal from './components/QuickCreateExamModal.vue'
 import TrainingStudentsContent from './components/TrainingStudentsContent.vue'
 import CourseResourcePicker from './components/CourseResourcePicker.vue'
@@ -1077,6 +1093,10 @@ const trainingData = reactive({
   workflowSteps: [],
   currentStepKey: 'draft',
   currentSession: null,
+  latestReportSnapshotId: null,
+  latestReportTitle: '',
+  latestReportConfirmedAt: null,
+  hasPendingReportTask: false,
   canManageAll: false,
   canManageTraining: false,
   canEditTraining: false,
@@ -1290,6 +1310,9 @@ async function loadTrainingDetail() {
     } else if (activeTab.value === 'courseChangeLogs') {
       loadTrainingCourseChangeLogs()
     }
+    if ((!data.canManageTraining && !data.canManageAll) && activeTab.value === 'reports') {
+      activeTab.value = 'overview'
+    }
     await maybeAutoOpenDetailTour()
   } catch (e) {
     message.error('加载培训班详情失败')
@@ -1389,6 +1412,7 @@ const scheduleViewMode = ref('course')
 const canEdit = computed(() => !!trainingData.canManageAll)
 const canScheduleEdit = computed(() => !!trainingData.canEditCourses && trainingData.status !== 'ended')
 const canManageStudents = computed(() => !!trainingData.canManageAll)
+const canManageTrainingReports = computed(() => !!(trainingData.canManageTraining || trainingData.canManageAll))
 const canManageEnrollmentApplications = computed(() => !!trainingData.canReviewEnrollments)
 const canManageNotices = computed(() => !!trainingData.canManageAll)
 const canExportStudents = computed(() => !!trainingData.canManageAll)

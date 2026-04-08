@@ -15,6 +15,7 @@ from app.database import get_redis
 from app.models import (
     AdmissionExam,
     AdmissionExamRecord,
+    AITask,
     Certificate,
     CheckinRecord,
     Department,
@@ -35,6 +36,7 @@ from app.models import (
     TrainingCourse,
     TrainingHistory,
     TrainingLeave,
+    TrainingReportSnapshot,
     User,
     question_folder_course_relations,
 )
@@ -64,6 +66,7 @@ from app.schemas.training import (
     TrainingExamSummary,
     TrainingQuizPublishRequest,
     TrainingQuizUpdateRequest,
+    TrainingReportSnapshotResponse,
     TrainingHistoryResponse,
     TrainingListResponse,
     TrainingStatsResponse,
@@ -346,6 +349,18 @@ class TrainingService:
         if changed:
             self.db.commit()
         return self._to_response(training, current_user_id)
+
+    def list_training_report_snapshots(self, training_id: int) -> List[TrainingReportSnapshotResponse]:
+        snapshots = self.db.query(TrainingReportSnapshot).filter(
+            TrainingReportSnapshot.training_id == training_id,
+        ).order_by(TrainingReportSnapshot.version_no.desc(), TrainingReportSnapshot.id.desc()).all()
+        return [self._training_report_snapshot_to_response(item) for item in snapshots]
+
+    def get_latest_training_report_snapshot(self, training_id: int) -> Optional[TrainingReportSnapshotResponse]:
+        snapshot = self.db.query(TrainingReportSnapshot).filter(
+            TrainingReportSnapshot.training_id == training_id,
+        ).order_by(TrainingReportSnapshot.version_no.desc(), TrainingReportSnapshot.id.desc()).first()
+        return self._training_report_snapshot_to_response(snapshot) if snapshot else None
 
     def create_training_quiz(
         self,
@@ -3420,6 +3435,17 @@ class TrainingService:
         current_enrollment = self._resolve_current_enrollment(training, current_user_id)
         current_enrollment_status = current_enrollment.status if current_enrollment else None
         current_step_key = self._resolve_current_step_key(training)
+        latest_report_snapshot = self.db.query(TrainingReportSnapshot).filter(
+            TrainingReportSnapshot.training_id == training.id,
+        ).order_by(TrainingReportSnapshot.version_no.desc(), TrainingReportSnapshot.id.desc()).first()
+        pending_report_tasks = self.db.query(AITask).filter(
+            AITask.task_type == "training_report_generation",
+            AITask.status.in_(["pending", "processing", "completed"]),
+        ).all()
+        has_pending_report_task = any(
+            int((item.request_payload or {}).get("training_id") or 0) == training.id
+            for item in pending_report_tasks
+        )
         # Sub-resources are now fetched via dedicated endpoints:
         # students -> GET /trainings/{id}/students
         # checkin_records -> GET /trainings/{id}/checkin/records
@@ -3482,6 +3508,10 @@ class TrainingService:
             current_step_key=current_step_key,
             current_session=self._build_current_session_response(training, current_user_id),
             recent_activities=recent_activities,
+            latest_report_snapshot_id=latest_report_snapshot.id if latest_report_snapshot else None,
+            latest_report_title=latest_report_snapshot.title if latest_report_snapshot else None,
+            latest_report_confirmed_at=latest_report_snapshot.confirmed_at if latest_report_snapshot else None,
+            has_pending_report_task=has_pending_report_task,
             is_related_user=is_related,
             can_manage_all=can_manage_all,
             can_manage_training=can_manage_training_directly,
@@ -3493,6 +3523,31 @@ class TrainingService:
             can_enter_training=current_enrollment_status == "approved",
             created_at=training.created_at,
             updated_at=training.updated_at,
+        )
+
+    def _training_report_snapshot_to_response(
+        self,
+        snapshot: Optional[TrainingReportSnapshot],
+    ) -> Optional[TrainingReportSnapshotResponse]:
+        if not snapshot:
+            return None
+        return TrainingReportSnapshotResponse(
+            id=snapshot.id,
+            training_id=snapshot.training_id,
+            version_no=snapshot.version_no,
+            ai_task_id=snapshot.ai_task_id,
+            task_name=snapshot.task_name,
+            title=snapshot.title,
+            request_payload=snapshot.request_payload or {},
+            kpi_overview=list(snapshot.kpi_overview or []),
+            attendance_summary=snapshot.attendance_summary or {},
+            exam_summary=snapshot.exam_summary or {},
+            risk_items=list(snapshot.risk_items or []),
+            suggestions=list(snapshot.suggestions or []),
+            report_markdown=snapshot.report_markdown or "",
+            confirmed_by=snapshot.confirmed_by,
+            confirmed_at=snapshot.confirmed_at,
+            created_at=snapshot.created_at,
         )
 
     def _resolve_training_schedule_rule_config(self, training: Training) -> TrainingScheduleRuleConfig:

@@ -15,6 +15,7 @@ from app.schemas import (
     EnrollmentCreate,
     TrainingQuizPublishRequest,
     TrainingQuizUpdateRequest,
+    TrainingReportSnapshotResponse,
     TrainingSkipCourseRequest,
     TrainingCourseChangeLogResponse,
     TrainingCreate,
@@ -70,6 +71,20 @@ class TrainingController:
         if not result:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="培训班不存在")
         return result
+
+    def list_training_report_snapshots(self, training_id: int) -> list[TrainingReportSnapshotResponse]:
+        try:
+            return self.service.list_training_report_snapshots(training_id)
+        except Exception as exc:
+            logger.error("获取培训班报告快照列表异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取报告版本失败")
+
+    def get_latest_training_report_snapshot(self, training_id: int) -> Optional[TrainingReportSnapshotResponse]:
+        try:
+            return self.service.get_latest_training_report_snapshot(training_id)
+        except Exception as exc:
+            logger.error("获取培训班最新报告快照异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取最新报告失败")
 
     def create_training_quiz(self, training_id: int, data: TrainingQuizPublishRequest, user_id: int):
         try:

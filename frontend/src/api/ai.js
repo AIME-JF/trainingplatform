@@ -150,6 +150,30 @@ export function confirmAiScheduleTask(taskId) {
   return request.post(`/ai/schedule-tasks/${taskId}/confirm`)
 }
 
+export function getAiTrainingReportTasks(params) {
+  return request.get('/ai/training-report-tasks', { params })
+}
+
+export function createAiTrainingReportTask(data) {
+  return request.post('/ai/training-report-tasks', data)
+}
+
+export function getAiTrainingReportTaskDetail(taskId) {
+  return request.get(`/ai/training-report-tasks/${taskId}`)
+}
+
+export function updateAiTrainingReportTaskResult(taskId, data) {
+  return request.put(`/ai/training-report-tasks/${taskId}/result`, data)
+}
+
+export function confirmAiTrainingReportTask(taskId) {
+  return request.post(`/ai/training-report-tasks/${taskId}/confirm`)
+}
+
+export function deleteAiTrainingReportTask(taskId) {
+  return request.delete(`/ai/training-report-tasks/${taskId}`)
+}
+
 // 智能解析课表
 export function getScheduleFileParseTaskList(params) {
   return request.get('/ai/schedule-file-parse-tasks', { params })

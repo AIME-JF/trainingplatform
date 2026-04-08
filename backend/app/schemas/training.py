@@ -165,6 +165,29 @@ class TrainingExamSummary(BaseModel):
     can_join: Optional[bool] = None
 
 
+class TrainingReportSnapshotResponse(BaseModel):
+    """培训班报告快照响应"""
+
+    id: int
+    training_id: int
+    version_no: int
+    ai_task_id: int
+    task_name: str
+    title: str
+    request_payload: dict = Field(default_factory=dict)
+    kpi_overview: List[dict] = Field(default_factory=list)
+    attendance_summary: dict = Field(default_factory=dict)
+    exam_summary: dict = Field(default_factory=dict)
+    risk_items: List[str] = Field(default_factory=list)
+    suggestions: List[str] = Field(default_factory=list)
+    report_markdown: str
+    confirmed_by: int
+    confirmed_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class TrainingQuizPublishRequest(BaseModel):
     """培训班随堂测试发布请求"""
 
@@ -571,6 +594,10 @@ class TrainingResponse(BaseModel):
     current_step_key: str = "draft"
     current_session: Optional[TrainingCurrentSessionResponse] = None
     recent_activities: List[TrainingActivityResponse] = Field(default_factory=list)
+    latest_report_snapshot_id: Optional[int] = None
+    latest_report_title: Optional[str] = None
+    latest_report_confirmed_at: Optional[datetime] = None
+    has_pending_report_task: bool = False
     is_related_user: bool = False
     can_manage_all: bool = False
     can_manage_training: bool = False

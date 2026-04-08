@@ -66,6 +66,7 @@ from .training import (
     CalendarEventResponse,
     ScheduleItemCreate, ScheduleItemResponse,
     TrainingExamSummary, TrainingQuizPublishRequest, TrainingQuizUpdateRequest,
+    TrainingReportSnapshotResponse,
     TrainingHistoryResponse, TrainingCourseChangeLogResponse,
     TrainingActivityResponse,
 )
@@ -115,14 +116,17 @@ from .ai import (
     AIScheduleConflictItem, AIScheduleUnavailableSlot,
     AIScheduleParsePreviewResponse,
     AIPersonalTrainingTaskCreateRequest, AIPersonalTrainingTaskUpdateRequest,
+    AITrainingReportTaskCreateRequest, AITrainingReportTaskUpdateRequest,
     AIPersonalTrainingPortrait, AIPersonalTrainingPortraitTag,
     AIPersonalTrainingPortraitEvidence, AIPersonalTrainingPlan,
+    TrainingReportDraft, TrainingReportKpiItem,
     AIPersonalTrainingAction, AIPersonalTrainingResourceRecommendation,
     AITaskQuestionDraft, AITaskPaperDraft, AITaskSummaryResponse,
     AIQuestionTaskDetailResponse, AIPaperAssemblyTaskDetailResponse,
     AIPaperGenerationTaskDetailResponse, AIPaperDocumentGenerationTaskDetailResponse,
     AIScheduleTaskDetailResponse,
-    AIPersonalTrainingTaskDetailResponse, TeachingResourceGenerationTaskDetailResponse
+    AIPersonalTrainingTaskDetailResponse, AITrainingReportTaskDetailResponse,
+    TeachingResourceGenerationTaskDetailResponse
 )
 from .schedule_file_parse import (
     ScheduleFileParseTaskDetailResponse,
@@ -225,6 +229,7 @@ __all__ = [
     "CalendarEventResponse",
     "ScheduleItemCreate", "ScheduleItemResponse",
     "TrainingExamSummary", "TrainingQuizPublishRequest", "TrainingQuizUpdateRequest",
+    "TrainingReportSnapshotResponse",
     "TrainingHistoryResponse", "TrainingCourseChangeLogResponse",
     "TrainingActivityResponse",
     # 考试相关
@@ -265,14 +270,17 @@ __all__ = [
     "AIScheduleConflictItem", "AIScheduleUnavailableSlot",
     "AIScheduleParsePreviewResponse",
     "AIPersonalTrainingTaskCreateRequest", "AIPersonalTrainingTaskUpdateRequest",
+    "AITrainingReportTaskCreateRequest", "AITrainingReportTaskUpdateRequest",
     "AIPersonalTrainingPortrait", "AIPersonalTrainingPortraitTag",
     "AIPersonalTrainingPortraitEvidence", "AIPersonalTrainingPlan",
+    "TrainingReportDraft", "TrainingReportKpiItem",
     "AIPersonalTrainingAction", "AIPersonalTrainingResourceRecommendation",
     "AITaskQuestionDraft", "AITaskPaperDraft", "AITaskSummaryResponse",
     "AIQuestionTaskDetailResponse", "AIPaperAssemblyTaskDetailResponse",
     "AIPaperGenerationTaskDetailResponse", "AIPaperDocumentGenerationTaskDetailResponse",
     "AIScheduleTaskDetailResponse",
-    "AIPersonalTrainingTaskDetailResponse", "TeachingResourceGenerationTaskDetailResponse",
+    "AIPersonalTrainingTaskDetailResponse", "AITrainingReportTaskDetailResponse",
+    "TeachingResourceGenerationTaskDetailResponse",
     # 智能解析课表
     "ScheduleFileParseTaskDetailResponse", "ScheduleFileParseTaskUpdateRequest",
     "ScheduleFileClassInfo", "ScheduleFileCourse", "ScheduleFileTrainingConfig",

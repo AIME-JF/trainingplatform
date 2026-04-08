@@ -200,6 +200,17 @@
             />
           </div>
 
+          <div v-if="activeTab === 'report'" class="tab-panel">
+            <ClassReportTab
+              :training-id="trainingId"
+              :training-name="detail?.name"
+              :can-manage="isClassInstructor"
+              :latest-report-confirmed-at="detail?.latest_report_confirmed_at || null"
+              :has-pending-report-task="detail?.has_pending_report_task || false"
+              @refresh="fetchDetail"
+            />
+          </div>
+
           <!-- ========== 学员名单 ========== -->
           <div v-if="activeTab === 'students'" class="tab-panel">
             <div v-if="students.length" class="student-toolbar">
@@ -362,6 +373,7 @@ import ActivityFeed from '@/components/classes/detail/ActivityFeed.vue'
 import NoticeList from '@/components/classes/detail/NoticeList.vue'
 import CourseScheduleTab from '@/components/classes/detail/CourseScheduleTab.vue'
 import ClassQuizTab from '@/components/classes/detail/ClassQuizTab.vue'
+import ClassReportTab from '@/components/classes/detail/ClassReportTab.vue'
 import ClassResourcesTab from '@/components/classes/detail/ClassResourcesTab.vue'
 import CheckinManager from '@/components/classes/detail/CheckinManager.vue'
 import CheckoutManager from '@/components/classes/detail/CheckoutManager.vue'
@@ -379,6 +391,10 @@ const activeTab = ref('overview')
 
 type TrainingDetail = TrainingResponse & {
   is_related_user?: boolean
+  latest_report_snapshot_id?: number | null
+  latest_report_title?: string | null
+  latest_report_confirmed_at?: string | null
+  has_pending_report_task?: boolean
 }
 
 type TrainingExamSession = NonNullable<TrainingResponse['exam_sessions']>[number] & {
@@ -527,6 +543,7 @@ const visibleTabs = computed(() => {
     { key: 'quiz', label: '随堂测试' },
   ]
   if (isClassInstructor.value) {
+    tabs.push({ key: 'report', label: '总结报告' })
     tabs.push({ key: 'students', label: '学员名单' })
   }
   return tabs
@@ -798,6 +815,12 @@ onUnmounted(() => {
 watch(activeTab, (tab) => {
   if (tab === 'students' && students.value.length === 0 && isClassInstructor.value) {
     fetchStudents()
+  }
+})
+
+watch(visibleTabs, (tabs) => {
+  if (!tabs.some((item) => item.key === activeTab.value)) {
+    activeTab.value = 'overview'
   }
 })
 </script>

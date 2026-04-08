@@ -38,6 +38,7 @@ from app.schemas import (
     TrainingHistoryResponse,
     TrainingQuizPublishRequest,
     TrainingQuizUpdateRequest,
+    TrainingReportSnapshotResponse,
     TrainingListResponse,
     TrainingStatsResponse,
     CalendarEventResponse,
@@ -255,6 +256,38 @@ def get_training(
     _require_training_viewer(db, training_id, current_user.user_id)
     controller = TrainingController(db)
     data = controller.get_training_by_id(training_id, current_user.user_id)
+    return StandardResponse(data=data)
+
+
+@router.get(
+    "/{training_id}/report-snapshots",
+    response_model=StandardResponse[List[TrainingReportSnapshotResponse]],
+    summary="培训班报告版本列表",
+)
+def get_training_report_snapshots(
+    training_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_training_manager(db, training_id, current_user.user_id)
+    controller = TrainingController(db)
+    data = controller.list_training_report_snapshots(training_id)
+    return StandardResponse(data=data)
+
+
+@router.get(
+    "/{training_id}/report-snapshots/latest",
+    response_model=StandardResponse[Optional[TrainingReportSnapshotResponse]],
+    summary="培训班最新报告版本",
+)
+def get_latest_training_report_snapshot(
+    training_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_training_manager(db, training_id, current_user.user_id)
+    controller = TrainingController(db)
+    data = controller.get_latest_training_report_snapshot(training_id)
     return StandardResponse(data=data)
 
 

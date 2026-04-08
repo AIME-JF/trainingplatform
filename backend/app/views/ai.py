@@ -17,6 +17,9 @@ from app.schemas import (
     AIPersonalTrainingTaskCreateRequest,
     AIPersonalTrainingTaskDetailResponse,
     AIPersonalTrainingTaskUpdateRequest,
+    AITrainingReportTaskCreateRequest,
+    AITrainingReportTaskDetailResponse,
+    AITrainingReportTaskUpdateRequest,
     AIPaperAssemblyTaskCreateRequest,
     AIPaperAssemblyTaskDetailResponse,
     AIPaperGenerationTaskCreateRequest,
@@ -714,6 +717,25 @@ def list_personal_training_tasks(
     return StandardResponse(data=data)
 
 
+@router.get(
+    "/training-report-tasks",
+    response_model=StandardResponse[PaginatedResponse[AITaskSummaryResponse]],
+    summary="培训班总结报告任务列表",
+)
+def list_training_report_tasks(
+    page: int = Query(1, ge=1),
+    size: int = Query(10, ge=-1),
+    status_value: Optional[str] = Query(None, alias="status"),
+    training_id: Optional[int] = Query(None, description="培训班ID"),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_schedule_task_permission(db, current_user)
+    controller = AIController(db)
+    data = controller.list_training_report_tasks(page, size, status_value, training_id, current_user.user_id)
+    return StandardResponse(data=data)
+
+
 @router.post(
     "/personal-training-tasks",
     response_model=StandardResponse[AIPersonalTrainingTaskDetailResponse],
@@ -729,6 +751,22 @@ def create_personal_training_task(
     return StandardResponse(data=result)
 
 
+@router.post(
+    "/training-report-tasks",
+    response_model=StandardResponse[AITrainingReportTaskDetailResponse],
+    summary="创建培训班总结报告任务",
+)
+def create_training_report_task(
+    data: AITrainingReportTaskCreateRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_schedule_task_permission(db, current_user)
+    controller = AIController(db)
+    result = controller.create_training_report_task(data, current_user.user_id)
+    return StandardResponse(data=result)
+
+
 @router.get(
     "/personal-training-tasks/{task_id}",
     response_model=StandardResponse[AIPersonalTrainingTaskDetailResponse],
@@ -741,6 +779,22 @@ def get_personal_training_task_detail(
 ):
     controller = AIController(db)
     data = controller.get_personal_training_task_detail(task_id, current_user.user_id)
+    return StandardResponse(data=data)
+
+
+@router.get(
+    "/training-report-tasks/{task_id}",
+    response_model=StandardResponse[AITrainingReportTaskDetailResponse],
+    summary="培训班总结报告任务详情",
+)
+def get_training_report_task_detail(
+    task_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_schedule_task_permission(db, current_user)
+    controller = AIController(db)
+    data = controller.get_training_report_task_detail(task_id, current_user.user_id)
     return StandardResponse(data=data)
 
 
@@ -760,6 +814,23 @@ def update_personal_training_task(
     return StandardResponse(data=result)
 
 
+@router.put(
+    "/training-report-tasks/{task_id}/result",
+    response_model=StandardResponse[AITrainingReportTaskDetailResponse],
+    summary="更新培训班总结报告任务结果",
+)
+def update_training_report_task(
+    task_id: int,
+    data: AITrainingReportTaskUpdateRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_schedule_task_permission(db, current_user)
+    controller = AIController(db)
+    result = controller.update_training_report_task(task_id, data, current_user.user_id)
+    return StandardResponse(data=result)
+
+
 @router.post(
     "/personal-training-tasks/{task_id}/confirm",
     response_model=StandardResponse[AIPersonalTrainingTaskDetailResponse],
@@ -773,6 +844,38 @@ def confirm_personal_training_task(
     controller = AIController(db)
     result = controller.confirm_personal_training_task(task_id, current_user.user_id)
     return StandardResponse(data=result)
+
+
+@router.post(
+    "/training-report-tasks/{task_id}/confirm",
+    response_model=StandardResponse[AITrainingReportTaskDetailResponse],
+    summary="确认培训班总结报告任务",
+)
+def confirm_training_report_task(
+    task_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_schedule_task_permission(db, current_user)
+    controller = AIController(db)
+    result = controller.confirm_training_report_task(task_id, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.delete(
+    "/training-report-tasks/{task_id}",
+    response_model=StandardResponse[dict],
+    summary="删除培训班总结报告任务",
+)
+def delete_training_report_task(
+    task_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_schedule_task_permission(db, current_user)
+    controller = AIController(db)
+    controller.delete_training_report_task(task_id, current_user.user_id)
+    return StandardResponse(data={"deleted": True})
 
 
 # ---------------------------------------------------------------------------
