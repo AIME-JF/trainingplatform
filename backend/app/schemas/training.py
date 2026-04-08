@@ -381,6 +381,7 @@ class BatchManualCheckinRequest(BaseModel):
 
     session_key: str = Field(..., description="课次标识")
     items: List[BatchManualCheckinItem] = Field(..., min_length=1)
+    complete_session: bool = Field(False, description="提交后直接完成课次（跳过签到签退流程）")
 
 
 class TrainingLeaveCreate(BaseModel):

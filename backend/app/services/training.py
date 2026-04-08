@@ -866,6 +866,8 @@ class TrainingService:
         events: List[CalendarEventResponse] = []
         for training in trainings:
             # 只返回与用户相关的班级的课时
+            if (training.status or "upcoming") == "ended":
+                continue
             related = is_training_related_user(training, user_id)
             if not (context.is_admin or related):
                 continue
@@ -1386,8 +1388,23 @@ class TrainingService:
             else:
                 record.absence_reason = None
                 record.time = record.time or now_time
+            if data.complete_session and item.status != "absent":
+                record.checkout_time = now_time
+                record.checkout_status = "completed"
+                record.checkout_method = "manual"
 
             affected_user_ids.append(item.user_id)
+
+        # 完成课次（跳过签到签退流程）
+        if data.complete_session:
+            now_iso = datetime.now().isoformat()
+            schedule = session["schedule"]
+            schedule["status"] = self.SESSION_COMPLETED
+            schedule["ended_at"] = now_iso
+            flag_modified(session["course"], "schedules")
+            if not training.locked_at:
+                self._mark_training_locked(training, None)
+            training.status = "active"
 
         self._refresh_training_histories(training_id, affected_user_ids)
         self.db.commit()
@@ -1404,6 +1421,8 @@ class TrainingService:
 
         logger.info("批量手动点名培训%s，课次=%s，%d人", training_id, session_key, len(data.items))
         self._broadcast_event(training_id, "checkin_updated", {"session_key": session_key})
+        if data.complete_session:
+            self._broadcast_event(training_id, "session_checkout_end", {"session_key": session_key})
         return results
 
     # ========== 请销假 ==========

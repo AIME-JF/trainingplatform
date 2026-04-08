@@ -104,6 +104,7 @@
                 :has-checked-out="hasCheckedOut"
                 @open-checkin-mgr="checkinMgrVisible = true"
                 @open-checkout-mgr="checkoutMgrVisible = true"
+                @open-manual-attendance="openSessionManualAttendance"
                 @student-checkin="studentCheckinVisible = true"
                 @student-checkout="studentCheckoutVisible = true"
                 @student-scan-qr="openQrScanner"
@@ -150,13 +151,7 @@
 
           <!-- ========== 课程 ========== -->
           <div v-if="activeTab === 'schedule'" class="tab-panel">
-            <CourseScheduleTab
-              :courses="courses"
-              :training-id="detail?.id"
-              :students="students"
-              :is-instructor="isClassInstructor"
-              @refresh="fetchDetail"
-            />
+            <CourseScheduleTab :courses="courses" />
           </div>
 
           <!-- ========== 资源 ========== -->
@@ -239,6 +234,16 @@
         :students="students"
         :refresh-key="wsCheckinRefreshKey"
         @detail-updated="onCheckoutManagerUpdated"
+      />
+
+      <ManualAttendance
+        v-model:visible="manualAttendanceVisible"
+        :training-id="detail.id"
+        :session-id="manualAttendanceSessionId"
+        :session-label="manualAttendanceLabel"
+        :students="students"
+        :complete-session="true"
+        @submitted="onManualAttendanceSubmitted"
       />
 
       <StudentCheckinConfirm
@@ -344,6 +349,7 @@ import CourseScheduleTab from '@/components/classes/detail/CourseScheduleTab.vue
 import ClassResourcesTab from '@/components/classes/detail/ClassResourcesTab.vue'
 import CheckinManager from '@/components/classes/detail/CheckinManager.vue'
 import CheckoutManager from '@/components/classes/detail/CheckoutManager.vue'
+import ManualAttendance from '@/components/classes/detail/ManualAttendance.vue'
 import StudentCheckinConfirm from '@/components/classes/detail/StudentCheckinConfirm.vue'
 import StudentCheckoutConfirm from '@/components/classes/detail/StudentCheckoutConfirm.vue'
 import QrScannerModal from '@/components/classes/detail/QrScannerModal.vue'
@@ -371,6 +377,9 @@ const qrScannerVisible = ref(false)
 const qrScannerAction = ref<'checkin' | 'checkout'>('checkin')
 const showGestureCheckin = ref(false)
 const showGestureCheckout = ref(false)
+const manualAttendanceVisible = ref(false)
+const manualAttendanceSessionId = ref('')
+const manualAttendanceLabel = ref('')
 
 const enrollModalVisible = ref(false)
 const enrollSubmitting = ref(false)
@@ -576,6 +585,20 @@ function onCheckoutSuccess() {
   fetchCheckinRecords()
 }
 
+async function openSessionManualAttendance() {
+  const sess = currentSession.value
+  if (!sess) return
+  manualAttendanceSessionId.value = sess.session_id
+  manualAttendanceLabel.value = `${sess.course_name} · ${sess.time_range?.replace('~', ' - ') || ''}`
+  if (!students.value.length) await fetchStudents()
+  manualAttendanceVisible.value = true
+}
+
+function onManualAttendanceSubmitted() {
+  fetchDetail()
+  fetchCheckinRecords()
+}
+
 function onCheckinManagerUpdated(nextDetail: TrainingResponse) {
   detail.value = nextDetail
   fetchCheckinRecords()
@@ -702,7 +725,7 @@ onUnmounted(() => {
 
 // Lazy-load students when tab is activated (only instructors have access)
 watch(activeTab, (tab) => {
-  if ((tab === 'students' || tab === 'schedule') && students.value.length === 0 && isClassInstructor.value) {
+  if (tab === 'students' && students.value.length === 0 && isClassInstructor.value) {
     fetchStudents()
   }
 })

@@ -15,6 +15,13 @@
 
     <div class="ma-toolbar">
       <a-space>
+        <a-input-search
+          v-model:value="searchText"
+          placeholder="搜索学员"
+          allow-clear
+          size="small"
+          style="width: 160px"
+        />
         <a-button size="small" @click="setAllStatus('on_time')">全部出勤</a-button>
         <a-button size="small" @click="setAllStatus('absent')">全部缺勤</a-button>
       </a-space>
@@ -24,7 +31,7 @@
     </div>
 
     <div class="ma-list">
-      <div v-for="item in attendanceItems" :key="item.userId" class="ma-row">
+      <div v-for="item in filteredItems" :key="item.userId" class="ma-row">
         <div class="ma-student">
           <a-avatar :size="28" class="ma-avatar">{{ (item.nickname || item.name || '').slice(0, 1) }}</a-avatar>
           <span class="ma-name">{{ item.nickname || item.name }}</span>
@@ -59,6 +66,7 @@ const props = defineProps<{
   sessionId: string
   sessionLabel: string
   students: StudentItem[]
+  completeSession?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -76,6 +84,16 @@ interface AttendanceItem {
 
 const attendanceItems = ref<AttendanceItem[]>([])
 const submitting = ref(false)
+const searchText = ref('')
+
+const filteredItems = computed(() => {
+  const keyword = searchText.value.trim().toLowerCase()
+  if (!keyword) return attendanceItems.value
+  return attendanceItems.value.filter(item =>
+    (item.name && item.name.toLowerCase().includes(keyword))
+    || (item.nickname && item.nickname.toLowerCase().includes(keyword))
+  )
+})
 
 const onTimeCount = computed(() => attendanceItems.value.filter(i => i.status === 'on_time').length)
 const lateCount = computed(() => attendanceItems.value.filter(i => i.status === 'late').length)
@@ -85,6 +103,7 @@ watch(
   () => props.visible,
   (val) => {
     if (val) {
+      searchText.value = ''
       attendanceItems.value = props.students.map(s => ({
         userId: s.user_id,
         name: s.user_name || '',
@@ -110,6 +129,7 @@ async function handleSubmit() {
     const axiosInstance = (await import('@/api/custom-instance')).default
     await axiosInstance.post(`/trainings/${props.trainingId}/checkin/batch-manual`, {
       session_key: props.sessionId,
+      complete_session: props.completeSession ?? false,
       items: attendanceItems.value.map(item => ({
         user_id: item.userId,
         status: item.status,

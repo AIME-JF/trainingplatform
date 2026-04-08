@@ -31,6 +31,13 @@
           开始签到
         </a-button>
         <a-button
+          v-if="session.action_permissions.can_start_checkin"
+          size="small"
+          @click="$emit('openManualAttendance')"
+        >
+          <EditOutlined /> 手动点名
+        </a-button>
+        <a-button
           v-if="session.action_permissions.can_start_checkout"
           type="primary"
           size="small"
@@ -101,6 +108,7 @@
 import { computed } from 'vue'
 import {
   ClockCircleOutlined,
+  EditOutlined,
   EnvironmentOutlined,
   UserOutlined,
   CheckCircleOutlined,
@@ -122,6 +130,7 @@ const props = defineProps<Props>()
 defineEmits<{
   (e: 'openCheckinMgr'): void
   (e: 'openCheckoutMgr'): void
+  (e: 'openManualAttendance'): void
   (e: 'studentCheckin'): void
   (e: 'studentCheckout'): void
   (e: 'studentScanQr', action: 'checkin' | 'checkout'): void
