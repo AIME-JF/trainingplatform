@@ -155,6 +155,8 @@ class TrainingBaseService:
 
     def _to_response(self, training_base: TrainingBase) -> TrainingBaseResponse:
         linked_trainings = training_base.linked_trainings or []
+        non_ended = [item for item in linked_trainings if (item.status or "upcoming") != "ended"]
+        used_capacity = sum(item.capacity or 0 for item in non_ended)
         upcoming_training_count = sum(1 for item in linked_trainings if (item.status or "upcoming") == "upcoming")
         active_training_count = sum(1 for item in linked_trainings if (item.status or "upcoming") == "active")
         return TrainingBaseResponse(
@@ -171,6 +173,7 @@ class TrainingBaseService:
             facilities=training_base.facilities,
             status=training_base.status,
             description=training_base.description,
+            used_capacity=used_capacity,
             linked_training_count=len(linked_trainings),
             upcoming_training_count=upcoming_training_count,
             active_training_count=active_training_count,

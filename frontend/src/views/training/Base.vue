@@ -45,6 +45,18 @@
           <template v-if="column.key === 'departmentName'">
             {{ record.departmentName || '未设置' }}
           </template>
+          <template v-if="column.key === 'capacityUsage'">
+            <template v-if="record.capacity">
+              <a-progress
+                :percent="Math.min(Math.round((record.usedCapacity || 0) / record.capacity * 100), 100)"
+                :status="(record.usedCapacity || 0) > record.capacity ? 'exception' : 'normal'"
+                size="small"
+                :stroke-color="(record.usedCapacity || 0) > record.capacity ? '#ff4d4f' : undefined"
+              />
+              <span class="capacity-text">{{ record.usedCapacity || 0 }} / {{ record.capacity }}</span>
+            </template>
+            <span v-else class="capacity-text">未设置</span>
+          </template>
           <template v-if="column.key === 'linkedTrainingStatus'">
             <a-space size="small">
               <a-tag color="orange">待开班 {{ record.upcomingTrainingCount || 0 }}</a-tag>
@@ -176,7 +188,7 @@ const editingBase = ref(null)
 const columns = [
   { title: '基地名称', dataIndex: 'name', key: 'name' },
   { title: '基地地点', dataIndex: 'location', key: 'location' },
-  { title: '容量', dataIndex: 'capacity', key: 'capacity', width: 80 },
+  { title: '容量使用', key: 'capacityUsage', width: 160 },
   { title: '联系人', dataIndex: 'contactPerson', key: 'contactPerson', width: 100 },
   { title: '联系电话', dataIndex: 'contactPhone', key: 'contactPhone', width: 120 },
   { title: '状态', key: 'status', width: 80 },
@@ -325,6 +337,8 @@ onMounted(() => {
 .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; gap: 16px; }
 .page-header h2 { margin: 0; font-size: 22px; color: #001234; }
 .page-sub { margin: 6px 0 0; color: #8c8c8c; font-size: 13px; }
+
+.capacity-text { font-size: 12px; color: #8c8c8c; }
 
 @media (max-width: 768px) {
   .page-header { flex-direction: column; }

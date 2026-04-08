@@ -204,6 +204,7 @@ class TrainingBaseResponse(BaseModel):
     facilities: Optional[str] = None
     status: Optional[str] = None
     description: Optional[str] = None
+    used_capacity: int = 0
     linked_training_count: int = 0
     upcoming_training_count: int = 0
     active_training_count: int = 0

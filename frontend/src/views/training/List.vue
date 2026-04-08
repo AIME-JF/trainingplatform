@@ -1273,6 +1273,31 @@ async function handleSubmitTraining() {
     return
   }
 
+  // 检查是否超出培训基地容量
+  if (locationSourceMode.value === 'base' && trainingForm.trainingBaseId) {
+    const base = trainingBaseOptions.value.find(item => item.id === trainingForm.trainingBaseId)
+    if (base && base.capacity) {
+      const currentUsed = base.usedCapacity || 0
+      // 编辑时扣除当前培训班原有的容量
+      const selfCapacity = editingTraining.value?.capacity || 0
+      const newTotal = currentUsed - selfCapacity + (trainingForm.capacity || 0)
+      if (newTotal > base.capacity) {
+        const confirmed = await new Promise(resolve => {
+          Modal.confirm({
+            title: '超出培训基地容量',
+            content: `培训基地「${base.name}」最大容纳 ${base.capacity} 人，当前已用 ${currentUsed - selfCapacity} 人，`
+              + `本班设置 ${trainingForm.capacity} 人后将达到 ${newTotal} 人，超出 ${newTotal - base.capacity} 人。是否继续？`,
+            okText: '继续创建',
+            cancelText: '返回修改',
+            onOk: () => resolve(true),
+            onCancel: () => resolve(false),
+          })
+        })
+        if (!confirmed) return
+      }
+    }
+  }
+
   const payload = {
     name: trainingForm.name,
     type: trainingForm.type,
