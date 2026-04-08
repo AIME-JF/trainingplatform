@@ -34,6 +34,12 @@
       </template>
     </a-alert>
 
+    <a-tabs v-model:activeKey="activeBusinessType" @change="onBusinessTypeChange" style="margin-bottom: 16px;">
+      <a-tab-pane key="resource" tab="资源审核" />
+      <!-- <a-tab-pane key="training" tab="培训审核" /> -->
+      <!-- <a-tab-pane key="exam" tab="考试审核" /> -->
+    </a-tabs>
+
     <a-card :bordered="false">
       <a-table :data-source="policies" :columns="columns" row-key="id" :pagination="false" :scroll="{ x: 1180 }">
         <template #bodyCell="{ column, record }">
@@ -299,6 +305,13 @@ const saving = ref(false)
 const canManagePolicy = computed(() => authStore.hasAnyPermission(['MANAGE_REVIEW_POLICY', 'VIEW_RESOURCE_ALL']))
 const flowVisible = ref(false)
 const flowPolicy = ref(null)
+const activeBusinessType = ref('resource')
+
+const businessTypeLabels = {
+  resource: '资源审核',
+  // training: '培训审核',
+  // exam: '考试审核',
+}
 
 const userReviewerOptions = ref([])
 const roleReviewerOptions = ref([])
@@ -324,6 +337,7 @@ const columns = [
 
 const form = reactive({
   name: '',
+  businessType: 'resource',
   enabled: true,
   scopeType: 'global',
   scopeDepartmentId: null,
@@ -513,6 +527,7 @@ async function ensureReviewerOptionsLoaded() {
 
 function resetForm() {
   form.name = ''
+  form.businessType = activeBusinessType.value
   form.enabled = true
   form.scopeType = 'global'
   form.scopeDepartmentId = null
@@ -522,9 +537,13 @@ function resetForm() {
   form.stages = [createStage(1)]
 }
 
+function onBusinessTypeChange() {
+  fetchPolicies()
+}
+
 async function fetchPolicies() {
   try {
-    policies.value = await getReviewPolicies() || []
+    policies.value = await getReviewPolicies({ businessType: activeBusinessType.value }) || []
   } catch (error) {
     message.error(error.message || '加载策略失败')
   }
@@ -542,6 +561,7 @@ async function openEdit(policy) {
   if (!canManagePolicy.value) return
   editing.value = policy
   form.name = policy.name
+  form.businessType = policy.businessType || activeBusinessType.value
   form.enabled = !!policy.enabled
   form.scopeType = policy.scopeType || 'global'
   form.scopeDepartmentId = normalizeId(policy.scopeDepartmentId)
@@ -701,6 +721,7 @@ async function save() {
 
   const payload = {
     name: form.name.trim(),
+    businessType: form.businessType || activeBusinessType.value,
     enabled: form.enabled,
     scopeType: form.scopeType,
     scopeDepartmentId: form.scopeType === 'global' ? null : normalizeId(form.scopeDepartmentId),

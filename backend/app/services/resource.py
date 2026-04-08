@@ -14,7 +14,7 @@ from app.models import (
 )
 from app.models.course import Course
 from app.models.training import Training
-from app.models.review import ResourceReviewTask
+from app.models.review import ReviewTask
 from app.schemas import PaginatedResponse
 from app.schemas.exam import (
     ADMISSION_SCOPE_ALL,
@@ -841,10 +841,11 @@ class ResourceService:
         if resource.uploader_id == user_id:
             return True
 
-        task = self.db.query(ResourceReviewTask.id).filter(
-            ResourceReviewTask.resource_id == resource.id,
-            ResourceReviewTask.assignee_user_id == user_id,
-            ResourceReviewTask.status == 'pending',
+        task = self.db.query(ReviewTask.id).filter(
+            ReviewTask.business_type == 'resource',
+            ReviewTask.business_id == resource.id,
+            ReviewTask.assignee_user_id == user_id,
+            ReviewTask.status == 'pending',
         ).first()
         if task:
             return True

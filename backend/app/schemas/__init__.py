@@ -156,7 +156,8 @@ from .review import (
     ReviewPolicyCreate, ReviewPolicyUpdate,
     ReviewPolicyResponse, ReviewPolicyStageResponse,
     ReviewTaskActionRequest, ReviewTaskResponse,
-    ReviewWorkflowResponse
+    ReviewWorkflowResponse, ReviewLogResponse,
+    SubmitReviewRequest,
 )
 from .recommendation import (
     ResourceBehaviorEventCreate,
@@ -288,6 +289,7 @@ __all__ = [
     "ReviewPolicyCreate", "ReviewPolicyUpdate",
     "ReviewPolicyResponse", "ReviewPolicyStageResponse",
     "ReviewTaskActionRequest", "ReviewTaskResponse", "ReviewWorkflowResponse",
+    "ReviewLogResponse", "SubmitReviewRequest",
     # 推荐
     "ResourceBehaviorEventCreate",
     "ResourceRecommendationItem", "ResourceRecommendationFeedResponse",

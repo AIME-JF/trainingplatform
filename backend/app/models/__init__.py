@@ -35,8 +35,9 @@ from .resource import (
 )
 from .library import LibraryFolder, LibraryItem
 from .review import (
-    ReviewPolicy, ReviewPolicyStage, ResourceReviewWorkflow,
-    ResourceReviewTask, ResourceReviewLog
+    ReviewPolicy, ReviewPolicyStage,
+    ReviewWorkflow, ReviewTask, ReviewLog,
+    ResourceReviewWorkflow, ResourceReviewTask, ResourceReviewLog,
 )
 from .recommendation import ResourceBehaviorEvent, ResourceRecommendScore
 from .training_activity import TrainingActivity
@@ -87,8 +88,9 @@ __all__ = [
     "ResourceLike", "ResourceComment",
     "LibraryFolder", "LibraryItem",
     # 审核
-    "ReviewPolicy", "ReviewPolicyStage", "ResourceReviewWorkflow",
-    "ResourceReviewTask", "ResourceReviewLog",
+    "ReviewPolicy", "ReviewPolicyStage",
+    "ReviewWorkflow", "ReviewTask", "ReviewLog",
+    "ResourceReviewWorkflow", "ResourceReviewTask", "ResourceReviewLog",
     # 推荐
     "ResourceBehaviorEvent", "ResourceRecommendScore",
     # 培训动态

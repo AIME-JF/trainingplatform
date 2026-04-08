@@ -1,5 +1,5 @@
 """
-资源审核控制器
+审核控制器（通用审核引擎）
 """
 from typing import Optional
 
@@ -7,7 +7,10 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.services.review import ReviewService
-from app.schemas.review import ReviewTaskActionRequest, ReviewPolicyCreate, ReviewPolicyUpdate
+from app.schemas.review import (
+    ReviewTaskActionRequest, ReviewPolicyCreate, ReviewPolicyUpdate,
+    SubmitReviewRequest,
+)
 from logger import logger
 
 
@@ -18,6 +21,7 @@ class ReviewController:
         self.db = db
         self.service = ReviewService(db)
 
+    # ===== 资源审核兼容入口 =====
     def submit_resource(self, resource_id: int, current_user_id: int):
         try:
             result = self.service.submit_resource(resource_id, current_user_id)
@@ -37,9 +41,34 @@ class ReviewController:
             logger.error(f"提交审核异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='提交审核失败')
 
-    def get_tasks(self, current_user_id: int, status_filter: str = 'pending'):
+    # ===== 通用审核提交 =====
+    def submit_for_review(self, data: SubmitReviewRequest, current_user_id: int):
         try:
-            return self.service.list_my_tasks(current_user_id, status_filter)
+            result = self.service.submit_for_review(
+                business_type=data.business_type,
+                business_id=data.business_id,
+                submitter_user_id=current_user_id,
+                scope_context=data.scope_context,
+            )
+            if not result:
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='审核流程创建失败')
+            return result
+        except PermissionError as e:
+            self.db.rollback()
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+        except ValueError as e:
+            self.db.rollback()
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        except HTTPException:
+            raise
+        except Exception as e:
+            self.db.rollback()
+            logger.error(f"通用提交审核异常: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='提交审核失败')
+
+    def get_tasks(self, current_user_id: int, status_filter: str = 'pending', business_type: Optional[str] = None):
+        try:
+            return self.service.list_my_tasks(current_user_id, status_filter, business_type=business_type)
         except Exception as e:
             logger.error(f"获取审核任务异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='获取审核任务失败')
@@ -72,15 +101,15 @@ class ReviewController:
             logger.error(f"审核驳回异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='审核驳回失败')
 
-    def get_workflow(self, resource_id: int):
-        data = self.service.get_workflow(resource_id)
+    def get_workflow(self, business_type: str, business_id: int):
+        data = self.service.get_workflow(business_type, business_id)
         if not data:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='审核流程不存在')
         return data
 
-    def get_policies(self):
+    def get_policies(self, business_type: Optional[str] = None):
         try:
-            return self.service.list_policies()
+            return self.service.list_policies(business_type=business_type)
         except Exception as e:
             logger.error(f"获取审核策略异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='获取审核策略失败')
