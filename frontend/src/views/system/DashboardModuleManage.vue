@@ -17,8 +17,8 @@
       >
         <template #bodyCell="{ column, record }">
           <template v-if="column.key === 'category'">
-            <a-tag :color="record.category === 'training' ? 'green' : 'blue'">
-              {{ record.category === 'training' ? '培训运营' : '综合数据' }}
+            <a-tag :color="record.category === 'training' ? 'green' : record.category === 'exam' ? 'orange' : 'blue'">
+              {{ record.category === 'training' ? '培训运营' : record.category === 'exam' ? '考试统计' : '综合数据' }}
             </a-tag>
           </template>
           <template v-else-if="column.key === 'visibleRoleCodes'">

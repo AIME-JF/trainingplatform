@@ -301,6 +301,9 @@ _DEFAULT_DASHBOARD_MODULES = [
     {"module_key": "city_completion", "module_name": "各单位完成率排名", "category": "training", "sort_order": 8,
      "module_description": "各部门培训完成率排名",
      "visible_role_codes": ["admin"]},
+    {"module_key": "exam_statistics", "module_name": "考试统计", "category": "exam", "sort_order": 9,
+     "module_description": "考试参加人数、及格率等统计指标及趋势分析",
+     "visible_role_codes": ["admin", "instructor"]},
 ]
 
 

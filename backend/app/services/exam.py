@@ -1085,6 +1085,175 @@ class ExamService:
             "recent_exams": recent_exam_items[:10],
         }
 
+    def get_exam_statistics(self, time_range: str = "30d") -> Dict[str, Any]:
+        """获取考试统计详情，支持时间筛选"""
+        from datetime import timedelta
+
+        from app.models import ExamRecord, AdmissionExamRecord
+
+        # 计算时间范围
+        now = datetime.now()
+        if time_range == "7d":
+            start_date = now - timedelta(days=7)
+        elif time_range == "30d":
+            start_date = now - timedelta(days=30)
+        elif time_range == "month":
+            start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        elif time_range == "year":
+            start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+        else:
+            start_date = None
+
+        # 查询所有考试
+        exams = self.db.query(Exam).options(
+            joinedload(Exam.training),
+            selectinload(Exam.participants).joinedload(ExamParticipant.user).selectinload(User.departments),
+            selectinload(Exam.participants).joinedload(ExamParticipant.user).selectinload(User.police_types),
+        ).all()
+        legacy_admission_exams = self.db.query(AdmissionExam).all()
+
+        # 根据时间筛选考试
+        if start_date:
+            exams = [e for e in exams if e.created_at and e.created_at >= start_date]
+            legacy_admission_exams = [e for e in legacy_admission_exams if e.created_at and e.created_at >= start_date]
+
+        # 统计考试数量
+        total_exams = len(exams) + len(legacy_admission_exams)
+        active_exams = len([item for item in exams if (item.status or "") == "active"]) + len([item for item in legacy_admission_exams if (item.status or "") == "active"])
+        ended_exams = len([item for item in exams if (item.status or "") == "ended"]) + len([item for item in legacy_admission_exams if (item.status or "") == "ended"])
+
+        # 查询考试成绩记录
+        new_records = self.db.query(ExamRecord).all()
+        legacy_records = self.db.query(AdmissionExamRecord).all()
+
+        # 根据时间筛选记录
+        if start_date:
+            new_records = [r for r in new_records if r.end_time and r.end_time >= start_date]
+            legacy_records = [r for r in legacy_records if r.end_time and r.end_time >= start_date]
+
+        all_records = [*new_records, *legacy_records]
+        submitted_records = [item for item in all_records if item.status == "submitted"]
+
+        # 计算参考人次
+        total_participants = sum(self._count_exam_expected_participants(exam) for exam in exams)
+        total_submitted = len(submitted_records)
+        absent_count = max(0, total_participants - total_submitted)
+
+        # 计算平均分和及格率
+        all_scores = [int(item.score or 0) for item in submitted_records]
+        pass_records = [item for item in submitted_records if item.result == "pass"]
+        avg_score = round(sum(all_scores) / len(all_scores), 1) if all_scores else 0
+        pass_rate = round(len(pass_records) / len(submitted_records) * 100, 1) if submitted_records else 0
+
+        # 分数段分布
+        excellent = len([s for s in all_scores if s >= 90])
+        good = len([s for s in all_scores if 80 <= s < 90])
+        passed = len([s for s in all_scores if 60 <= s < 80])
+        fail = len([s for s in all_scores if s < 60])
+
+        # 各维度平均分计算
+        dimension_scores = {"law": [], "enforce": [], "evidence": [], "physical": [], "ethic": []}
+        for record in submitted_records:
+            dim_scores = record.dimension_scores or {}
+            for dim in DIMENSION_KEYS:
+                if dim in dim_scores and dim_scores[dim]:
+                    dimension_scores[dim].append(float(dim_scores[dim]))
+
+        dimension_avg_scores = {
+            dim: round(sum(scores) / len(scores), 1) if scores else 0
+            for dim, scores in dimension_scores.items()
+        }
+
+        # 各单位考试排名
+        department_stats: Dict[str, Dict[str, Any]] = {}
+        for exam in exams:
+            if (exam.scene or EXAM_SCENE_TRAINING) != EXAM_SCENE_STANDALONE:
+                continue
+            for participant in (exam.participants or []):
+                user = participant.user
+                if not user:
+                    continue
+                for department in (user.departments or []):
+                    dept_name = department.name
+                    if dept_name not in department_stats:
+                        department_stats[dept_name] = {"exam_count": 0, "total_score": 0, "pass_count": 0, "submitted": 0}
+                    department_stats[dept_name]["exam_count"] += 1
+
+        # 关联考试成绩到部门
+        for record in new_records:
+            if not record.exam_id:
+                continue
+            exam = next((e for e in exams if e.id == record.exam_id), None)
+            if not exam or (exam.scene or EXAM_SCENE_TRAINING) != EXAM_SCENE_STANDALONE:
+                continue
+            for participant in (exam.participants or []):
+                if participant.user_id != record.user_id:
+                    continue
+                user = participant.user
+                if not user:
+                    continue
+                for department in (user.departments or []):
+                    dept_name = department.name
+                    if dept_name in department_stats:
+                        department_stats[dept_name]["total_score"] += int(record.score or 0)
+                        department_stats[dept_name]["submitted"] += 1
+                        if record.result == "pass":
+                            department_stats[dept_name]["pass_count"] += 1
+
+        city_ranking = []
+        for city, stats in department_stats.items():
+            avg = round(stats["total_score"] / stats["submitted"], 1) if stats["submitted"] else 0
+            pr = round(stats["pass_count"] / stats["submitted"] * 100, 1) if stats["submitted"] else 0
+            city_ranking.append({
+                "city": city,
+                "exam_count": stats["exam_count"],
+                "avg_score": avg,
+                "pass_rate": pr,
+            })
+        city_ranking.sort(key=lambda x: x["avg_score"], reverse=True)
+
+        # 月度趋势
+        trend_map: Dict[str, Dict[str, Any]] = {}
+        for record in submitted_records:
+            if not record.end_time:
+                continue
+            month_key = record.end_time.strftime("%Y-%m")
+            item = trend_map.setdefault(month_key, {"month": month_key, "exam_count": 0, "scores": [], "pass_count": 0})
+            item["exam_count"] += 1
+            item["scores"].append(int(record.score or 0))
+            if record.result == "pass":
+                item["pass_count"] += 1
+
+        monthly_trend = []
+        for month_key in sorted(trend_map.keys()):
+            item = trend_map[month_key]
+            monthly_trend.append({
+                "month": month_key,
+                "exam_count": item["exam_count"],
+                "avg_score": round(sum(item["scores"]) / len(item["scores"]), 1) if item["scores"] else 0,
+                "pass_rate": round(item["pass_count"] / len(item["scores"]) * 100, 1) if item["scores"] else 0,
+            })
+
+        return {
+            "total_exams": total_exams,
+            "active_exams": active_exams,
+            "ended_exams": ended_exams,
+            "total_participants": total_participants,
+            "total_submitted": total_submitted,
+            "absent_count": absent_count,
+            "avg_score": avg_score,
+            "pass_rate": pass_rate,
+            "score_distribution": {
+                "excellent": excellent,
+                "good": good,
+                "pass": passed,
+                "fail": fail,
+            },
+            "dimension_avg_scores": dimension_avg_scores,
+            "city_ranking": city_ranking[:10],
+            "monthly_trend": monthly_trend,
+        }
+
     def build_exam_participant_import_template(self) -> bytes:
         """生成独立考试名单导入模板"""
         try:

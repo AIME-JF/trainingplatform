@@ -10,6 +10,7 @@
           <a-select-option value="all">全部模块</a-select-option>
           <a-select-option value="general">综合数据</a-select-option>
           <a-select-option value="training">培训运营</a-select-option>
+          <a-select-option value="exam">考试统计</a-select-option>
         </a-select>
         <a-button @click="handleExport" :loading="exporting">导出报表</a-button>
       </a-space>
@@ -104,6 +105,67 @@
             </div>
           </a-card>
         </a-col>
+
+        <!-- 考试统计模块 -->
+        <a-col :span="24" v-if="hasModule('exam_statistics')">
+          <a-card :bordered="false" class="module-card">
+            <template #title>
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span>考试统计</span>
+                <a-select v-model:value="examTimeRange" style="width: 120px" @change="loadExamStatistics">
+                  <a-select-option value="7d">近7天</a-select-option>
+                  <a-select-option value="30d">近30天</a-select-option>
+                  <a-select-option value="month">本月</a-select-option>
+                  <a-select-option value="year">本年</a-select-option>
+                </a-select>
+              </div>
+            </template>
+            <a-row :gutter="16">
+              <a-col :span="6" v-for="item in examKpiCards" :key="item.label">
+                <a-statistic :title="item.label" :value="item.value" :suffix="item.suffix" :value-style="{ color: item.color }" />
+              </a-col>
+            </a-row>
+          </a-card>
+        </a-col>
+
+        <!-- 考试月度趋势 -->
+        <a-col :span="12" v-if="hasModule('exam_statistics')">
+          <a-card :bordered="false" class="module-card chart-card">
+            <template #title>考试月度趋势</template>
+            <v-chart :option="examTrendOption" autoresize style="height: 320px" />
+          </a-card>
+        </a-col>
+
+        <!-- 分数段分布 -->
+        <a-col :span="12" v-if="hasModule('exam_statistics')">
+          <a-card :bordered="false" class="module-card chart-card">
+            <template #title>分数段分布</template>
+            <v-chart :option="scoreDistributionOption" autoresize style="height: 320px" />
+          </a-card>
+        </a-col>
+
+        <!-- 各单位考试排名 -->
+        <a-col :span="12" v-if="hasModule('exam_statistics')">
+          <a-card :bordered="false" class="module-card">
+            <template #title>各单位考试排名</template>
+            <div class="ranking-list">
+              <div v-for="(item, idx) in cityExamRankingData" :key="item.city" class="ranking-item">
+                <span class="ranking-medal" :class="'rank-' + (idx + 1)">{{ idx + 1 }}</span>
+                <span class="ranking-name">{{ item.city }}</span>
+                <a-progress :percent="Math.round(item.avgScore)" size="small" :stroke-color="idx < 3 ? '#003087' : '#8c8c8c'" style="flex:1" />
+                <span class="ranking-score">{{ item.avgScore.toFixed(1) }}分</span>
+              </div>
+            </div>
+          </a-card>
+        </a-col>
+
+        <!-- 各维度平均得分 -->
+        <a-col :span="12" v-if="hasModule('exam_statistics')">
+          <a-card :bordered="false" class="module-card chart-card">
+            <template #title>各维度平均得分</template>
+            <v-chart :option="dimensionScoreOption" autoresize style="height: 320px" />
+          </a-card>
+        </a-col>
       </a-row>
     </a-spin>
   </div>
@@ -114,12 +176,12 @@ import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
-import { LineChart, PieChart, BarChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent, LegendComponent } from 'echarts/components'
+import { LineChart, PieChart, BarChart, RadarChart } from 'echarts/charts'
+import { GridComponent, TooltipComponent, LegendComponent, RadarComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import { useAuthStore } from '@/stores/auth'
 
-use([CanvasRenderer, LineChart, PieChart, BarChart, GridComponent, TooltipComponent, LegendComponent])
+use([CanvasRenderer, LineChart, PieChart, BarChart, RadarChart, GridComponent, TooltipComponent, LegendComponent, RadarComponent])
 import { getDashboardModules } from '@/api/system'
 import {
   getKpi, getTrend, getTrainingTrend,
@@ -127,6 +189,7 @@ import {
   getPoliceTypeDistribution, getCityRanking,
   exportReport,
 } from '@/api/report'
+import { getExamStatistics } from '@/api/exam'
 import { downloadBlob } from '@/utils/download'
 
 const authStore = useAuthStore()
@@ -143,6 +206,10 @@ const policeTypeData = ref([])
 const cityAttendanceData = ref([])
 const cityRankingData = ref([])
 const cityCompletionData = ref([])
+
+// 考试统计数据
+const examTimeRange = ref('30d')
+const examStatisticsData = ref({})
 
 const visibleModules = computed(() => {
   if (activeCategory.value === 'all') return modules.value
@@ -166,6 +233,105 @@ const trainingKpiCards = computed(() => [
   { label: '本月完成率', value: kpiData.value.monthlyCompletionRate || 0, suffix: '%', color: '#d48806' },
   { label: '待审核学员', value: kpiData.value.pendingEnrollments || 0, suffix: '人', color: '#cf1322' },
 ])
+
+// 考试统计 KPI 卡片
+const examKpiCards = computed(() => [
+  { label: '总考试数', value: examStatisticsData.value.totalExams || 0, suffix: '场', color: '#003087' },
+  { label: '参考人次', value: examStatisticsData.value.totalSubmitted || 0, suffix: '人', color: '#1a7a3e' },
+  { label: '平均分', value: examStatisticsData.value.avgScore || 0, suffix: '分', color: '#d48806' },
+  { label: '及格率', value: examStatisticsData.value.passRate || 0, suffix: '%', color: '#0958d9' },
+])
+
+// 考试月度趋势图
+const examTrendOption = computed(() => {
+  const data = examStatisticsData.value.monthlyTrend || []
+  return {
+    tooltip: { trigger: 'axis' },
+    grid: { top: 20, right: 20, bottom: 30, left: 50 },
+    xAxis: { type: 'category', data: data.map(d => d.month) },
+    yAxis: { type: 'value' },
+    series: [
+      {
+        name: '平均分',
+        type: 'line',
+        data: data.map(d => d.avgScore),
+        smooth: true,
+        areaStyle: { opacity: 0.15 },
+        itemStyle: { color: '#003087' },
+      },
+      {
+        name: '及格率',
+        type: 'line',
+        data: data.map(d => d.passRate),
+        smooth: true,
+        yAxisIndex: 0,
+        itemStyle: { color: '#1a7a3e' },
+      },
+    ],
+  }
+})
+
+// 分数段分布饼图
+const scoreDistributionOption = computed(() => {
+  const dist = examStatisticsData.value.scoreDistribution || {}
+  const data = [
+    { name: '优秀(90+)', value: dist.excellent || 0 },
+    { name: '良好(80-89)', value: dist.good || 0 },
+    { name: '及格(60-79)', value: dist.pass || 0 },
+    { name: '不及格(<60)', value: dist.fail || 0 },
+  ]
+  return {
+    tooltip: { trigger: 'item', formatter: '{b}: {c}人 ({d}%)' },
+    legend: { bottom: 10, left: 'center' },
+    series: [{
+      type: 'pie',
+      radius: ['40%', '70%'],
+      data,
+      label: { formatter: '{b}: {c}' },
+      itemStyle: { borderRadius: 8, borderColor: '#fff', borderWidth: 2 },
+      color: ['#003087', '#1a7a3e', '#d48806', '#cf1322'],
+    }],
+  }
+})
+
+// 各单位考试排名数据
+const cityExamRankingData = computed(() => {
+  return examStatisticsData.value.cityRanking || []
+})
+
+// 各维度平均得分雷达图
+const dimensionScoreOption = computed(() => {
+  const dimScores = examStatisticsData.value.dimensionAvgScores || {}
+  const dimensions = [
+    { name: '法律法规', value: dimScores.law || 0 },
+    { name: '执法能力', value: dimScores.enforce || 0 },
+    { name: '证据运用', value: dimScores.evidence || 0 },
+    { name: '体能测试', value: dimScores.physical || 0 },
+    { name: '职业道德', value: dimScores.ethic || 0 },
+  ]
+  return {
+    tooltip: {},
+    radar: {
+      indicator: dimensions.map(d => ({ name: d.name, max: 100 })),
+      radius: '65%',
+    },
+    series: [{
+      type: 'radar',
+      data: [{ value: dimensions.map(d => d.value), name: '各维度得分' }],
+      areaStyle: { opacity: 0.3 },
+      itemStyle: { color: '#003087' },
+    }],
+  }
+})
+
+async function loadExamStatistics() {
+  try {
+    const data = await getExamStatistics({ time_range: examTimeRange.value })
+    examStatisticsData.value = data || {}
+  } catch (e) {
+    console.error('加载考试统计失败', e)
+  }
+}
 
 function buildLineOption(data, xKey, yKey, name, color) {
   return {
@@ -240,6 +406,9 @@ async function loadData() {
     }
     if (moduleKeys.has('city_completion')) {
       tasks.push(getCityCompletion().then(d => { cityCompletionData.value = d || [] }).catch(() => {}))
+    }
+    if (moduleKeys.has('exam_statistics')) {
+      tasks.push(loadExamStatistics())
     }
 
     await Promise.all(tasks)

@@ -376,3 +376,10 @@ class ExamController:
         except Exception as exc:
             logger.error("获取考试看板异常: %s", exc)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取考试看板失败")
+
+    def get_exam_statistics(self, time_range: str = "30d"):
+        try:
+            return self.service.get_exam_statistics(time_range)
+        except Exception as exc:
+            logger.error("获取考试统计异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取考试统计失败")

@@ -56,6 +56,10 @@ export function getExamDashboard(params) {
     return request.get('/exams/dashboard', { params })
 }
 
+export function getExamStatistics(params) {
+    return request.get('/exams/statistics', { params })
+}
+
 export function getAdmissionExams(params) {
     return request.get('/exams/admission', { params })
 }

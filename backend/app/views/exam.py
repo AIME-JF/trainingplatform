@@ -76,6 +76,18 @@ def get_exam_dashboard(
     return StandardResponse(data=data)
 
 
+@router.get("/statistics", response_model=StandardResponse[dict], summary="考试统计详情")
+def get_exam_statistics(
+    time_range: str = Query("30d", description="时间范围: 7d/30d/month/year"),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = ExamController(db)
+    data = controller.get_exam_statistics(time_range)
+    return StandardResponse(data=data)
+
+
 @router.post("/papers", response_model=StandardResponse[ExamPaperDetailResponse], summary="创建试卷")
 def create_exam_paper(
     data: ExamPaperCreate,

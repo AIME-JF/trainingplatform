@@ -4,11 +4,11 @@
       <div>
         <div class="hero-kicker">Unified Exam Center</div>
         <h2>统一考试管理</h2>
-        <p>统一管理独立考试与培训班考试，独立考试支持 Excel 名单导入，培训班考试直接关联班级学员。</p>
+        <p>这里主要用于独立考试管理。培训班考试请前往培训班管理中创建，独立考试支持名单导入和多种考试类型配置。</p>
       </div>
       <div class="hero-actions">
-        <a-button v-if="!routeTrainingLocked" type="primary" size="large" @click="openCreateDrawer('standalone')">创建独立考试</a-button>
-        <a-button size="large" @click="openCreateDrawer('training')">{{ routeTrainingLocked ? '为当前培训班创建考试' : '创建培训班考试' }}</a-button>
+        <a-button type="primary" size="large" @click="openCreateDrawer('standalone')">创建独立考试</a-button>
+        <a-button size="large" @click="openTrainingExamGuide">{{ routeTrainingLocked ? '前往培训班管理创建考试' : '创建培训班考试' }}</a-button>
         <a-button size="large" @click="loadAllData">刷新数据</a-button>
       </div>
     </section>
@@ -65,8 +65,8 @@
         </a-select>
       </div>
       <div class="filter-hint">
-        <span v-if="routeTrainingLocked">当前已锁定到培训班 {{ routeTrainingId }}，列表仅展示该培训班考试。</span>
-        <span v-else>独立考试通过 Excel 名单导入参试对象，培训班考试直接使用班级名单。</span>
+        <span v-if="routeTrainingLocked">当前已锁定到培训班 {{ routeTrainingId }}，如需创建培训班考试，请返回培训班管理页面操作。</span>
+        <span v-else>独立考试通过 Excel 名单导入参试对象；培训班考试请前往培训班管理页面创建。</span>
       </div>
     </section>
 
@@ -123,7 +123,7 @@
       </a-table>
     </section>
 
-    <a-drawer :open="drawerVisible" :title="isViewOnly ? '考试详情' : (isEdit ? '编辑考试' : (form.scene === 'training' ? '创建培训班考试' : '创建独立考试'))" :width="860" @close="closeDrawer">
+    <a-drawer :open="drawerVisible" :title="isViewOnly ? '考试详情' : (isEdit ? '编辑考试' : '创建独立考试')" :width="860" @close="closeDrawer">
       <a-form layout="vertical">
         <div class="drawer-grid">
           <section class="drawer-panel">
@@ -134,9 +134,9 @@
             <a-row :gutter="12">
               <a-col :span="12">
                 <a-form-item label="考试场景" required>
-                  <a-select v-model:value="form.scene" :disabled="isViewOnly || routeTrainingLocked" @change="handleFormSceneChange">
+                  <a-select v-model:value="form.scene" :disabled="true" @change="handleFormSceneChange">
                     <a-select-option value="standalone">独立考试</a-select-option>
-                    <a-select-option value="training">培训班考试</a-select-option>
+                    <a-select-option v-if="isEdit || isViewOnly" value="training">培训班考试</a-select-option>
                   </a-select>
                 </a-form-item>
               </a-col>
@@ -340,7 +340,7 @@ const route = useRoute()
 const purposeOptions = [
   { value: 'admission', label: '准入制考试' },
   { value: 'completion', label: '结课考试' },
-  { value: 'quiz', label: '随堂测验' },
+  { value: 'quiz', label: '测试' },
   { value: 'makeup', label: '补考' },
   { value: 'special', label: '专项考试' },
   { value: 'other', label: '其他考试' },
@@ -627,11 +627,22 @@ function handlePaperChange(value) {
 }
 
 function openCreateDrawer(scene = 'standalone') {
-  const resolvedScene = routeTrainingLocked.value ? 'training' : scene
-  resetForm(resolvedScene)
+  resetForm(scene === 'training' ? 'standalone' : scene)
   isViewOnly.value = false
   isEdit.value = false
   drawerVisible.value = true
+}
+
+function openTrainingExamGuide() {
+  Modal.confirm({
+    title: '培训班考试请前往培训班管理创建',
+    content: '培训班考试需要在对应培训班内完成创建和关联，当前页面仅支持独立考试管理。你可以直接前往培训班管理页面继续操作。',
+    okText: '跳转到培训班管理',
+    cancelText: '知道了',
+    onOk() {
+      router.push({ name: 'TrainingList' })
+    },
+  })
 }
 
 async function openExamDrawer(record, viewOnly = false) {
@@ -704,6 +715,9 @@ function buildPayload() {
 async function handleSave() {
   if (!form.title.trim()) return message.warning('请输入考试名称')
   if (!form.paperId) return message.warning('请选择试卷')
+  if (!isEdit.value) {
+    form.scene = 'standalone'
+  }
   if (form.scene === 'training' && !form.trainingId) return message.warning('请选择培训班')
   if (Number(form.duration) < 10) return message.warning('考试时长不能少于 10 分钟')
   if (selectedPaperDetail.value && Number(form.passingScore) > Number(selectedPaperDetail.value.totalScore || 0)) {
