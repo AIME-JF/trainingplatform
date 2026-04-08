@@ -142,7 +142,7 @@
               </a-col>
               <a-col :span="12">
                 <a-form-item label="考试类型" required>
-                  <a-select v-model:value="form.purpose" :disabled="isViewOnly">
+                  <a-select v-model:value="form.purpose" :disabled="isViewOnly" @change="handlePurposeChange">
                     <a-select-option v-for="item in purposeOptions" :key="item.value" :value="item.value">{{ item.label }}</a-select-option>
                   </a-select>
                 </a-form-item>
@@ -173,7 +173,27 @@
               <a-form-item label="参试对象摘要">
                 <a-input v-model:value="form.participantSummary" :disabled="isViewOnly" placeholder="例如：射击理论考试（支队民警）" />
               </a-form-item>
-              <div class="standalone-tip">独立考试创建后，请在列表中点击“导入名单”，上传 Excel 名单完成参试对象分配。</div>
+              <a-form-item label="人员名单导入">
+                <div class="standalone-import">
+                  <a-space direction="vertical" style="width: 100%">
+                    <a-space wrap>
+                      <a-button :disabled="isViewOnly" @click="handleDownloadTemplate">下载名单模板</a-button>
+                      <span class="standalone-import__hint">保存独立考试后会自动预检并导入名单；不存在账号的人员会自动注册，账号使用警号，初始密码为默认密码。</span>
+                    </a-space>
+                    <a-upload-dragger
+                      :before-upload="beforeCreateImportUpload"
+                      :file-list="createImportFileList"
+                      :disabled="isViewOnly"
+                      :multiple="false"
+                      :max-count="1"
+                    >
+                      <p class="ant-upload-text">点击或拖拽上传独立考试名单 Excel</p>
+                      <p class="ant-upload-hint">支持 `.xlsx` / `.xls`，保存考试后自动导入。</p>
+                    </a-upload-dragger>
+                  </a-space>
+                </div>
+              </a-form-item>
+              <div class="standalone-tip">如果暂时没有名单，也可以先保存考试，之后再从列表中补充导入。</div>
             </template>
           </section>
 
@@ -193,7 +213,7 @@
                 <a-form-item label="展示类型">
                   <a-select v-model:value="form.type" :disabled="isViewOnly">
                     <a-select-option value="formal">正式考试</a-select-option>
-                    <a-select-option value="quiz">测验</a-select-option>
+                    <a-select-option value="quiz">测试</a-select-option>
                   </a-select>
                 </a-form-item>
               </a-col>
@@ -242,7 +262,7 @@
       <template #footer>
         <a-space style="float: right">
           <a-button @click="closeDrawer">{{ isViewOnly ? '关闭' : '取消' }}</a-button>
-          <a-button v-if="!isViewOnly" type="primary" :loading="submitting" @click="handleSave">保存</a-button>
+          <a-button v-if="!isViewOnly" type="primary" :loading="submitting || importingFromCreate" @click="handleSave">保存</a-button>
         </a-space>
       </template>
     </a-drawer>
@@ -454,9 +474,12 @@ const importExam = ref(null)
 const importParticipants = ref([])
 const importFile = ref(null)
 const importFileList = ref([])
+const createImportFile = ref(null)
+const createImportFileList = ref([])
 const importPreview = ref(null)
 const importPreviewLoading = ref(false)
 const importConfirmLoading = ref(false)
+const importingFromCreate = ref(false)
 
 const routeTrainingId = computed(() => {
   const value = Number(route.query.trainingId)
@@ -520,6 +543,8 @@ function resetForm(scene = 'standalone') {
   })
   dateRange.value = null
   selectedPaperDetail.value = null
+  createImportFile.value = null
+  createImportFileList.value = []
 }
 
 function closeDrawer() {
@@ -563,7 +588,7 @@ async function loadLookups() {
   courseOptions.value = courses.status === 'fulfilled' ? (courses.value.items || []) : []
   trainingOptions.value = trainings.status === 'fulfilled' ? (trainings.value.items || []) : []
   departmentOptions.value = departments.status === 'fulfilled' ? (departments.value.items || []) : []
-  policeTypeOptions.value = policeTypes.status === 'fulfilled' ? (policeTypes.value || []) : []
+  policeTypeOptions.value = policeTypes.status === 'fulfilled' ? (policeTypes.value.items || []) : []
 }
 
 async function loadExams() {
@@ -604,8 +629,12 @@ async function setPaperPreview(paperId, applyDefaults = false) {
     selectedPaperDetail.value = detail
     if (applyDefaults) {
       form.duration = detail.duration || 60
-      form.passingScore = detail.passingScore || Math.max(1, Math.ceil((detail.totalScore || 0) * 0.6))
-      form.type = detail.type || 'formal'
+      const totalScore = Number(detail.totalScore || 0)
+      const recommendedPassingScore = totalScore > 0 ? Math.max(1, Math.ceil(totalScore * 0.6)) : 60
+      form.passingScore = form.purpose === 'quiz'
+        ? recommendedPassingScore
+        : (detail.passingScore || recommendedPassingScore)
+      form.type = form.purpose === 'quiz' ? 'quiz' : (detail.type || 'formal')
     }
   } catch {
     selectedPaperDetail.value = null
@@ -619,6 +648,20 @@ function handleFormSceneChange(nextScene) {
   } else {
     form.trainingId = undefined
     form.purpose = form.purpose === 'completion' ? 'special' : form.purpose
+  }
+}
+
+function handlePurposeChange(nextPurpose) {
+  if (nextPurpose === 'quiz') {
+    form.type = 'quiz'
+    const totalScore = Number(selectedPaperDetail.value?.totalScore || 0)
+    if (totalScore > 0) {
+      form.passingScore = Math.max(1, Math.ceil(totalScore * 0.6))
+    }
+    return
+  }
+  if (form.type === 'quiz') {
+    form.type = 'formal'
   }
 }
 
@@ -712,6 +755,39 @@ function buildPayload() {
   }
 }
 
+function beforeCreateImportUpload(file) {
+  createImportFile.value = file
+  createImportFileList.value = [file]
+  return false
+}
+
+async function handleImportAfterCreate(exam) {
+  if (!exam?.id || !createImportFile.value) {
+    return false
+  }
+  importingFromCreate.value = true
+  try {
+    importExam.value = exam
+    importPreview.value = await previewExamParticipantImport(exam.id, createImportFile.value)
+    if (importPreview.value?.batchId) {
+      importPreview.value = await confirmExamParticipantImport(importPreview.value.batchId)
+    }
+    await Promise.all([loadImportParticipants(exam.id), loadAllData()])
+    if ((importPreview.value?.summary?.failedCount || 0) > 0) {
+      importModalVisible.value = true
+      message.warning('独立考试已创建，名单已部分导入，请检查失败结果')
+    } else {
+      message.success('独立考试已创建并完成名单导入')
+    }
+    return true
+  } catch (error) {
+    message.error(error.message || '独立考试已创建，但名单导入失败，请稍后在列表中重试')
+    return false
+  } finally {
+    importingFromCreate.value = false
+  }
+}
+
 async function handleSave() {
   if (!form.title.trim()) return message.warning('请输入考试名称')
   if (!form.paperId) return message.warning('请选择试卷')
@@ -730,8 +806,12 @@ async function handleSave() {
       await updateExam(editingId.value, payload)
       message.success('考试已更新')
     } else {
-      await createExam(payload)
-      message.success(form.scene === 'standalone' ? '独立考试已创建，请继续导入名单' : '培训班考试已创建')
+      const createdExam = await createExam(payload)
+      if (form.scene === 'standalone' && createImportFile.value) {
+        await handleImportAfterCreate(createdExam)
+      } else {
+        message.success(form.scene === 'standalone' ? '独立考试已创建，请继续导入名单' : '培训班考试已创建')
+      }
     }
     closeDrawer()
     await loadAllData()
@@ -904,6 +984,8 @@ onMounted(async () => {
 .drawer-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 .drawer-panel { padding: 18px; border-radius: 18px; background: #f8fafc; border: 1px solid #e2e8f0; }
 .drawer-panel h4 { margin: 0 0 16px; font-size: 16px; color: #0f172a; }
+.standalone-import { width: 100%; }
+.standalone-import__hint { color: #64748b; font-size: 12px; line-height: 1.7; }
 .standalone-tip { padding: 12px 14px; border-radius: 12px; background: #eff6ff; color: #1d4ed8; font-size: 12px; line-height: 1.7; }
 .paper-preview { padding: 16px; border-radius: 14px; border: 1px solid #dbeafe; background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%); }
 .paper-preview__head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 10px; color: #1e3a8a; font-weight: 600; }

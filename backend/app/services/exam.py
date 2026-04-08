@@ -92,6 +92,7 @@ EXAM_STATUS_VALUES = {"upcoming", "active", "ended"}
 PARTICIPANT_IMPORT_STATUS_MATCHED = "matched"
 PARTICIPANT_IMPORT_STATUS_CREATED = "created"
 PARTICIPANT_IMPORT_STATUS_FAILED = "failed"
+PARTICIPANT_IMPORT_DEFAULT_PASSWORD = "Police@123456"
 
 
 class ExamService:
@@ -2083,8 +2084,7 @@ class ExamService:
         return role
 
     def _generate_initial_password(self, length: int = 10) -> str:
-        alphabet = string.ascii_letters + string.digits
-        return "".join(secrets.choice(alphabet) for _ in range(length))
+        return PARTICIPANT_IMPORT_DEFAULT_PASSWORD
 
     def _upsert_exam_participant(
         self,
