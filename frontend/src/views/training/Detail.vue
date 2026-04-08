@@ -79,6 +79,7 @@
             <template #icon><FileTextOutlined /></template>
             <template #title>考试测评</template>
             <a-menu-item key="exams">考试安排</a-menu-item>
+            <a-menu-item key="quiz">随堂测验</a-menu-item>
           </a-sub-menu>
           <a-sub-menu key="config-group" v-if="!authStore.isStudent">
             <template #icon><SettingOutlined /></template>
@@ -257,6 +258,15 @@
               :format-date-time="formatDateTime"
               @quick-create="quickCreateTrainingExam"
               @go-manage="goTrainingExamManage"
+            />
+          </div>
+
+          <!-- 随堂测验 -->
+          <div v-show="activeTab === 'quiz'">
+            <TrainingQuizContent
+              :training-data="trainingData"
+              :is-student="authStore.isStudent"
+              @go-question-bank="goQuestionBank"
             />
           </div>
 
@@ -989,6 +999,7 @@ import TrainingOverviewContent from './components/TrainingOverviewContent.vue'
 import TrainingScheduleContent from './components/TrainingScheduleContent.vue'
 import TrainingScheduleRuleContent from './components/TrainingScheduleRuleContent.vue'
 import TrainingExamsContent from './components/TrainingExamsContent.vue'
+import TrainingQuizContent from './components/TrainingQuizContent.vue'
 import QuickCreateExamModal from './components/QuickCreateExamModal.vue'
 import TrainingStudentsContent from './components/TrainingStudentsContent.vue'
 import CourseResourcePicker from './components/CourseResourcePicker.vue'
@@ -1994,6 +2005,10 @@ function goTrainingExamManage() {
       trainingId: String(trainingData.id),
     },
   })
+}
+
+function goQuestionBank() {
+  router.push({ name: 'QuestionBank' })
 }
 
 function handleGuideClick(key) {

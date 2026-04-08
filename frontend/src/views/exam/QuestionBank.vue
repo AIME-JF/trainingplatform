@@ -42,13 +42,13 @@
                 <div class="divider-v"></div>
                 <a-dropdown v-if="!pickMode">
                   <button type="button" class="btn-primary upload-trigger-btn">
-                    手动上传
+                    新增/导入题目
                     <DownOutlined class="upload-trigger-icon" />
                   </button>
                   <template #overlay>
                     <a-menu @click="handleUploadMenuClick">
-                      <a-menu-item key="manual">手动输入</a-menu-item>
-                      <a-menu-item key="document">上传文档</a-menu-item>
+                      <a-menu-item key="manual">手动录入题目</a-menu-item>
+                      <a-menu-item key="document">按模板导入文档</a-menu-item>
                     </a-menu>
                   </template>
                 </a-dropdown>
@@ -66,18 +66,18 @@
               <div class="toolbar-left">
                 <a-dropdown>
                   <button type="button" class="btn-primary upload-trigger-btn">
-                    手动上传
+                    新增/导入题目
                     <DownOutlined class="upload-trigger-icon" />
                   </button>
                   <template #overlay>
                     <a-menu @click="handleUploadMenuClick">
-                      <a-menu-item key="manual">手动输入</a-menu-item>
-                      <a-menu-item key="document">上传文档</a-menu-item>
+                      <a-menu-item key="manual">手动录入题目</a-menu-item>
+                      <a-menu-item key="document">按模板导入文档</a-menu-item>
                     </a-menu>
                   </template>
                 </a-dropdown>
                 <button v-if="canUseAiQuestion" class="btn-primary" @click="goToAiQuestion">
-                  上传材料生成题库
+                  AI 生成题库
                 </button>
                 <div class="search-wrapper">
                   <svg class="search-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
@@ -452,7 +452,7 @@
           <ul>
             <li>JSON 文件（.json）</li>
           </ul>
-          <p class="mt-4">如需上传 Word、PDF、Excel、TXT 等文档并自动生成题目，请使用“手动上传”中的“上传文档”。</p>
+            <p class="mt-4">如需上传 Word、PDF、Excel、TXT 等文档并按模板直接导入题库，请使用“新增/导入题目”中的“按模板导入文档”。</p>
           <p class="mt-4">文件格式示例（JSON）：</p>
           <pre class="code-block">{{ batchUploadExample }}</pre>
         </div>
@@ -493,90 +493,100 @@
       </div>
     </a-modal>
 
-    <!-- 上传文档弹窗 -->
+    <!-- 模板文档导入弹窗 -->
     <a-modal
       v-model:open="documentImportModalVisible"
-      title="上传文档"
-      width="720px"
+      title="模板导入题库"
+      width="1120px"
+      class="document-import-modal"
       :confirm-loading="documentImportLoading"
       ok-text="同步导入"
       @ok="handleDocumentImportSubmit"
       @cancel="resetDocumentImportModal"
     >
       <a-form :model="documentImportForm" layout="vertical">
-        <a-row :gutter="16">
-          <a-col :span="12">
-            <a-form-item label="题库名称" required>
-              <a-auto-complete
-                v-model:value="documentImportForm.bankName"
-                placeholder="选择已有题库，或直接输入新题库名称"
-                :options="folderNameSelectOptions"
-                allow-clear
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="6">
-            <a-form-item label="题库分类">
-              <a-auto-complete
-                v-model:value="documentImportForm.bankCategory"
-                placeholder="可输入新分类"
-                :options="categorySelectOptions"
-                allow-clear
-              />
-            </a-form-item>
-          </a-col>
-          <a-col :span="6">
-            <a-form-item label="关联课程">
-              <a-select
-                v-model:value="documentImportForm.bankCourseId"
-                allow-clear
-                show-search
-                option-filter-prop="label"
-                placeholder="不关联课程时仅自己可见"
-              >
-                <a-select-option v-for="item in courseOptions" :key="item.id" :value="item.id" :label="item.title">
-                  {{ item.title }}
-                </a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-        </a-row>
-        <div class="upload-tip document-upload-tip">
-          <p>请按模板整理题目后上传，系统会先同步提取文档文本，再按模板规则直接导入题库。</p>
-          <p class="mt-4">
-            <a :href="documentTemplateUrl" download class="template-link">下载题目模板</a>
-            <span class="template-hint">支持 `.txt/.doc/.docx/.pdf/.xls/.xlsx/.csv`，推荐优先使用模板后另存为 Word 或 TXT 上传。</span>
-          </p>
-        </div>
-        <a-form-item label="上传文档">
-          <input
-            ref="documentFileInputRef"
-            type="file"
-            accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
-            style="display:none"
-            @change="handleDocumentFileSelect"
-          >
-          <div class="upload-area" @click="triggerDocumentFileInput">
-            <div v-if="!documentImportForm.sourceMaterialName" class="upload-placeholder">
-              <svg class="w-12 h-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
-              </svg>
-              <p class="mt-2">{{ documentParsing ? '文档解析中...' : '点击选择文档并同步解析' }}</p>
+        <div class="document-import-layout">
+          <div class="document-import-panel document-info-panel">
+            <div class="document-basic-grid">
+              <a-form-item label="题库名称" required class="document-field-name">
+                <a-auto-complete
+                  v-model:value="documentImportForm.bankName"
+                  placeholder="选择已有题库，或直接输入新题库名称"
+                  :options="folderNameSelectOptions"
+                  allow-clear
+                />
+              </a-form-item>
+              <a-form-item label="题库分类">
+                <a-auto-complete
+                  v-model:value="documentImportForm.bankCategory"
+                  placeholder="可输入新分类"
+                  :options="categorySelectOptions"
+                  allow-clear
+                />
+              </a-form-item>
+              <a-form-item label="关联课程">
+                <a-select
+                  v-model:value="documentImportForm.bankCourseId"
+                  allow-clear
+                  show-search
+                  option-filter-prop="label"
+                  placeholder="不关联课程时仅自己可见"
+                >
+                  <a-select-option v-for="item in courseOptions" :key="item.id" :value="item.id" :label="item.title">
+                    {{ item.title }}
+                  </a-select-option>
+                </a-select>
+              </a-form-item>
             </div>
-            <div v-else class="selected-file">
-              <svg class="w-8 h-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-              </svg>
-              <span class="ml-2">{{ documentImportForm.sourceMaterialName }}</span>
+            <div class="upload-tip document-upload-tip">
+              <p>请按模板整理题目后上传，系统会先同步提取文档文本，再按模板规则直接导入题库。</p>
+              <p class="mt-4">
+                <a :href="documentTemplateUrl" download class="template-link">下载题目模板</a>
+                <span class="template-hint">支持 `.txt/.doc/.docx/.pdf/.xls/.xlsx/.csv`，推荐优先使用模板后另存为 Word 或 TXT 上传。</span>
+              </p>
             </div>
           </div>
-        </a-form-item>
-        <a-form-item label="解析结果" extra="上传文档后会自动提取文本；如有识别偏差，可直接在这里微调后再提交。">
-          <a-textarea v-model:value="documentImportForm.sourceText" :rows="12" placeholder="请输入或上传文档后自动填充模板文本" />
-        </a-form-item>
-        <a-form-item label="模板格式说明">
-          <pre class="code-block">{{ documentTemplatePreview }}</pre>
-        </a-form-item>
+
+          <div class="document-import-panel document-result-panel">
+            <a-form-item
+              label="解析结果"
+              extra="上传文档后会自动提取文本；如有识别偏差，可直接在这里微调后再提交。"
+              class="document-result-field"
+            >
+              <a-textarea
+                v-model:value="documentImportForm.sourceText"
+                :rows="20"
+                placeholder="请输入或上传文档后自动填充模板文本"
+              />
+            </a-form-item>
+          </div>
+
+          <div class="document-import-panel document-upload-panel">
+            <a-form-item label="上传模板文档" class="document-upload-field">
+              <input
+                ref="documentFileInputRef"
+                type="file"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
+                style="display:none"
+                @change="handleDocumentFileSelect"
+              >
+              <div class="upload-area document-upload-area" @click="triggerDocumentFileInput">
+                <div v-if="!documentImportForm.sourceMaterialName" class="upload-placeholder">
+                  <svg class="w-12 h-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+                  </svg>
+                  <p class="mt-2">{{ documentParsing ? '文档解析中...' : '点击选择模板文档并同步解析' }}</p>
+                </div>
+                <div v-else class="selected-file">
+                  <svg class="w-8 h-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                  </svg>
+                  <span class="ml-2">{{ documentImportForm.sourceMaterialName }}</span>
+                </div>
+              </div>
+            </a-form-item>
+          </div>
+        </div>
       </a-form>
     </a-modal>
 
@@ -1026,7 +1036,7 @@ const targetFolderModalTitle = computed(() => {
   const titleMap = {
     manual: '选择题库后手动输入',
     batch: '选择题库后批量上传',
-    document: '选择题库后上传文档',
+    document: '选择题库后按模板导入',
   }
   return titleMap[targetFolderAction.value] || '选择题库'
 })
@@ -2728,7 +2738,96 @@ onUnmounted(() => {
 }
 
 .document-upload-tip {
-  margin-bottom: 20px;
+  margin-bottom: 0;
+}
+
+.document-import-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.8fr) minmax(560px, 1.45fr);
+  grid-template-areas:
+    "info result"
+    "upload result";
+  gap: 18px;
+  align-items: stretch;
+}
+
+.document-import-panel {
+  border: 1px solid #E2E8F0;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.04);
+  padding: 18px 18px 10px;
+}
+
+.document-info-panel {
+  grid-area: info;
+}
+
+.document-result-panel {
+  grid-area: result;
+  display: flex;
+  flex-direction: column;
+}
+
+.document-upload-panel {
+  grid-area: upload;
+}
+
+.document-info-panel {
+  padding-bottom: 18px;
+}
+
+.document-basic-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 14px;
+}
+
+.document-field-name {
+  grid-column: 1 / -1;
+}
+
+.document-upload-field,
+.document-result-field {
+  margin-bottom: 0;
+}
+
+.document-upload-area {
+  min-height: 196px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.04), rgba(14, 165, 233, 0.02)),
+    #FFFFFF;
+}
+
+.document-upload-area:hover {
+  border-color: #93C5FD;
+  background:
+    linear-gradient(135deg, rgba(37, 99, 235, 0.08), rgba(14, 165, 233, 0.04)),
+    #F8FAFC;
+}
+
+.document-result-field :deep(.ant-form-item-control-input),
+.document-result-field :deep(.ant-form-item-control-input-content) {
+  min-height: 100%;
+}
+
+.document-result-field :deep(.ant-form-item-extra) {
+  margin-bottom: 10px;
+}
+
+.document-result-field :deep(textarea.ant-input) {
+  min-height: 540px;
+  resize: vertical;
+  border-radius: 12px;
+  padding: 14px 16px;
+  line-height: 1.65;
+}
+
+:deep(.document-import-modal .ant-modal-body) {
+  padding-top: 18px;
 }
 
 .template-link {
@@ -2845,5 +2944,33 @@ onUnmounted(() => {
   text-align: center;
   color: #94A3B8;
   font-size: 12px;
+}
+
+@media (max-width: 960px) {
+  .document-import-layout {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "info"
+      "upload"
+      "result";
+  }
+
+  .document-info-panel,
+  .document-result-panel,
+  .document-upload-panel {
+    grid-area: auto;
+  }
+
+  .document-basic-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .document-field-name {
+    grid-column: auto;
+  }
+
+  .document-result-field :deep(textarea.ant-input) {
+    min-height: 320px;
+  }
 }
 </style>

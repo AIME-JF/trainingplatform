@@ -72,6 +72,8 @@ from .exam import (
     AdmissionExamDetailResponse, AdmissionExamRecordResponse,
     ExamCreate, ExamUpdate, ExamResponse, ExamDetailResponse,
     ExamSubmit, ExamRecordResponse, ExamQuestionSnapshotResponse,
+    ExamParticipantResponse, ExamParticipantImportPreviewResponse,
+    ExamParticipantImportConfirmRequest, ExamParticipantImportRowResponse,
     ExamWrongQuestionResponse,
     PaperFolderCreate, PaperFolderUpdate, PaperFolderResponse, PaperMoveRequest,
     QuestionFolderCreate, QuestionFolderUpdate, QuestionFolderResponse, QuestionMoveRequest
@@ -213,6 +215,8 @@ __all__ = [
     "AdmissionExamDetailResponse", "AdmissionExamRecordResponse",
     "ExamCreate", "ExamUpdate", "ExamResponse", "ExamDetailResponse",
     "ExamSubmit", "ExamRecordResponse", "ExamQuestionSnapshotResponse",
+    "ExamParticipantResponse", "ExamParticipantImportPreviewResponse",
+    "ExamParticipantImportConfirmRequest", "ExamParticipantImportRowResponse",
     "ExamWrongQuestionResponse",
     "PaperFolderCreate", "PaperFolderUpdate", "PaperFolderResponse", "PaperMoveRequest",
     "QuestionFolderCreate", "QuestionFolderUpdate", "QuestionFolderResponse", "QuestionMoveRequest",

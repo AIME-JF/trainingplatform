@@ -10,6 +10,7 @@ from app.schemas import (
     AdmissionExamCreate,
     AdmissionExamUpdate,
     ExamCreate,
+    ExamParticipantImportConfirmRequest,
     ExamPaperCreate,
     ExamPaperUpdate,
     ExamSubmit,
@@ -150,8 +151,11 @@ class ExamController:
         exam_status: Optional[str] = None,
         exam_type: Optional[str] = None,
         search: Optional[str] = None,
+        scene: Optional[str] = None,
         training_id: Optional[int] = None,
         purpose: Optional[str] = None,
+        department_id: Optional[int] = None,
+        police_type_id: Optional[int] = None,
         current_user_id: Optional[int] = None,
     ):
         try:
@@ -161,12 +165,15 @@ class ExamController:
                 exam_status,
                 exam_type,
                 search,
+                scene,
                 training_id,
                 purpose,
+                department_id,
+                police_type_id,
                 current_user_id,
             )
         except Exception as exc:
-            logger.error("获取培训班内考试列表异常: %s", exc)
+            logger.error("获取考试列表异常: %s", exc)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取考试列表失败")
 
     def get_admission_exams(
@@ -317,3 +324,55 @@ class ExamController:
         except Exception as exc:
             logger.error("获取准入考试分析异常: %s", exc)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取考试分析数据失败")
+
+    def build_exam_participant_import_template(self):
+        try:
+            return self.service.build_exam_participant_import_template()
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("生成考试名单导入模板异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="生成导入模板失败")
+
+    def preview_exam_participant_import(self, exam_id: int, file_bytes: bytes, file_name: str, user_id: int):
+        try:
+            return self.service.preview_exam_participant_import(exam_id, file_bytes, file_name, user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("预检考试名单导入异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="名单预检失败")
+
+    def confirm_exam_participant_import(self, exam_id: int, data: ExamParticipantImportConfirmRequest, user_id: int):
+        try:
+            return self.service.confirm_exam_participant_import(data, user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("确认考试名单导入异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="名单导入失败")
+
+    def list_exam_participants(self, exam_id: int):
+        try:
+            return self.service.list_exam_participants(exam_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("获取考试名单异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取考试名单失败")
+
+    def export_exam_participant_import_result(self, batch_id: int):
+        try:
+            return self.service.export_exam_participant_import_result(batch_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("导出考试名单导入结果异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="导出导入结果失败")
+
+    def get_exam_dashboard(self):
+        try:
+            return self.service.get_exam_dashboard()
+        except Exception as exc:
+            logger.error("获取考试看板异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取考试看板失败")

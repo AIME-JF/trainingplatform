@@ -254,6 +254,7 @@ class TrainingCreate(BaseModel):
     enrollment_start_at: Optional[datetime] = None
     enrollment_end_at: Optional[datetime] = None
     admission_exam_id: Optional[int] = None
+    entry_exam_id: Optional[int] = None
     schedule_rule_config: Optional[TrainingScheduleRuleConfig] = Field(None, description="排课规则配置")
     courses: List[TrainingCourseCreate] = Field(default_factory=list)
 
@@ -290,6 +291,7 @@ class TrainingUpdate(BaseModel):
     enrollment_start_at: Optional[datetime] = None
     enrollment_end_at: Optional[datetime] = None
     admission_exam_id: Optional[int] = None
+    entry_exam_id: Optional[int] = None
     schedule_rule_config: Optional[TrainingScheduleRuleConfig] = Field(None, description="排课规则配置")
     courses: Optional[List[TrainingCourseCreate]] = None
     student_ids: Optional[List[int]] = None
@@ -459,6 +461,8 @@ class TrainingResponse(BaseModel):
     is_locked: bool = False
     admission_exam_id: Optional[int] = None
     admission_exam_title: Optional[str] = None
+    entry_exam_id: Optional[int] = None
+    entry_exam_title: Optional[str] = None
     group_names: List[str] = Field(default_factory=list)
     cadre_count: int = 0
     schedule_rule_config: TrainingScheduleRuleConfig = Field(default_factory=TrainingScheduleRuleConfig)
@@ -524,6 +528,8 @@ class TrainingListResponse(BaseModel):
     is_locked: bool = False
     admission_exam_id: Optional[int] = None
     admission_exam_title: Optional[str] = None
+    entry_exam_id: Optional[int] = None
+    entry_exam_title: Optional[str] = None
     current_step_key: str = "draft"
     current_enrollment_status: Optional[str] = None
     can_enter_training: bool = False

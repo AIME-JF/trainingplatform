@@ -7,7 +7,8 @@
     @search="fetchExams"
   >
     <template #filters>
-      <button type="button" class="dark-chip" :class="{ active: activeTab === 'admission' }" @click="switchTab('admission')">准入考试</button>
+      <button type="button" class="dark-chip" :class="{ active: activeTab === 'all' }" @click="switchTab('all')">全部考试</button>
+      <button type="button" class="dark-chip" :class="{ active: activeTab === 'standalone' }" @click="switchTab('standalone')">独立考试</button>
       <button type="button" class="dark-chip" :class="{ active: activeTab === 'training' }" @click="switchTab('training')">培训班考试</button>
       <span class="dark-chip-sep" />
       <button v-for="tab in statusTabs" :key="tab.key" type="button" class="dark-chip" :class="{ active: filters.status === tab.key }" @click="selectStatus(tab.key)">{{ tab.label }}</button>
@@ -250,7 +251,7 @@
     <!-- ===== 建场次弹窗 ===== -->
     <a-modal
       v-model:open="examModalVisible"
-      :title="activeTab === 'admission' ? '创建准入考试' : '创建培训班考试'"
+      :title="activeTab === 'training' ? '创建培训班考试' : '创建独立考试'"
       width="700px"
       :footer="null"
       @cancel="examModalVisible = false"
@@ -259,6 +260,12 @@
         <div class="form-field">
           <label class="field-label required">场次名称</label>
           <a-input v-model:value="examForm.title" placeholder="请输入考试场次名称" />
+        </div>
+        <div class="form-field">
+          <label class="field-label required">考试类型</label>
+          <a-select v-model:value="examForm.purpose" style="width: 100%">
+            <a-select-option v-for="item in examPurposeOptions" :key="item.value" :value="item.value">{{ item.label }}</a-select-option>
+          </a-select>
         </div>
         <div class="form-field">
           <label class="field-label required">关联试卷</label>
@@ -296,19 +303,19 @@
             :options="availableTrainings.map((item) => ({ value: item.id, label: item.name }))"
           />
         </div>
-        <div v-if="activeTab === 'admission'" class="form-field">
-          <label class="field-label required">关联课程</label>
+        <div v-if="activeTab !== 'training'" class="form-field">
+          <label class="field-label">关联课程</label>
           <a-select
             v-model:value="examForm.courseIds"
             mode="multiple"
-            placeholder="请选择关联课程，用于关联学员"
+            placeholder="可选，支持将考试与课程建立关联"
             style="width: 100%"
             allow-clear
           >
             <a-select-option v-for="c in availableCourses" :key="c.id" :value="c.id">{{ c.title || c.name }}</a-select-option>
           </a-select>
           <div class="paper-hint">
-            <span class="hint-text">准入考试将根据所关联课程同步关联学员</span>
+            <span class="hint-text">独立考试创建后，请到管理端导入 Excel 名单完成参试对象配置。</span>
           </div>
         </div>
       </div>
@@ -626,6 +633,12 @@
           <a-input v-model:value="examForm.title" placeholder="请输入考试名称" />
         </div>
         <div class="form-field">
+          <label class="field-label required">考试类型</label>
+          <a-select v-model:value="examForm.purpose" style="width: 100%">
+            <a-select-option v-for="item in examPurposeOptions" :key="item.value" :value="item.value">{{ item.label }}</a-select-option>
+          </a-select>
+        </div>
+        <div class="form-field">
           <label class="field-label required">关联试卷</label>
           <a-select
             v-model:value="examForm.paperId"
@@ -689,18 +702,18 @@
           />
         </div>
         <div class="form-field">
-          <label class="field-label" :class="{ required: activeTab === 'admission' }">关联课程</label>
+          <label class="field-label">关联课程</label>
           <a-select
             v-model:value="examForm.courseIds"
             mode="multiple"
-            :placeholder="activeTab === 'admission' ? '请选择关联课程，用于关联学员' : '请选择关联课程（可选）'"
+            placeholder="请选择关联课程（可选）"
             style="width: 100%"
             allow-clear
           >
             <a-select-option v-for="c in availableCourses" :key="c.id" :value="c.id">{{ c.title || c.name }}</a-select-option>
           </a-select>
-          <div v-if="activeTab === 'admission'" class="paper-hint">
-            <span class="hint-text">准入考试将根据所关联课程同步关联学员</span>
+          <div v-if="activeTab !== 'training'" class="paper-hint">
+            <span class="hint-text">独立考试创建后，请到管理端导入 Excel 名单完成参试对象配置。</span>
           </div>
         </div>
         <div class="form-field">
@@ -770,14 +783,11 @@ import type {
   TrainingListResponse,
 } from '@/api/generated/model'
 import {
-  getAdmissionExamsApiV1ExamsAdmissionGet,
-  getExamsApiV1ExamsGet,
   getExamPapersApiV1ExamsPapersGet,
   createExamPaperApiV1ExamsPapersPost,
   publishExamPaperApiV1ExamsPapersPaperIdPublishPost,
-  createExamApiV1ExamsPost,
-  createAdmissionExamApiV1ExamsAdmissionPost,
 } from '@/api/generated/exam-management/exam-management'
+import { createUnifiedExam, getUnifiedExams } from '@/api/exam'
 import {
   getQuestionsApiV1QuestionsGet,
   getQuestionFoldersApiV1QuestionsFoldersGet,
@@ -809,11 +819,11 @@ const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
 const loading = ref(false)
-const activeTab = ref<'admission' | 'training'>('admission')
+const activeTab = ref<'all' | 'standalone' | 'training'>('all')
 const exams = ref<ExamResponse[]>([])
 const isStudentView = computed(() => authStore.isStudent)
 const searchPlaceholder = computed(() => (
-  activeTab.value === 'training' ? '搜索考试名称或班级名称...' : '搜索考试名称...'
+  activeTab.value === 'training' ? '搜索考试名称或班级名称...' : '搜索考试名称、考试类型或说明...'
 ))
 
 const filters = reactive({
@@ -827,6 +837,15 @@ const statusTabs = [
   { key: 'active', label: '进行中' },
   { key: 'upcoming', label: '即将开始' },
   { key: 'ended', label: '已结束' },
+]
+
+const examPurposeOptions = [
+  { value: 'admission', label: '准入制考试' },
+  { value: 'completion', label: '结课考试' },
+  { value: 'quiz', label: '随堂测验' },
+  { value: 'makeup', label: '补考' },
+  { value: 'special', label: '专项考试' },
+  { value: 'other', label: '其他考试' },
 ]
 
 const ongoingCount = computed(() => exams.value.filter((e) => normalizeExamStatus(e.status) === 'active').length)
@@ -888,6 +907,7 @@ const examModalVisible = ref(false)
 const examForm = reactive({
   paperId: undefined as number | undefined,
   status: 'upcoming',
+  purpose: 'special',
   courseIds: [] as number[],
   maxAttempts: 1,
   title: '',
@@ -957,7 +977,6 @@ const canSubmitPaper = computed(() => paperForm.title.trim() && wizardSelectedQu
 const canSubmitExam = computed(() => {
   if (!examForm.title.trim() || !examForm.paperId) return false
   if (activeTab.value === 'training' && !effectiveTrainingId.value) return false
-  if (activeTab.value === 'admission' && examForm.courseIds.length === 0) return false
   return true
 })
 const currentWizardPaperId = computed(() => examForm.paperId ?? wizardPaperId.value ?? undefined)
@@ -965,7 +984,6 @@ const currentWizardPaperSummary = computed(() => getSelectedPaperSummary(current
 const canSubmitWizardExam = computed(() => {
   if (!examForm.title.trim() || !currentWizardPaperId.value) return false
   if (activeTab.value === 'training' && !effectiveTrainingId.value) return false
-  if (activeTab.value === 'admission' && examForm.courseIds.length === 0) return false
   return true
 })
 
@@ -1008,7 +1026,7 @@ async function buildAiRequirementsPayload() {
 
   const uploadFiles = aiAttachmentList.value
     .map((item) => item.originFileObj)
-    .filter((item): item is File => item instanceof File)
+    .filter((item): item is NonNullable<UploadFile['originFileObj']> => !!item)
 
   if (uploadFiles.length === 0) {
     return sections.join('\n\n')
@@ -1035,18 +1053,22 @@ async function buildAiRequirementsPayload() {
 }
 
 onMounted(() => {
+  if (routeTrainingId.value) {
+    activeTab.value = 'training'
+  }
   void fetchExams()
 })
 
 async function fetchExams() {
   loading.value = true
   try {
-    const params = { page: 1, size: 50, search: filters.search || undefined }
-    const response = activeTab.value === 'admission'
-      ? await getAdmissionExamsApiV1ExamsAdmissionGet(params)
-      : await getExamsApiV1ExamsGet(params)
+    const params: Record<string, unknown> = { page: 1, size: 50, search: filters.search || undefined }
+    if (activeTab.value === 'standalone' || activeTab.value === 'training') {
+      params.scene = activeTab.value
+    }
+    const response = await getUnifiedExams(params)
 
-    let items = response?.items || []
+    let items: any[] = response?.items || []
 
     if (filters.status !== 'all') {
       items = items.filter((item) => normalizeExamStatus(item.status) === filters.status)
@@ -1081,7 +1103,7 @@ function selectStatus(status: string) {
   void fetchExams()
 }
 
-function switchTab(tab: 'admission' | 'training') {
+function switchTab(tab: 'all' | 'standalone' | 'training') {
   activeTab.value = tab
   void fetchExams()
 }
@@ -1124,7 +1146,7 @@ function shouldShowResult(exam: ExamResponse) {
 }
 
 function goToExamOverview(exam: ExamResponse) {
-  const kind = resolveExamKind(exam.kind, activeTab.value)
+  const kind = resolveExamKind(exam.kind, 'training')
   // 教官直接跳转成绩表格页面
   if (!authStore.isStudent) {
     return router.push({
@@ -1141,7 +1163,7 @@ function goToExamOverview(exam: ExamResponse) {
 function goToExamResult(exam: ExamResponse) {
   return router.push({
     path: `/exam/result/${exam.id}`,
-    query: { kind: resolveExamKind(exam.kind, activeTab.value) },
+    query: { kind: resolveExamKind(exam.kind, 'training') },
   })
 }
 
@@ -1355,10 +1377,6 @@ function validateExamForm(paperId: number) {
     message.warning('请选择所属培训班')
     return false
   }
-  if (activeTab.value === 'admission' && examForm.courseIds.length === 0) {
-    message.warning('请选择关联课程')
-    return false
-  }
   if (Number(examForm.duration) < 10) {
     message.warning('考试时长不能少于10分钟')
     return false
@@ -1368,7 +1386,7 @@ function validateExamForm(paperId: number) {
     return false
   }
   const paper = getSelectedPaperSummary(paperId)
-  const totalScore = Number(paper?.total_score ?? paper?.totalScore ?? 0)
+  const totalScore = Number(paper?.total_score ?? 0)
   if (totalScore > 0 && Number(examForm.passingScore) > totalScore) {
     message.warning('及格分不能超过试卷总分')
     return false
@@ -1377,9 +1395,13 @@ function validateExamForm(paperId: number) {
 }
 
 function buildExamPayload(paperId: number) {
+  const isTrainingExam = activeTab.value === 'training'
   const payload: any = {
     title: examForm.title.trim(),
     paper_id: paperId,
+    scene: isTrainingExam ? 'training' : 'standalone',
+    participant_mode: isTrainingExam ? 'training_enrollment' : 'excel_import',
+    purpose: examForm.purpose,
     status: examForm.status,
     type: examForm.type,
     max_attempts: examForm.maxAttempts,
@@ -1390,7 +1412,7 @@ function buildExamPayload(paperId: number) {
     description: examForm.description || undefined,
     course_ids: examForm.courseIds.length > 0 ? examForm.courseIds : undefined,
   }
-  if (activeTab.value !== 'admission') {
+  if (isTrainingExam) {
     payload.training_id = effectiveTrainingId.value
   }
   return payload
@@ -1437,6 +1459,7 @@ function openExamModal() {
   examForm.title = ''
   examForm.paperId = undefined
   examForm.status = 'upcoming'
+  examForm.purpose = activeTab.value === 'training' ? 'completion' : 'special'
   examForm.courseIds = []
   examForm.maxAttempts = 1
   examForm.type = 'formal'
@@ -1459,11 +1482,7 @@ async function handleCreateExam() {
   examSubmitting.value = true
   try {
     const payload = buildExamPayload(examForm.paperId)
-    if (activeTab.value === 'admission') {
-      await createAdmissionExamApiV1ExamsAdmissionPost(payload as any)
-    } else {
-      await createExamApiV1ExamsPost(payload as any)
-    }
+    await createUnifiedExam(payload as any)
     message.success('考试创建成功')
     examModalVisible.value = false
     await void fetchExams()
@@ -1486,6 +1505,7 @@ function openWizardModal() {
   examForm.title = ''
   examForm.paperId = undefined
   examForm.status = 'upcoming'
+  examForm.purpose = activeTab.value === 'training' ? 'completion' : 'special'
   examForm.courseIds = []
   examForm.maxAttempts = 1
   examForm.type = 'formal'
@@ -1651,11 +1671,7 @@ async function handleWizardCreateExam() {
   examSubmitting.value = true
   try {
     const payload = buildExamPayload(paperId)
-    if (activeTab.value === 'admission') {
-      await createAdmissionExamApiV1ExamsAdmissionPost(payload as any)
-    } else {
-      await createExamApiV1ExamsPost(payload as any)
-    }
+    await createUnifiedExam(payload as any)
     message.success('考试创建成功')
     wizardModalVisible.value = false
     await void fetchExams()
