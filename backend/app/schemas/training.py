@@ -381,6 +381,30 @@ class BatchManualCheckinRequest(BaseModel):
     items: List[BatchManualCheckinItem] = Field(..., min_length=1)
 
 
+class TrainingLeaveCreate(BaseModel):
+    """请假"""
+
+    session_key: str = Field(..., description="课次标识")
+    reason: Optional[str] = Field(None, max_length=500, description="请假原因")
+
+
+class TrainingLeaveResponse(BaseModel):
+    """请假响应"""
+
+    id: int
+    training_id: int
+    user_id: int
+    user_name: Optional[str] = None
+    user_nickname: Optional[str] = None
+    session_key: str
+    reason: Optional[str] = None
+    status: str = "leave_active"
+    cancelled_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class CheckinResponse(BaseModel):
     """签到响应"""
 

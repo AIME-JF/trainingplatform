@@ -294,6 +294,19 @@ AI 个训任务支持：
 | `GET /api/v1/trainings/{id}/attendance/qr?action=checkin\|checkout` | 生成出勤二维码（签到或签退） |
 | `GET /api/v1/trainings/attendance/qr/{token}` | 获取出勤二维码信息 |
 | `POST /api/v1/trainings/attendance/qr/{token}` | 扫码出勤（根据 action 自动路由） |
+| `POST /api/v1/trainings/{id}/checkin/batch-manual` | 批量手动点名（教官填写全班出勤） |
+
+请销假接口：
+
+| 接口 | 说明 |
+| --- | --- |
+| `POST /api/v1/trainings/{id}/leaves` | 学员按课次请假，自动标记签到状态为 `leave` 并通知班主任 |
+| `DELETE /api/v1/trainings/{id}/leaves/{leave_id}` | 销假（学员本人或教官），恢复签到状态为 `absent` 并通知班主任 |
+| `GET /api/v1/trainings/{id}/leaves?session_key=xxx` | 获取请假记录（教官看全部，学员看自己） |
+
+- 签到记录 `status` 新增 `leave` 状态，表示已请假，区别于 `absent`（未到）
+- 请销假不走审批流程，仅做记录和通知；审批走线下
+- 通知类型：`leave_submitted`（请假）、`leave_cancelled`（销假），仅发送给班主任
 
 批量导入接口：
 

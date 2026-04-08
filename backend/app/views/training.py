@@ -18,6 +18,8 @@ from app.schemas import (
     CheckinCreate,
     CheckinResponse,
     CheckoutCreate,
+    TrainingLeaveCreate,
+    TrainingLeaveResponse,
     EnrollmentCreate,
     EnrollmentResponse,
     PaginatedResponse,
@@ -835,6 +837,45 @@ def batch_manual_checkin(
     _require_training_manager(db, training_id, current_user.user_id)
     controller = TrainingController(db)
     result = controller.batch_manual_checkin(training_id, data)
+    return StandardResponse(data=result)
+
+
+@router.post("/{training_id}/leaves", response_model=StandardResponse[TrainingLeaveResponse], summary="请假")
+def create_leave(
+    training_id: int,
+    data: TrainingLeaveCreate,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_self_or_manager(db, training_id, current_user.user_id, None)
+    controller = TrainingController(db)
+    result = controller.create_leave(training_id, current_user.user_id, data)
+    return StandardResponse(data=result)
+
+
+@router.delete("/{training_id}/leaves/{leave_id}", response_model=StandardResponse[TrainingLeaveResponse], summary="销假")
+def cancel_leave(
+    training_id: int,
+    leave_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = TrainingController(db)
+    result = controller.cancel_leave(training_id, leave_id, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.get("/{training_id}/leaves", response_model=StandardResponse[List[TrainingLeaveResponse]], summary="请假记录")
+def get_leaves(
+    training_id: int,
+    session_key: Optional[str] = None,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    training = _get_training_or_404(db, training_id)
+    is_manager = can_manage_training(db, training, current_user.user_id)
+    controller = TrainingController(db)
+    result = controller.get_leaves(training_id, current_user.user_id, session_key, is_manager)
     return StandardResponse(data=result)
 
 

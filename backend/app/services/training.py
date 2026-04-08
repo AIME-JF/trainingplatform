@@ -31,6 +31,7 @@ from app.models import (
     TrainingCourseChangeLog,
     TrainingCourse,
     TrainingHistory,
+    TrainingLeave,
     User,
 )
 from app.models.resource import Resource, ResourceTagRelation, TrainingResourceRef
@@ -39,6 +40,8 @@ from app.schemas import PaginatedResponse
 from app.schemas.resource import ResourceListItemResponse, TrainingBoundResourceResponse, TrainingResourceBindRequest
 from app.schemas.training import (
     BatchManualCheckinRequest,
+    TrainingLeaveCreate,
+    TrainingLeaveResponse,
     CalendarEventResponse,
     CheckinCreate,
     CheckinResponse,
@@ -1386,6 +1389,176 @@ class TrainingService:
         logger.info("批量手动点名培训%s，课次=%s，%d人", training_id, session_key, len(data.items))
         self._broadcast_event(training_id, "checkin_updated", {"session_key": session_key})
         return results
+
+    # ========== 请销假 ==========
+
+    def create_leave(self, training_id: int, user_id: int, data: TrainingLeaveCreate) -> TrainingLeaveResponse:
+        """学员请假"""
+        training = self.db.query(Training).options(
+            joinedload(Training.courses),
+        ).filter(Training.id == training_id).first()
+        if not training:
+            raise ValueError("培训班不存在")
+
+        self._ensure_training_member(training_id, user_id)
+
+        session_key = data.session_key
+        session = self._find_schedule_session(training, session_key)
+        if not session:
+            raise ValueError("课次不存在")
+
+        existing = self.db.query(TrainingLeave).filter(
+            TrainingLeave.training_id == training_id,
+            TrainingLeave.user_id == user_id,
+            TrainingLeave.session_key == session_key,
+            TrainingLeave.status == "leave_active",
+        ).first()
+        if existing:
+            raise ValueError("该课次已有生效的请假记录")
+
+        leave = TrainingLeave(
+            training_id=training_id,
+            user_id=user_id,
+            session_key=session_key,
+            reason=data.reason,
+            status="leave_active",
+        )
+        self.db.add(leave)
+
+        # 同步签到记录为 leave 状态
+        checkin_date = self._resolve_session_date(training, session_key, datetime.now().date())
+        record = self.db.query(CheckinRecord).filter(
+            CheckinRecord.training_id == training_id,
+            CheckinRecord.user_id == user_id,
+            CheckinRecord.date == checkin_date,
+            CheckinRecord.session_key == session_key,
+        ).first()
+        if not record:
+            record = CheckinRecord(
+                training_id=training_id,
+                user_id=user_id,
+                date=checkin_date,
+                session_key=session_key,
+            )
+            self.db.add(record)
+        record.status = "leave"
+        record.checkin_method = "manual"
+        record.absence_reason = data.reason or "请假"
+
+        self.db.flush()
+
+        # 通知班主任
+        user = self.db.query(User).filter(User.id == user_id).first()
+        user_name = (user.nickname or user.username) if user else str(user_id)
+        course_name = session["course"].name if session.get("course") else session_key
+        if training.instructor_id:
+            notice = Notice(
+                title=f"{user_name} 请假",
+                content=f"{user_name} 申请 {course_name} 课次请假，原因：{data.reason or '未填写'}",
+                type="reminder",
+                training_id=training_id,
+                target_user_id=training.instructor_id,
+                reminder_type="leave_submitted",
+                author_id=user_id,
+            )
+            self.db.add(notice)
+
+        self._refresh_training_histories(training_id, [user_id])
+        self.db.commit()
+        self.db.refresh(leave)
+
+        self._broadcast_event(training_id, "leave_updated", {"session_key": session_key})
+        logger.info("学员%s请假培训%s，课次=%s", user_id, training_id, session_key)
+        return self._leave_to_response(leave)
+
+    def cancel_leave(self, training_id: int, leave_id: int, user_id: int) -> TrainingLeaveResponse:
+        """销假"""
+        leave = self.db.query(TrainingLeave).filter(
+            TrainingLeave.id == leave_id,
+            TrainingLeave.training_id == training_id,
+        ).first()
+        if not leave:
+            raise ValueError("请假记录不存在")
+        if leave.status != "leave_active":
+            raise ValueError("该请假记录已销假")
+
+        # 学员本人或教官可以销假
+        is_self = leave.user_id == user_id
+        training = self.db.query(Training).filter(Training.id == training_id).first()
+        is_manager = training and (
+            training.instructor_id == user_id
+            or training.created_by == user_id
+        )
+        if not is_self and not is_manager:
+            raise ValueError("无权操作该请假记录")
+
+        leave.status = "cancelled"
+        leave.cancelled_at = datetime.now()
+
+        # 恢复签到记录为 absent
+        training_full = self.db.query(Training).options(
+            joinedload(Training.courses),
+        ).filter(Training.id == training_id).first()
+        checkin_date = self._resolve_session_date(training_full, leave.session_key, datetime.now().date())
+        record = self.db.query(CheckinRecord).filter(
+            CheckinRecord.training_id == training_id,
+            CheckinRecord.user_id == leave.user_id,
+            CheckinRecord.date == checkin_date,
+            CheckinRecord.session_key == leave.session_key,
+        ).first()
+        if record and record.status == "leave":
+            record.status = "absent"
+            record.absence_reason = None
+
+        # 通知班主任
+        if training and training.instructor_id:
+            user = self.db.query(User).filter(User.id == leave.user_id).first()
+            user_name = (user.nickname or user.username) if user else str(leave.user_id)
+            notice = Notice(
+                title=f"{user_name} 销假",
+                content=f"{user_name} 已销假（课次：{leave.session_key}）",
+                type="reminder",
+                training_id=training_id,
+                target_user_id=training.instructor_id,
+                reminder_type="leave_cancelled",
+                author_id=user_id,
+            )
+            self.db.add(notice)
+
+        self._refresh_training_histories(training_id, [leave.user_id])
+        self.db.commit()
+        self.db.refresh(leave)
+
+        self._broadcast_event(training_id, "leave_updated", {"session_key": leave.session_key})
+        logger.info("销假: leave_id=%s, training=%s", leave_id, training_id)
+        return self._leave_to_response(leave)
+
+    def get_leaves(self, training_id: int, user_id: int, session_key: Optional[str] = None, is_manager: bool = False) -> list[TrainingLeaveResponse]:
+        """获取请假记录"""
+        query = self.db.query(TrainingLeave).filter(
+            TrainingLeave.training_id == training_id,
+        )
+        if not is_manager:
+            query = query.filter(TrainingLeave.user_id == user_id)
+        if session_key:
+            query = query.filter(TrainingLeave.session_key == session_key)
+        leaves = query.order_by(TrainingLeave.created_at.desc()).all()
+        return [self._leave_to_response(leave) for leave in leaves]
+
+    def _leave_to_response(self, leave: TrainingLeave) -> TrainingLeaveResponse:
+        user = leave.user if getattr(leave, "user", None) else self.db.query(User).filter(User.id == leave.user_id).first()
+        return TrainingLeaveResponse(
+            id=leave.id,
+            training_id=leave.training_id,
+            user_id=leave.user_id,
+            user_name=user.username if user else None,
+            user_nickname=user.nickname if user else None,
+            session_key=leave.session_key,
+            reason=leave.reason,
+            status=leave.status,
+            cancelled_at=leave.cancelled_at,
+            created_at=leave.created_at,
+        )
 
     def submit_training_evaluation(self, training_id: int, user_id: int, data: TrainingEvaluationCreate) -> CheckinResponse:
         """提交评课"""

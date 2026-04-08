@@ -193,6 +193,29 @@ class CheckinRecord(Base):
     user = relationship("User", foreign_keys=[user_id])
 
 
+class TrainingLeave(Base):
+    """请销假记录表"""
+
+    __tablename__ = "training_leaves"
+
+    id = Column(Integer, primary_key=True, index=True)
+    training_id = Column(Integer, ForeignKey("trainings.id", ondelete="CASCADE"), nullable=False, comment="培训班ID")
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, comment="学员ID")
+    session_key = Column(String(100), nullable=False, comment="课次标识")
+    reason = Column(Text, nullable=True, comment="请假原因")
+    status = Column(String(20), default="leave_active", comment="状态: leave_active/cancelled")
+    cancelled_at = Column(DateTime(timezone=True), nullable=True, comment="销假时间")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="请假时间")
+
+    __table_args__ = (
+        UniqueConstraint("training_id", "user_id", "session_key", name="uq_leave_training_user_session"),
+        Index("ix_leave_training_session", "training_id", "session_key"),
+    )
+
+    training = relationship("Training", foreign_keys=[training_id])
+    user = relationship("User", foreign_keys=[user_id])
+
+
 class ScheduleItem(Base):
     """训练计划条目表"""
 

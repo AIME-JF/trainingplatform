@@ -11,6 +11,7 @@ from app.schemas import (
     BatchManualCheckinRequest,
     CheckinCreate,
     CheckoutCreate,
+    TrainingLeaveCreate,
     EnrollmentCreate,
     TrainingSkipCourseRequest,
     TrainingCourseChangeLogResponse,
@@ -229,6 +230,33 @@ class TrainingController:
         except Exception as exc:
             logger.error("批量手动点名异常: %s", exc)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="批量手动点名失败")
+
+    def create_leave(self, training_id: int, user_id: int, data: TrainingLeaveCreate):
+        try:
+            return self.service.create_leave(training_id, user_id, data)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("请假异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="请假失败")
+
+    def cancel_leave(self, training_id: int, leave_id: int, user_id: int):
+        try:
+            return self.service.cancel_leave(training_id, leave_id, user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("销假异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="销假失败")
+
+    def get_leaves(self, training_id: int, user_id: int, session_key=None, is_manager=False):
+        try:
+            return self.service.get_leaves(training_id, user_id, session_key, is_manager)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("获取请假记录异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取请假记录失败")
 
     def submit_training_evaluation(self, training_id: int, user_id: int, data: TrainingEvaluationCreate):
         try:

@@ -8,6 +8,8 @@ export const reminderTypeLabelMap: Record<string, string> = {
   enrollment_rejected: '报名驳回',
   enrollment_pending: '报名待审批',
   training_notice: '培训通知',
+  leave_submitted: '学员请假',
+  leave_cancelled: '学员销假',
 }
 
 export function getReminderTypeLabel(type?: string | null): string {

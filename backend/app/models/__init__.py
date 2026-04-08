@@ -12,7 +12,7 @@ from .course import (
     Course, Chapter, CourseNote, CourseProgress, CourseTag, CourseTagRelation, CourseQA
 )
 from .training import (
-    Training, TrainingBase, TrainingCourse, Enrollment, CheckinRecord, ScheduleItem, TrainingHistory,
+    Training, TrainingBase, TrainingCourse, Enrollment, CheckinRecord, TrainingLeave, ScheduleItem, TrainingHistory,
     TrainingCourseChangeLog,
 )
 from .exam import (
@@ -63,7 +63,7 @@ __all__ = [
     # 课程相关
     "Course", "Chapter", "CourseNote", "CourseProgress", "CourseTag", "CourseTagRelation", "CourseQA",
     # 培训相关
-    "Training", "TrainingBase", "TrainingCourse", "Enrollment", "CheckinRecord", "ScheduleItem", "TrainingHistory",
+    "Training", "TrainingBase", "TrainingCourse", "Enrollment", "CheckinRecord", "TrainingLeave", "ScheduleItem", "TrainingHistory",
     "TrainingCourseChangeLog",
     # 考试相关
     "KnowledgePoint", "Question", "QuestionFolder", "ExamPaper", "PaperFolder", "ExamPaperQuestion",
