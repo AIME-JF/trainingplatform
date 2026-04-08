@@ -20,7 +20,7 @@
           <a-select-option value="active">进行中</a-select-option>
         </a-select>
         <a-button v-if="!isStudentView" type="primary" @click="openWizardModal">
-          一站式创建
+          创建考试
         </a-button>
       </div>
     </template>
@@ -320,7 +320,7 @@
       </div>
     </a-modal>
 
-    <!-- ===== 一站式创建向导 ===== -->
+    <!-- ===== 创建考试向导 ===== -->
     <a-modal
       v-model:open="wizardModalVisible"
       :title="null"
@@ -331,7 +331,7 @@
       @cancel="wizardModalVisible = false"
     >
       <div class="wizard-header">
-        <h2 class="wizard-title">一站式创建考试</h2>
+        <h2 class="wizard-title">创建考试</h2>
         <p class="wizard-subtitle">选择题目 → 创建试卷 → 创建考试场次</p>
       </div>
       <a-steps :current="wizardStep - 1" size="small" class="wizard-steps">
@@ -463,7 +463,7 @@
           </div>
 
           <div class="ai-input-grid">
-            <div class="ai-requirements-card">
+            <div class="ai-requirements-card" style="margin-left: 20px;">
               <div class="type-config-header">智能组卷要求</div>
               <a-textarea
                 v-model:value="aiRequirements"
@@ -488,9 +488,6 @@
                   <FileTextOutlined />
                 </p>
                 <p class="ant-upload-text">点击或拖拽上传参考材料</p>
-                <p class="ant-upload-hint">
-                  支持 PDF、DOC、DOCX、XLS、XLSX、CSV、TXT、MD、PPT、PPTX，上传后会自动解析文本。
-                </p>
               </a-upload-dragger>
             </div>
           </div>
@@ -1704,7 +1701,9 @@ watch(manualTotalScore, (totalScore) => {
   flex-wrap: wrap;
   gap: 16px;
   margin-bottom: 20px;
+  padding: 0 30px;
   color: var(--v2-text-secondary);
+  box-sizing: border-box;
 }
 
 .loading-wrapper,
@@ -1716,6 +1715,8 @@ watch(manualTotalScore, (totalScore) => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: 20px;
+  padding: 0 30px 8px;
+  box-sizing: border-box;
 }
 
 .exam-card {
@@ -2235,7 +2236,7 @@ watch(manualTotalScore, (totalScore) => {
 
 .ai-requirements-card,
 .ai-attachments-card {
-  padding: 16px;
+  padding: 12px;
   border-radius: 12px;
   background:
     linear-gradient(135deg, rgba(13, 110, 253, 0.06), rgba(255, 255, 255, 0.96));
@@ -2262,29 +2263,38 @@ watch(manualTotalScore, (totalScore) => {
   background: rgba(255, 255, 255, 0.78);
   border-radius: 10px;
   border-color: rgba(13, 110, 253, 0.18);
-  min-height: 104px;
+  height: 42px !important;
+  min-height: 42px !important;
+  padding: 4px 8px !important;
+  overflow: hidden;
 }
 
-:deep(.ai-attachments-card .ant-upload-wrapper .ant-upload-drag .ant-upload) {
-  padding: 14px 12px;
+:deep(.ai-attachments-card .ant-upload-wrapper .ant-upload-drag .ant-upload.ant-upload-btn) {
+  display: block;
+  min-height: 42px;
+  padding: 5px 8px !important;
 }
 
 :deep(.ai-attachments-card .ant-upload-wrapper .ant-upload-drag .ant-upload-drag-icon) {
-  margin-bottom: 6px;
+  display: none !important;
 }
 
 :deep(.ai-attachments-card .ant-upload-wrapper .ant-upload-drag .ant-upload-drag-icon .anticon) {
-  font-size: 24px;
+  display: none !important;
 }
 
 :deep(.ai-attachments-card .ant-upload-wrapper .ant-upload-drag .ant-upload-text) {
-  margin-bottom: 2px;
-  font-size: 14px;
+  margin: 0 !important;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 :deep(.ai-attachments-card .ant-upload-wrapper .ant-upload-drag .ant-upload-hint) {
-  font-size: 12px;
-  line-height: 1.5;
+  display: none !important;
+}
+
+:deep(.ai-attachments-card .ant-upload-wrapper .ant-upload-drag p) {
+  margin-bottom: 0 !important;
 }
 
 :deep(.ai-attachments-card .ant-upload-list) {
