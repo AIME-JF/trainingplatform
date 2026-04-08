@@ -93,6 +93,7 @@ PARTICIPANT_IMPORT_STATUS_MATCHED = "matched"
 PARTICIPANT_IMPORT_STATUS_CREATED = "created"
 PARTICIPANT_IMPORT_STATUS_FAILED = "failed"
 PARTICIPANT_IMPORT_DEFAULT_PASSWORD = "Police@123456"
+TRAINING_ONLY_PURPOSES = {"completion"}
 
 
 class ExamService:
@@ -509,6 +510,7 @@ class ExamService:
             raise ValueError("培训班考试必须关联培训班")
         if data.scene == EXAM_SCENE_STANDALONE:
             data.training_id = None
+        self._validate_exam_scene_purpose(data.scene, data.purpose)
         if data.scene == EXAM_SCENE_TRAINING and data.training_id is not None:
             training = self.db.query(Training).filter(Training.id == data.training_id).first()
             if not training:
@@ -616,8 +618,10 @@ class ExamService:
         next_scene = data.scene or exam.scene or EXAM_SCENE_TRAINING
         next_training_id = data.training_id if data.training_id is not None else exam.training_id
         next_participant_mode = data.participant_mode or exam.participant_mode or EXAM_PARTICIPANT_MODE_TRAINING
+        next_purpose = data.purpose or exam.purpose or "completion"
         if next_scene == EXAM_SCENE_TRAINING and not next_training_id:
             raise ValueError("培训班考试必须关联培训班")
+        self._validate_exam_scene_purpose(next_scene, next_purpose)
         if next_scene == EXAM_SCENE_STANDALONE and next_participant_mode != EXAM_PARTICIPANT_MODE_EXCEL:
             raise ValueError("独立考试当前仅支持 Excel 名单导入")
         if next_scene == EXAM_SCENE_TRAINING and next_training_id is not None:
@@ -1773,6 +1777,10 @@ class ExamService:
         if fallback is not None:
             return int(fallback)
         return self._resolve_create_exam_passing_score(paper, None)
+
+    def _validate_exam_scene_purpose(self, scene: str, purpose: Optional[str]) -> None:
+        if scene == EXAM_SCENE_STANDALONE and (purpose or "").strip() in TRAINING_ONLY_PURPOSES:
+            raise ValueError("结课考试仅支持培训班考试，不支持独立考试")
 
     def _validate_exam_configuration(
         self,

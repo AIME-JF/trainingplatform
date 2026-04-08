@@ -85,8 +85,8 @@
               <button class="link-button" @click="openViewDrawer(record)">{{ record.title }}</button>
               <div class="title-meta">
                 <a-tag :color="record.scene === 'standalone' ? 'blue' : 'cyan'">{{ sceneLabelMap[record.scene] }}</a-tag>
-                <a-tag>{{ purposeLabelMap[record.purpose] || record.purpose || '其他考试' }}</a-tag>
-                <a-tag>{{ record.type === 'quiz' ? '测验' : '正式考试' }}</a-tag>
+                <a-tag>{{ formatPurposeLabel(record.purpose) }}</a-tag>
+                <a-tag>{{ record.type === 'quiz' ? '测试' : '正式考试' }}</a-tag>
               </div>
             </div>
           </template>
@@ -99,9 +99,10 @@
           </template>
           <template v-else-if="column.key === 'target'">
             <div class="target-list">
-              <span>{{ record.participantSummary || (record.scene === 'standalone' ? '待导入名单' : '培训班已报名学员') }}</span>
-              <small v-if="record.departmentNames?.length">部门：{{ record.departmentNames.join('、') }}</small>
-              <small v-if="record.policeTypeNames?.length">警种：{{ record.policeTypeNames.join('、') }}</small>
+              <span class="target-list__summary">{{ record.participantSummary || (record.scene === 'standalone' ? '待导入名单' : '培训班已报名学员') }}</span>
+              <small v-if="record.departmentNames?.length || record.policeTypeNames?.length">
+                {{ buildTargetMeta(record) }}
+              </small>
             </div>
           </template>
           <template v-else-if="column.key === 'time'">
@@ -143,7 +144,7 @@
               <a-col :span="12">
                 <a-form-item label="考试类型" required>
                   <a-select v-model:value="form.purpose" :disabled="isViewOnly" @change="handlePurposeChange">
-                    <a-select-option v-for="item in purposeOptions" :key="item.value" :value="item.value">{{ item.label }}</a-select-option>
+                    <a-select-option v-for="item in availablePurposeOptions" :key="item.value" :value="item.value">{{ item.label }}</a-select-option>
                   </a-select>
                 </a-form-item>
               </a-col>
@@ -365,7 +366,14 @@ const purposeOptions = [
   { value: 'special', label: '专项考试' },
   { value: 'other', label: '其他考试' },
 ]
-const purposeLabelMap = Object.fromEntries(purposeOptions.map(item => [item.value, item.label]))
+const purposeLabelMap = {
+  ...Object.fromEntries(purposeOptions.map(item => [item.value, item.label])),
+  class_assessment: '结课考试',
+  class_quiz: '测试',
+  admission_exam: '准入制考试',
+  entry_exam: '准入制考试',
+  makeup_exam: '补考',
+}
 const sceneLabelMap = { standalone: '独立考试', training: '培训班考试' }
 const statusLabelMap = { upcoming: '未开始', active: '进行中', ended: '已结束' }
 const statusColorMap = { upcoming: 'gold', active: 'green', ended: 'default' }
@@ -374,7 +382,7 @@ const columns = [
   { title: '考试名称', key: 'title', width: 260 },
   { title: '参试统计', key: 'participants', width: 150 },
   { title: '考试时间', key: 'time', width: 180 },
-  { title: '考试类型 / 对象', key: 'target' },
+  { title: '考试类型 / 对象', key: 'target', width: 240 },
   { title: '关联培训班', key: 'training', width: 180 },
   { title: '状态', key: 'status', width: 100 },
   { title: '操作', key: 'actions', width: 260, fixed: 'right' },
@@ -444,6 +452,17 @@ const availablePaperOptions = computed(() => (
     ? paperOptions.value
     : paperOptions.value.filter(item => item.status === 'published')
 ))
+const standalonePurposeValues = ['admission', 'quiz', 'makeup', 'special', 'other']
+const availablePurposeOptions = computed(() => {
+  if (form.scene !== 'standalone') {
+    return purposeOptions
+  }
+  const options = purposeOptions.filter(item => standalonePurposeValues.includes(item.value))
+  if (form.purpose && !options.some(item => item.value === form.purpose) && purposeLabelMap[form.purpose]) {
+    options.push({ value: form.purpose, label: purposeLabelMap[form.purpose] })
+  }
+  return options
+})
 
 const drawerVisible = ref(false)
 const isEdit = ref(false)
@@ -489,6 +508,21 @@ const routeTrainingLocked = computed(() => !!routeTrainingId.value)
 
 function formatDateTime(value) {
   return value ? dayjs(value).format('YYYY-MM-DD HH:mm') : '未设置'
+}
+
+function buildTargetMeta(record) {
+  const chunks = []
+  if (record.departmentNames?.length) {
+    chunks.push(`部门 ${record.departmentNames.join('、')}`)
+  }
+  if (record.policeTypeNames?.length) {
+    chunks.push(`警种 ${record.policeTypeNames.join('、')}`)
+  }
+  return chunks.join(' · ')
+}
+
+function formatPurposeLabel(value) {
+  return purposeLabelMap[value] || '其他考试'
 }
 
 function handleSearch() {
@@ -981,6 +1015,13 @@ onMounted(async () => {
 .stat-block strong { font-size: 20px; color: #0f172a; }
 .stat-block span, .stat-sub, .target-list small { color: #64748b; }
 .time-cell, .target-list { display: flex; flex-direction: column; gap: 6px; }
+.target-list { min-width: 0; }
+.target-list__summary,
+.target-list small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .drawer-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 .drawer-panel { padding: 18px; border-radius: 18px; background: #f8fafc; border: 1px solid #e2e8f0; }
 .drawer-panel h4 { margin: 0 0 16px; font-size: 16px; color: #0f172a; }
