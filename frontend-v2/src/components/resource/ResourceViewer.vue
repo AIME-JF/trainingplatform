@@ -27,7 +27,7 @@
             :muted="autoplay"
             playsinline
             preload="metadata"
-            @play="$emit('play')"
+            @play="handleVideoPlay"
             @ended="$emit('complete')"
           />
         </template>
@@ -71,7 +71,7 @@
             autoplay
             muted
             playsinline
-            @play="$emit('play')"
+            @play="handleVideoPlay"
             @ended="$emit('complete')"
           />
           <button
@@ -130,7 +130,7 @@ const props = withDefaults(defineProps<{
   theme: 'default',
 })
 
-defineEmits<{
+const emit = defineEmits<{
   click: []
   play: []
   complete: []
@@ -139,6 +139,7 @@ defineEmits<{
 const mediaIndex = ref(0)
 const mediaTouch = ref({ startX: 0, startY: 0 })
 const recommendVideoRef = ref<HTMLVideoElement | null>(null)
+const trackedPlayKey = ref('')
 const { isMobile } = useMobile()
 
 const mediaList = computed(() => props.resource?.media_links || [])
@@ -159,6 +160,7 @@ const recommendPreviewTip = computed(() => {
 watch(() => props.resource?.id, () => {
   mediaIndex.value = 0
   recommendVideoRef.value = null
+  trackedPlayKey.value = ''
 })
 
 function prevMedia() {
@@ -198,6 +200,15 @@ async function toggleRecommendPlayback() {
   }
 
   video.pause()
+}
+
+function handleVideoPlay() {
+  const key = `${props.resource?.id || 'unknown'}:${currentMedia.value?.id || currentMedia.value?.file_url || ''}`
+  if (trackedPlayKey.value === key) {
+    return
+  }
+  trackedPlayKey.value = key
+  emit('play')
 }
 
 function onMediaTouchStart(event: TouchEvent) {

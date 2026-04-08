@@ -2,6 +2,7 @@
 配置文件
 """
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 from dotenv import load_dotenv
 from typing import Optional
 
@@ -63,6 +64,17 @@ class Settings(BaseSettings):
     # AI 任务并发与超时
     AI_TASK_MAX_CONCURRENCY: int = 5
     AI_TASK_TIMEOUT_MINUTES: int = 15
+
+    @field_validator("DEBUG", mode="before")
+    @classmethod
+    def normalize_debug_flag(cls, value):
+        if isinstance(value, str):
+            normalized = value.strip().lower()
+            if normalized in {"release", "prod", "production", "false", "0", "off", "no"}:
+                return False
+            if normalized in {"debug", "dev", "development", "true", "1", "on", "yes"}:
+                return True
+        return value
 
 
     class Config:

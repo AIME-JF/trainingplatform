@@ -9,6 +9,7 @@ from app.middleware.auth import get_current_user
 from app.schemas import (
     StandardResponse,
     TokenData,
+    CommunityBoardDashboardResponse,
     ResourceLikeStatusResponse,
     ResourceShareStatusResponse,
     ResourceRecommendationFeedResponse,
@@ -78,4 +79,19 @@ def get_feed(
 ):
     controller = RecommendationController(db)
     data = controller.get_feed(current_user.user_id, page, size)
+    return StandardResponse(data=data)
+
+
+@router.get(
+    '/community/board/dashboard',
+    response_model=StandardResponse[CommunityBoardDashboardResponse],
+    summary='社区看板统计',
+)
+def get_community_board_dashboard(
+    range: str = Query('7d'),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = RecommendationController(db)
+    data = controller.get_community_board_dashboard(current_user.user_id, current_user.permissions, range)
     return StandardResponse(data=data)

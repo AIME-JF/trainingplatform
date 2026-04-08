@@ -159,6 +159,9 @@ from .review import (
 from .recommendation import (
     ResourceBehaviorEventCreate,
     ResourceRecommendationItem, ResourceRecommendationFeedResponse,
+    CommunityBoardOverviewResponse, CommunityBoardTrendItem,
+    CommunityBoardInteractionItem, CommunityBoardVideoItem,
+    CommunityBoardDashboardResponse,
     RecommendationScoreBreakdown
 )
 
@@ -284,5 +287,8 @@ __all__ = [
     # 推荐
     "ResourceBehaviorEventCreate",
     "ResourceRecommendationItem", "ResourceRecommendationFeedResponse",
+    "CommunityBoardOverviewResponse", "CommunityBoardTrendItem",
+    "CommunityBoardInteractionItem", "CommunityBoardVideoItem",
+    "CommunityBoardDashboardResponse",
     "RecommendationScoreBreakdown",
 ]

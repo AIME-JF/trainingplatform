@@ -1,12 +1,14 @@
 """
 资源推荐服务
 """
+from collections import defaultdict
 from typing import List, Optional, Dict, Set
-from datetime import datetime
+from datetime import datetime, timedelta
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload, selectinload
 
-from app.models import Resource, ResourceLike
+from app.models import Resource, ResourceComment, ResourceLike, ResourceTagRelation
 from app.models.recommendation import ResourceBehaviorEvent, ResourceRecommendScore
 from app.services.resource import ResourceService
 
@@ -46,8 +48,10 @@ class RecommendationService:
             context_json=context_json,
         )
 
-        if normalized_event_type in {'click', 'play', 'complete'}:
+        if normalized_event_type == 'click':
             resource.view_count = (resource.view_count or 0) + 1
+        if normalized_event_type == 'play':
+            resource.play_count = (resource.play_count or 0) + 1
         if normalized_event_type == 'favorite':
             resource.favorite_count = (resource.favorite_count or 0) + 1
 
@@ -204,6 +208,89 @@ class RecommendationService:
             'total': total,
         }
 
+    def get_community_board_dashboard(self, user_id: int, user_permissions: List[str], range_key: str = '7d') -> Dict:
+        range_days = self._resolve_board_range_days(range_key)
+        end_time = datetime.now()
+        start_time = (end_time - timedelta(days=range_days - 1)).replace(hour=0, minute=0, second=0, microsecond=0)
+        trend_buckets = self._build_trend_buckets(start_time, range_days)
+
+        resources = self._get_accessible_published_video_resources(user_id, user_permissions)
+        if not resources:
+            return {
+                'overview': {
+                    'submission_count': 0,
+                    'total_videos': 0,
+                    'total_plays': 0,
+                    'total_likes': 0,
+                    'total_comments': 0,
+                    'total_shares': 0,
+                    'engagement_rate': 0,
+                    'completion_rate': 0,
+                },
+                'trend': list(trend_buckets.values()),
+                'interaction_distribution': [
+                    {'name': '点赞', 'value': 0},
+                    {'name': '评论', 'value': 0},
+                    {'name': '转发', 'value': 0},
+                ],
+                'top_videos': [],
+                'latest_videos': [],
+            }
+
+        resource_ids = [resource.id for resource in resources]
+        event_summary = self._collect_board_event_summary(resource_ids, start_time)
+        comment_summary = self._collect_board_comment_summary(resource_ids, start_time)
+        resource_stats = self._build_resource_board_stats(resources, event_summary, comment_summary)
+
+        for day_key, bucket in trend_buckets.items():
+            event_bucket = event_summary['trend'].get(day_key, {})
+            bucket['plays'] = int(event_bucket.get('plays', 0))
+            bucket['likes'] = int(event_bucket.get('likes', 0))
+            bucket['shares'] = int(event_bucket.get('shares', 0))
+            bucket['comments'] = int(comment_summary['trend'].get(day_key, 0))
+
+        total_plays = sum(item['plays'] for item in resource_stats.values())
+        total_likes = sum(item['likes'] for item in resource_stats.values())
+        total_comments = sum(item['comments'] for item in resource_stats.values())
+        total_shares = sum(item['shares'] for item in resource_stats.values())
+        total_completes = sum(item['completes'] for item in resource_stats.values())
+
+        top_resources = sorted(
+            resources,
+            key=lambda resource: (
+                resource_stats[resource.id]['plays'],
+                resource_stats[resource.id]['likes'] + resource_stats[resource.id]['comments'] + resource_stats[resource.id]['shares'],
+                resource.publish_at or resource.created_at or datetime.min,
+            ),
+            reverse=True,
+        )[:5]
+        latest_resources = sorted(
+            resources,
+            key=lambda resource: resource.publish_at or resource.created_at or datetime.min,
+            reverse=True,
+        )[:5]
+
+        return {
+            'overview': {
+                'submission_count': len(resources),
+                'total_videos': len(resources),
+                'total_plays': total_plays,
+                'total_likes': total_likes,
+                'total_comments': total_comments,
+                'total_shares': total_shares,
+                'engagement_rate': self._calc_engagement_rate(total_plays, total_likes, total_comments, total_shares),
+                'completion_rate': self._calc_completion_rate(total_plays, total_completes),
+            },
+            'trend': list(trend_buckets.values()),
+            'interaction_distribution': [
+                {'name': '点赞', 'value': total_likes},
+                {'name': '评论', 'value': total_comments},
+                {'name': '转发', 'value': total_shares},
+            ],
+            'top_videos': [self._build_board_video_item(resource, resource_stats[resource.id]) for resource in top_resources],
+            'latest_videos': [self._build_board_video_item(resource, resource_stats[resource.id]) for resource in latest_resources],
+        }
+
     def upsert_precomputed_scores(self, user_id: int, score_rows: List[dict]):
         for row in score_rows:
             existing = self.db.query(ResourceRecommendScore).filter(
@@ -319,11 +406,195 @@ class RecommendationService:
         return 0.2
 
     def _calc_popularity_score(self, resource: Resource) -> float:
-        views = resource.view_count or 0
+        views = resource.play_count or resource.view_count or 0
         likes = resource.like_count or 0
         favorites = resource.favorite_count or 0
         raw = views * 0.01 + likes * 0.2 + favorites * 0.3
         return min(1.0, raw / 20.0)
+
+    def _resolve_board_range_days(self, range_key: str) -> int:
+        normalized_range = str(range_key or '7d').strip().lower()
+        if normalized_range == '7d':
+            return 7
+        if normalized_range == '30d':
+            return 30
+        raise ValueError('不支持的时间范围')
+
+    def _build_trend_buckets(self, start_time: datetime, range_days: int) -> Dict[str, dict]:
+        buckets: Dict[str, dict] = {}
+        for offset in range(range_days):
+            day = start_time + timedelta(days=offset)
+            day_key = day.strftime('%Y-%m-%d')
+            buckets[day_key] = {
+                'date': day.strftime('%m-%d'),
+                'plays': 0,
+                'likes': 0,
+                'comments': 0,
+                'shares': 0,
+            }
+        return buckets
+
+    def _get_accessible_published_video_resources(self, user_id: int, user_permissions: List[str]) -> List[Resource]:
+        resources = self.db.query(Resource).options(
+            joinedload(Resource.uploader),
+            joinedload(Resource.owner_department),
+            selectinload(Resource.tag_relations).joinedload(ResourceTagRelation.tag),
+            selectinload(Resource.visibility_scopes),
+        ).filter(
+            Resource.status == 'published',
+            Resource.content_type == 'video',
+        ).all()
+
+        if 'VIEW_RESOURCE_ALL' in set(user_permissions or []):
+            return resources
+
+        user_ctx = self._get_user_context(user_id)
+        return [
+            resource
+            for resource in resources
+            if self.resource_service.can_user_access_published_resource(resource, user_id, user_ctx)
+        ]
+
+    def _collect_board_event_summary(self, resource_ids: List[int], start_time: datetime) -> Dict[str, Dict]:
+        per_resource = defaultdict(lambda: {'plays': 0, 'likes': 0, 'shares': 0, 'completes': 0})
+        trend = defaultdict(lambda: {'plays': 0, 'likes': 0, 'shares': 0})
+
+        if not resource_ids:
+            return {'per_resource': per_resource, 'trend': trend}
+
+        rows = self.db.query(
+            ResourceBehaviorEvent.resource_id,
+            func.date(ResourceBehaviorEvent.event_time).label('event_date'),
+            ResourceBehaviorEvent.event_type,
+            func.count(ResourceBehaviorEvent.id).label('total'),
+        ).filter(
+            ResourceBehaviorEvent.resource_id.in_(resource_ids),
+            ResourceBehaviorEvent.event_time >= start_time,
+            ResourceBehaviorEvent.event_type.in_(('play', 'complete', 'like', 'share')),
+        ).group_by(
+            ResourceBehaviorEvent.resource_id,
+            func.date(ResourceBehaviorEvent.event_time),
+            ResourceBehaviorEvent.event_type,
+        ).all()
+
+        metric_map = {
+            'play': 'plays',
+            'complete': 'completes',
+            'like': 'likes',
+            'share': 'shares',
+        }
+
+        for resource_id, event_date, event_type, total in rows:
+            metric = metric_map.get(str(event_type or '').strip())
+            if not metric:
+                continue
+            count = int(total or 0)
+            per_resource[int(resource_id)][metric] += count
+            day_key = self._normalize_grouped_day(event_date)
+            if metric != 'completes' and day_key:
+                trend[day_key][metric] += count
+
+        return {
+            'per_resource': per_resource,
+            'trend': trend,
+        }
+
+    def _collect_board_comment_summary(self, resource_ids: List[int], start_time: datetime) -> Dict[str, Dict]:
+        per_resource = defaultdict(int)
+        trend = defaultdict(int)
+
+        if not resource_ids:
+            return {'per_resource': per_resource, 'trend': trend}
+
+        rows = self.db.query(
+            ResourceComment.resource_id,
+            func.date(ResourceComment.created_at).label('comment_date'),
+            func.count(ResourceComment.id).label('total'),
+        ).filter(
+            ResourceComment.resource_id.in_(resource_ids),
+            ResourceComment.created_at >= start_time,
+        ).group_by(
+            ResourceComment.resource_id,
+            func.date(ResourceComment.created_at),
+        ).all()
+
+        for resource_id, comment_date, total in rows:
+            count = int(total or 0)
+            per_resource[int(resource_id)] += count
+            day_key = self._normalize_grouped_day(comment_date)
+            if day_key:
+                trend[day_key] += count
+
+        return {
+            'per_resource': per_resource,
+            'trend': trend,
+        }
+
+    def _build_resource_board_stats(
+        self,
+        resources: List[Resource],
+        event_summary: Dict[str, Dict],
+        comment_summary: Dict[str, Dict],
+    ) -> Dict[int, Dict[str, int]]:
+        per_resource_stats: Dict[int, Dict[str, int]] = {}
+        event_stats = event_summary.get('per_resource', {})
+        comment_stats = comment_summary.get('per_resource', {})
+
+        for resource in resources:
+            stats = event_stats.get(resource.id, {})
+            per_resource_stats[resource.id] = {
+                'plays': int(stats.get('plays', 0)),
+                'likes': int(stats.get('likes', 0)),
+                'shares': int(stats.get('shares', 0)),
+                'completes': int(stats.get('completes', 0)),
+                'comments': int(comment_stats.get(resource.id, 0)),
+            }
+
+        return per_resource_stats
+
+    def _build_board_video_item(self, resource: Resource, stats: Dict[str, int]) -> Dict[str, int | float | str | None]:
+        plays = int(stats.get('plays', 0))
+        likes = int(stats.get('likes', 0))
+        comments = int(stats.get('comments', 0))
+        shares = int(stats.get('shares', 0))
+        completes = int(stats.get('completes', 0))
+
+        return {
+            'id': resource.id,
+            'title': resource.title,
+            'category': self._resolve_board_category(resource),
+            'uploader_name': (resource.uploader.nickname or resource.uploader.username) if resource.uploader else None,
+            'plays': plays,
+            'likes': likes,
+            'comments': comments,
+            'shares': shares,
+            'engagement_rate': self._calc_engagement_rate(plays, likes, comments, shares),
+            'completion_rate': self._calc_completion_rate(plays, completes),
+        }
+
+    def _resolve_board_category(self, resource: Resource) -> str:
+        for relation in (resource.tag_relations or []):
+            tag = getattr(relation, 'tag', None)
+            if tag and getattr(tag, 'name', None):
+                return str(tag.name)
+        return '视频'
+
+    def _calc_engagement_rate(self, plays: int, likes: int, comments: int, shares: int) -> float:
+        if plays <= 0:
+            return 0.0
+        return round(((likes + comments + shares) / plays) * 100, 2)
+
+    def _calc_completion_rate(self, plays: int, completes: int) -> float:
+        if plays <= 0:
+            return 0.0
+        return round((completes / plays) * 100, 2)
+
+    def _normalize_grouped_day(self, value: object) -> str:
+        if value is None:
+            return ''
+        if isinstance(value, datetime):
+            return value.strftime('%Y-%m-%d')
+        return str(value)
 
     def _append_event(
         self,
