@@ -4,8 +4,9 @@ Database initialization helpers.
 from typing import Generator, Optional
 
 import redis
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
+from sqlalchemy.schema import CreateColumn
 
 from config import settings
 from logger import logger
@@ -30,6 +31,41 @@ SessionLocal = sessionmaker(
 Base = declarative_base()
 
 _db_tested = False
+
+
+EXAM_SCHEMA_BOOTSTRAP_REQUIREMENTS: dict[str, tuple[str, ...]] = {
+    "exams": (
+        "scene",
+        "participant_mode",
+        "department_ids",
+        "police_type_ids",
+        "participant_summary",
+        "legacy_admission_exam_id",
+    ),
+    "exam_participant_import_batches": (
+        "id",
+        "exam_id",
+        "file_name",
+        "status",
+        "summary",
+        "failure_rows",
+        "created_by",
+    ),
+    "exam_participants": (
+        "id",
+        "exam_id",
+        "user_id",
+        "import_batch_id",
+        "source_row_no",
+        "source_snapshot",
+        "match_status",
+        "participation_status",
+        "generated_password",
+    ),
+    "trainings": (
+        "entry_exam_id",
+    ),
+}
 
 
 def test_db_connection() -> bool:
@@ -117,16 +153,84 @@ class RedisClient:
 redis_client = RedisClient()
 
 
+def _build_add_column_sql(table_name: str, column) -> str:
+    """Build dialect-aware SQL for adding a missing column."""
+    compiled_column = CreateColumn(column).compile(dialect=engine.dialect)
+    quoted_table_name = engine.dialect.identifier_preparer.quote(table_name)
+    return f"ALTER TABLE {quoted_table_name} ADD COLUMN {compiled_column}"
+
+
+def bootstrap_exam_schema() -> None:
+    """Backfill unified exam tables/columns outside the migration system."""
+    import app.models  # noqa: F401
+
+    Base.metadata.create_all(bind=engine)
+
+    with engine.begin() as connection:
+        inspector = inspect(connection)
+
+        for table_name in EXAM_SCHEMA_BOOTSTRAP_REQUIREMENTS:
+            metadata_table = Base.metadata.tables.get(table_name)
+            if metadata_table is None:
+                raise RuntimeError(f"模型中未声明表 `{table_name}`，无法完成启动补齐")
+
+            if inspector.has_table(table_name):
+                continue
+
+            logger.warning(f"启动补齐：创建缺失表 `{table_name}`")
+            metadata_table.create(bind=connection, checkfirst=True)
+
+        inspector = inspect(connection)
+
+        for table_name, required_columns in EXAM_SCHEMA_BOOTSTRAP_REQUIREMENTS.items():
+            metadata_table = Base.metadata.tables[table_name]
+            existing_columns = {
+                column["name"] for column in inspector.get_columns(table_name)
+            }
+
+            for column_name in required_columns:
+                if column_name in existing_columns:
+                    continue
+
+                metadata_column = metadata_table.columns.get(column_name)
+                if metadata_column is None:
+                    raise RuntimeError(
+                        f"模型中未声明字段 `{table_name}.{column_name}`，无法完成启动补齐"
+                    )
+
+                ddl = _build_add_column_sql(table_name, metadata_column)
+                logger.warning(f"启动补齐：执行 {ddl}")
+                connection.execute(text(ddl))
+
+        inspector = inspect(connection)
+        issues: list[str] = []
+        for table_name, required_columns in EXAM_SCHEMA_BOOTSTRAP_REQUIREMENTS.items():
+            if not inspector.has_table(table_name):
+                issues.append(f"缺少表 `{table_name}`")
+                continue
+
+            existing_columns = {
+                column["name"] for column in inspector.get_columns(table_name)
+            }
+            missing_columns = [
+                column_name
+                for column_name in required_columns
+                if column_name not in existing_columns
+            ]
+            if missing_columns:
+                issues.append(
+                    f"表 `{table_name}` 缺少字段: {', '.join(missing_columns)}"
+                )
+
+        if issues:
+            detail_lines = "\n".join(f"- {issue}" for issue in issues)
+            raise RuntimeError(f"统一考试启动补齐后仍有缺失结构。\n{detail_lines}")
+
+
 def init_db():
-    """Create declared tables that are still missing.
-
-    This only fills in absent tables. Existing tables must be evolved through
-    Alembic migrations instead of `create_all()`.
-    """
+    """Create declared tables and backfill unified-exam bootstrap columns."""
     try:
-        import app.models  # noqa: F401
-
-        Base.metadata.create_all(bind=engine)
+        bootstrap_exam_schema()
         logger.info("Database initialized successfully")
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

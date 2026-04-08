@@ -165,6 +165,7 @@ class ResourceListItemResponse(BaseModel):
     cover_media_file_id: Optional[int] = None
     cover_url: Optional[str] = None
     tags: List[str] = []
+    play_count: int = 0
     like_count: int = 0
     share_count: int = 0
     comment_count: int = 0

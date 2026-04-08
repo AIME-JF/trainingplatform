@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h2>{{ COMMUNITY_BOARD_TITLE }}</h2>
-        <p class="page-sub">按播放、点赞、评论、转发等维度分析社区视频表现，辅助管理员判断内容热度与传播质量。</p>
+        <p class="page-sub">按播放、点赞、评论、转发等维度分析社区视频表现，帮助管理员判断内容热度与传播质量。</p>
       </div>
       <a-space wrap>
         <a-select v-model:value="range" style="width: 140px" @change="loadDashboard">
@@ -18,7 +18,7 @@
 
     <a-spin :spinning="loading">
       <a-row :gutter="[16, 16]" class="metric-row">
-        <a-col v-for="card in overviewCards" :key="card.key" :xs="24" :sm="12" :xl="8">
+        <a-col v-for="card in overviewCards" :key="card.key" :xs="24" :sm="12" :lg="8" :xl="6">
           <a-card :bordered="false" class="metric-card-shell">
             <div class="metric-card">
               <div class="metric-icon" :class="card.theme">
@@ -33,8 +33,11 @@
           </a-card>
         </a-col>
       </a-row>
+      <div class="metric-note">
+        除累计投稿量外，其他指标均按当前时间范围统计；底部明细表仅展示最新 5 条已发布视频。
+      </div>
 
-      <a-row :gutter="[16, 16]">
+      <a-row :gutter="[16, 16]" class="chart-row">
         <a-col :xs="24" :xl="16">
           <a-card :bordered="false" class="module-card">
             <template #title>互动趋势</template>
@@ -45,6 +48,32 @@
           <a-card :bordered="false" class="module-card">
             <template #title>互动结构</template>
             <v-chart :option="interactionOption" autoresize class="pie-chart" />
+          </a-card>
+        </a-col>
+      </a-row>
+
+      <a-row :gutter="[16, 16]" class="radar-row">
+        <a-col :span="24">
+          <a-card :bordered="false" class="module-card radar-module">
+            <template #title>创作表现雷达</template>
+            <template #extra>
+              <span class="card-extra">{{ rangeLabel }}真实视频数据</span>
+            </template>
+            <div class="radar-layout">
+              <v-chart :option="radarOption" autoresize class="radar-chart" />
+              <div class="radar-metric-grid">
+                <div
+                  v-for="metric in radarMetrics"
+                  :key="metric.key"
+                  class="radar-metric"
+                  :style="{ '--metric-accent': metric.color }"
+                >
+                  <div class="radar-metric-label">{{ metric.name }}</div>
+                  <div class="radar-metric-value">{{ metric.display }}</div>
+                  <div class="radar-metric-hint">{{ metric.hint }}</div>
+                </div>
+              </div>
+            </div>
           </a-card>
         </a-col>
       </a-row>
@@ -61,7 +90,7 @@
                   <div class="ranking-meta">
                     <span>{{ item.category }}</span>
                     <span>{{ formatNumber(item.plays) }} 播放</span>
-                    <span>{{ item.engagementRate.toFixed(2) }}% 互动率</span>
+                    <span>{{ formatPercent(item.engagementRate) }} 互动率</span>
                   </div>
                 </div>
                 <a-button type="link" size="small" @click="goDetail(item.id)">详情</a-button>
@@ -71,14 +100,17 @@
         </a-col>
         <a-col :xs="24" :xl="15">
           <a-card :bordered="false" class="module-card">
-            <template #title>视频表现明细</template>
+            <template #title>最新发布视频表现</template>
+            <template #extra>
+              <span class="card-extra">仅展示最新 5 条</span>
+            </template>
             <a-table :data-source="dashboard.latestVideos" :columns="videoColumns" :pagination="false" row-key="id">
               <template #bodyCell="{ column, record }">
                 <template v-if="column.key === 'plays' || column.key === 'likes' || column.key === 'comments' || column.key === 'shares'">
                   {{ formatNumber(record[column.key]) }}
                 </template>
                 <template v-else-if="column.key === 'engagementRate' || column.key === 'completionRate'">
-                  {{ record[column.key].toFixed(2) }}%
+                  {{ formatPercent(record[column.key]) }}
                 </template>
                 <template v-else-if="column.key === 'action'">
                   <a-button type="link" size="small" @click="goDetail(record.id)">查看详情</a-button>
@@ -96,34 +128,33 @@
 import { computed, onMounted, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import {
+  FundOutlined,
   LikeOutlined,
   MessageOutlined,
   PlayCircleOutlined,
-  ShareAltOutlined,
   RiseOutlined,
-  FundOutlined,
+  ShareAltOutlined,
+  VideoCameraOutlined,
 } from '@ant-design/icons-vue'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
-import { BarChart, LineChart, PieChart } from 'echarts/charts'
-import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
+import { BarChart, LineChart, PieChart, RadarChart } from 'echarts/charts'
+import { GridComponent, LegendComponent, RadarComponent, TooltipComponent } from 'echarts/components'
 import VChart from 'vue-echarts'
 import { useRouter } from 'vue-router'
 import { getCommunityBoardDashboard } from '@/api/community'
 import { COMMUNITY_ASSISTANT_TITLE, COMMUNITY_BOARD_TITLE, COMMUNITY_MANAGEMENT_TITLE } from '@/constants/navigationTitles'
 
-use([CanvasRenderer, BarChart, LineChart, PieChart, GridComponent, LegendComponent, TooltipComponent])
+use([CanvasRenderer, BarChart, LineChart, PieChart, RadarChart, GridComponent, LegendComponent, RadarComponent, TooltipComponent])
 
 const router = useRouter()
 const loading = ref(false)
 const range = ref('7d')
-const dashboard = ref({
-  overview: {},
-  trend: [],
-  interactionDistribution: [],
-  topVideos: [],
-  latestVideos: [],
-})
+const dashboard = ref(createEmptyDashboard())
+
+const overview = computed(() => dashboard.value.overview || {})
+const rangeLabel = computed(() => (range.value === '30d' ? '近30天' : '近7天'))
+const submissionCount = computed(() => Number(overview.value.submissionCount ?? overview.value.totalVideos ?? 0))
 
 const videoColumns = [
   { title: '视频标题', dataIndex: 'title', key: 'title' },
@@ -139,41 +170,49 @@ const videoColumns = [
 
 const overviewCards = computed(() => [
   {
+    key: 'submission',
+    label: '累计投稿量',
+    value: formatNumber(submissionCount.value),
+    hint: '累计已发布视频总数',
+    icon: VideoCameraOutlined,
+    theme: 'coral',
+  },
+  {
     key: 'plays',
     label: '总播放量',
-    value: formatNumber(dashboard.value.overview.totalPlays || 0),
-    hint: `${dashboard.value.overview.totalVideos || 0} 条视频参与统计`,
+    value: formatNumber(overview.value.totalPlays || 0),
+    hint: `${submissionCount.value} 条视频参与统计`,
     icon: PlayCircleOutlined,
     theme: 'blue',
   },
   {
     key: 'likes',
     label: '总点赞量',
-    value: formatNumber(dashboard.value.overview.totalLikes || 0),
-    hint: `${formatNumber(dashboard.value.overview.totalComments || 0)} 条评论`,
+    value: formatNumber(overview.value.totalLikes || 0),
+    hint: `${formatNumber(overview.value.totalComments || 0)} 条评论`,
     icon: LikeOutlined,
     theme: 'red',
   },
   {
     key: 'shares',
     label: '总转发量',
-    value: formatNumber(dashboard.value.overview.totalShares || 0),
-    hint: `${(dashboard.value.overview.engagementRate || 0).toFixed(2)}% 综合互动率`,
+    value: formatNumber(overview.value.totalShares || 0),
+    hint: `${formatPercent(overview.value.engagementRate || 0)} 综合互动率`,
     icon: ShareAltOutlined,
     theme: 'gold',
   },
   {
     key: 'comments',
-    label: '评论活跃度',
-    value: formatNumber(dashboard.value.overview.totalComments || 0),
-    hint: `${(dashboard.value.overview.completionRate || 0).toFixed(2)}% 平均完播率`,
+    label: '周期评论量',
+    value: formatNumber(overview.value.totalComments || 0),
+    hint: `${rangeLabel.value}内视频评论次数`,
     icon: MessageOutlined,
     theme: 'green',
   },
   {
     key: 'engagement',
     label: '互动率',
-    value: `${(dashboard.value.overview.engagementRate || 0).toFixed(2)}%`,
+    value: formatPercent(overview.value.engagementRate || 0),
     hint: '点赞、评论、转发综合换算',
     icon: RiseOutlined,
     theme: 'violet',
@@ -181,7 +220,7 @@ const overviewCards = computed(() => [
   {
     key: 'completion',
     label: '完播率',
-    value: `${(dashboard.value.overview.completionRate || 0).toFixed(2)}%`,
+    value: formatPercent(overview.value.completionRate || 0),
     hint: '衡量内容观看深度',
     icon: FundOutlined,
     theme: 'teal',
@@ -237,6 +276,7 @@ const trendOption = computed(() => ({
 const interactionOption = computed(() => ({
   tooltip: { trigger: 'item' },
   legend: { bottom: 0 },
+  color: ['#3b82f6', '#fb7185', '#f59e0b'],
   series: [
     {
       type: 'pie',
@@ -251,8 +291,163 @@ const interactionOption = computed(() => ({
   ],
 }))
 
+const radarMetrics = computed(() => [
+  {
+    key: 'submission',
+    name: '投稿量',
+    value: submissionCount.value,
+    score: getRadarScore(submissionCount.value, 40),
+    display: formatNumber(submissionCount.value),
+    hint: '累计已发布视频',
+    color: '#fb7185',
+  },
+  {
+    key: 'plays',
+    name: '播放量',
+    value: Number(overview.value.totalPlays || 0),
+    score: getRadarScore(overview.value.totalPlays, 1000),
+    display: formatNumber(overview.value.totalPlays || 0),
+    hint: `${rangeLabel.value}真实播放`,
+    color: '#3b82f6',
+  },
+  {
+    key: 'engagement',
+    name: '互动指数',
+    value: Number((overview.value.engagementRate || 0).toFixed(2)),
+    score: getRadarScore(overview.value.engagementRate, 10),
+    display: formatPercent(overview.value.engagementRate || 0),
+    hint: '点赞评论转发综合表现',
+    color: '#8b5cf6',
+  },
+  {
+    key: 'completion',
+    name: '完播率',
+    value: Number((overview.value.completionRate || 0).toFixed(2)),
+    score: getRadarScore(overview.value.completionRate, 100),
+    display: formatPercent(overview.value.completionRate || 0),
+    hint: '播放到完播的转化效率',
+    color: '#14b8a6',
+  },
+])
+
+const radarOption = computed(() => ({
+  tooltip: {
+    trigger: 'item',
+    formatter: () =>
+      radarMetrics.value
+        .map((metric) => `${metric.name}：${metric.display}`)
+        .join('<br/>'),
+  },
+  radar: {
+    radius: '66%',
+    center: ['50%', '52%'],
+    splitNumber: 4,
+    axisLabel: {
+      show: false,
+    },
+    axisName: {
+      color: '#12233d',
+      fontSize: 14,
+      fontWeight: 600,
+    },
+    axisNameGap: 16,
+    splitLine: {
+      lineStyle: {
+        color: 'rgba(148, 163, 184, 0.28)',
+      },
+    },
+    axisLine: {
+      lineStyle: {
+        color: 'rgba(148, 163, 184, 0.24)',
+      },
+    },
+    splitArea: {
+      areaStyle: {
+        color: ['rgba(15, 23, 42, 0.02)', 'rgba(15, 23, 42, 0.05)'],
+      },
+    },
+    indicator: radarMetrics.value.map((metric) => ({
+      name: metric.name,
+      min: 0,
+      max: 100,
+      interval: 25,
+      alignTicks: false,
+    })),
+  },
+  series: [
+    {
+      type: 'radar',
+      symbol: 'circle',
+      symbolSize: 10,
+      lineStyle: {
+        color: '#ff4d6d',
+        width: 3,
+      },
+      itemStyle: {
+        color: '#ffffff',
+        borderColor: '#ff4d6d',
+        borderWidth: 3,
+      },
+      areaStyle: {
+        color: 'rgba(255, 77, 109, 0.24)',
+      },
+      data: [
+        {
+          value: radarMetrics.value.map((metric) => metric.score),
+          name: rangeLabel.value,
+        },
+      ],
+    },
+  ],
+}))
+
+function createEmptyDashboard() {
+  return {
+    overview: {
+      submissionCount: 0,
+      totalVideos: 0,
+      totalPlays: 0,
+      totalLikes: 0,
+      totalComments: 0,
+      totalShares: 0,
+      engagementRate: 0,
+      completionRate: 0,
+    },
+    trend: [],
+    interactionDistribution: [],
+    topVideos: [],
+    latestVideos: [],
+  }
+}
+
+function normalizeDashboard(data = {}) {
+  const base = createEmptyDashboard()
+  return {
+    ...base,
+    ...data,
+    overview: {
+      ...base.overview,
+      ...(data.overview || {}),
+    },
+    trend: Array.isArray(data.trend) ? data.trend : [],
+    interactionDistribution: Array.isArray(data.interactionDistribution) ? data.interactionDistribution : [],
+    topVideos: Array.isArray(data.topVideos) ? data.topVideos : [],
+    latestVideos: Array.isArray(data.latestVideos) ? data.latestVideos : [],
+  }
+}
+
 function formatNumber(value) {
   return new Intl.NumberFormat('zh-CN').format(Number(value) || 0)
+}
+
+function formatPercent(value) {
+  return `${(Number(value) || 0).toFixed(2)}%`
+}
+
+function getRadarScore(value, benchmark) {
+  const numeric = Number(value) || 0
+  const normalizedBenchmark = Number(benchmark) || 1
+  return Math.min(100, Number(((numeric / normalizedBenchmark) * 100).toFixed(2)))
 }
 
 function goDetail(id) {
@@ -262,7 +457,8 @@ function goDetail(id) {
 async function loadDashboard() {
   loading.value = true
   try {
-    dashboard.value = await getCommunityBoardDashboard({ range: range.value })
+    const data = await getCommunityBoardDashboard({ range: range.value })
+    dashboard.value = normalizeDashboard(data)
   } catch (error) {
     message.error(error.message || '加载社区看板失败')
   } finally {
@@ -300,8 +496,19 @@ onMounted(() => {
 }
 
 .metric-row,
+.chart-row,
+.radar-row,
 .content-row {
   margin-top: 16px;
+}
+
+.metric-note {
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: rgba(241, 245, 249, 0.9);
+  color: #64748b;
+  font-size: 12px;
 }
 
 .metric-card-shell,
@@ -323,6 +530,11 @@ onMounted(() => {
   align-items: center;
   justify-content: center;
   font-size: 22px;
+}
+
+.metric-icon.coral {
+  background: rgba(251, 113, 133, 0.14);
+  color: #e11d48;
 }
 
 .metric-icon.blue {
@@ -374,9 +586,59 @@ onMounted(() => {
   color: #8c8c8c;
 }
 
+.card-extra {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
 .trend-chart,
 .pie-chart {
   height: 340px;
+}
+
+.radar-layout {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.radar-chart {
+  flex: 1.3;
+  min-height: 360px;
+}
+
+.radar-metric-grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.radar-metric {
+  padding: 18px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.96), rgba(241, 245, 249, 0.86));
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.radar-metric-label {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.radar-metric-value {
+  margin-top: 10px;
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--metric-accent);
+}
+
+.radar-metric-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #94a3b8;
 }
 
 .ranking-list {
@@ -430,6 +692,9 @@ onMounted(() => {
 .ranking-title {
   font-weight: 600;
   color: #0f172a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ranking-meta {
@@ -441,9 +706,26 @@ onMounted(() => {
   color: #64748b;
 }
 
+@media (max-width: 992px) {
+  .radar-layout {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .radar-chart {
+    min-height: 320px;
+  }
+}
+
 @media (max-width: 768px) {
   .page-header {
     flex-direction: column;
+  }
+}
+
+@media (max-width: 576px) {
+  .radar-metric-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

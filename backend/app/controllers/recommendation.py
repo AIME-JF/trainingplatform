@@ -39,6 +39,15 @@ class RecommendationController:
             logger.error(f"获取推荐流异常: {e}")
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='获取推荐流失败')
 
+    def get_community_board_dashboard(self, current_user_id: int, user_permissions: list, range_key: str = '7d'):
+        try:
+            return self.service.get_community_board_dashboard(current_user_id, user_permissions, range_key)
+        except ValueError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        except Exception as e:
+            logger.error(f"鑾峰彇绀惧尯鐪嬫澘寮傚父: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail='鑾峰彇绀惧尯鐪嬫澘澶辫触')
+
     def like_resource(self, resource_id: int, current_user_id: int, user_permissions: list):
         try:
             return self.service.like_resource(resource_id, current_user_id, user_permissions)

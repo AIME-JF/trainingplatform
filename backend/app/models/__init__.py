@@ -18,7 +18,7 @@ from .training import (
 from .exam import (
     KnowledgePoint, Question, QuestionFolder, ExamPaper, PaperFolder, ExamPaperQuestion,
     AdmissionExam, AdmissionExamRecord,
-    Exam, ExamQuestion, ExamRecord,
+    Exam, ExamQuestion, ExamRecord, ExamParticipant, ExamParticipantImportBatch,
     question_knowledge_point_relations,
     question_folder_course_relations,
 )
@@ -68,7 +68,7 @@ __all__ = [
     # 考试相关
     "KnowledgePoint", "Question", "QuestionFolder", "ExamPaper", "PaperFolder", "ExamPaperQuestion",
     "AdmissionExam", "AdmissionExamRecord",
-    "Exam", "ExamQuestion", "ExamRecord",
+    "Exam", "ExamQuestion", "ExamRecord", "ExamParticipant", "ExamParticipantImportBatch",
     "question_knowledge_point_relations",
     "question_folder_course_relations",
     "AITask",

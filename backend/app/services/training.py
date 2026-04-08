@@ -295,8 +295,9 @@ class TrainingService:
         self.db.add(training)
         self.db.flush()
 
-        if data.admission_exam_id:
-            self._bind_admission_exam(training, data.admission_exam_id)
+        selected_entry_exam_id = data.entry_exam_id or data.admission_exam_id
+        if selected_entry_exam_id:
+            self._bind_entry_exam(training, selected_entry_exam_id)
 
         self._replace_courses(training.id, data.courses or [])
         self.db.commit()
@@ -318,6 +319,7 @@ class TrainingService:
             joinedload(Training.courses).joinedload(TrainingCourse.primary_instructor),
             joinedload(Training.enrollments).joinedload(Enrollment.user).joinedload(User.departments),
             joinedload(Training.admission_exam),
+            joinedload(Training.entry_exam),
             joinedload(Training.exam_sessions).joinedload(Exam.paper).joinedload(ExamPaper.paper_questions),
         ).filter(Training.id == training_id).first()
         if not training:
@@ -356,8 +358,11 @@ class TrainingService:
             for key in ("status", "start_date", "end_date", "name", "type")
         )
         admission_exam_id = None
+        entry_exam_id = None
         if "admission_exam_id" in update_data:
             admission_exam_id = update_data.pop("admission_exam_id")
+        if "entry_exam_id" in update_data:
+            entry_exam_id = update_data.pop("entry_exam_id")
         schedule_rule_config = _UNSET
         if "schedule_rule_config" in update_data:
             schedule_rule_config = update_data.pop("schedule_rule_config")
@@ -395,10 +400,12 @@ class TrainingService:
                 schedule_rule_config
             )
 
-        if admission_exam_id is not None:
+        selected_entry_exam_id = entry_exam_id if entry_exam_id is not None else admission_exam_id
+        if selected_entry_exam_id is not None:
             training.admission_exam_id = None
-            if admission_exam_id:
-                self._bind_admission_exam(training, admission_exam_id)
+            training.entry_exam_id = None
+            if selected_entry_exam_id:
+                self._bind_entry_exam(training, selected_entry_exam_id)
 
         if courses is not None:
             self._assert_training_course_editable(training, "修改课程安排")
@@ -974,7 +981,16 @@ class TrainingService:
         if existing:
             raise ValueError("已报名该培训班")
 
-        if training.admission_exam_id:
+        if training.entry_exam_id:
+            passed = self.db.query(ExamRecord.id).filter(
+                ExamRecord.exam_id == training.entry_exam_id,
+                ExamRecord.user_id == user_id,
+                ExamRecord.result == "pass",
+                ExamRecord.status == "submitted",
+            ).first()
+            if not passed:
+                raise ValueError("该培训班要求先通过入口考试")
+        elif training.admission_exam_id:
             passed = self.db.query(AdmissionExamRecord.id).filter(
                 AdmissionExamRecord.admission_exam_id == training.admission_exam_id,
                 AdmissionExamRecord.user_id == user_id,
@@ -2434,11 +2450,18 @@ class TrainingService:
             changed_user_ids.append(enrollment.user_id)
         return changed_user_ids
 
-    def _bind_admission_exam(self, training: Training, exam_id: int) -> None:
-        exam = self.db.query(AdmissionExam).filter(AdmissionExam.id == exam_id).first()
-        if not exam:
-            raise ValueError("准入考试不存在")
+    def _bind_entry_exam(self, training: Training, exam_id: int) -> None:
+        exam = self.db.query(Exam).filter(Exam.id == exam_id).first()
+        if exam:
+            training.entry_exam_id = exam_id
+            if (exam.purpose or "") == "admission":
+                training.admission_exam_id = None
+            return
+        legacy_exam = self.db.query(AdmissionExam).filter(AdmissionExam.id == exam_id).first()
+        if not legacy_exam:
+            raise ValueError("入口考试不存在")
         training.admission_exam_id = exam_id
+        training.entry_exam_id = None
 
     def _ensure_department(self, department_id: Optional[int]) -> Optional[Department]:
         if not department_id:
@@ -3135,7 +3158,9 @@ class TrainingService:
             locked_at=training.locked_at,
             is_locked=training.locked_at is not None,
             admission_exam_id=training.admission_exam_id,
-            admission_exam_title=training.admission_exam.title if training.admission_exam else None,
+            admission_exam_title=training.admission_exam.title if training.admission_exam else (training.entry_exam.title if training.entry_exam else None),
+            entry_exam_id=training.entry_exam_id,
+            entry_exam_title=training.entry_exam.title if training.entry_exam else (training.admission_exam.title if training.admission_exam else None),
             group_names=group_names,
             cadre_count=cadre_count,
             schedule_rule_config=schedule_rule_config,
@@ -3227,7 +3252,9 @@ class TrainingService:
             enrollment_end_at=training.enrollment_end_at,
             is_locked=training.locked_at is not None,
             admission_exam_id=training.admission_exam_id,
-            admission_exam_title=training.admission_exam.title if training.admission_exam else None,
+            admission_exam_title=training.admission_exam.title if training.admission_exam else (training.entry_exam.title if training.entry_exam else None),
+            entry_exam_id=training.entry_exam_id,
+            entry_exam_title=training.entry_exam.title if training.entry_exam else (training.admission_exam.title if training.admission_exam else None),
             current_step_key=self._resolve_current_step_key(training),
             current_enrollment_status=current_enrollment_status,
             can_enter_training=current_enrollment_status == "approved",

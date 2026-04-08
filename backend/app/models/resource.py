@@ -31,6 +31,7 @@ class Resource(Base):
     offline_at = Column(DateTime(timezone=True), nullable=True, comment='下线时间')
 
     view_count = Column(Integer, default=0, comment='浏览次数')
+    play_count = Column(Integer, default=0, comment='播放次数')
     like_count = Column(Integer, default=0, comment='点赞次数')
     share_count = Column(Integer, default=0, comment='转发次数')
     comment_count = Column(Integer, default=0, comment='评论次数')

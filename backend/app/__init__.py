@@ -113,38 +113,21 @@ def startup_event():
     else:
         logger.info("Automatic database migration is disabled")
 
-    if settings.AUTO_MIGRATE_ON_STARTUP:
-        try:
-            from app.database.auto_migrate import (
-                ensure_schema_compatibility,
-                is_database_empty,
-            )
-
-            if is_database_empty():
-                logger.info("Database is empty; skipping pre-init schema compatibility check and allowing bootstrap")
-            else:
-                logger.info("Validating critical database schema compatibility before table initialization...")
-                ensure_schema_compatibility()
-        except Exception as e:
-            logger.error(f"Database schema compatibility check failed before table initialization: {e}")
-            raise
-
     try:
-        logger.info("Ensuring declared tables exist...")
+        logger.info("Ensuring declared tables and bootstrap columns exist...")
         init_db()
     except Exception as e:
         logger.error(f"Database initialization failed during startup: {e}")
         raise
 
-    if not settings.AUTO_MIGRATE_ON_STARTUP:
-        try:
-            from app.database.auto_migrate import ensure_schema_compatibility
+    try:
+        from app.database.auto_migrate import ensure_schema_compatibility
 
-            logger.info("Validating critical database schema compatibility after table initialization...")
-            ensure_schema_compatibility()
-        except Exception as e:
-            logger.error(f"Database schema compatibility check failed after table initialization: {e}")
-            raise
+        logger.info("Validating migration-tracked schema compatibility after bootstrap...")
+        ensure_schema_compatibility()
+    except Exception as e:
+        logger.error(f"Database schema compatibility check failed after bootstrap: {e}")
+        raise
 
     try:
         from app.database import test_redis_connection

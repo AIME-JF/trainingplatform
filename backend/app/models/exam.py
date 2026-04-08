@@ -218,7 +218,7 @@ class AdmissionExam(Base):
 
 
 class Exam(Base):
-    """培训班内考试表"""
+    """统一考试表"""
 
     __tablename__ = "exams"
 
@@ -231,13 +231,29 @@ class Exam(Base):
     passing_score = Column(Integer, default=60, comment="及格分")
     status = Column(String(50), default="upcoming", comment="状态: active/upcoming/ended")
     type = Column(String(50), default="formal", comment="展示类型: formal/quiz")
+    scene = Column(String(30), default="training", comment="考试场景: training/standalone")
+    participant_mode = Column(
+        String(30),
+        default="training_enrollment",
+        comment="参试方式: training_enrollment/excel_import",
+    )
     purpose = Column(
         String(50),
-        default="class_assessment",
-        comment="用途: class_assessment/final_assessment/quiz/makeup",
+        default="completion",
+        comment="用途: admission/completion/quiz/makeup/special/other",
     )
     training_id = Column(Integer, ForeignKey("trainings.id"), nullable=True, comment="关联培训班ID")
     course_ids = Column(JSON, nullable=True, comment="显式绑定课程ID列表")
+    department_ids = Column(JSON, nullable=True, comment="目标部门ID列表")
+    police_type_ids = Column(JSON, nullable=True, comment="目标警种ID列表")
+    participant_summary = Column(Text, nullable=True, comment="参试对象摘要")
+    legacy_admission_exam_id = Column(
+        Integer,
+        ForeignKey("admission_exams.id"),
+        nullable=True,
+        unique=True,
+        comment="兼容旧准入考试ID",
+    )
     max_attempts = Column(Integer, default=1, comment="最大作答次数")
     allow_makeup = Column(Boolean, default=False, comment="是否允许补考")
     start_time = Column(DateTime(timezone=True), nullable=True, comment="开始时间")
@@ -255,12 +271,23 @@ class Exam(Base):
         back_populates="exam",
         cascade="all, delete-orphan",
     )
+    participants = relationship(
+        "ExamParticipant",
+        back_populates="exam",
+        cascade="all, delete-orphan",
+    )
+    participant_import_batches = relationship(
+        "ExamParticipantImportBatch",
+        back_populates="exam",
+        cascade="all, delete-orphan",
+    )
     exam_questions = relationship(
         "ExamQuestion",
         foreign_keys="ExamQuestion.exam_id",
         back_populates="exam",
         cascade="all, delete-orphan",
     )
+    legacy_admission_exam = relationship("AdmissionExam", foreign_keys=[legacy_admission_exam_id])
 
 
 class ExamQuestion(Base):
@@ -284,6 +311,63 @@ class ExamQuestion(Base):
     knowledge_points = Column(JSON, nullable=True, comment="知识点快照")
 
     exam = relationship("Exam", foreign_keys=[exam_id], back_populates="exam_questions")
+
+
+class ExamParticipantImportBatch(Base):
+    """考试参试名单导入批次表"""
+
+    __tablename__ = "exam_participant_import_batches"
+
+    id = Column(Integer, primary_key=True, index=True)
+    exam_id = Column(Integer, ForeignKey("exams.id", ondelete="CASCADE"), nullable=False, comment="考试ID")
+    file_name = Column(String(255), nullable=True, comment="导入文件名")
+    status = Column(String(30), default="preview", comment="状态: preview/confirmed")
+    summary = Column(JSON, nullable=True, comment="导入汇总")
+    failure_rows = Column(JSON, nullable=True, comment="失败行清单")
+    created_by = Column(Integer, ForeignKey("users.id"), nullable=True, comment="创建人ID")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), comment="更新时间")
+
+    exam = relationship("Exam", back_populates="participant_import_batches")
+    creator = relationship("User", foreign_keys=[created_by])
+    participants = relationship(
+        "ExamParticipant",
+        back_populates="import_batch",
+        cascade="all, delete-orphan",
+    )
+
+
+class ExamParticipant(Base):
+    """考试参试人员表"""
+
+    __tablename__ = "exam_participants"
+
+    id = Column(Integer, primary_key=True, index=True)
+    exam_id = Column(Integer, ForeignKey("exams.id", ondelete="CASCADE"), nullable=False, comment="考试ID")
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, comment="用户ID")
+    import_batch_id = Column(
+        Integer,
+        ForeignKey("exam_participant_import_batches.id", ondelete="SET NULL"),
+        nullable=True,
+        comment="导入批次ID",
+    )
+    source_row_no = Column(Integer, nullable=True, comment="Excel 行号")
+    source_snapshot = Column(JSON, nullable=True, comment="导入原始快照")
+    match_status = Column(String(30), default="matched", comment="匹配状态: matched/created")
+    participation_status = Column(
+        String(30),
+        default="assigned",
+        comment="参试状态: assigned/submitted/absent",
+    )
+    generated_password = Column(String(100), nullable=True, comment="自动创建账号时生成的初始密码")
+    password_exported_at = Column(DateTime(timezone=True), nullable=True, comment="初始密码导出时间")
+    assigned_at = Column(DateTime(timezone=True), server_default=func.now(), comment="分配时间")
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="创建时间")
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), comment="更新时间")
+
+    exam = relationship("Exam", back_populates="participants")
+    user = relationship("User", foreign_keys=[user_id])
+    import_batch = relationship("ExamParticipantImportBatch", back_populates="participants")
 
 
 class AdmissionExamRecord(Base):

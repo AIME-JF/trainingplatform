@@ -19,6 +19,26 @@ ADMISSION_SCOPE_CHOICES = {
     ADMISSION_SCOPE_DEPARTMENT,
     ADMISSION_SCOPE_ROLE,
 }
+EXAM_SCENE_TRAINING = "training"
+EXAM_SCENE_STANDALONE = "standalone"
+EXAM_SCENE_CHOICES = {
+    EXAM_SCENE_TRAINING,
+    EXAM_SCENE_STANDALONE,
+}
+EXAM_PARTICIPANT_MODE_TRAINING = "training_enrollment"
+EXAM_PARTICIPANT_MODE_EXCEL = "excel_import"
+EXAM_PARTICIPANT_MODE_CHOICES = {
+    EXAM_PARTICIPANT_MODE_TRAINING,
+    EXAM_PARTICIPANT_MODE_EXCEL,
+}
+EXAM_PURPOSE_CHOICES = {
+    "admission",
+    "completion",
+    "quiz",
+    "makeup",
+    "special",
+    "other",
+}
 
 
 def _normalize_admission_scope_type(value: Optional[str], allow_none: bool = False) -> Optional[str]:
@@ -27,6 +47,33 @@ def _normalize_admission_scope_type(value: Optional[str], allow_none: bool = Fal
     normalized = str(value).strip() or ADMISSION_SCOPE_ALL
     if normalized not in ADMISSION_SCOPE_CHOICES:
         raise ValueError(f"不支持的适用范围类型: {normalized}")
+    return normalized
+
+
+def _normalize_exam_scene(value: Optional[str], allow_none: bool = False) -> Optional[str]:
+    if value is None:
+        return None if allow_none else EXAM_SCENE_TRAINING
+    normalized = str(value).strip() or EXAM_SCENE_TRAINING
+    if normalized not in EXAM_SCENE_CHOICES:
+        raise ValueError(f"不支持的考试场景: {normalized}")
+    return normalized
+
+
+def _normalize_participant_mode(value: Optional[str], allow_none: bool = False) -> Optional[str]:
+    if value is None:
+        return None if allow_none else EXAM_PARTICIPANT_MODE_TRAINING
+    normalized = str(value).strip() or EXAM_PARTICIPANT_MODE_TRAINING
+    if normalized not in EXAM_PARTICIPANT_MODE_CHOICES:
+        raise ValueError(f"不支持的参试方式: {normalized}")
+    return normalized
+
+
+def _normalize_exam_purpose(value: Optional[str], allow_none: bool = False) -> Optional[str]:
+    if value is None:
+        return None if allow_none else "completion"
+    normalized = str(value).strip() or "completion"
+    if normalized not in EXAM_PURPOSE_CHOICES:
+        raise ValueError(f"不支持的考试类型: {normalized}")
     return normalized
 
 
@@ -441,7 +488,7 @@ class AdmissionExamDetailResponse(AdmissionExamResponse):
 
 
 class ExamCreate(BaseModel):
-    """创建培训班内考试"""
+    """创建统一考试"""
 
     title: str = Field(..., max_length=200, description="场次标题")
     paper_id: int = Field(..., description="关联试卷ID")
@@ -450,22 +497,50 @@ class ExamCreate(BaseModel):
     passing_score: Optional[int] = Field(None, ge=1, description="及格分")
     status: str = Field("upcoming", description="状态")
     type: Optional[str] = Field(None, description="展示类型: formal/quiz")
-    purpose: str = Field("class_assessment", description="用途")
+    scene: str = Field(EXAM_SCENE_TRAINING, description="考试场景: training/standalone")
+    participant_mode: str = Field(
+        EXAM_PARTICIPANT_MODE_TRAINING,
+        description="参试方式: training_enrollment/excel_import",
+    )
+    purpose: str = Field("completion", description="考试类型")
     training_id: Optional[int] = Field(None, description="关联培训班ID，可为空")
     course_ids: List[int] = Field(default_factory=list, description="显式绑定课程ID列表")
+    department_ids: List[int] = Field(default_factory=list, description="目标部门ID列表")
+    police_type_ids: List[int] = Field(default_factory=list, description="目标警种ID列表")
+    participant_summary: Optional[str] = Field(None, description="参试对象摘要")
     max_attempts: int = Field(1, ge=1, le=10, description="最大作答次数")
     allow_makeup: bool = Field(False, description="是否允许补考")
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
+
+    @field_validator("scene", mode="before")
+    @classmethod
+    def validate_scene(cls, value: Optional[str]) -> str:
+        return _normalize_exam_scene(value) or EXAM_SCENE_TRAINING
+
+    @field_validator("participant_mode", mode="before")
+    @classmethod
+    def validate_participant_mode(cls, value: Optional[str]) -> str:
+        return _normalize_participant_mode(value) or EXAM_PARTICIPANT_MODE_TRAINING
+
+    @field_validator("purpose", mode="before")
+    @classmethod
+    def validate_purpose(cls, value: Optional[str]) -> str:
+        return _normalize_exam_purpose(value) or "completion"
 
     @field_validator("course_ids", mode="before")
     @classmethod
     def validate_course_ids(cls, value: Any) -> List[int]:
         return _normalize_admission_scope_target_ids(value) or []
 
+    @field_validator("department_ids", "police_type_ids", mode="before")
+    @classmethod
+    def validate_target_ids(cls, value: Any) -> List[int]:
+        return _normalize_admission_scope_target_ids(value) or []
+
 
 class ExamUpdate(BaseModel):
-    """更新培训班内考试"""
+    """更新统一考试"""
 
     title: Optional[str] = Field(None, max_length=200)
     paper_id: Optional[int] = Field(None, description="关联试卷ID")
@@ -474,25 +549,52 @@ class ExamUpdate(BaseModel):
     passing_score: Optional[int] = Field(None, ge=1)
     status: Optional[str] = None
     type: Optional[str] = None
+    scene: Optional[str] = None
+    participant_mode: Optional[str] = None
     purpose: Optional[str] = None
     training_id: Optional[int] = None
     course_ids: Optional[List[int]] = Field(None, description="显式绑定课程ID列表")
+    department_ids: Optional[List[int]] = Field(None, description="目标部门ID列表")
+    police_type_ids: Optional[List[int]] = Field(None, description="目标警种ID列表")
+    participant_summary: Optional[str] = None
     max_attempts: Optional[int] = Field(None, ge=1, le=10)
     allow_makeup: Optional[bool] = None
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
+
+    @field_validator("scene", mode="before")
+    @classmethod
+    def validate_scene(cls, value: Optional[str]) -> Optional[str]:
+        return _normalize_exam_scene(value, allow_none=True)
+
+    @field_validator("participant_mode", mode="before")
+    @classmethod
+    def validate_participant_mode(cls, value: Optional[str]) -> Optional[str]:
+        return _normalize_participant_mode(value, allow_none=True)
+
+    @field_validator("purpose", mode="before")
+    @classmethod
+    def validate_purpose(cls, value: Optional[str]) -> Optional[str]:
+        return _normalize_exam_purpose(value, allow_none=True)
 
     @field_validator("course_ids", mode="before")
     @classmethod
     def validate_course_ids(cls, value: Any) -> Optional[List[int]]:
         return _normalize_admission_scope_target_ids(value, allow_none=True)
 
+    @field_validator("department_ids", "police_type_ids", mode="before")
+    @classmethod
+    def validate_target_ids(cls, value: Any) -> Optional[List[int]]:
+        return _normalize_admission_scope_target_ids(value, allow_none=True)
+
 
 class ExamResponse(BaseModel):
-    """培训班内考试响应"""
+    """统一考试响应"""
 
     id: int
     kind: str = "training"
+    scene: str = EXAM_SCENE_TRAINING
+    participant_mode: str = EXAM_PARTICIPANT_MODE_TRAINING
     paper_id: Optional[int] = None
     paper_title: Optional[str] = None
     paper_status: Optional[str] = None
@@ -503,19 +605,27 @@ class ExamResponse(BaseModel):
     passing_score: int = 60
     status: str = "upcoming"
     type: str = "formal"
-    purpose: str = "class_assessment"
+    purpose: str = "completion"
     training_id: Optional[int] = None
     training_name: Optional[str] = None
     course_id: Optional[int] = None
     course_name: Optional[str] = None
     course_ids: List[int] = Field(default_factory=list)
     course_names: List[str] = Field(default_factory=list)
+    department_ids: List[int] = Field(default_factory=list)
+    police_type_ids: List[int] = Field(default_factory=list)
+    department_names: List[str] = Field(default_factory=list)
+    police_type_names: List[str] = Field(default_factory=list)
+    participant_summary: Optional[str] = None
     max_attempts: int = 1
     allow_makeup: bool = False
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     created_by: Optional[int] = None
     question_count: int = 0
+    participant_count: int = 0
+    submitted_count: int = 0
+    absent_count: int = 0
     attempt_count: int = 0
     latest_result: Optional[str] = None
     can_join: Optional[bool] = None
@@ -569,11 +679,12 @@ class AdmissionExamRecordResponse(BaseModel):
 
 
 class ExamRecordResponse(BaseModel):
-    """培训班考试记录响应"""
+    """统一考试记录响应"""
 
     id: int
     exam_id: int
     kind: str = "training"
+    scene: str = EXAM_SCENE_TRAINING
     paper_id: Optional[int] = None
     exam_title: Optional[str] = None
     user_id: int
@@ -596,3 +707,56 @@ class ExamRecordResponse(BaseModel):
     dimension_scores: Dict[str, Any] = Field(default_factory=dict)
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class ExamParticipantResponse(BaseModel):
+    """考试参试人员响应"""
+
+    id: int
+    exam_id: int
+    user_id: int
+    user_name: Optional[str] = None
+    user_nickname: Optional[str] = None
+    police_id: Optional[str] = None
+    phone: Optional[str] = None
+    departments: List[str] = Field(default_factory=list)
+    police_types: List[str] = Field(default_factory=list)
+    match_status: str = "matched"
+    participation_status: str = "assigned"
+    source_row_no: Optional[int] = None
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ExamParticipantImportRowResponse(BaseModel):
+    """考试名单导入单行结果"""
+
+    row_no: int
+    name: Optional[str] = None
+    police_id: Optional[str] = None
+    phone: Optional[str] = None
+    id_card_number: Optional[str] = None
+    username: Optional[str] = None
+    status: str
+    reason: Optional[str] = None
+    user_id: Optional[int] = None
+    generated_password: Optional[str] = None
+
+
+class ExamParticipantImportPreviewResponse(BaseModel):
+    """考试名单导入预检响应"""
+
+    batch_id: Optional[int] = None
+    exam_id: Optional[int] = None
+    file_name: Optional[str] = None
+    summary: Dict[str, Any] = Field(default_factory=dict)
+    matched_rows: List[ExamParticipantImportRowResponse] = Field(default_factory=list)
+    created_rows: List[ExamParticipantImportRowResponse] = Field(default_factory=list)
+    failed_rows: List[ExamParticipantImportRowResponse] = Field(default_factory=list)
+
+
+class ExamParticipantImportConfirmRequest(BaseModel):
+    """确认考试名单导入"""
+
+    batch_id: int = Field(..., description="导入预检批次ID")

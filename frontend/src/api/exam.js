@@ -52,6 +52,10 @@ export function getExams(params) {
     return request.get('/exams', { params })
 }
 
+export function getExamDashboard(params) {
+    return request.get('/exams/dashboard', { params })
+}
+
 export function getAdmissionExams(params) {
     return request.get('/exams/admission', { params })
 }
@@ -118,4 +122,34 @@ export function getExamScores(id, params) {
 
 export function getAdmissionExamScores(id, params) {
     return request.get(`/exams/admission/${id}/scores`, { params })
+}
+
+export function downloadExamParticipantImportTemplate() {
+    return request.get('/exams/participants/import/template', {
+        responseType: 'blob',
+    })
+}
+
+export function previewExamParticipantImport(examId, file) {
+    const formData = new FormData()
+    formData.append('file', file)
+    return request.post(`/exams/${examId}/participants/import/preview`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+    })
+}
+
+export function confirmExamParticipantImport(batchId) {
+    return request.post('/exams/participants/import/confirm', {
+        batchId,
+    })
+}
+
+export function getExamParticipants(examId) {
+    return request.get(`/exams/${examId}/participants`)
+}
+
+export function exportExamParticipantImportResult(batchId) {
+    return request.get(`/exams/participants/import/${batchId}/export`, {
+        responseType: 'blob',
+    })
 }

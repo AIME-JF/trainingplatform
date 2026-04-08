@@ -961,6 +961,7 @@ class ResourceService:
             cover_media_file_id=resource.cover_media_file_id,
             cover_url=self._build_media_url(resource.cover_media),
             tags=tags,
+            play_count=int(resource.play_count or 0),
             like_count=int(resource.like_count or 0),
             share_count=int(resource.share_count or 0),
             comment_count=int(resource.comment_count or 0),

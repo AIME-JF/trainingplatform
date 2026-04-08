@@ -1,3 +1,5 @@
+import request from './request'
+
 function cloneData(value) {
   return Promise.resolve(JSON.parse(JSON.stringify(value)))
 }
@@ -187,7 +189,5 @@ export function getCommunityAssistantDashboard() {
 }
 
 export function getCommunityBoardDashboard(params = {}) {
-  // TODO: replace with request.get('/community/board/dashboard', { params })
-  const range = params.range || '7d'
-  return cloneData(boardDashboards[range] || boardDashboards['7d'])
+  return request.get('/community/board/dashboard', { params })
 }

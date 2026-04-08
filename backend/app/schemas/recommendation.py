@@ -24,6 +24,51 @@ class ResourceRecommendationFeedResponse(BaseModel):
     total: int
 
 
+class CommunityBoardOverviewResponse(BaseModel):
+    submission_count: int = 0
+    total_videos: int = 0
+    total_plays: int = 0
+    total_likes: int = 0
+    total_comments: int = 0
+    total_shares: int = 0
+    engagement_rate: float = 0
+    completion_rate: float = 0
+
+
+class CommunityBoardTrendItem(BaseModel):
+    date: str
+    plays: int = 0
+    likes: int = 0
+    comments: int = 0
+    shares: int = 0
+
+
+class CommunityBoardInteractionItem(BaseModel):
+    name: str
+    value: int = 0
+
+
+class CommunityBoardVideoItem(BaseModel):
+    id: int
+    title: str
+    category: str = '视频'
+    uploader_name: Optional[str] = None
+    plays: int = 0
+    likes: int = 0
+    comments: int = 0
+    shares: int = 0
+    engagement_rate: float = 0
+    completion_rate: float = 0
+
+
+class CommunityBoardDashboardResponse(BaseModel):
+    overview: CommunityBoardOverviewResponse
+    trend: List[CommunityBoardTrendItem]
+    interaction_distribution: List[CommunityBoardInteractionItem]
+    top_videos: List[CommunityBoardVideoItem]
+    latest_videos: List[CommunityBoardVideoItem]
+
+
 class RecommendationScoreBreakdown(BaseModel):
     resource_id: int
     score: float

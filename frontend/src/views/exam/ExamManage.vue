@@ -1,1288 +1,908 @@
 <template>
   <div class="exam-manage-page">
-    <!-- 主体内容 -->
-    <main class="main-content">
-      <div class="content-wrapper">
-
-        <!-- 1. 二级导航与快捷操作入口 -->
-        <div class="sub-nav-bar">
-          <div class="sub-nav-left">
-            <span :class="['sub-nav-item', { active: activeNav === 'exam' }]" @click="activeNav = 'exam'">考试中心</span>
-          </div>
-        </div>
-
-        <!-- 2. 统一的大边框容器 -->
-        <div class="main-container">
-
-          <!-- 第一层：操作与搜索过滤 -->
-          <div class="toolbar-row">
-            <div class="toolbar-left">
-              <button class="btn-primary" @click="openCreateDrawer">
-                添加准入考试
-              </button>
-              <a-popconfirm
-                title="培训班考试需要在培训班内添加"
-                description="请到培训管理 → 培训班列表，进入培训班后在「考试安排」中添加考试。"
-                ok-text="前往培训班列表"
-                cancel-text="知道了"
-                @confirm="router.push({ name: 'TrainingList' })"
-              >
-                <button class="btn-default">
-                  添加培训班考试
-                </button>
-              </a-popconfirm>
-              <div class="search-wrapper">
-                <svg class="search-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
-                <a-input-search v-model:value="searchText" placeholder="请输入关键字搜索..." allow-clear @search="handleSearch" class="search-input" />
-              </div>
-            </div>
-
-            <div class="toolbar-right">
-              <select v-model="filterExamType" class="input-minimal filter-select">
-                <option value="admission">准入考试</option>
-                <option value="training">培训班考试</option>
-              </select>
-              <select v-model="filterStatusSelect" class="input-minimal filter-select-sm">
-                <option value="">全部</option>
-                <option value="upcoming">未开始</option>
-                <option value="active">进行中</option>
-                <option value="ended">已结束</option>
-              </select>
-            </div>
-          </div>
-
-          <!-- 第二层：状态与评分切换 -->
-          <div class="filter-row">
-            <div class="filter-left">
-              <span class="filter-label">状态:</span>
-              <div class="status-tabs">
-                <span v-for="tab in statusTabs" :key="tab.value" :class="['status-tab', { active: currentStatusTab === tab.value }]" @click="switchStatusTab(tab.value)">{{ tab.label }}</span>
-              </div>
-            </div>
-          </div>
-
-          <!-- 第三层：表格数据 -->
-          <div class="table-wrapper">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th class="col-check">
-                    <a-checkbox v-model:checked="selectAll" @change="handleSelectAll" />
-                  </th>
-                  <th class="col-index">序号</th>
-                  <th class="col-name">考试名称</th>
-                  <th class="col-count text-center">考试人员</th>
-                  <th class="col-time text-center">考试开放时间</th>
-                  <th class="col-status text-center">状态</th>
-                  <th class="col-paper">所用试卷</th>
-                  <th class="col-type text-center">类型</th>
-                  <th class="col-category text-center">分类</th>
-                  <th class="col-training text-center">关联班级</th>
-                  <th class="col-action text-right">操作</th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-slate-50">
-                <tr v-for="(exam, idx) in examList" :key="exam.id" class="table-row">
-                  <td class="col-check">
-                    <a-checkbox :checked="selectedIds.includes(exam.id)" @change="toggleSelect(exam.id, $event)" />
-                  </td>
-                  <td class="col-index text-slate-400">{{ (pagination.current - 1) * pagination.pageSize + idx + 1 }}</td>
-                  <td class="col-name">
-                    <div class="name-cell">
-                      <span class="name-text" @click="openEditDrawer(exam)">{{ exam.title }}</span>
-                      <svg v-if="exam.relatedTrainingId" class="link-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
-                    </div>
-                  </td>
-                  <td class="col-count text-center">
-                    <span class="count-actual" :class="{ 'has-data': exam.actualCount > 0 }">{{ exam.actualCount ?? 0 }}</span>
-                    <span class="count-sep">/</span>
-                    <span class="count-total">{{ exam.expectedCount ?? '-' }}</span>
-                  </td>
-                  <td class="col-time text-center">
-                    <div v-if="exam.startTime && exam.endTime" class="time-cell">
-                      <div class="time-text">{{ formatDateTime(exam.startTime) }}</div>
-                      <div class="time-text">{{ formatDateTime(exam.endTime) }}</div>
-                    </div>
-                    <div v-else class="time-placeholder">~</div>
-                  </td>
-                  <td class="col-status text-center">
-                    <span class="status-pill" :class="getStatusPillClass(exam.status)">{{ statusLabels[exam.status] || exam.status }}</span>
-                  </td>
-                  <td class="col-paper">
-                    <span class="paper-link" @click="goToPaperDetail(exam.paperId)">{{ exam.paperTitle || '-' }}</span>
-                  </td>
-                  <td class="col-type text-center text-slate-600">{{ exam.type === 'formal' ? '线上' : '测验' }}</td>
-                  <td class="col-category text-center text-slate-600">{{ exam.courseNames?.length ? exam.courseNames.join('、') : (exam.courseName || '默认分类') }}</td>
-                  <td class="col-training text-center text-slate-600">{{ exam.training_name || '-' }}</td>
-                  <td class="col-action text-right">
-                    <div class="action-btns">
-                      <button class="btn-link" @click="handleAction('edit', exam)">编辑</button>
-                      <button class="btn-link" @click="handleAction('view', exam)">查看详情</button>
-                      <button class="btn-link" @click="handleAction('viewScores', exam)">考试情况</button>
-                      <button class="btn-link btn-link-danger" @click="handleAction('delete', exam)">删除</button>
-                    </div>
-                  </td>
-                </tr>
-
-                <!-- 空状态 -->
-                <tr v-if="!loading && examList.length === 0">
-                  <td colspan="11" class="empty-cell">
-                    <div class="empty-content">
-                      <svg class="empty-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
-                      <span class="empty-text">暂无考试记录</span>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <!-- 第四层：说明与批量操作 -->
-          <div class="footer-area">
-            <!-- 说明文字 -->
-            <div class="notice-area">
-              <svg class="notice-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/></svg>
-              <div class="notice-text">
-                <p>说明：此图标表示该考试为关联培训或关联课程考试，培训或课程中添加的考试，请在培训或课程中进行修改或删除操作。</p>
-              </div>
-            </div>
-
-            <div class="footer-divider"></div>
-
-            <!-- 批量操作与分页 -->
-            <div class="footer-actions">
-              <div class="footer-left">
-                <label class="checkbox-label">
-                  <a-checkbox v-model:checked="selectAll" @change="handleSelectAll" />
-                  <span>全选</span>
-                </label>
-                <div class="batch-ops">
-                  <span class="batch-label">批量操作:</span>
-                  <button class="btn-batch btn-batch-danger" @click="handleBatchDelete">删除</button>
-                </div>
-              </div>
-
-              <div class="footer-right">
-                <div class="page-info">
-                  共 {{ pagination.total }} 条记录 <span class="page-sep">|</span> 每页 {{ pagination.pageSize }} 条
-                </div>
-                <div class="pagination-btns">
-                  <button class="page-btn" :class="{ disabled: pagination.current === 1 }" :disabled="pagination.current === 1" @click="handlePageChange(pagination.current - 1)">
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M15 19l-7-7 7-7"/></svg>
-                  </button>
-                  <button v-for="page in visiblePages" :key="page" class="page-btn" :class="{ 'page-btn-active': page === pagination.current }" @click="handlePageChange(page)">{{ page }}</button>
-                  <button class="page-btn" :class="{ disabled: pagination.current === totalPages }" :disabled="pagination.current === totalPages" @click="handlePageChange(pagination.current + 1)">
-                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M9 5l7 7-7 7"/></svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-
-        </div>
-
+    <section class="page-hero">
+      <div>
+        <div class="hero-kicker">Unified Exam Center</div>
+        <h2>统一考试管理</h2>
+        <p>统一管理独立考试与培训班考试，独立考试支持 Excel 名单导入，培训班考试直接关联班级学员。</p>
       </div>
-    </main>
+      <div class="hero-actions">
+        <a-button v-if="!routeTrainingLocked" type="primary" size="large" @click="openCreateDrawer('standalone')">创建独立考试</a-button>
+        <a-button size="large" @click="openCreateDrawer('training')">{{ routeTrainingLocked ? '为当前培训班创建考试' : '创建培训班考试' }}</a-button>
+        <a-button size="large" @click="loadAllData">刷新数据</a-button>
+      </div>
+    </section>
 
-    <!-- 抽屉 -->
-    <a-drawer v-model:open="drawerVisible" :title="drawerTitle" width="760" @close="resetForm">
-      <a-form :model="form" layout="vertical">
-        <a-row :gutter="16">
-          <a-col :span="24">
-            <a-form-item label="场次名称" required>
-              <a-input v-model:value="form.title" placeholder="请输入考试场次名称" :disabled="isViewOnly" />
+    <section class="dashboard-grid">
+      <article class="metric-card">
+        <span class="metric-label">考试总量</span>
+        <strong>{{ dashboard.totalExams }}</strong>
+        <small>统一统计独立考试与培训班考试</small>
+      </article>
+      <article class="metric-card">
+        <span class="metric-label">独立考试</span>
+        <strong>{{ dashboard.standaloneExams }}</strong>
+        <small>专项考试、准入制考试等独立场景</small>
+      </article>
+      <article class="metric-card">
+        <span class="metric-label">培训班考试</span>
+        <strong>{{ dashboard.trainingExams }}</strong>
+        <small>培训班内结课考核与测验</small>
+      </article>
+      <article class="metric-card">
+        <span class="metric-label">进行中</span>
+        <strong>{{ dashboard.activeExams }}</strong>
+        <small>当前正在开放作答</small>
+      </article>
+      <article class="metric-card">
+        <span class="metric-label">近期待开考</span>
+        <strong>{{ dashboard.upcomingExams }}</strong>
+        <small>已发布但尚未开始的考试</small>
+      </article>
+    </section>
+
+    <section class="filter-card">
+      <div class="filter-row">
+        <a-input-search v-model:value="filters.search" placeholder="搜索考试名称、培训班或参试对象摘要" allow-clear class="search-input" @search="handleSearch" />
+        <a-select v-model:value="filters.scene" class="filter-select" @change="handleSceneChange">
+          <a-select-option value="all">全部考试</a-select-option>
+          <a-select-option value="standalone">独立考试</a-select-option>
+          <a-select-option value="training">培训班考试</a-select-option>
+        </a-select>
+        <a-select v-model:value="filters.purpose" allow-clear class="filter-select" placeholder="考试类型" @change="loadExams">
+          <a-select-option v-for="item in purposeOptions" :key="item.value" :value="item.value">{{ item.label }}</a-select-option>
+        </a-select>
+        <a-select v-model:value="filters.status" allow-clear class="filter-select" placeholder="状态" @change="loadExams">
+          <a-select-option value="upcoming">未开始</a-select-option>
+          <a-select-option value="active">进行中</a-select-option>
+          <a-select-option value="ended">已结束</a-select-option>
+        </a-select>
+        <a-select v-model:value="filters.departmentId" allow-clear show-search option-filter-prop="label" class="filter-select" placeholder="部门" @change="loadExams">
+          <a-select-option v-for="item in departmentOptions" :key="item.id" :value="item.id" :label="item.name">{{ item.name }}</a-select-option>
+        </a-select>
+        <a-select v-model:value="filters.policeTypeId" allow-clear show-search option-filter-prop="label" class="filter-select" placeholder="警种" @change="loadExams">
+          <a-select-option v-for="item in policeTypeOptions" :key="item.id" :value="item.id" :label="item.name">{{ item.name }}</a-select-option>
+        </a-select>
+      </div>
+      <div class="filter-hint">
+        <span v-if="routeTrainingLocked">当前已锁定到培训班 {{ routeTrainingId }}，列表仅展示该培训班考试。</span>
+        <span v-else>独立考试通过 Excel 名单导入参试对象，培训班考试直接使用班级名单。</span>
+      </div>
+    </section>
+
+    <section class="table-card">
+      <div class="table-head">
+        <div>
+          <h3>考试列表</h3>
+          <p>同一试卷可关联多场不同类型考试，列表统一展示场景、类型和参试统计。</p>
+        </div>
+        <a-button danger :disabled="!selectedRowKeys.length" @click="handleBatchDelete">批量删除</a-button>
+      </div>
+      <a-table row-key="id" :loading="loading" :columns="columns" :data-source="examList" :pagination="pagination" :row-selection="{ selectedRowKeys, onChange: onSelectChange }" @change="handleTableChange">
+        <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'title'">
+            <div class="title-cell">
+              <button class="link-button" @click="openViewDrawer(record)">{{ record.title }}</button>
+              <div class="title-meta">
+                <a-tag :color="record.scene === 'standalone' ? 'blue' : 'cyan'">{{ sceneLabelMap[record.scene] }}</a-tag>
+                <a-tag>{{ purposeLabelMap[record.purpose] || record.purpose || '其他考试' }}</a-tag>
+                <a-tag>{{ record.type === 'quiz' ? '测验' : '正式考试' }}</a-tag>
+              </div>
+            </div>
+          </template>
+          <template v-else-if="column.key === 'participants'">
+            <div class="stat-block"><strong>{{ record.participantCount ?? 0 }}</strong><span>应考</span></div>
+            <div class="stat-sub">已交卷 {{ record.submittedCount ?? 0 }} · 缺考 {{ record.absentCount ?? 0 }}</div>
+          </template>
+          <template v-else-if="column.key === 'training'">
+            <span>{{ record.trainingName || (record.scene === 'training' ? '未选择培训班' : '-') }}</span>
+          </template>
+          <template v-else-if="column.key === 'target'">
+            <div class="target-list">
+              <span>{{ record.participantSummary || (record.scene === 'standalone' ? '待导入名单' : '培训班已报名学员') }}</span>
+              <small v-if="record.departmentNames?.length">部门：{{ record.departmentNames.join('、') }}</small>
+              <small v-if="record.policeTypeNames?.length">警种：{{ record.policeTypeNames.join('、') }}</small>
+            </div>
+          </template>
+          <template v-else-if="column.key === 'time'">
+            <div class="time-cell"><span>{{ formatDateTime(record.startTime) }}</span><span>{{ formatDateTime(record.endTime) }}</span></div>
+          </template>
+          <template v-else-if="column.key === 'status'">
+            <a-tag :color="statusColorMap[record.status] || 'default'">{{ statusLabelMap[record.status] || record.status || '未设置' }}</a-tag>
+          </template>
+          <template v-else-if="column.key === 'actions'">
+            <a-space wrap>
+              <a-button type="link" @click="openEditDrawer(record)">编辑</a-button>
+              <a-button type="link" @click="openViewDrawer(record)">详情</a-button>
+              <a-button type="link" @click="goToScores(record)">考试情况</a-button>
+              <a-button v-if="record.scene === 'standalone'" type="link" @click="openImportModal(record)">导入名单</a-button>
+              <a-button type="link" danger @click="handleDelete(record)">删除</a-button>
+            </a-space>
+          </template>
+        </template>
+      </a-table>
+    </section>
+
+    <a-drawer :open="drawerVisible" :title="isViewOnly ? '考试详情' : (isEdit ? '编辑考试' : (form.scene === 'training' ? '创建培训班考试' : '创建独立考试'))" :width="860" @close="closeDrawer">
+      <a-form layout="vertical">
+        <div class="drawer-grid">
+          <section class="drawer-panel">
+            <h4>基础信息</h4>
+            <a-form-item label="考试名称" required>
+              <a-input v-model:value="form.title" :disabled="isViewOnly" placeholder="请输入考试场次名称" />
             </a-form-item>
-          </a-col>
-          <a-col :span="18">
+            <a-row :gutter="12">
+              <a-col :span="12">
+                <a-form-item label="考试场景" required>
+                  <a-select v-model:value="form.scene" :disabled="isViewOnly || routeTrainingLocked" @change="handleFormSceneChange">
+                    <a-select-option value="standalone">独立考试</a-select-option>
+                    <a-select-option value="training">培训班考试</a-select-option>
+                  </a-select>
+                </a-form-item>
+              </a-col>
+              <a-col :span="12">
+                <a-form-item label="考试类型" required>
+                  <a-select v-model:value="form.purpose" :disabled="isViewOnly">
+                    <a-select-option v-for="item in purposeOptions" :key="item.value" :value="item.value">{{ item.label }}</a-select-option>
+                  </a-select>
+                </a-form-item>
+              </a-col>
+            </a-row>
+            <a-form-item v-if="form.scene === 'training'" label="所属培训班" required>
+              <a-select v-model:value="form.trainingId" show-search option-filter-prop="label" :disabled="isViewOnly || routeTrainingLocked" :options="trainingOptions.map(item => ({ value: item.id, label: item.name }))" placeholder="请选择培训班" />
+            </a-form-item>
             <a-form-item label="关联试卷" required>
-              <a-select v-model:value="form.paperId" placeholder="请选择已发布试卷" :disabled="isEdit || isViewOnly" show-search option-filter-prop="label" @change="handlePaperChange" :options="availablePaperOptions.map(p => ({ value: p.id, label: p.title }))" />
-              <div class="paper-hint">
-                <span class="hint-text">考试只能选择已发布试卷；考试创建后不能再更换试卷</span>
-                <a-button type="link" size="small" :disabled="isViewOnly" @click="goToPaperManage">去试卷管理创建试卷</a-button>
-              </div>
+              <a-select v-model:value="form.paperId" :disabled="isEdit || isViewOnly" show-search option-filter-prop="label" :options="availablePaperOptions.map(item => ({ value: item.id, label: item.title }))" placeholder="请选择已发布试卷" @change="handlePaperChange" />
             </a-form-item>
-          </a-col>
-          <a-col :span="6">
-            <a-form-item label="展示类型">
-              <a-select v-model:value="form.type" :disabled="isViewOnly">
-                <a-select-option value="formal">正式考核</a-select-option>
-                <a-select-option value="quiz">测验</a-select-option>
+            <a-form-item label="关联课程">
+              <a-select v-model:value="form.courseIds" mode="multiple" :disabled="isViewOnly" allow-clear show-search option-filter-prop="label" placeholder="可选，支持一个考试关联多个课程">
+                <a-select-option v-for="item in courseOptions" :key="item.id" :value="item.id" :label="item.title">{{ item.title }}</a-select-option>
               </a-select>
             </a-form-item>
-          </a-col>
-          <a-col :span="6">
-            <a-form-item label="状态">
-              <a-select v-model:value="form.status" :disabled="isViewOnly">
-                <a-select-option value="upcoming">未开始</a-select-option>
-                <a-select-option value="active">进行中</a-select-option>
-                <a-select-option value="ended">已结束</a-select-option>
-              </a-select>
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
-            <a-form-item label="适用范围">
-              <div :class="{ 'read-only-block': isViewOnly }">
-                <AdmissionScopeSelector v-model:scope-type="form.scopeType" v-model:scope-target-ids="form.scopeTargetIds" />
-              </div>
-            </a-form-item>
-          </a-col>
-          <a-col :span="12">
+            <template v-if="form.scene === 'standalone'">
+              <a-form-item label="目标部门">
+                <a-select v-model:value="form.departmentIds" mode="multiple" :disabled="isViewOnly" allow-clear show-search option-filter-prop="label" placeholder="可选，作为统计维度">
+                  <a-select-option v-for="item in departmentOptions" :key="item.id" :value="item.id" :label="item.name">{{ item.name }}</a-select-option>
+                </a-select>
+              </a-form-item>
+              <a-form-item label="目标警种">
+                <a-select v-model:value="form.policeTypeIds" mode="multiple" :disabled="isViewOnly" allow-clear show-search option-filter-prop="label" placeholder="可选，作为统计维度">
+                  <a-select-option v-for="item in policeTypeOptions" :key="item.id" :value="item.id" :label="item.name">{{ item.name }}</a-select-option>
+                </a-select>
+              </a-form-item>
+              <a-form-item label="参试对象摘要">
+                <a-input v-model:value="form.participantSummary" :disabled="isViewOnly" placeholder="例如：射击理论考试（支队民警）" />
+              </a-form-item>
+              <div class="standalone-tip">独立考试创建后，请在列表中点击“导入名单”，上传 Excel 名单完成参试对象分配。</div>
+            </template>
+          </section>
+
+          <section class="drawer-panel">
+            <h4>发布设置</h4>
+            <a-row :gutter="12">
+              <a-col :span="12">
+                <a-form-item label="状态">
+                  <a-select v-model:value="form.status" :disabled="isViewOnly">
+                    <a-select-option value="upcoming">未开始</a-select-option>
+                    <a-select-option value="active">进行中</a-select-option>
+                    <a-select-option value="ended">已结束</a-select-option>
+                  </a-select>
+                </a-form-item>
+              </a-col>
+              <a-col :span="12">
+                <a-form-item label="展示类型">
+                  <a-select v-model:value="form.type" :disabled="isViewOnly">
+                    <a-select-option value="formal">正式考试</a-select-option>
+                    <a-select-option value="quiz">测验</a-select-option>
+                  </a-select>
+                </a-form-item>
+              </a-col>
+            </a-row>
             <a-form-item label="考试时间">
-              <a-range-picker v-model:value="dateRange" show-time format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm" style="width:100%" :disabled="isViewOnly" />
+              <a-range-picker v-model:value="dateRange" :disabled="isViewOnly" show-time format="YYYY-MM-DD HH:mm" value-format="YYYY-MM-DD HH:mm" style="width: 100%" />
             </a-form-item>
-          </a-col>
-          <a-col :span="6">
-            <a-form-item label="考试时长（分钟）">
-              <a-input-number v-model:value="form.duration" :min="10" :max="300" style="width:100%" :disabled="isViewOnly" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="6">
-            <a-form-item label="及格分">
-              <a-input-number v-model:value="form.passingScore" :min="1" style="width:100%" :disabled="isViewOnly" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="6">
-            <a-form-item label="最大次数">
-              <a-input-number v-model:value="form.maxAttempts" :min="1" :max="10" style="width:100%" :disabled="isViewOnly" />
-            </a-form-item>
-          </a-col>
-          <a-col :span="24">
+            <a-row :gutter="12">
+              <a-col :span="8">
+                <a-form-item label="考试时长">
+                  <a-input-number v-model:value="form.duration" :min="10" :max="300" :disabled="isViewOnly" style="width: 100%" />
+                </a-form-item>
+              </a-col>
+              <a-col :span="8">
+                <a-form-item label="及格分">
+                  <a-input-number v-model:value="form.passingScore" :min="1" :disabled="isViewOnly" style="width: 100%" />
+                </a-form-item>
+              </a-col>
+              <a-col :span="8">
+                <a-form-item label="最大次数">
+                  <a-input-number v-model:value="form.maxAttempts" :min="1" :max="10" :disabled="isViewOnly" style="width: 100%" />
+                </a-form-item>
+              </a-col>
+            </a-row>
             <a-form-item label="考试说明">
-              <a-textarea v-model:value="form.description" :rows="3" placeholder="选填" :disabled="isViewOnly" />
+              <a-textarea v-model:value="form.description" :disabled="isViewOnly" :rows="4" placeholder="可填写考试说明、补考规则等" />
             </a-form-item>
-          </a-col>
-          <a-col :span="24">
-            <a-form-item label="试卷预览">
-              <div class="paper-preview">
-                <template v-if="selectedPaperDetail">
-                  <div class="preview-header">
-                    <div>
-                      <div class="preview-title">{{ selectedPaperDetail.title }}</div>
-                      <div class="preview-meta">{{ paperStatusLabels[selectedPaperDetail.status] }} · {{ selectedPaperDetail.questionCount || 0 }} 题 · {{ selectedPaperDetail.totalScore || 0 }} 分</div>
-                    </div>
-                    <div class="preview-stats">
-                      <span>时长 {{ selectedPaperDetail.duration || 60 }} 分钟</span>
-                      <span>及格 {{ selectedPaperDetail.passingScore || 60 }} 分</span>
-                    </div>
-                  </div>
-                  <div v-if="selectedPaperDetail.questions?.length" class="preview-questions">
-                    <div v-for="(item, qi) in selectedPaperDetail.questions.slice(0, 20)" :key="item.id || qi" class="question-item">
-                      <span class="question-num">{{ qi + 1 }}.</span>
-                      <span class="question-type">[{{ questionTypeLabels[item.type] || item.type }}]</span>
-                      <span class="question-content">{{ item.content }}</span>
-                      <span class="question-score">{{ item.score || 0 }}分</span>
-                    </div>
-                    <div v-if="selectedPaperDetail.questions.length > 20" class="more-questions">还有 {{ selectedPaperDetail.questions.length - 20 }} 道题目...</div>
-                  </div>
-                  <a-empty v-else description="试卷暂无题目快照" />
-                </template>
-                <a-empty v-else description="请选择试卷" />
+            <div class="paper-preview">
+              <div class="paper-preview__head">
+                <span>试卷预览</span>
+                <small>考试创建后不可更换试卷</small>
               </div>
-            </a-form-item>
-          </a-col>
-        </a-row>
+              <template v-if="selectedPaperDetail">
+                <strong>{{ selectedPaperDetail.title }}</strong>
+                <div class="paper-preview__meta">
+                  <span>{{ selectedPaperDetail.questionCount || 0 }} 题</span>
+                  <span>满分 {{ selectedPaperDetail.totalScore || 0 }} 分</span>
+                  <span>建议时长 {{ selectedPaperDetail.duration || 60 }} 分钟</span>
+                </div>
+              </template>
+              <a-empty v-else description="请选择试卷后查看预览" />
+            </div>
+          </section>
+        </div>
       </a-form>
       <template #footer>
-        <a-space style="float:right">
-          <a-button @click="resetForm">{{ isViewOnly ? '关闭' : '取消' }}</a-button>
+        <a-space style="float: right">
+          <a-button @click="closeDrawer">{{ isViewOnly ? '关闭' : '取消' }}</a-button>
           <a-button v-if="!isViewOnly" type="primary" :loading="submitting" @click="handleSave">保存</a-button>
         </a-space>
       </template>
     </a-drawer>
+
+    <a-modal :open="importModalVisible" width="1100px" title="独立考试名单导入" :footer="null" @cancel="closeImportModal">
+      <div v-if="importExam" class="import-layout">
+        <div class="import-side">
+          <div class="import-card">
+            <div class="import-card__title">考试信息</div>
+            <div class="import-meta">{{ importExam.title }}</div>
+            <div class="import-meta">考试类型：{{ purposeLabelMap[importExam.purpose] || importExam.purpose || '其他考试' }}</div>
+            <div class="import-meta">当前已导入 {{ importParticipants.length }} 人</div>
+          </div>
+          <div class="import-card">
+            <div class="import-card__title">Excel 名单导入</div>
+            <a-space direction="vertical" style="width: 100%">
+              <a-button block @click="handleDownloadTemplate">下载导入模板</a-button>
+              <a-upload-dragger :before-upload="beforeImportUpload" :file-list="importFileList" :multiple="false" :max-count="1">
+                <p class="ant-upload-text">点击或拖拽上传名单 Excel</p>
+                <p class="ant-upload-hint">支持 `.xlsx` / `.xls`，按模板填写警号、手机号或身份证号。</p>
+              </a-upload-dragger>
+              <a-button type="primary" block :loading="importPreviewLoading" @click="handlePreviewImport">预检名单</a-button>
+            </a-space>
+          </div>
+          <div class="import-card">
+            <div class="import-card__title">已导入名单</div>
+            <a-table size="small" row-key="id" :data-source="importParticipants" :columns="participantColumns" :pagination="{ pageSize: 5 }" />
+          </div>
+        </div>
+
+        <div class="import-main">
+          <div class="import-card">
+            <div class="import-card__title">预检结果</div>
+            <div v-if="importPreview" class="preview-summary">
+              <a-tag color="blue">总行数 {{ importPreview.summary?.totalRows || 0 }}</a-tag>
+              <a-tag color="green">已匹配 {{ importPreview.summary?.matchedCount || 0 }}</a-tag>
+              <a-tag color="gold">将创建账号 {{ importPreview.summary?.createdCount || 0 }}</a-tag>
+              <a-tag color="red">失败 {{ importPreview.summary?.failedCount || 0 }}</a-tag>
+            </div>
+            <a-empty v-else description="上传并预检 Excel 后，在这里查看匹配结果" />
+          </div>
+          <div v-if="importPreview" class="preview-grid">
+            <div class="import-card">
+              <div class="import-card__title">已匹配现有账号</div>
+              <a-table size="small" row-key="rowNo" :data-source="importPreview.matchedRows || []" :columns="previewColumns" :pagination="{ pageSize: 5 }" />
+            </div>
+            <div class="import-card">
+              <div class="import-card__title">将自动创建账号</div>
+              <a-table size="small" row-key="rowNo" :data-source="importPreview.createdRows || []" :columns="previewColumns" :pagination="{ pageSize: 5 }" />
+            </div>
+            <div class="import-card import-card--danger">
+              <div class="import-card__title">导入失败 / 冲突</div>
+              <a-table size="small" row-key="rowNo" :data-source="importPreview.failedRows || []" :columns="failedColumns" :pagination="{ pageSize: 5 }" />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <a-button @click="closeImportModal">关闭</a-button>
+            <a-button v-if="importPreview?.batchId" :disabled="!(importPreview.failedRows || []).length" @click="handleExportImportResult">导出失败结果</a-button>
+            <a-button v-if="importPreview?.batchId" type="primary" :loading="importConfirmLoading" :disabled="(importPreview.summary?.totalRows || 0) === 0" @click="handleConfirmImport">确认导入名单</a-button>
+          </div>
+        </div>
+      </div>
+    </a-modal>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
-import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
+import dayjs from 'dayjs'
 import {
-  createExam, createAdmissionExam,
-  deleteAdmissionExam, deleteExam,
-  getExamDetail, getExamPaperDetail, getExamPapers, getExams,
-  getAdmissionExamDetail, getAdmissionExams,
-  updateExam, updateAdmissionExam,
+  confirmExamParticipantImport,
+  createExam,
+  deleteExam,
+  downloadExamParticipantImportTemplate,
+  exportExamParticipantImportResult,
+  getExamDashboard,
+  getExamDetail,
+  getExamPaperDetail,
+  getExamPapers,
+  getExamParticipants,
+  getExams,
+  previewExamParticipantImport,
+  updateExam,
 } from '@/api/exam'
 import { getCourses } from '@/api/course'
-import AdmissionScopeSelector from './components/AdmissionScopeSelector.vue'
+import { getTrainings } from '@/api/training'
+import { getDepartmentList } from '@/api/department'
+import { getPoliceTypes } from '@/api/user'
 
 const router = useRouter()
-const authStore = useAuthStore()
+const route = useRoute()
 
-const statusLabels = { upcoming: '未开始', active: '进行中', ended: '已结束' }
-const paperStatusLabels = { draft: '草稿', published: '已发布', archived: '已归档' }
-const questionTypeLabels = { single: '单选', multi: '多选', judge: '判断' }
-
-const activeNav = ref('exam')
-
-const statusTabs = [
-  { label: '全部', value: 'all' },
-  { label: '进行中', value: 'active' },
-  { label: '未开始', value: 'upcoming' },
-  { label: '已结束', value: 'ended' },
+const purposeOptions = [
+  { value: 'admission', label: '准入制考试' },
+  { value: 'completion', label: '结课考试' },
+  { value: 'quiz', label: '随堂测验' },
+  { value: 'makeup', label: '补考' },
+  { value: 'special', label: '专项考试' },
+  { value: 'other', label: '其他考试' },
 ]
+const purposeLabelMap = Object.fromEntries(purposeOptions.map(item => [item.value, item.label]))
+const sceneLabelMap = { standalone: '独立考试', training: '培训班考试' }
+const statusLabelMap = { upcoming: '未开始', active: '进行中', ended: '已结束' }
+const statusColorMap = { upcoming: 'gold', active: 'green', ended: 'default' }
+
+const columns = [
+  { title: '考试名称', key: 'title', width: 260 },
+  { title: '参试统计', key: 'participants', width: 150 },
+  { title: '考试时间', key: 'time', width: 180 },
+  { title: '考试类型 / 对象', key: 'target' },
+  { title: '关联培训班', key: 'training', width: 180 },
+  { title: '状态', key: 'status', width: 100 },
+  { title: '操作', key: 'actions', width: 260, fixed: 'right' },
+]
+
+const participantColumns = [
+  { title: '姓名', dataIndex: 'name', key: 'name', width: 100 },
+  { title: '账号', dataIndex: 'username', key: 'username', width: 120 },
+  { title: '警号', dataIndex: 'policeId', key: 'policeId', width: 120 },
+  { title: '手机号', dataIndex: 'phone', key: 'phone', width: 120 },
+  { title: '匹配状态', dataIndex: 'matchStatus', key: 'matchStatus', width: 100 },
+  { title: '参与状态', dataIndex: 'participationStatus', key: 'participationStatus', width: 100 },
+]
+
+const previewColumns = [
+  { title: '行号', dataIndex: 'rowNo', key: 'rowNo', width: 70 },
+  { title: '姓名', dataIndex: 'name', key: 'name', width: 100 },
+  { title: '警号', dataIndex: 'policeId', key: 'policeId', width: 120 },
+  { title: '手机号', dataIndex: 'phone', key: 'phone', width: 120 },
+  { title: '账号', dataIndex: 'username', key: 'username', width: 120 },
+  { title: '说明', dataIndex: 'message', key: 'message' },
+]
+
+const failedColumns = [
+  { title: '行号', dataIndex: 'rowNo', key: 'rowNo', width: 70 },
+  { title: '姓名', dataIndex: 'name', key: 'name', width: 100 },
+  { title: '警号', dataIndex: 'policeId', key: 'policeId', width: 120 },
+  { title: '手机号', dataIndex: 'phone', key: 'phone', width: 120 },
+  { title: '失败原因', dataIndex: 'message', key: 'message' },
+]
+
+const filters = reactive({
+  search: '',
+  scene: 'all',
+  purpose: undefined,
+  status: undefined,
+  departmentId: undefined,
+  policeTypeId: undefined,
+})
+
+const pagination = reactive({
+  current: 1,
+  pageSize: 10,
+  total: 0,
+})
+
+const dashboard = reactive({
+  totalExams: 0,
+  standaloneExams: 0,
+  trainingExams: 0,
+  activeExams: 0,
+  upcomingExams: 0,
+})
 
 const loading = ref(false)
 const submitting = ref(false)
-const searchText = ref('')
-const filterExamType = ref('admission')
-const createExamType = ref('admission')
-const filterStatusSelect = ref('')
-const currentStatusTab = ref('all')
 const examList = ref([])
-const selectedIds = ref([])
+const selectedRowKeys = ref([])
 const paperOptions = ref([])
 const courseOptions = ref([])
+const trainingOptions = ref([])
+const departmentOptions = ref([])
+const policeTypeOptions = ref([])
 const selectedPaperDetail = ref(null)
+const availablePaperOptions = computed(() => (
+  isEdit.value || isViewOnly.value
+    ? paperOptions.value
+    : paperOptions.value.filter(item => item.status === 'published')
+))
+
 const drawerVisible = ref(false)
 const isEdit = ref(false)
 const isViewOnly = ref(false)
 const editingId = ref(null)
 const dateRange = ref(null)
-const selectAll = ref(false)
-
-const pagination = reactive({ current: 1, pageSize: 15, total: 0 })
 
 const form = reactive({
-  title: '', paperId: undefined, description: '',
-  type: 'formal', status: 'upcoming',
-  scopeType: 'all', scopeTargetIds: [],
-  duration: 60, passingScore: 60, maxAttempts: 1,
-  trainingId: 0,
+  title: '',
+  scene: 'standalone',
+  purpose: 'special',
+  paperId: undefined,
+  trainingId: undefined,
+  courseIds: [],
+  departmentIds: [],
+  policeTypeIds: [],
+  participantSummary: '',
+  status: 'upcoming',
+  type: 'formal',
+  duration: 60,
+  passingScore: 60,
+  maxAttempts: 1,
+  description: '',
 })
 
-const drawerTitle = computed(() => (isViewOnly.value ? '考试详情' : (isEdit.value ? '编辑考试' : '添加考试')))
-const availablePaperOptions = computed(() => (isEdit.value || isViewOnly.value) ? paperOptions.value : paperOptions.value.filter(i => i.status === 'published'))
-const totalPages = computed(() => Math.max(1, Math.ceil(pagination.total / pagination.pageSize)))
-const visiblePages = computed(() => {
-  const pages = [], total = totalPages.value, cur = pagination.current
-  let start = Math.max(1, cur - 2), end = Math.min(total, start + 4)
-  if (end - start < 4) start = Math.max(1, end - 4)
-  for (let i = start; i <= end; i++) pages.push(i)
-  return pages
-})
+const importModalVisible = ref(false)
+const importExam = ref(null)
+const importParticipants = ref([])
+const importFile = ref(null)
+const importFileList = ref([])
+const importPreview = ref(null)
+const importPreviewLoading = ref(false)
+const importConfirmLoading = ref(false)
 
-function getStatusPillClass(status) {
-  return { upcoming: 'status-pending', active: 'status-ongoing', ended: 'status-ended' }[status] || 'status-pending'
+const routeTrainingId = computed(() => {
+  const value = Number(route.query.trainingId)
+  return Number.isInteger(value) && value > 0 ? value : undefined
+})
+const routeTrainingLocked = computed(() => !!routeTrainingId.value)
+
+function formatDateTime(value) {
+  return value ? dayjs(value).format('YYYY-MM-DD HH:mm') : '未设置'
 }
 
-function switchStatusTab(tab) {
-  currentStatusTab.value = tab
-  filterStatusSelect.value = tab === 'all' ? '' : tab
+function handleSearch() {
   pagination.current = 1
   loadExams()
 }
 
-function handleAction(key, exam) {
-  if (key === 'edit') {
-    openEditDrawer(exam)
-  } else if (key === 'view') {
-    openViewDrawer(exam)
-  } else if (key === 'viewScores') {
-    router.push({ name: 'ExamScores', query: { examId: exam.id } })
-  } else if (key === 'delete') {
-    Modal.confirm({
-      title: '确定删除该考试吗？',
-      content: '已有作答记录或已关联培训班的考试不能删除。',
-      okText: '确定删除',
-      okType: 'danger',
-      async onOk() {
-        try {
-          if ((exam.kind || filterExamType.value) === 'admission') {
-            await deleteAdmissionExam(exam.id)
-          } else {
-            await deleteExam(exam.id)
-          }
-          message.success('删除成功')
-          await loadExams()
-        } catch (e) {
-          message.error(e.message || '删除失败')
-        }
-      },
-    })
+function handleSceneChange(nextScene) {
+  if (routeTrainingLocked.value && nextScene !== 'training') {
+    filters.scene = 'training'
+    return
+  }
+  pagination.current = 1
+  loadExams()
+}
+
+function onSelectChange(keys) {
+  selectedRowKeys.value = keys
+}
+
+function handleTableChange(nextPagination) {
+  pagination.current = nextPagination.current
+  pagination.pageSize = nextPagination.pageSize
+  loadExams()
+}
+
+function goToScores(record) {
+  router.push({ name: 'ExamScores', query: { examId: record.id } })
+}
+
+function normalizeScene(value) {
+  return value === 'training' ? 'training' : 'standalone'
+}
+
+function resetForm(scene = 'standalone') {
+  Object.assign(form, {
+    title: '',
+    scene,
+    purpose: scene === 'training' ? 'completion' : 'special',
+    paperId: undefined,
+    trainingId: routeTrainingId.value,
+    courseIds: [],
+    departmentIds: [],
+    policeTypeIds: [],
+    participantSummary: '',
+    status: 'upcoming',
+    type: 'formal',
+    duration: 60,
+    passingScore: 60,
+    maxAttempts: 1,
+    description: '',
+  })
+  dateRange.value = null
+  selectedPaperDetail.value = null
+}
+
+function closeDrawer() {
+  drawerVisible.value = false
+  isEdit.value = false
+  isViewOnly.value = false
+  editingId.value = null
+}
+
+function downloadBlob(blob, fileName) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = fileName
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+async function loadDashboard() {
+  try {
+    const data = await getExamDashboard(routeTrainingLocked.value ? { trainingId: routeTrainingId.value } : undefined)
+    dashboard.totalExams = data?.kpi?.totalExams || 0
+    dashboard.standaloneExams = data?.kpi?.standaloneExams || 0
+    dashboard.trainingExams = data?.kpi?.trainingExams || 0
+    dashboard.activeExams = data?.kpi?.activeExams || 0
+    dashboard.upcomingExams = data?.kpi?.upcomingExams || 0
+  } catch {
+    Object.assign(dashboard, { totalExams: 0, standaloneExams: 0, trainingExams: 0, activeExams: 0, upcomingExams: 0 })
   }
 }
 
-function handleSearch() { pagination.current = 1; loadExams() }
-function handlePageChange(page) { if (page < 1 || page > totalPages.value) return; pagination.current = page; loadExams() }
-
-function toggleSelect(id, e) {
-  if (e.target.checked) { if (!selectedIds.value.includes(id)) selectedIds.value.push(id) }
-  else { selectedIds.value = selectedIds.value.filter(i => i !== id) }
-  selectAll.value = selectedIds.value.length === examList.value.length && examList.value.length > 0
-}
-
-function handleSelectAll(e) {
-  if (e.target.checked) { selectedIds.value = examList.value.map(ex => ex.id); selectAll.value = true }
-  else { selectedIds.value = []; selectAll.value = false }
+async function loadLookups() {
+  const [papers, courses, trainings, departments, policeTypes] = await Promise.allSettled([
+    getExamPapers({ size: -1 }),
+    getCourses({ size: -1 }),
+    getTrainings({ size: -1 }),
+    getDepartmentList({ size: -1 }),
+    getPoliceTypes(),
+  ])
+  paperOptions.value = papers.status === 'fulfilled' ? (papers.value.items || []) : []
+  courseOptions.value = courses.status === 'fulfilled' ? (courses.value.items || []) : []
+  trainingOptions.value = trainings.status === 'fulfilled' ? (trainings.value.items || []) : []
+  departmentOptions.value = departments.status === 'fulfilled' ? (departments.value.items || []) : []
+  policeTypeOptions.value = policeTypes.status === 'fulfilled' ? (policeTypes.value || []) : []
 }
 
 async function loadExams() {
   loading.value = true
   try {
-    const params = { page: pagination.current, size: pagination.pageSize, search: searchText.value || undefined, status: filterStatusSelect.value || undefined }
-    const result = filterExamType.value === 'admission' ? await getAdmissionExams(params) : await getExams(params)
-    examList.value = (result.items || []).map(item => ({
-      ...item,
-      code: item.code || 'EXAM-' + String(item.id).padStart(4, '0'),
-      actualCount: item.actualCount ?? item.joinedCount ?? 0,
-      expectedCount: item.expectedCount ?? item.totalCount ?? item.maxParticipants ?? '-',
-      relatedTrainingId: item.trainingId,
-    }))
+    const result = await getExams({
+      page: pagination.current,
+      size: pagination.pageSize,
+      search: filters.search || undefined,
+      scene: filters.scene === 'all' ? undefined : filters.scene,
+      purpose: filters.purpose || undefined,
+      status: filters.status || undefined,
+      departmentId: filters.departmentId || undefined,
+      policeTypeId: filters.policeTypeId || undefined,
+      trainingId: routeTrainingId.value,
+    })
+    examList.value = result.items || []
     pagination.total = result.total || 0
-    selectedIds.value = []; selectAll.value = false
-  } catch (e) { message.error(e.message || '加载考试列表失败') }
-  finally { loading.value = false }
-}
-
-async function loadPaperOptions() {
-  try { const r = await getExamPapers({ size: -1 }); paperOptions.value = r.items || [] }
-  catch { paperOptions.value = [] }
-}
-
-async function loadCourseOptions() {
-  try {
-    const result = await getCourses({ size: -1 })
-    courseOptions.value = (result.items || []).map(item => ({
-      value: item.id,
-      label: item.title,
-    }))
-  } catch {
-    courseOptions.value = []
+    selectedRowKeys.value = []
+  } catch (error) {
+    message.error(error.message || '加载考试列表失败')
+  } finally {
+    loading.value = false
   }
 }
 
+async function loadAllData() {
+  await Promise.all([loadDashboard(), loadExams()])
+}
+
 async function setPaperPreview(paperId, applyDefaults = false) {
-  if (!paperId) { selectedPaperDetail.value = null; return }
+  if (!paperId) {
+    selectedPaperDetail.value = null
+    return
+  }
   try {
     const detail = await getExamPaperDetail(paperId)
     selectedPaperDetail.value = detail
     if (applyDefaults) {
+      form.duration = detail.duration || 60
+      form.passingScore = detail.passingScore || Math.max(1, Math.ceil((detail.totalScore || 0) * 0.6))
       form.type = detail.type || 'formal'
-      form.duration = Math.min(300, Math.max(10, Math.floor(Number(detail.duration) || 60)))
-      const totalScore = Number(detail?.totalScore || 0)
-      const cfg = Number(detail?.passingScore)
-      form.passingScore = (Number.isFinite(cfg) && cfg > 0 && cfg <= totalScore) ? cfg : Math.max(1, Math.ceil(totalScore * 0.6))
     }
-  } catch { selectedPaperDetail.value = null }
+  } catch {
+    selectedPaperDetail.value = null
+  }
 }
 
-function handlePaperChange(val) { setPaperPreview(val, !isEdit.value) }
-function openCreateDrawer() {
-  resetForm()
+function handleFormSceneChange(nextScene) {
+  if (nextScene === 'training') {
+    form.purpose = form.purpose === 'special' ? 'completion' : form.purpose
+    form.trainingId = routeTrainingId.value || form.trainingId
+  } else {
+    form.trainingId = undefined
+    form.purpose = form.purpose === 'completion' ? 'special' : form.purpose
+  }
+}
+
+function handlePaperChange(value) {
+  setPaperPreview(value, !isEdit.value)
+}
+
+function openCreateDrawer(scene = 'standalone') {
+  const resolvedScene = routeTrainingLocked.value ? 'training' : scene
+  resetForm(resolvedScene)
   isViewOnly.value = false
+  isEdit.value = false
   drawerVisible.value = true
 }
 
-async function openExamDrawer(record, options = {}) {
-  const { viewOnly = false } = options
-  isViewOnly.value = viewOnly
-  isEdit.value = !viewOnly
-  editingId.value = record.id
+async function openExamDrawer(record, viewOnly = false) {
   try {
-    const detail = (filterExamType.value === 'admission' || record.kind === 'admission')
-      ? await getAdmissionExamDetail(record.id) : await getExamDetail(record.id)
-    form.title = detail.title
+    const detail = await getExamDetail(record.id)
+    resetForm(normalizeScene(detail.scene || record.scene))
+    isViewOnly.value = viewOnly
+    isEdit.value = !viewOnly
+    editingId.value = record.id
+    form.title = detail.title || ''
+    form.scene = normalizeScene(detail.scene)
+    form.purpose = detail.purpose || 'completion'
     form.paperId = detail.paperId
-    form.description = detail.description || ''
-    form.type = detail.type || 'formal'
-    form.status = detail.status || 'upcoming'
-    form.scopeType = detail.scopeType || 'all'
-    form.scopeTargetIds = [...(detail.scopeTargetIds || [])]
+    form.trainingId = detail.trainingId
     form.courseIds = [...(detail.courseIds || [])]
+    form.departmentIds = [...(detail.departmentIds || [])]
+    form.policeTypeIds = [...(detail.policeTypeIds || [])]
+    form.participantSummary = detail.participantSummary || ''
+    form.status = detail.status || 'upcoming'
+    form.type = detail.type || 'formal'
     form.duration = detail.duration || 60
     form.passingScore = detail.passingScore || 60
     form.maxAttempts = detail.maxAttempts || 1
+    form.description = detail.description || ''
     dateRange.value = detail.startTime && detail.endTime ? [detail.startTime, detail.endTime] : null
     selectedPaperDetail.value = {
-      id: detail.paperId, title: detail.paperTitle || '未命名试卷',
-      status: detail.paperStatus, duration: detail.duration, totalScore: detail.totalScore,
-      passingScore: detail.passingScore, questionCount: detail.questionCount,
-      questions: detail.questions || [],
+      title: detail.paperTitle || '未命名试卷',
+      questionCount: detail.questionCount || 0,
+      totalScore: detail.totalScore || 0,
+      duration: detail.duration || 60,
+      status: detail.paperStatus,
     }
     drawerVisible.value = true
-  } catch (e) { message.error(e.message || '加载详情失败') }
+  } catch (error) {
+    message.error(error.message || '加载考试详情失败')
+  }
 }
 
-async function openEditDrawer(record) {
-  return openExamDrawer(record, { viewOnly: false })
+function openEditDrawer(record) {
+  openExamDrawer(record, false)
 }
 
-async function openViewDrawer(record) {
-  return openExamDrawer(record, { viewOnly: true })
+function openViewDrawer(record) {
+  openExamDrawer(record, true)
 }
 
-function resetForm() {
-  Object.assign(form, { title: '', paperId: undefined, description: '', type: 'formal', status: 'upcoming', scopeType: 'all', scopeTargetIds: [], duration: 60, passingScore: 60, maxAttempts: 1 })
-  selectedPaperDetail.value = null; drawerVisible.value = false; isEdit.value = false; isViewOnly.value = false; editingId.value = null; dateRange.value = null
+function buildPayload() {
+  return {
+    title: form.title.trim(),
+    scene: form.scene,
+    participantMode: form.scene === 'training' ? 'training_enrollment' : 'excel_import',
+    purpose: form.purpose,
+    paperId: form.paperId,
+    trainingId: form.scene === 'training' ? form.trainingId : undefined,
+    courseIds: form.courseIds,
+    departmentIds: form.scene === 'standalone' ? form.departmentIds : [],
+    policeTypeIds: form.scene === 'standalone' ? form.policeTypeIds : [],
+    participantSummary: form.scene === 'standalone' ? (form.participantSummary || undefined) : undefined,
+    status: form.status,
+    type: form.type,
+    duration: Number(form.duration),
+    passingScore: Number(form.passingScore),
+    maxAttempts: Number(form.maxAttempts),
+    description: form.description || undefined,
+    startTime: dateRange.value?.[0] || undefined,
+    endTime: dateRange.value?.[1] || undefined,
+  }
 }
 
 async function handleSave() {
-  if (!form.title.trim()) { message.warning('请输入场次名称'); return }
-  if (!form.paperId) { message.warning('请选择试卷'); return }
-  if (form.scopeType !== 'all' && !form.scopeTargetIds.length) { message.warning('请选择适用范围'); return }
-  const dur = Number(form.duration), ps = Number(form.passingScore)
-  if (!Number.isFinite(dur) || dur < 10) { message.warning('考试时长不能少于10分钟'); return }
-  if (!Number.isFinite(ps) || ps < 1) { message.warning('及格分不能小于1分'); return }
-  if (selectedPaperDetail.value && ps > selectedPaperDetail.value.totalScore) { message.warning('及格分不能超过试卷满分'); return }
-  const payload = { title: form.title, paperId: form.paperId, description: form.description || undefined, type: form.type, status: form.status, duration: dur, passingScore: ps, startTime: dateRange.value?.[0], endTime: dateRange.value?.[1], maxAttempts: form.maxAttempts, scopeType: form.scopeType, scopeTargetIds: form.scopeTargetIds }
-  if (createExamType.value === 'training' && form.trainingId) {
-    payload.trainingId = form.trainingId
+  if (!form.title.trim()) return message.warning('请输入考试名称')
+  if (!form.paperId) return message.warning('请选择试卷')
+  if (form.scene === 'training' && !form.trainingId) return message.warning('请选择培训班')
+  if (Number(form.duration) < 10) return message.warning('考试时长不能少于 10 分钟')
+  if (selectedPaperDetail.value && Number(form.passingScore) > Number(selectedPaperDetail.value.totalScore || 0)) {
+    return message.warning('及格分不能超过试卷满分')
   }
   submitting.value = true
   try {
+    const payload = buildPayload()
     if (isEdit.value) {
-      filterExamType.value === 'admission' ? await updateAdmissionExam(editingId.value, payload) : await updateExam(editingId.value, payload)
+      await updateExam(editingId.value, payload)
       message.success('考试已更新')
     } else {
-      createExamType.value === 'admission' ? await createAdmissionExam(payload) : await createExam(payload)
-      message.success('考试已添加')
+      await createExam(payload)
+      message.success(form.scene === 'standalone' ? '独立考试已创建，请继续导入名单' : '培训班考试已创建')
     }
-    resetForm(); loadExams()
-  } catch (e) { message.error(e.message || '保存失败') }
-  finally { submitting.value = false }
+    closeDrawer()
+    await loadAllData()
+  } catch (error) {
+    message.error(error.message || '保存失败')
+  } finally {
+    submitting.value = false
+  }
 }
 
-async function handleBatchDelete() {
-  if (!selectedIds.value.length) return
+function handleDelete(record) {
   Modal.confirm({
-    title: `确定删除选中的 ${selectedIds.value.length} 场考试吗？`,
-    content: '已有作答记录或已关联培训班的考试不能删除。',
-    okText: '确定删除',
+    title: `确定删除“${record.title}”吗？`,
+    content: '已有作答记录或已关联业务流程的考试不能删除。',
     okType: 'danger',
     async onOk() {
-      let successCount = 0
-      let failCount = 0
-      for (const id of selectedIds.value) {
-        const exam = examList.value.find(item => item.id === id)
-        if (!exam) continue
-        try {
-          if ((exam.kind || filterExamType.value) === 'admission') {
-            await deleteAdmissionExam(id)
-          } else {
-            await deleteExam(id)
-          }
-          successCount += 1
-        } catch {
-          failCount += 1
-        }
-      }
-      selectedIds.value = []
-      await loadExams()
-      if (failCount === 0) {
-        message.success(`成功删除 ${successCount} 场考试`)
-      } else {
-        message.warning(`成功删除 ${successCount} 场，${failCount} 场删除失败`)
+      try {
+        await deleteExam(record.id)
+        message.success('删除成功')
+        await loadAllData()
+      } catch (error) {
+        message.error(error.message || '删除失败')
       }
     },
   })
 }
 
-function goToPaperManage() { router.push({ path: '/paper/repository' }) }
-function goToPaperDetail(id) { if (id) router.push({ path: `/paper/repository/${id}` }) }
-function formatDateTime(v) { return v ? String(v).replace('T', ' ').slice(0, 16) : '未设置' }
+function handleBatchDelete() {
+  if (!selectedRowKeys.value.length) return
+  Modal.confirm({
+    title: `确定删除选中的 ${selectedRowKeys.value.length} 场考试吗？`,
+    content: '删除后不可恢复。',
+    okType: 'danger',
+    async onOk() {
+      let success = 0
+      let failed = 0
+      for (const examId of selectedRowKeys.value) {
+        try {
+          await deleteExam(examId)
+          success += 1
+        } catch {
+          failed += 1
+        }
+      }
+      await loadAllData()
+      if (failed) message.warning(`成功删除 ${success} 场，${failed} 场删除失败`)
+      else message.success(`成功删除 ${success} 场考试`)
+    },
+  })
+}
 
-watch(filterExamType, () => { pagination.current = 1; loadExams() })
-watch(filterStatusSelect, val => { currentStatusTab.value = val || 'all' })
-onMounted(() => { loadExams(); loadPaperOptions() })
+async function loadImportParticipants(examId) {
+  try {
+    importParticipants.value = await getExamParticipants(examId)
+  } catch {
+    importParticipants.value = []
+  }
+}
+
+function resetImportState() {
+  importPreview.value = null
+  importFile.value = null
+  importFileList.value = []
+  importParticipants.value = []
+}
+
+async function openImportModal(record) {
+  importExam.value = record
+  resetImportState()
+  importModalVisible.value = true
+  await loadImportParticipants(record.id)
+}
+
+function closeImportModal() {
+  importModalVisible.value = false
+  importExam.value = null
+  resetImportState()
+}
+
+function beforeImportUpload(file) {
+  importFile.value = file
+  importFileList.value = [file]
+  return false
+}
+
+async function handleDownloadTemplate() {
+  try {
+    const blob = await downloadExamParticipantImportTemplate()
+    downloadBlob(blob, '独立考试名单导入模板.xlsx')
+  } catch (error) {
+    message.error(error.message || '模板下载失败')
+  }
+}
+
+async function handlePreviewImport() {
+  if (!importExam.value) return
+  if (!importFile.value) return message.warning('请先选择 Excel 文件')
+  importPreviewLoading.value = true
+  try {
+    importPreview.value = await previewExamParticipantImport(importExam.value.id, importFile.value)
+    message.success('名单预检完成')
+  } catch (error) {
+    message.error(error.message || '名单预检失败')
+  } finally {
+    importPreviewLoading.value = false
+  }
+}
+
+async function handleConfirmImport() {
+  if (!importPreview.value?.batchId) return message.warning('请先完成名单预检')
+  importConfirmLoading.value = true
+  try {
+    importPreview.value = await confirmExamParticipantImport(importPreview.value.batchId)
+    await Promise.all([loadImportParticipants(importExam.value.id), loadAllData()])
+    message.success('名单导入成功')
+  } catch (error) {
+    message.error(error.message || '名单导入失败')
+  } finally {
+    importConfirmLoading.value = false
+  }
+}
+
+async function handleExportImportResult() {
+  if (!importPreview.value?.batchId) return
+  try {
+    const blob = await exportExamParticipantImportResult(importPreview.value.batchId)
+    downloadBlob(blob, `${importExam.value?.title || '考试'}_导入结果.xlsx`)
+  } catch (error) {
+    message.error(error.message || '导出失败结果失败')
+  }
+}
+
+onMounted(async () => {
+  if (routeTrainingLocked.value) filters.scene = 'training'
+  else if (route.query.kind === 'training' || route.query.scene === 'training') filters.scene = 'training'
+  await loadLookups()
+  await loadAllData()
+})
 </script>
 
 <style scoped>
-.exam-manage-page {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  background-color: #f8fafc;
-  color: #334155;
-}
-
-.main-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 24px 32px;
-}
-
-.content-wrapper {
-  max-width: 100%;
-  width: 100%;
-}
-
-.sub-nav-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 24px;
-}
-
-.sub-nav-left {
-  display: flex;
-  align-items: center;
-  gap: 24px;
-}
-
-.sub-nav-item {
-  font-size: 14px;
-  font-weight: 600;
-  color: #94a3b8;
-  padding-bottom: 8px;
-  border-bottom: 2px solid transparent;
-  transition: all 0.2s;
-  cursor: pointer;
-}
-
-.sub-nav-item:hover {
-  color: #64748b;
-}
-
-.sub-nav-item.active {
-  color: #1e293b;
-  border-color: #2563eb;
-}
-
-.sub-nav-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.btn-aux {
-  font-size: 12px;
-  font-weight: 600;
-  color: #64748b;
-  padding: 6px 12px;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background-color: #ffffff;
-  transition: all 0.2s;
-  cursor: pointer;
-}
-
-.btn-aux:hover {
-  border-color: #cbd5e1;
-  background-color: #f8fafc;
-  color: #1e293b;
-}
-
-.main-container {
-  background: white;
-  border: 1px solid #e2e8f0;
-  border-radius: 24px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  min-height: 640px;
-}
-
-.toolbar-row {
-  padding: 24px 32px;
-  border-bottom: 1px solid #f1f5f9;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.toolbar-left,
-.toolbar-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.btn-primary {
-  background: #2563eb;
-  color: white;
-  font-size: 14px;
-  font-weight: 700;
-  padding: 8px 24px;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  box-shadow: 0 4px 6px rgba(37, 99, 235, 0.1);
-}
-
-.btn-primary:hover {
-  background: #1d4ed8;
-}
-
-.btn-default {
-  background: #ffffff;
-  color: #2563eb;
-  font-size: 14px;
-  font-weight: 600;
-  padding: 8px 24px;
-  border-radius: 8px;
-  border: 1.5px solid #2563eb;
-  cursor: pointer;
-  margin-left: 8px;
-}
-
-.btn-default:hover {
-  background: #eff6ff;
-}
-
-.search-wrapper {
-  position: relative;
-  width: 280px;
-}
-
-.search-icon {
-  position: absolute;
-  left: 12px;
-  top: 10px;
-  width: 16px;
-  height: 16px;
-  color: #94a3b8;
-  pointer-events: none;
-  z-index: 2;
-}
-
-.input-minimal {
-  background-color: transparent;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 6px 12px;
-  font-size: 12px;
-  color: #1e293b;
-  transition: all 0.2s;
-  outline: none;
-  height: 36px;
-}
-
-.input-minimal:hover {
-  border-color: #cbd5e1;
-}
-
-.filter-select {
-  width: 140px;
-}
-
-.filter-select-sm {
-  width: 120px;
-}
-
-.filter-row {
-  padding: 12px 32px;
-  border-bottom: 1px solid #f1f5f9;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: rgba(248, 250, 252, 0.35);
-}
-
-.filter-left,
-.filter-right {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.filter-label {
-  font-size: 12px;
-  font-weight: 700;
-  color: #94a3b8;
-}
-
-.status-tabs {
-  display: flex;
-  gap: 4px;
-  padding: 2px;
-  border: 1px solid #e2e8f0;
-  border-radius: 10px;
-  background: #f8fafc;
-}
-
-.status-tab {
-  font-size: 12px;
-  font-weight: 600;
-  color: #64748b;
-  padding: 6px 10px;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.status-tab:hover {
-  color: #334155;
-}
-
-.status-tab.active {
-  background: white;
-  color: #2563eb;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.08);
-}
-
-.grade-filter {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.grade-link {
-  font-size: 12px;
-  color: #64748b;
-  cursor: pointer;
-}
-
-.grade-link:hover {
-  color: #2563eb;
-}
-
-.checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-  font-size: 12px;
-  color: #64748b;
-}
-
-.table-wrapper {
-  flex: 1;
-  overflow-x: auto;
-}
-
-.data-table {
-  width: 100%;
-  text-align: left;
-  border-collapse: collapse;
-  table-layout: fixed;
-}
-
-.data-table thead tr {
-  background: #f8fafc;
-  border-bottom: 1px solid #f1f5f9;
-}
-
-.data-table th {
-  padding: 16px;
-  font-size: 10px;
-  font-weight: 700;
-  color: #94a3b8;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}
-
-.data-table td {
-  padding: 16px;
-  vertical-align: middle;
-}
-
-.table-row {
-  border-bottom: 1px solid #f8fafc;
-}
-
-.table-row:hover {
-  background-color: #f8fafc;
-}
-
-.text-center {
-  text-align: center;
-}
-
-.text-right {
-  text-align: right;
-}
-
-.col-check { width: 46px; }
-.col-index { width: 56px; }
-.col-name { width: 260px; }
-.col-count { width: 110px; }
-.col-time { width: 160px; }
-.col-status { width: 92px; }
-.col-paper { width: 180px; }
-.col-type { width: 72px; }
-.col-category { width: 88px; }
-.col-training { width: 100px; }
-.col-action {
-  width: 220px;
-  padding-right: 24px !important;
-}
-
-.name-cell {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.name-text {
-  font-size: 14px;
-  font-weight: 600;
-  color: #334155;
-  cursor: pointer;
-}
-
-.name-text:hover {
-  color: #2563eb;
-}
-
-.link-icon {
-  width: 14px;
-  height: 14px;
-  color: #ef4444;
-}
-
-.count-actual { font-size: 13px; color: #94a3b8; font-weight: 700; }
-.count-actual.has-data { color: #ef4444; }
-.count-sep { margin: 0 4px; color: #cbd5e1; }
-.count-total { font-size: 13px; color: #94a3b8; }
-
-.time-cell {
-  font-size: 11px;
-  color: #94a3b8;
-  line-height: 1.4;
-}
-
-.time-text { white-space: nowrap; }
-.time-placeholder { color: #94a3b8; }
-
-.status-pill {
-  display: inline-flex;
-  align-items: center;
-  padding: 2px 10px;
-  border-radius: 9999px;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.status-ongoing { background-color: #dcfce7; color: #166534; }
-.status-pending { background-color: #fef3c7; color: #92400e; }
-.status-ended { background-color: #f1f5f9; color: #64748b; }
-
-.paper-link {
-  color: #ef4444;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.paper-link:hover {
-  text-decoration: underline;
-}
-
-.action-btns {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.btn-link {
-  background: none;
-  border: none;
-  color: #2563eb;
-  font-size: 12px;
-  font-weight: 500;
-  cursor: pointer;
-  padding: 4px 0;
-  transition: color 0.2s;
-}
-
-.btn-link:hover {
-  color: #1d4ed8;
-  text-decoration: underline;
-}
-
-.btn-link-danger {
-  color: #ef4444;
-}
-
-.btn-link-danger:hover {
-  color: #dc2626;
-}
-
-.empty-cell {
-  text-align: center;
-  padding: 64px 0;
-}
-
-.empty-content {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-}
-
-.empty-icon {
-  width: 44px;
-  height: 44px;
-  color: #cbd5e1;
-}
-
-.empty-text {
-  color: #94a3b8;
-  font-size: 14px;
-}
-
-.footer-area {
-  padding: 20px 32px;
-  border-top: 1px solid #f1f5f9;
-  background: rgba(248, 250, 252, 0.1);
-}
-
-.notice-area {
-  display: flex;
-  gap: 8px;
-  align-items: flex-start;
-}
-
-.notice-icon {
-  width: 16px;
-  height: 16px;
-  color: #ef4444;
-  margin-top: 2px;
-}
-
-.notice-text {
-  font-size: 12px;
-  color: #94a3b8;
-  line-height: 1.6;
-}
-
-.footer-divider {
-  width: 100%;
-  height: 1px;
-  background: #f1f5f9;
-  margin: 16px 0;
-}
-
-.footer-actions {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.footer-left,
-.footer-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.batch-ops {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.batch-label {
-  font-size: 12px;
-  color: #94a3b8;
-}
-
-.btn-batch {
-  font-size: 12px;
-  font-weight: 700;
-  color: #64748b;
-  padding: 4px 10px;
-  border-radius: 4px;
-  border: 1px solid transparent;
-  background: none;
-  cursor: pointer;
-}
-
-.btn-batch:hover {
-  background: #f1f5f9;
-}
-
-.btn-batch-danger {
-  color: #ef4444;
-}
-
-.btn-batch-danger:hover {
-  background: #fef2f2;
-}
-
-.page-info {
-  font-size: 11px;
-  color: #94a3b8;
-}
-
-.page-sep {
-  margin: 0 8px;
-  color: #e2e8f0;
-}
-
-.pagination-btns {
-  display: flex;
-  gap: 4px;
-}
-
-.page-btn {
-  width: 32px;
-  height: 32px;
-  border-radius: 4px;
-  border: 1px solid #e2e8f0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: white;
-  cursor: pointer;
-  color: #64748b;
-}
-
-.page-btn:hover:not(:disabled) {
-  background: #f1f5f9;
-}
-
-.page-btn:disabled,
-.page-btn.disabled {
-  color: #cbd5e1;
-  cursor: not-allowed;
-}
-
-.page-btn-active {
-  background: #1e293b;
-  color: white;
-  border-color: #1e293b;
-}
-
-.page-footer {
-  margin-top: 14px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 12px;
-  color: #94a3b8;
-}
-
-.status-indicator {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #22c55e;
-}
-
-.paper-hint {
-  margin-top: 6px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.hint-text {
-  color: #94a3b8;
-  font-size: 12px;
-}
-
-.read-only-block {
-  pointer-events: none;
-  opacity: 0.72;
-}
-
-.paper-preview {
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #f8fafc;
-  padding: 12px;
-}
-
-.preview-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.preview-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1e293b;
-}
-
-.preview-meta {
-  font-size: 12px;
-  color: #94a3b8;
-  margin-top: 2px;
-}
-
-.preview-stats {
-  font-size: 12px;
-  color: #64748b;
-  display: flex;
-  gap: 12px;
-}
-
-.preview-questions {
-  max-height: 260px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.question-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background: #ffffff;
-  font-size: 12px;
-}
-
-.question-num { color: #94a3b8; }
-.question-type { color: #2563eb; white-space: nowrap; }
-.question-content {
-  flex: 1;
-  color: #475569;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.question-score { color: #94a3b8; white-space: nowrap; }
-.more-questions {
-  font-size: 12px;
-  color: #94a3b8;
-  text-align: center;
-  padding-top: 4px;
-}
-
-:deep(.search-input .ant-input-group .ant-input) {
-  border-radius: 8px;
-  border-color: #e2e8f0;
-  padding-left: 36px;
-  height: 36px;
-}
-
-:deep(.search-input .ant-input-group .ant-input:hover),
-:deep(.search-input .ant-input-group .ant-input:focus) {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-:deep(.search-input .ant-input-group-addon) {
-  left: 0;
-  border-left: none;
-  border-radius: 0 8px 8px 0;
-  background: #f8fafc;
-  border-color: #e2e8f0;
-  padding: 0;
-}
-
-:deep(.search-input .ant-input-group-addon .ant-btn) {
-  border-radius: 0 8px 8px 0;
-  height: 36px;
-  border-left: none;
-  background: #f8fafc;
-}
-
-:deep(.search-input .ant-input-group) {
-  display: flex;
-}
-
+.exam-manage-page { display: flex; flex-direction: column; gap: 20px; min-height: 100%; padding: 12px 0 24px; }
+.page-hero { display: flex; justify-content: space-between; gap: 24px; padding: 28px 32px; border-radius: 24px; background: radial-gradient(circle at top right, rgba(59, 130, 246, 0.22), transparent 34%), linear-gradient(135deg, #0f172a 0%, #13315d 100%); color: #f8fafc; }
+.hero-kicker { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(191, 219, 254, 0.92); }
+.page-hero h2 { margin: 10px 0 8px; font-size: 30px; color: #fff; }
+.page-hero p { margin: 0; max-width: 720px; line-height: 1.7; color: rgba(226, 232, 240, 0.92); }
+.hero-actions { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
+.dashboard-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; }
+.metric-card, .filter-card, .table-card { border: 1px solid #e2e8f0; border-radius: 20px; background: #fff; box-shadow: 0 14px 30px rgba(15, 23, 42, 0.04); }
+.metric-card { padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+.metric-label { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #64748b; text-transform: uppercase; }
+.metric-card strong { font-size: 28px; color: #0f172a; }
+.metric-card small { line-height: 1.6; color: #64748b; }
+.filter-card { padding: 20px 24px; }
+.filter-row { display: grid; grid-template-columns: minmax(260px, 1.4fr) repeat(5, minmax(140px, 1fr)); gap: 12px; }
+.search-input, .filter-select { width: 100%; }
+.filter-hint { margin-top: 12px; font-size: 12px; color: #64748b; }
+.table-card { padding: 22px 24px 18px; }
+.table-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 18px; }
+.table-head h3 { margin: 0 0 6px; font-size: 20px; color: #0f172a; }
+.table-head p { margin: 0; color: #64748b; }
+.title-cell { display: flex; flex-direction: column; gap: 8px; }
+.link-button { padding: 0; border: none; background: transparent; text-align: left; font-size: 15px; font-weight: 700; color: #0f172a; cursor: pointer; }
+.link-button:hover { color: #2563eb; }
+.title-meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.stat-block { display: flex; align-items: baseline; gap: 8px; }
+.stat-block strong { font-size: 20px; color: #0f172a; }
+.stat-block span, .stat-sub, .target-list small { color: #64748b; }
+.time-cell, .target-list { display: flex; flex-direction: column; gap: 6px; }
+.drawer-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.drawer-panel { padding: 18px; border-radius: 18px; background: #f8fafc; border: 1px solid #e2e8f0; }
+.drawer-panel h4 { margin: 0 0 16px; font-size: 16px; color: #0f172a; }
+.standalone-tip { padding: 12px 14px; border-radius: 12px; background: #eff6ff; color: #1d4ed8; font-size: 12px; line-height: 1.7; }
+.paper-preview { padding: 16px; border-radius: 14px; border: 1px solid #dbeafe; background: linear-gradient(135deg, #eff6ff 0%, #ffffff 100%); }
+.paper-preview__head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 10px; color: #1e3a8a; font-weight: 600; }
+.paper-preview__head small, .paper-preview__meta { color: #64748b; }
+.paper-preview__meta { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 12px; }
+.import-layout { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 16px; }
+.import-side, .import-main, .preview-grid { display: flex; flex-direction: column; gap: 16px; }
+.import-card { padding: 18px; border-radius: 18px; border: 1px solid #e2e8f0; background: #fff; }
+.import-card--danger { border-color: #fecaca; background: #fff7f7; }
+.import-card__title { margin-bottom: 14px; font-size: 15px; font-weight: 700; color: #0f172a; }
+.import-meta { margin-bottom: 8px; color: #475569; }
+.preview-summary { display: flex; flex-wrap: wrap; gap: 8px; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 12px; }
+@media (max-width: 1400px) { .dashboard-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .filter-row { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 960px) { .page-hero, .table-head { flex-direction: column; } .dashboard-grid, .filter-row, .drawer-grid, .import-layout { grid-template-columns: 1fr; } }
 </style>

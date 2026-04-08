@@ -176,7 +176,10 @@ function setupPlayer() {
     ignores: ['poster', 'fullscreen'],
   })
 
+  let hasEmittedPlay = false
   player.on('play', () => {
+    if (hasEmittedPlay) return
+    hasEmittedPlay = true
     emit('play')
   })
 

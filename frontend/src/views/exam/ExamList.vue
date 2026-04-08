@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h2>在线考试</h2>
-        <p class="page-sub">支持准入考试与班内考核，共用统一题库</p>
+        <p class="page-sub">支持独立考试与培训班考试，共用统一题库与试卷资源</p>
       </div>
       <div class="header-stats">
         <a-tag color="green">可参加 {{ joinableExams.length }} 场</a-tag>
@@ -17,7 +17,8 @@
         <div class="exam-card">
           <div class="exam-card-header">
             <a-tag :color="statusColors[exam.status]">{{ statusLabels[exam.status] }}</a-tag>
-            <a-tag>{{ exam.kind === 'admission' ? '准入考试' : (purposeLabels[exam.purpose] || exam.purpose) }}</a-tag>
+            <a-tag>{{ sceneLabels[exam.scene] || '统一考试' }}</a-tag>
+            <a-tag>{{ purposeLabels[exam.purpose] || exam.purpose || '其他考试' }}</a-tag>
             <a-tag>{{ exam.type === 'formal' ? '正式考核' : '测验' }}</a-tag>
             <a-tag v-for="className in visibleClassTags(exam)" :key="`${exam.kind}-${exam.id}-${className}`" color="cyan">
               {{ className }}
@@ -35,7 +36,7 @@
           </div>
 
           <div class="exam-meta">
-            <div>{{ exam.kind === 'admission' ? `适用范围：${exam.scope || '全体学员'}` : `所属班级：${exam.trainingName || '独立场次'}` }}</div>
+            <div>{{ exam.scene === 'standalone' ? `参试对象：${exam.participantSummary || '按名单导入'}` : `所属班级：${exam.trainingName || '未关联培训班'}` }}</div>
             <div>次数：{{ exam.attemptCount || 0 }}/{{ exam.maxAttempts || 1 }}</div>
             <div>时间：{{ formatDate(exam.startTime) }} ~ {{ formatDate(exam.endTime) }}</div>
             <div v-if="exam.latestResult">最近结果：{{ exam.latestResult === 'pass' ? '通过' : '未通过' }}</div>
@@ -86,18 +87,21 @@ import {
   FileTextOutlined,
   TrophyOutlined,
 } from '@ant-design/icons-vue'
-import { getAdmissionExams, getExams } from '@/api/exam'
+import { getExams } from '@/api/exam'
 
 const router = useRouter()
 const examList = ref([])
 
 const statusLabels = { upcoming: '即将开始', active: '进行中', ended: '已结束' }
 const statusColors = { upcoming: 'orange', active: 'green', ended: 'default' }
+const sceneLabels = { standalone: '独立考试', training: '培训班考试' }
 const purposeLabels = {
   admission: '准入考试',
-  class_assessment: '班内考核',
-  final_assessment: '结业考核',
+  completion: '结课考试',
   quiz: '随堂测验',
+  makeup: '补考',
+  special: '专项考试',
+  other: '其他考试',
 }
 
 const joinableExams = computed(() => examList.value.filter(item => item.canJoin))
@@ -105,23 +109,17 @@ const upcomingExams = computed(() => examList.value.filter(item => item.status =
 
 async function fetchExams() {
   try {
-    const [activeTraining, upcomingTraining, endedTraining, activeAdmission, upcomingAdmission, endedAdmission] = await Promise.all([
+    const [activeExams, upcomingExamsList, endedExams] = await Promise.all([
       getExams({ size: 100, status: 'active' }),
       getExams({ size: 100, status: 'upcoming' }),
       getExams({ size: 100, status: 'ended' }),
-      getAdmissionExams({ size: 100, status: 'active' }),
-      getAdmissionExams({ size: 100, status: 'upcoming' }),
-      getAdmissionExams({ size: 100, status: 'ended' }),
     ])
     const items = [
-      ...(activeTraining.items || []),
-      ...(upcomingTraining.items || []),
-      ...((endedTraining.items || []).filter((item) => (item.attemptCount || 0) > 0)),
-      ...(activeAdmission.items || []),
-      ...(upcomingAdmission.items || []),
-      ...((endedAdmission.items || []).filter((item) => (item.attemptCount || 0) > 0)),
+      ...(activeExams.items || []),
+      ...(upcomingExamsList.items || []),
+      ...((endedExams.items || []).filter((item) => (item.attemptCount || 0) > 0)),
     ]
-    const unique = new Map(items.map(item => [`${item.kind}-${item.id}`, item]))
+    const unique = new Map(items.map(item => [`${item.scene || item.kind}-${item.id}`, item]))
     const statusRank = { active: 0, upcoming: 1, ended: 2 }
     examList.value = [...unique.values()].sort((left, right) => {
       const leftRank = statusRank[left.status] ?? 9
@@ -141,7 +139,7 @@ function formatDate(value) {
 }
 
 function visibleClassTags(exam) {
-  if (exam.kind === 'admission') return []
+  if (exam.scene === 'standalone') return []
   return exam.trainingName ? [exam.trainingName] : []
 }
 
@@ -157,7 +155,7 @@ function hasExamResult(exam) {
 }
 
 function hasSavedProgress(exam) {
-  return !!sessionStorage.getItem(`student-exam:${exam.kind || 'training'}:${exam.id}`)
+  return !!sessionStorage.getItem(`student-exam:${exam.scene === 'standalone' ? 'training' : (exam.kind || 'training')}:${exam.id}`)
 }
 
 function startExam(exam) {
@@ -165,27 +163,28 @@ function startExam(exam) {
     title: '确认开始考试',
     content: `即将进入【${exam.title}】，共 ${exam.questionCount || 0} 题，限时 ${exam.duration || 0} 分钟。`,
     onOk() {
-      router.push({ name: 'DoExam', params: { id: exam.id }, query: { kind: exam.kind || 'training' } })
+      router.push({ name: 'DoExam', params: { id: exam.id }, query: { kind: exam.scene === 'standalone' ? 'training' : (exam.kind || 'training') } })
     },
   })
 }
 
 function viewExamResult(exam) {
-  router.push({ name: 'ExamResult', params: { id: exam.id }, query: { kind: exam.kind || 'training' } })
+  router.push({ name: 'ExamResult', params: { id: exam.id }, query: { kind: exam.scene === 'standalone' ? 'training' : (exam.kind || 'training') } })
 }
 
 function viewExamGuide(exam) {
   const remainingAttempts = Math.max(0, (exam.maxAttempts || 1) - (exam.attemptCount || 0))
   const lines = [
-    `考试类型：${exam.kind === 'admission' ? '准入考试' : (purposeLabels[exam.purpose] || '班内考核')}`,
+    `考试场景：${sceneLabels[exam.scene] || '统一考试'}`,
+    `考试类型：${purposeLabels[exam.purpose] || '其他考试'}`,
     `考试状态：${statusLabels[exam.status] || exam.status || '未设置'}`,
     `考试时长：${exam.duration || 0} 分钟`,
     `题量与分值：${exam.questionCount || 0} 题 / 满分 ${exam.totalScore || 0} 分 / 及格 ${exam.passingScore || 0} 分`,
     `作答次数：已作答 ${exam.attemptCount || 0} 次，剩余 ${remainingAttempts} 次`,
     `考试时间：${formatDate(exam.startTime)} ~ ${formatDate(exam.endTime)}`,
-    exam.kind === 'admission'
-      ? `适用范围：${exam.scope || '全体学员'}`
-      : `所属班级：${exam.trainingName || '独立场次'}`,
+    exam.scene === 'standalone'
+      ? `参试对象：${exam.participantSummary || '按导入名单匹配'}`
+      : `所属班级：${exam.trainingName || '未关联培训班'}`,
     `考试说明：${exam.description || '暂无考试说明'}`,
   ]
 

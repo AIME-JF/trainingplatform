@@ -73,6 +73,8 @@ from .exam import (
     AdmissionExamDetailResponse, AdmissionExamRecordResponse,
     ExamCreate, ExamUpdate, ExamResponse, ExamDetailResponse,
     ExamSubmit, ExamRecordResponse, ExamQuestionSnapshotResponse,
+    ExamParticipantResponse, ExamParticipantImportPreviewResponse,
+    ExamParticipantImportConfirmRequest, ExamParticipantImportRowResponse,
     ExamWrongQuestionResponse,
     PaperFolderCreate, PaperFolderUpdate, PaperFolderResponse, PaperMoveRequest,
     QuestionFolderCreate, QuestionFolderUpdate, QuestionFolderResponse, QuestionMoveRequest
@@ -158,6 +160,9 @@ from .review import (
 from .recommendation import (
     ResourceBehaviorEventCreate,
     ResourceRecommendationItem, ResourceRecommendationFeedResponse,
+    CommunityBoardOverviewResponse, CommunityBoardTrendItem,
+    CommunityBoardInteractionItem, CommunityBoardVideoItem,
+    CommunityBoardDashboardResponse,
     RecommendationScoreBreakdown
 )
 
@@ -215,6 +220,8 @@ __all__ = [
     "AdmissionExamDetailResponse", "AdmissionExamRecordResponse",
     "ExamCreate", "ExamUpdate", "ExamResponse", "ExamDetailResponse",
     "ExamSubmit", "ExamRecordResponse", "ExamQuestionSnapshotResponse",
+    "ExamParticipantResponse", "ExamParticipantImportPreviewResponse",
+    "ExamParticipantImportConfirmRequest", "ExamParticipantImportRowResponse",
     "ExamWrongQuestionResponse",
     "PaperFolderCreate", "PaperFolderUpdate", "PaperFolderResponse", "PaperMoveRequest",
     "QuestionFolderCreate", "QuestionFolderUpdate", "QuestionFolderResponse", "QuestionMoveRequest",
@@ -282,5 +289,8 @@ __all__ = [
     # 推荐
     "ResourceBehaviorEventCreate",
     "ResourceRecommendationItem", "ResourceRecommendationFeedResponse",
+    "CommunityBoardOverviewResponse", "CommunityBoardTrendItem",
+    "CommunityBoardInteractionItem", "CommunityBoardVideoItem",
+    "CommunityBoardDashboardResponse",
     "RecommendationScoreBreakdown",
 ]

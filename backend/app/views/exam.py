@@ -2,8 +2,10 @@
 考试管理路由
 """
 from typing import Optional
+from io import BytesIO
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.controllers import ExamController
@@ -17,6 +19,9 @@ from app.schemas import (
     AdmissionExamUpdate,
     ExamCreate,
     ExamDetailResponse,
+    ExamParticipantImportConfirmRequest,
+    ExamParticipantImportPreviewResponse,
+    ExamParticipantResponse,
     ExamPaperCreate,
     ExamPaperDetailResponse,
     ExamPaperResponse,
@@ -57,6 +62,17 @@ def get_exam_papers(
     _require_admin_or_instructor(db, current_user.user_id)
     controller = ExamController(db)
     data = controller.get_exam_papers(page, size, status, type, search, current_user.user_id, folder_id)
+    return StandardResponse(data=data)
+
+
+@router.get("/dashboard", response_model=StandardResponse[dict], summary="统一考试看板")
+def get_exam_dashboard(
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = ExamController(db)
+    data = controller.get_exam_dashboard()
     return StandardResponse(data=data)
 
 
@@ -312,24 +328,39 @@ def get_admission_exam_analysis(
     return StandardResponse(data=data)
 
 
-@router.get("", response_model=StandardResponse[PaginatedResponse[ExamResponse]], summary="培训班内考试列表")
+@router.get("", response_model=StandardResponse[PaginatedResponse[ExamResponse]], summary="统一考试列表")
 def get_exams(
     page: int = Query(1, ge=1),
     size: int = Query(10, ge=-1),
     status: Optional[str] = None,
     type: Optional[str] = None,
     search: Optional[str] = None,
+    scene: Optional[str] = None,
     training_id: Optional[int] = None,
     purpose: Optional[str] = None,
+    department_id: Optional[int] = None,
+    police_type_id: Optional[int] = None,
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     controller = ExamController(db)
-    data = controller.get_exams(page, size, status, type, search, training_id, purpose, current_user.user_id)
+    data = controller.get_exams(
+        page,
+        size,
+        status,
+        type,
+        search,
+        scene,
+        training_id,
+        purpose,
+        department_id,
+        police_type_id,
+        current_user.user_id,
+    )
     return StandardResponse(data=data)
 
 
-@router.post("", response_model=StandardResponse[ExamResponse], summary="创建培训班内考试")
+@router.post("", response_model=StandardResponse[ExamResponse], summary="创建统一考试")
 def create_exam(
     data: ExamCreate,
     current_user: TokenData = Depends(get_current_user),
@@ -341,7 +372,7 @@ def create_exam(
     return StandardResponse(data=result)
 
 
-@router.put("/{exam_id}", response_model=StandardResponse[ExamResponse], summary="更新培训班内考试")
+@router.put("/{exam_id}", response_model=StandardResponse[ExamResponse], summary="更新统一考试")
 def update_exam(
     exam_id: int,
     data: ExamUpdate,
@@ -354,7 +385,7 @@ def update_exam(
     return StandardResponse(data=result)
 
 
-@router.delete("/{exam_id}", response_model=StandardResponse[dict], summary="删除培训班内考试")
+@router.delete("/{exam_id}", response_model=StandardResponse[dict], summary="删除统一考试")
 def delete_exam(
     exam_id: int,
     current_user: TokenData = Depends(get_current_user),
@@ -366,7 +397,7 @@ def delete_exam(
     return StandardResponse(data=result)
 
 
-@router.get("/{exam_id}", response_model=StandardResponse[ExamDetailResponse], summary="培训班内考试详情")
+@router.get("/{exam_id}", response_model=StandardResponse[ExamDetailResponse], summary="统一考试详情")
 def get_exam(
     exam_id: int,
     current_user: TokenData = Depends(get_current_user),
@@ -377,7 +408,7 @@ def get_exam(
     return StandardResponse(data=data)
 
 
-@router.post("/{exam_id}/submit", response_model=StandardResponse[ExamRecordResponse], summary="提交培训班内考试")
+@router.post("/{exam_id}/submit", response_model=StandardResponse[ExamRecordResponse], summary="提交统一考试")
 def submit_exam(
     exam_id: int,
     data: ExamSubmit,
@@ -389,7 +420,7 @@ def submit_exam(
     return StandardResponse(data=result)
 
 
-@router.get("/{exam_id}/result", response_model=StandardResponse[ExamRecordResponse], summary="培训班内考试结果")
+@router.get("/{exam_id}/result", response_model=StandardResponse[ExamRecordResponse], summary="统一考试结果")
 def get_exam_result(
     exam_id: int,
     current_user: TokenData = Depends(get_current_user),
@@ -403,7 +434,7 @@ def get_exam_result(
 @router.get(
     "/{exam_id}/scores",
     response_model=StandardResponse[PaginatedResponse[ExamRecordResponse]],
-    summary="培训班内考试成绩管理",
+    summary="统一考试成绩管理",
 )
 def get_exam_scores(
     exam_id: int,
@@ -418,7 +449,7 @@ def get_exam_scores(
     return StandardResponse(data=data)
 
 
-@router.get("/{exam_id}/records/analysis", summary="培训班内考试分析报表")
+@router.get("/{exam_id}/records/analysis", summary="统一考试分析报表")
 def get_exam_analysis(
     exam_id: int,
     current_user: TokenData = Depends(get_current_user),
@@ -428,3 +459,90 @@ def get_exam_analysis(
     controller = ExamController(db)
     data = controller.get_exam_analysis(exam_id)
     return StandardResponse(data=data)
+
+
+@router.get("/participants/import/template", summary="下载独立考试名单导入模板")
+def download_exam_participant_import_template(
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = ExamController(db)
+    data = controller.build_exam_participant_import_template()
+    return StreamingResponse(
+        BytesIO(data),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=exam_participants_import_template.xlsx"},
+    )
+
+
+@router.post(
+    "/{exam_id}/participants/import/preview",
+    response_model=StandardResponse[ExamParticipantImportPreviewResponse],
+    summary="预检独立考试名单导入",
+)
+async def preview_exam_participant_import(
+    exam_id: int,
+    file: UploadFile = File(...),
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    file_bytes = await file.read()
+    controller = ExamController(db)
+    data = controller.preview_exam_participant_import(
+        exam_id,
+        file_bytes,
+        file.filename or "participants.xlsx",
+        current_user.user_id,
+    )
+    return StandardResponse(data=data)
+
+
+@router.post(
+    "/{exam_id}/participants/import/confirm",
+    response_model=StandardResponse[ExamParticipantImportPreviewResponse],
+    summary="确认独立考试名单导入",
+)
+def confirm_exam_participant_import(
+    exam_id: int,
+    data: ExamParticipantImportConfirmRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = ExamController(db)
+    result = controller.confirm_exam_participant_import(exam_id, data, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.get(
+    "/{exam_id}/participants",
+    response_model=StandardResponse[list[ExamParticipantResponse]],
+    summary="考试参试名单",
+)
+def list_exam_participants(
+    exam_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = ExamController(db)
+    data = controller.list_exam_participants(exam_id)
+    return StandardResponse(data=data)
+
+
+@router.get("/participants/import/{batch_id}/export", summary="导出考试名单导入结果")
+def export_exam_participant_import_result(
+    batch_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_admin_or_instructor(db, current_user.user_id)
+    controller = ExamController(db)
+    data = controller.export_exam_participant_import_result(batch_id)
+    return StreamingResponse(
+        BytesIO(data),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=exam_participant_import_{batch_id}.xlsx"},
+    )
