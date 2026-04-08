@@ -182,15 +182,19 @@ export const appMenuConfig = [
     ],
   },
   {
-    key: '/evaluation',
-    label: '评价管理',
-    icon: AuditOutlined,
-  },
-  {
     key: 'manage',
     label: '系统管理',
     icon: SettingOutlined,
     children: [
+      {
+        key: '/system/notices',
+        label: '通知管理',
+        roles: ['admin'],
+      },
+      {
+        key: '/evaluation',
+        label: '评价管理',
+      },
       {
         key: '/resource/manage',
         label: '资源管理',
@@ -215,11 +219,6 @@ export const appMenuConfig = [
         key: '/system/dict',
         label: '字典管理',
         anyPermissions: DICT_MANAGE_PAGE_PERMISSIONS,
-      },
-      {
-        key: '/system/notices',
-        label: '通知管理',
-        roles: ['admin'],
       },
       {
         key: '/system/dashboard-modules',

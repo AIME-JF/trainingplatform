@@ -312,6 +312,62 @@ pnpm api:generate
 - 按钮：圆角 8px，padding 6px 16px
 - 选中态：浅蓝底 `--v2-primary-light` + 蓝色文字
 
+#### 页面标题
+
+- `font-size: 20px`，`font-weight: 400`（不加粗），`color: var(--v2-text-primary)`
+- 移动端（≤ 768px）：`font-size: 18px`，`text-align: center`
+- 已应用页面：通知中心、问卷中心
+
+#### 页面级标签页（Pill Tabs）
+
+用于页面顶部的主分类切换（如"正在进行/已结束"、"消息提醒/平台公告"），替代 Ant Design 的 `a-tabs`。
+
+```css
+.page-tabs {
+  display: flex;
+  gap: 0;
+  border-radius: var(--v2-radius-sm);  /* 8px */
+  background: var(--v2-bg);             /* #F5F6FA */
+  padding: 4px;
+}
+
+.page-tab {
+  flex: 1;                              /* 移动端和桌面端均等分填满 */
+  text-align: center;
+  padding: 8px 0;
+  font-size: 14px;
+  color: var(--v2-text-secondary);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.page-tab.active {
+  background: var(--v2-primary);        /* #4B6EF5 */
+  color: #fff;
+  font-weight: 500;
+}
+```
+
+- 每个 tab 使用 `flex: 1` 等分宽度，在任何屏幕宽度下都横向填满
+- 选中态为主色填充 + 白色文字，未选中态为灰色文字
+- 已应用页面：通知中心、问卷中心
+
+#### 内容型页面宽度限制
+
+非网格布局的内容型页面（通知列表、问卷列表、表单填写等）应限制最大宽度并居中，避免桌面端内容过于分散：
+
+```css
+.page-container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+```
+
+- 移动端（≤ 768px）：`padding: 16px 12px`，宽度自然 100%
+- 已应用页面：通知中心、问卷中心、问卷填写
+
 ### 响应式断点
 
 | 断点 | 说明 |

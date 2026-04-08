@@ -185,6 +185,19 @@ export const routes: RouteRecordRaw[] = [
         path: 'resource/ai-generate',
         redirect: { name: 'TeachingResourceGenerationTask' },
       },
+      // -- 问卷评价 --
+      {
+        path: 'evaluation',
+        name: 'EvaluationCenter',
+        component: () => import('@/views/evaluation/Index.vue'),
+        meta: { title: '问卷中心' },
+      },
+      {
+        path: 'evaluation/fill/:taskId',
+        name: 'EvaluationFill',
+        component: () => import('@/views/evaluation/Fill.vue'),
+        meta: { title: '问卷填写' },
+      },
       // -- 个人中心 --
       {
         path: 'profile',

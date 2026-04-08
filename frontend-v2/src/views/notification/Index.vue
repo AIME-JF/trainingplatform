@@ -1,28 +1,30 @@
 <template>
   <div class="notification-page">
     <div class="notification-header">
-      <h1 class="notification-title">通知中心</h1>
+      <h2 class="page-title">通知中心</h2>
       <a-button v-if="hasUnread" type="link" size="small" @click="handleMarkAllRead">
         全部已读
       </a-button>
     </div>
 
-    <a-tabs v-model:activeKey="activeTab" class="notification-tabs" @change="onTabChange">
-      <a-tab-pane key="reminder">
-        <template #tab>
-          <a-badge :count="unreadCount.reminder" :offset="[8, -4]" size="small">
-            <span>消息提醒</span>
-          </a-badge>
-        </template>
-      </a-tab-pane>
-      <a-tab-pane key="system">
-        <template #tab>
-          <a-badge :count="unreadCount.system" :offset="[8, -4]" size="small">
-            <span>平台公告</span>
-          </a-badge>
-        </template>
-      </a-tab-pane>
-    </a-tabs>
+    <div class="page-tabs">
+      <span
+        class="page-tab"
+        :class="{ active: activeTab === 'reminder' }"
+        @click="activeTab = 'reminder'; onTabChange()"
+      >
+        消息提醒
+        <a-badge v-if="unreadCount.reminder" :count="unreadCount.reminder" :offset="[4, -2]" size="small" />
+      </span>
+      <span
+        class="page-tab"
+        :class="{ active: activeTab === 'system' }"
+        @click="activeTab = 'system'; onTabChange()"
+      >
+        平台公告
+        <a-badge v-if="unreadCount.system" :count="unreadCount.system" :offset="[4, -2]" size="small" />
+      </span>
+    </div>
 
     <div class="notification-body">
       <a-spin :spinning="loading">
@@ -152,18 +154,44 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 16px;
 }
 
-.notification-title {
-  font-size: 22px;
-  font-weight: 700;
+.page-title {
+  font-size: 20px;
+  font-weight: 400;
   color: var(--v2-text-primary);
   margin: 0;
 }
 
-.notification-tabs {
-  margin-bottom: 4px;
+.page-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 16px;
+  border-radius: var(--v2-radius-sm);
+  background: var(--v2-bg);
+  padding: 4px;
+}
+
+.page-tab {
+  flex: 1;
+  text-align: center;
+  padding: 8px 0;
+  font-size: 14px;
+  color: var(--v2-text-secondary);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.page-tab.active {
+  background: var(--v2-primary);
+  color: #fff;
+  font-weight: 500;
 }
 
 .notification-body {
@@ -258,8 +286,15 @@ onMounted(() => {
   .notification-page {
     padding: 16px 12px;
   }
-  .notification-title {
+  .page-title {
     font-size: 18px;
+    width: 100%;
+    text-align: center;
+  }
+  .notification-header {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
   }
 }
 </style>
