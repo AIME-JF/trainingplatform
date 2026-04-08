@@ -162,6 +162,13 @@ from .review import (
     ReviewWorkflowResponse, ReviewLogResponse,
     SubmitReviewRequest,
 )
+from .evaluation import (
+    EvaluationDimensionCreate, EvaluationDimensionUpdate, EvaluationDimensionResponse,
+    EvaluationTemplateResponse, EvaluationTemplateUpdate,
+    EvaluationTaskCreate, EvaluationTaskUpdate, EvaluationTaskResponse,
+    EvaluationSubmit, EvaluationScoreItem, EvaluationScoreResponse,
+    EvaluationRecordResponse, EvaluationSummaryResponse, EvaluationDimensionStat,
+)
 from .recommendation import (
     ResourceBehaviorEventCreate,
     ResourceRecommendationItem, ResourceRecommendationFeedResponse,

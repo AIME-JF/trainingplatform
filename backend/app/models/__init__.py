@@ -9,6 +9,7 @@ from .police_type import PoliceType, user_police_types
 from .training_type import TrainingType
 from .dict_instructor_specialty import DictInstructorSpecialty
 from .instructor_tag import InstructorTag
+from .evaluation import EvaluationTemplate, EvaluationDimension, EvaluationTask, EvaluationRecord, EvaluationScore
 from .system import Config, ConfigGroup, ConfigFormat, DashboardModuleConfig
 from .course import (
     Course, Chapter, CourseNote, CourseProgress, CourseTag, CourseTagRelation, CourseQA
@@ -65,6 +66,7 @@ __all__ = [
     "TrainingType",
     "DictInstructorSpecialty",
     "InstructorTag",
+    "EvaluationTemplate", "EvaluationDimension", "EvaluationTask", "EvaluationRecord", "EvaluationScore",
     "department_permissions",
     # 课程相关
     "Course", "Chapter", "CourseNote", "CourseProgress", "CourseTag", "CourseTagRelation", "CourseQA",

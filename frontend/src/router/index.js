@@ -331,6 +331,12 @@ const router = createRouter({
           meta: { title: '字典管理', anyPermissions: DICT_MANAGE_PAGE_PERMISSIONS },
         },
         {
+          path: 'evaluation',
+          name: 'EvaluationManage',
+          component: () => import('../views/evaluation/EvaluationManage.vue'),
+          meta: { title: '评价管理' },
+        },
+        {
           path: 'profile',
           name: 'Profile',
           component: () => import('../views/profile/Index.vue'),

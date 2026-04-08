@@ -8,6 +8,7 @@ from app.models import User, Role, Permission, Department, PoliceType
 from app.models.permission import PermissionGroup
 from app.models.training_type import TrainingType
 from app.models.dict_instructor_specialty import DictInstructorSpecialty
+from app.models.evaluation import EvaluationTemplate, EvaluationDimension
 from app.models.system import SystemMeta
 from app.services.auth import auth_service
 from app.services.system import SystemConfigService
@@ -667,6 +668,83 @@ def init_instructor_specialties():
         raise
 
 
+def init_evaluation_templates():
+    """初始化评价问卷模板（固定 4 种）"""
+    try:
+        with Session(engine) as db:
+            if db.query(EvaluationTemplate).count() > 0:
+                logger.info("评价模板数据已存在，跳过初始化")
+                return
+
+            templates = [
+                {
+                    "name": "课程评价",
+                    "target_type": "course",
+                    "description": "对课程内容的评价",
+                    "dimensions": [
+                        {"name": "实用性", "description": "内容是否贴合工作实际、能学以致用", "sort_order": 1},
+                        {"name": "前沿与丰富度", "description": "知识点是否充实、与时俱进", "sort_order": 2},
+                        {"name": "结构与难度", "description": "逻辑是否清晰、难易程度是否适中", "sort_order": 3},
+                    ],
+                },
+                {
+                    "name": "教官评价",
+                    "target_type": "instructor",
+                    "description": "对教官授课的评价",
+                    "dimensions": [
+                        {"name": "专业水平", "description": "专业功底与答疑能力", "sort_order": 1},
+                        {"name": "授课技巧", "description": "表达是否生动、教学方法是否多样", "sort_order": 2},
+                        {"name": "课堂互动", "description": "是否能调动氛围、引导学员参与", "sort_order": 3},
+                    ],
+                },
+                {
+                    "name": "培训班评价",
+                    "target_type": "training",
+                    "description": "对培训班软性管理的评价",
+                    "dimensions": [
+                        {"name": "教学安排", "description": "课程节奏与时间规划是否合理", "sort_order": 1},
+                        {"name": "班级管理", "description": "纪律维护、团队建设与学习氛围", "sort_order": 2},
+                        {"name": "教务服务", "description": "带班队长的组织能力", "sort_order": 3},
+                    ],
+                },
+                {
+                    "name": "培训基地评价",
+                    "target_type": "training_base",
+                    "description": "对培训基地硬件后勤的评价",
+                    "dimensions": [
+                        {"name": "教学设施", "description": "教学环境及教学设备运行情况", "sort_order": 1},
+                        {"name": "食宿质量", "description": "餐饮口味/卫生，宿舍环境/设施", "sort_order": 2},
+                        {"name": "后勤保障", "description": "整体环境安全及工作人员响应速度", "sort_order": 3},
+                    ],
+                },
+            ]
+
+            for tpl_data in templates:
+                tpl = EvaluationTemplate(
+                    name=tpl_data["name"],
+                    target_type=tpl_data["target_type"],
+                    description=tpl_data["description"],
+                    enabled=True,
+                )
+                db.add(tpl)
+                db.flush()
+                for dim_data in tpl_data["dimensions"]:
+                    db.add(EvaluationDimension(
+                        template_id=tpl.id,
+                        name=dim_data["name"],
+                        description=dim_data["description"],
+                        sort_order=dim_data["sort_order"],
+                        weight=1.0,
+                    ))
+
+            db.commit()
+            logger.info("评价模板初始化完成，共创建 4 个模板")
+
+    except Exception as e:
+        logger.error(f"初始化评价模板失败: {e}")
+        raise
+
+
 def main():
     """主函数"""
     try:
@@ -676,6 +754,7 @@ def main():
         init_system_configs()
         init_training_types()
         init_instructor_specialties()
+        init_evaluation_templates()
         init_permission_groups()
         init_permissions()
         sync_permission_group_ids()

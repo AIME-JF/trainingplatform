@@ -182,6 +182,11 @@ export const appMenuConfig = [
     ],
   },
   {
+    key: '/evaluation',
+    label: '评价管理',
+    icon: AuditOutlined,
+  },
+  {
     key: 'manage',
     label: '系统管理',
     icon: SettingOutlined,
