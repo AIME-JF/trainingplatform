@@ -33,8 +33,11 @@ from app.schemas import (
     TrainingCourseResponse,
     TrainingCreate,
     TrainingCourseChangeLogResponse,
+    TrainingExamSummary,
     TrainingEvaluationCreate,
     TrainingHistoryResponse,
+    TrainingQuizPublishRequest,
+    TrainingQuizUpdateRequest,
     TrainingListResponse,
     TrainingStatsResponse,
     CalendarEventResponse,
@@ -253,6 +256,58 @@ def get_training(
     controller = TrainingController(db)
     data = controller.get_training_by_id(training_id, current_user.user_id)
     return StandardResponse(data=data)
+
+
+@router.post(
+    "/{training_id}/quizzes",
+    response_model=StandardResponse[TrainingExamSummary],
+    summary="发布培训班随堂测试",
+)
+def create_training_quiz(
+    training_id: int,
+    data: TrainingQuizPublishRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_training_manager(db, training_id, current_user.user_id)
+    controller = TrainingController(db)
+    result = controller.create_training_quiz(training_id, data, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.put(
+    "/{training_id}/quizzes/{exam_id}",
+    response_model=StandardResponse[TrainingExamSummary],
+    summary="更新培训班随堂测试",
+)
+def update_training_quiz(
+    training_id: int,
+    exam_id: int,
+    data: TrainingQuizUpdateRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_training_manager(db, training_id, current_user.user_id)
+    controller = TrainingController(db)
+    result = controller.update_training_quiz(training_id, exam_id, data, current_user.user_id)
+    return StandardResponse(data=result)
+
+
+@router.delete(
+    "/{training_id}/quizzes/{exam_id}",
+    response_model=StandardResponse[dict],
+    summary="删除培训班随堂测试",
+)
+def delete_training_quiz(
+    training_id: int,
+    exam_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_training_manager(db, training_id, current_user.user_id)
+    controller = TrainingController(db)
+    result = controller.delete_training_quiz(training_id, exam_id, current_user.user_id)
+    return StandardResponse(data=result)
 
 
 @router.put("/{training_id}", response_model=StandardResponse[TrainingResponse], summary="更新培训班")

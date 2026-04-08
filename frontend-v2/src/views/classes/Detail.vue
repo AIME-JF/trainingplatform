@@ -172,11 +172,14 @@
 
           <!-- ========== 考试 ========== -->
           <div v-if="activeTab === 'exam'" class="tab-panel">
-            <a-empty v-if="!detail.exam_sessions?.length" description="暂无考试安排" />
+            <a-empty v-if="!classExamSessions.length" description="暂无考试安排" />
             <div v-else class="exam-list">
-              <div v-for="exam in detail.exam_sessions" :key="exam.id" class="exam-row">
+              <div v-for="exam in classExamSessions" :key="exam.id" class="exam-row">
                 <div class="exam-info">
-                  <span class="exam-title">{{ exam.title || '考试' }}</span>
+                  <div class="exam-title-row">
+                    <span class="exam-title">{{ exam.title || '考试' }}</span>
+                    <a-tag color="blue">{{ getExamPurposeLabel(exam.purpose) }}</a-tag>
+                  </div>
                   <span class="exam-time">{{ formatDateTime(exam.start_time) }}</span>
                 </div>
                 <a-button
@@ -188,6 +191,18 @@
                 </a-button>
               </div>
             </div>
+          </div>
+
+          <!-- ========== 随堂测试 ========== -->
+          <div v-if="activeTab === 'quiz'" class="tab-panel">
+            <ClassQuizTab
+              :training-id="trainingId"
+              :quiz-sessions="quizExamSessions"
+              :courses="courses"
+              :is-instructor="isClassInstructor"
+              :is-student="authStore.isStudent"
+              @refresh="fetchDetail"
+            />
           </div>
 
           <!-- ========== 学员名单 ========== -->
@@ -341,6 +356,7 @@ import CurrentSessionCard from '@/components/classes/detail/CurrentSessionCard.v
 import ActivityFeed from '@/components/classes/detail/ActivityFeed.vue'
 import NoticeList from '@/components/classes/detail/NoticeList.vue'
 import CourseScheduleTab from '@/components/classes/detail/CourseScheduleTab.vue'
+import ClassQuizTab from '@/components/classes/detail/ClassQuizTab.vue'
 import ClassResourcesTab from '@/components/classes/detail/ClassResourcesTab.vue'
 import CheckinManager from '@/components/classes/detail/CheckinManager.vue'
 import CheckoutManager from '@/components/classes/detail/CheckoutManager.vue'
@@ -355,7 +371,21 @@ const authStore = useAuthStore()
 const loading = ref(false)
 const activeTab = ref('overview')
 
-const detail = ref<TrainingResponse | null>(null)
+type TrainingDetail = TrainingResponse & {
+  is_related_user?: boolean
+}
+
+type TrainingExamSession = NonNullable<TrainingResponse['exam_sessions']>[number] & {
+  type?: string | null
+  description?: string | null
+  duration?: number
+  max_attempts?: number
+  attempt_count?: number
+  latest_result?: string | null
+  can_join?: boolean | null
+}
+
+const detail = ref<TrainingDetail | null>(null)
 const students = ref<any[]>([])
 const checkinRecords = ref<any[]>([])
 const notices = ref<any[]>([])
@@ -485,12 +515,25 @@ const visibleTabs = computed(() => {
     { key: 'schedule', label: '课程' },
     { key: 'resources', label: '班级资源' },
     { key: 'exam', label: '考试' },
+    { key: 'quiz', label: '随堂测试' },
   ]
   if (isClassInstructor.value) {
     tabs.push({ key: 'students', label: '学员名单' })
   }
   return tabs
 })
+
+const allExamSessions = computed<TrainingExamSession[]>(() =>
+  (detail.value?.exam_sessions || []) as TrainingExamSession[],
+)
+
+const quizExamSessions = computed(() =>
+  allExamSessions.value.filter((item) => (item.purpose || '').toLowerCase() === 'quiz'),
+)
+
+const classExamSessions = computed(() =>
+  allExamSessions.value.filter((item) => (item.purpose || '').toLowerCase() !== 'quiz'),
+)
 
 const filteredStudents = computed(() => {
   const list = students.value
@@ -523,6 +566,18 @@ function checkinRateClass(rate: number | null | undefined): string {
 function enrollStatusLabel(status: string): string {
   const map: Record<string, string> = { approved: '已通过', pending: '待审核', rejected: '未通过' }
   return map[status] || status
+}
+
+function getExamPurposeLabel(purpose?: string | null): string {
+  const map: Record<string, string> = {
+    completion: '结课考试',
+    makeup: '补考',
+    special: '专项考试',
+    other: '其他考试',
+    quiz: '随堂测试',
+    admission: '准入考试',
+  }
+  return map[String(purpose || '').toLowerCase()] || '考试'
 }
 
 function canTakeExam(exam: { start_time?: string | null; end_time?: string | null }): boolean {
@@ -651,14 +706,30 @@ let trainingWs: WebSocket | null = null
 const latestWsActivity = ref<TrainingActivityResponse | null>(null)
 const wsCheckinRefreshKey = ref(0)
 
+function resolveTrainingWsUrl(token: string, currentTrainingId: number | string) {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined
+
+  let apiOrigin = window.location.origin
+  if (configuredBaseUrl) {
+    try {
+      apiOrigin = new URL(configuredBaseUrl, window.location.origin).origin
+    } catch {
+      apiOrigin = window.location.origin
+    }
+  }
+
+  const wsBaseUrl = new URL(apiOrigin)
+  wsBaseUrl.protocol = protocol
+  wsBaseUrl.pathname = `/ws/trainings/${currentTrainingId}/activities`
+  wsBaseUrl.search = `token=${encodeURIComponent(token)}`
+  return wsBaseUrl.toString()
+}
+
 function connectTrainingWs() {
   const token = localStorage.getItem('token')
   if (!token || !trainingId.value) return
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const host = import.meta.env.VITE_API_BASE_URL
-    ? new URL(import.meta.env.VITE_API_BASE_URL as string).host
-    : location.host
-  const url = `${protocol}//${host}/ws/trainings/${trainingId.value}/activities?token=${token}`
+  const url = resolveTrainingWsUrl(token, trainingId.value)
 
   trainingWs = new WebSocket(url)
   trainingWs.onmessage = (event) => {
@@ -958,6 +1029,7 @@ watch(activeTab, (tab) => {
 .exam-title { font-size: 14px; font-weight: 500; color: var(--v2-text-primary); }
 .exam-time { font-size: 12px; color: var(--v2-text-muted); margin-top: 2px; }
 .exam-info { display: flex; flex-direction: column; }
+.exam-title-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 /* ====== 学员名单 ====== */
 .student-toolbar {

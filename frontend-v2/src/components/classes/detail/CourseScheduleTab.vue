@@ -77,10 +77,10 @@
     <ManualAttendance
       v-if="canManualAttendance"
       v-model:visible="manualAttendanceVisible"
-      :training-id="trainingId"
+      :training-id="props.trainingId || ''"
       :session-id="manualSessionId"
       :session-label="manualSessionLabel"
-      :students="students"
+      :students="props.students || []"
       @submitted="emit('refresh')"
     />
   </div>
@@ -104,7 +104,9 @@ const emit = defineEmits<{
   (e: 'refresh'): void
 }>()
 
-const canManualAttendance = computed(() => props.isInstructor && props.trainingId && props.students?.length)
+const canManualAttendance = computed(() =>
+  Boolean(props.isInstructor && props.trainingId && (props.students?.length || 0) > 0),
+)
 
 const manualAttendanceVisible = ref(false)
 const manualSessionId = ref('')

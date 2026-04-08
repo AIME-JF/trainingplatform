@@ -2148,6 +2148,10 @@ class ExamService:
             model.status == "submitted",
         ).count()
 
+    def _to_exam_response(self, exam: Exam, current_user_id: Optional[int] = None) -> ExamResponse:
+        """统一考试响应兼容入口。"""
+        return self._to_training_exam_response(exam, current_user_id)
+
     def _to_training_exam_response(self, exam: Exam, current_user_id: Optional[int] = None) -> ExamResponse:
         attempt_count = 0
         latest_result = None
