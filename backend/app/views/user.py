@@ -202,7 +202,7 @@ def get_user(
     """获取用户详情"""
     _require_permission(current_user, "GET_USER")
     user = _get_scoped_user_or_403(db, user_id, current_user.user_id)
-    return StandardResponse(data=UserSimpleResponse.model_validate(user))
+    return StandardResponse(data=UserService(db)._to_simple_response(user))
 
 
 @router.post("", response_model=StandardResponse[UserSimpleResponse], summary="创建用户")
@@ -262,7 +262,7 @@ def create_user(
     db.commit()
     db.refresh(user)
     logger.info(f"创建用户: {data.username}")
-    return StandardResponse(data=UserSimpleResponse.model_validate(user))
+    return StandardResponse(data=UserService(db)._to_simple_response(user))
 
 
 @router.put("/{user_id}", response_model=StandardResponse[UserSimpleResponse], summary="更新用户")
@@ -283,7 +283,7 @@ def update_user(
     db.commit()
     db.refresh(user)
     logger.info(f"更新用户: {user.username}")
-    return StandardResponse(data=UserSimpleResponse.model_validate(user))
+    return StandardResponse(data=UserService(db)._to_simple_response(user))
 
 
 @router.put("/{user_id}/roles", response_model=StandardResponse[UserSimpleResponse], summary="更新用户角色")
@@ -304,7 +304,7 @@ def update_user_roles(
     db.commit()
     db.refresh(user)
     logger.info(f"更新用户角色: {user.username}")
-    return StandardResponse(data=UserSimpleResponse.model_validate(user))
+    return StandardResponse(data=UserService(db)._to_simple_response(user))
 
 
 @router.put("/{user_id}/departments", response_model=StandardResponse[UserSimpleResponse], summary="更新用户所属单位")
@@ -326,7 +326,7 @@ def update_user_departments(
     db.commit()
     db.refresh(user)
     logger.info(f"更新用户所属单位: {user.username}")
-    return StandardResponse(data=UserSimpleResponse.model_validate(user))
+    return StandardResponse(data=UserService(db)._to_simple_response(user))
 
 
 @router.put("/{user_id}/police-types", response_model=StandardResponse[UserSimpleResponse], summary="更新用户警种")
@@ -348,7 +348,7 @@ def update_user_police_types(
     db.commit()
     db.refresh(user)
     logger.info(f"更新用户警种: {user.username}")
-    return StandardResponse(data=UserSimpleResponse.model_validate(user))
+    return StandardResponse(data=UserService(db)._to_simple_response(user))
 
 
 @router.put("/{user_id}/password", response_model=StandardResponse, summary="重置密码")
