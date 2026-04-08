@@ -145,7 +145,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { PlusOutlined } from '@ant-design/icons-vue'
@@ -236,6 +236,17 @@ const paperSelectOptions = computed(() =>
 function filterSelectOption(input: string, option?: { label?: string }) {
   return String(option?.label || '').toLowerCase().includes(input.toLowerCase())
 }
+
+watch(
+  () => form.value.paperId,
+  (paperId) => {
+    if (isEditing.value || publishMode.value !== 'paper' || !paperId) return
+    const selectedPaper = paperOptions.value.find((item) => item.id === paperId)
+    if (selectedPaper?.title) {
+      form.value.title = selectedPaper.title
+    }
+  },
+)
 
 function resetForm() {
   publishMode.value = 'paper'
