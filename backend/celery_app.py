@@ -18,6 +18,7 @@ celery_app = Celery(
         "app.tasks.teaching_resource_generation",
         "app.tasks.schedule_file_parse",
         "app.tasks.ai_task_timeout",
+        "app.tasks.video_keyframe",
     ]
 )
 

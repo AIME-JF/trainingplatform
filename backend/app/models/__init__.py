@@ -43,6 +43,7 @@ from .recommendation import ResourceBehaviorEvent, ResourceRecommendScore
 from .training_activity import TrainingActivity
 from .training_plan import TrainingPlan
 from .practice import PracticeRecord
+from .video_keyframe import VideoKeyframeTask, VideoKeyframe
 
 
 __all__ = [
@@ -99,4 +100,6 @@ __all__ = [
     "TrainingPlan",
     # 练习记录
     "PracticeRecord",
+    # 视频关键帧
+    "VideoKeyframeTask", "VideoKeyframe",
 ]

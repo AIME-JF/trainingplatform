@@ -10,7 +10,7 @@ ENV PYTHONUNBUFFERED=1 \
 # 安装系统依赖
 RUN sed -i 's@deb.debian.org@mirrors.aliyun.com@g' /etc/apt/sources.list.d/debian.sources
 RUN apt-get update && \
-    apt-get install -y gcc default-libmysqlclient-dev libpq-dev pkg-config tzdata && \
+    apt-get install -y gcc default-libmysqlclient-dev libpq-dev pkg-config tzdata ffmpeg && \
     ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
     echo "Asia/Shanghai" > /etc/timezone && \
     rm -rf /var/lib/apt/lists/*

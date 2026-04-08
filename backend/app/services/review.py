@@ -11,7 +11,8 @@ from dataclasses import dataclass, field
 
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import Resource, User, Role, Department
+from app.models import Resource, ResourceMediaLink, MediaFile, User, Role, Department
+from app.models.video_keyframe import VideoKeyframeTask
 from app.models.review import (
     ReviewPolicy, ReviewPolicyStage,
     ReviewWorkflow, ReviewTask, ReviewLog,
@@ -61,6 +62,7 @@ def _resource_on_submitted(db: Session, business_id: int):
     resource = db.query(Resource).filter(Resource.id == business_id).first()
     if resource:
         resource.status = 'pending_review'
+        _trigger_video_keyframe_extraction(db, resource)
 
 
 def _resource_on_approved(db: Session, business_id: int):
@@ -81,6 +83,45 @@ def _resource_on_stage_advanced(db: Session, business_id: int):
     resource = db.query(Resource).filter(Resource.id == business_id).first()
     if resource:
         resource.status = 'reviewing'
+
+
+def _trigger_video_keyframe_extraction(db: Session, resource: Resource):
+    """如果资源包含视频文件，创建关键帧抽取任务"""
+    from logger import logger
+    try:
+        video_links = db.query(ResourceMediaLink).join(MediaFile).filter(
+            ResourceMediaLink.resource_id == resource.id,
+            MediaFile.mime_type.like('video/%'),
+        ).all()
+
+        if not video_links:
+            return
+
+        from app.tasks.video_keyframe import schedule_keyframe_task
+
+        for link in video_links:
+            # 避免重复创建
+            existing = db.query(VideoKeyframeTask.id).filter(
+                VideoKeyframeTask.media_file_id == link.media_file_id,
+                VideoKeyframeTask.resource_id == resource.id,
+                VideoKeyframeTask.status.in_(["pending", "running", "success", "partial_success"]),
+            ).first()
+            if existing:
+                continue
+
+            task = VideoKeyframeTask(
+                media_file_id=link.media_file_id,
+                resource_id=resource.id,
+                status="pending",
+            )
+            db.add(task)
+            db.flush()
+
+            schedule_keyframe_task(preferred_task_id=task.id, db=db)
+
+        logger.info("资源 %s 已触发 %d 个视频关键帧抽取任务", resource.id, len(video_links))
+    except Exception as exc:
+        logger.error("触发关键帧抽取失败(resource=%s): %s", resource.id, exc)
 
 
 ReviewCallbackRegistry.register('resource', ReviewCallbacks(

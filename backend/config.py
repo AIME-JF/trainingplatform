@@ -65,6 +65,14 @@ class Settings(BaseSettings):
     AI_TASK_MAX_CONCURRENCY: int = 5
     AI_TASK_TIMEOUT_MINUTES: int = 15
 
+    # 视频关键帧抽取
+    KEYFRAME_TASK_TIMEOUT_MINUTES: int = 10
+    KEYFRAME_BASE_INTERVAL_SECONDS: int = 15
+    KEYFRAME_MAX_PER_MINUTE: int = 6
+    KEYFRAME_THUMBNAIL_HEIGHT: int = 480
+    KEYFRAME_THUMBNAIL_FPS: int = 5
+    KEYFRAME_JPEG_QUALITY: int = 80
+
     @field_validator("DEBUG", mode="before")
     @classmethod
     def normalize_debug_flag(cls, value):
