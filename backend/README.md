@@ -85,11 +85,14 @@ backend/
 │   │   ├── teaching_resource_parser.py      # 教学资源需求解析
 │   │   ├── teaching_resource_content_agent.py  # 教学资源内容生成
 │   │   └── training_create_parser.py   # 培训班智能创建解析（多轮对话）
-│   ├── tasks/                      # Celery 异步任务（5 个任务模块）
+│   ├── tasks/                      # Celery 异步任务（8 个任务模块 + 定时任务）
 │   │   ├── ai_question.py          # 智能出题
 │   │   ├── ai_paper_assembly.py    # 自动组卷
+│   │   ├── ai_paper_generation.py  # 自动生成试卷
 │   │   ├── ai_schedule.py          # 排课建议
+│   │   ├── ai_task_timeout.py      # AI 任务超时自动清理（Beat 定时任务）
 │   │   ├── teaching_resource_generation.py  # 教学资源生成
+│   │   ├── schedule_file_parse.py  # 课表文件解析
 │   │   └── recommendation.py       # 推荐刷新（占位）
 │   ├── models/                     # SQLAlchemy 模型（18 个模型模块）
 │   │   ├── user.py, role.py, permission.py, department.py, police_type.py
@@ -115,12 +118,12 @@ backend/
 │       ├── permission_group.py     # 权限分组推断
 │       ├── system_initial_configs.py  # 初始化配置模板
 │       └── utils.py                # 通用工具
-├── alembic/                        # 数据库迁移版本（30 个版本文件）
+├── alembic/                        # 数据库迁移版本（57 个版本文件）
 ├── data/                           # 本地临时文件目录（.gitignore）
 ├── docker/                         # 容器启动脚本（entrypoint.sh）
 ├── tests/                          # 测试脚本
 ├── main.py                         # uvicorn 启动入口
-├── config.py                       # Settings 定义（DB / Redis / MinIO / JWT / LLM）
+├── config.py                       # Settings 定义（DB / Redis / MinIO / JWT / AI 任务并发与超时）
 ├── logger.py                       # Loguru 配置（控制台 + 按天轮转文件）
 ├── migrate.py                      # Alembic 管理脚本
 ├── init_data.py                    # 种子数据与系统配置初始化
@@ -133,12 +136,11 @@ backend/
 
 ### 考试域
 
-当前考试域已拆成四层：
+当前考试域已拆成三层：
 
 | 层级 | 模型 | 说明 |
 | --- | --- | --- |
-| 知识点 | `KnowledgePoint` | 知识点主数据，与题目多对多 |
-| 题库 | `Question` | 统一题库，关联知识点 |
+| 题库 | `Question` | 统一题库 |
 | 试卷 | `ExamPaper` | 独立试卷，维护题目快照与状态 |
 | 考试 | `AdmissionExam` / `Exam` | 准入考试（独立）/ 培训班考试（关联 `training_id`） |
 
@@ -146,8 +148,8 @@ backend/
 
 - 试卷状态流：`draft → published → archived`
 - 试卷发布后不可再修改题目；已被考试引用的试卷不能删除
-- 题目不再使用单个知识点字符串，改为 `knowledge_points` 关联和知识点快照
 - 只有已发布试卷才能创建准入考试和培训班考试
+- 培训班内考试支持一站式快速创建（选择已有试卷或新建试卷）
 - 准入考试范围由 `scope_type + scope_target_ids` 控制，支持 `all`、`user`、`department`、`role`
 - 准入考试列表、详情、交卷都会按适用范围做后端校验
 - 培训班报名时，如果绑定了 `admission_exam_id`，必须先有通过记录
@@ -166,6 +168,8 @@ backend/
 | AI 个训方案 | `personal_training_plan_generation` | 同步 | `personal_training_plan_agent` |
 
 统一任务状态：`pending → processing → completed → confirmed`（异常则 `failed`）
+
+异步任务调度支持可配置并行数（`AI_TASK_MAX_CONCURRENCY`，默认 5）和超时自动清理（`AI_TASK_TIMEOUT_MINUTES`，默认 15 分钟）。Celery Beat 每分钟扫描超时的 `processing` 任务，自动标记 `failed` 并 revoke Worker 中对应的 Celery 任务，然后触发后续调度填补空闲槽位。
 
 #### 各任务线实现差异
 
@@ -239,7 +243,8 @@ AI 运行时配置：
 
 当前培训域主链路：
 
-- 培训基地：独立 `TrainingBase` 模型
+- 培训计划：独立 `TrainingPlan` 模型，支持创建年度 / 季度培训计划并关联培训班
+- 培训基地：独立 `TrainingBase` 模型，返回 `used_capacity`（非结束状态关联培训班容量总和）用于容量使用统计
 - 培训班流程：`发布招生 → 锁定名单 → 开班 → 结班`
 - 培训班报名模式：`enrollment_requires_approval`（`true` = 待审核，`false` = 直接通过）；报名不限角色，任何不在班内的用户均可申请
 - 报名提交后自动向班主任（`instructor_id`）发送 `reminder` 类通知（`reminder_type=enrollment_pending`）
@@ -360,7 +365,7 @@ AI 个训任务支持：
 
 已注册的 24 个业务路由模块（统一前缀 `/api/v1`）：
 
-`auth` · `user` · `role` · `department` · `permission` · `police-type` · `course` · `training` · `training-base` · `exam` · `question` · `knowledge-point` · `resource` · `review` · `recommendation` · `ai` · `media` · `dashboard` · `profile` · `report` · `certificate` · `talent` · `notice` · `system`
+`auth` · `user` · `role` · `department` · `permission` · `police-type` · `course` · `training` · `training-base` · `training-plan` · `exam` · `question` · `knowledge-point` · `resource` · `review` · `recommendation` · `ai` · `media` · `dashboard` · `profile` · `report` · `certificate` · `talent` · `notice` · `system`
 
 ## 启动流程
 
@@ -444,18 +449,27 @@ python main.py
 
 ### 当前注册到 Celery 的任务
 
-`celery_app.py` 当前显式注册了四类任务：
+`celery_app.py` 当前显式注册的任务模块：
 
 | 任务模块 | 对应功能 | 是否必须 |
 | --- | --- | --- |
 | `app.tasks.ai_question` | AI 智能出题 | 需要 Worker |
 | `app.tasks.ai_paper_assembly` | AI 自动组卷 | 需要 Worker |
+| `app.tasks.ai_paper_generation` | AI 自动生成试卷 | 需要 Worker |
 | `app.tasks.ai_schedule` | AI 排课建议 | 需要 Worker |
 | `app.tasks.teaching_resource_generation` | 教学资源生成 | 需要 Worker |
+| `app.tasks.schedule_file_parse` | 课表文件解析 | 需要 Worker |
+| `app.tasks.ai_task_timeout` | AI 任务超时清理 | 需要 Beat |
 
-不依赖 Worker 的任务：`AI 自动生成试卷`、`AI 个训方案`（同步生成）
+不依赖 Worker 的任务：`AI 个训方案`（同步生成）
 
-`app/tasks/recommendation.py` 目前只是占位脚本，没有注册成 Celery 定时任务。
+Beat 定时任务编排：
+
+| 任务 | 周期 | 说明 |
+| --- | --- | --- |
+| `check-ai-task-timeout` | 每 60 秒 | 扫描超时的 processing 任务并标记失败 |
+
+`app/tasks/recommendation.py` 目前只是占位脚本，没有注册成 Celery 任务。
 
 ### 启动 Worker
 
@@ -475,9 +489,9 @@ celery -A celery_app beat --loglevel=info
 
 说明：
 
-- Worker 镜像与 API 镜像共用 `backend/Dockerfile`
-- 默认 Compose 只启动 `worker`，不启动 `beat`
-- 当前仓库没有启用的周期任务编排，`beat` 主要用于后续扩展
+- Worker 和 Beat 镜像与 API 镜像共用 `backend/Dockerfile`
+- 默认 Compose 同时启动 `worker` 和 `beat`
+- Beat 负责 AI 任务超时清理等定时任务
 
 ## Docker 启动入口
 
@@ -521,7 +535,9 @@ celery -A celery_app beat --loglevel=info
 
 ### 需要特别注意的点
 
-- `LLM_*` 仍保留在 `config.py` 中，但 AI 智能出题和 AI 排课自然语言解析实际优先读取系统配置组 `ai`
+- `AI_TASK_MAX_CONCURRENCY`：AI 异步任务最大并行数（默认 5）
+- `AI_TASK_TIMEOUT_MINUTES`：AI 任务超时时间（默认 15 分钟）
+- AI 智能出题和 AI 排课自然语言解析读取系统配置组 `ai`
 - 培训排课默认规则来自系统配置组 `training_schedule`
 - 系统配置会同步到 Redis 缓存；修改配置后由配置服务负责刷新缓存
 - 数据库连接池配置：`pool_size=20`、`max_overflow=50`、`pool_timeout=30s`、`pool_recycle=1h`
@@ -539,7 +555,7 @@ python migrate.py status           # 查看状态
 python migrate.py generate "msg"   # 生成新迁移
 ```
 
-当前迁移已覆盖的关键改造（30 个版本文件）：
+当前迁移已覆盖的关键改造（57 个版本文件）：
 
 - 考试 P0 重构、试卷状态字段、准入考试结构化适用范围
 - 题目知识点拆表、多对多关联与试卷知识点快照
@@ -554,6 +570,9 @@ python migrate.py generate "msg"   # 生成新迁移
 - 培训排课规则字段 `training_schedule_rule_config`
 - 知识点独立管理与多对多关联
 - 教学资源生成快照表 `teaching_resource_generation_snapshots`
+- 培训计划表 `training_plans`
+- 教官资源库表 `library_folders` / `library_items`
+- 培训基地扩展字段（联系人、面积、设施等）
 
 注意：
 

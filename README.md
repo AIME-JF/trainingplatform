@@ -18,10 +18,10 @@
 | --- | --- |
 | 工作台 | 按当前用户角色与权限展示首页数据（管理员 / 教官 / 学员三视图） |
 | 课程资源 | 课程中心、章节浏览、课程答疑、标签管理 |
-| 培训管理 | 培训班、培训基地、报名审核、学员名单、课程安排、课次签到 / 签退、课程变更记录、训历 |
-| 考试系统 | 题库、知识点管理、试卷仓库、准入考试、培训班内考试、成绩管理、考试分析 |
+| 培训管理 | 培训班、培训计划、培训基地（含容量使用统计）、报名审核、学员名单、课程安排、课次签到 / 签退、班级资源与知识库、课程变更记录、训历 |
+| 考试系统 | 题库、试卷仓库、准入考试、培训班内考试（支持一站式快速创建）、成绩管理、考试分析 |
 | 资源中心 | 资源库（仅展示已发布资源）、我的资源、教学资源生成、推荐流、资源详情与预览 |
-| 审核管理 | 资源审核、审核策略 |
+| 审核管理 | 资源审核、审核策略（含流程图可视化） |
 | 智能任务流 | 智能建班（对话式）、智能出题、智能组卷、智能生成试卷、教学资源生成、智能排课、智能个训方案 |
 | 数据看板 | 统一看板页面，按角色动态展示可见模块（综合数据 / 培训运营），管理员可在看板配置中调整模块可见角色 |
 | 系统管理 | 资源管理、用户、角色、部门、字典管理（警种等）、看板配置、系统配置 |
@@ -32,8 +32,8 @@
 
 #### 考试域
 
-- 考试已拆成 `题库 → 知识点 → 试卷 → 准入考试 / 培训班考试` 四层
-- 知识点已独立成 `KnowledgePoint`，题目与知识点是多对多；前端提供独立"知识点管理"页面
+- 考试已拆成 `题库 → 试卷 → 准入考试 / 培训班考试` 三层
+- 培训班内考试支持一站式快速创建（选择已有试卷或新建试卷）
 - `ExamPaper` 独立维护试卷草稿、发布、归档；题目快照固化在试卷层
 - 只有已发布试卷才能创建准入考试和培训班考试
 - 培训班考试必须关联 `training_id`
@@ -42,7 +42,9 @@
 
 #### 培训域
 
-- 培训基地已独立成表，培训班支持维护 `department_id`、`police_type_id`、`training_base_id`
+- 培训计划已独立管理，支持创建年度 / 季度培训计划并关联培训班
+- 培训基地已独立成表，支持容量使用统计（已用 / 可用）；创建培训班时若班级容量超出基地剩余容量会弹窗提醒
+- 培训班支持维护 `department_id`、`police_type_id`、`training_base_id`
 - 培训班支持可见范围配置 `visibility_scope`：`all`（全部可见）、`department`（仅指定部门可见）、`department_and_sub`（仅指定部门及其下属可见），配合 `visibility_department_ids` 多选部门列表控制数据可见域
 - 已报名且审批通过的学员始终可见其加入的培训班，不受可见范围限制
 - 培训班流程按 `发布招生 → 锁定名单 → 开班 → 结班` 顺序推进
@@ -56,6 +58,7 @@
 - 签到 / 签退模式（`direct` / `qr`）、截止时间等字段在课次 JSON 中持久保存，刷新详情不会丢失
 - 自动状态刷新优先尊重签到 / 签退窗口截止时间，不会在窗口有效期内将课次标记为 `missed`
 - 培训班支持 `schedule_rule_config` 排课规则，AI 排课和手工排课都按同一套规则计算课时
+- 培训班支持班级资源与知识库管理，教官可将线上课程资源关联到班级
 
 #### 通知域
 
@@ -80,7 +83,7 @@
 - 资源标签已独立成表，资源库和我的资源中的上传弹窗支持搜索已有标签并直接创建新标签，交互与课程标签一致
 - 我的资源新增"教学资源生成"入口：先输入自然语言要求生成预览课件，再补资源摘要、标签和可见范围，标题由系统自动生成
 - 审核能力分成资源提交、审核任务、审核轨迹、审核策略四条接口
-- 审核策略支持作用域、上传者约束、多级审核；没有启用规则时会回退到"管理员默认审核"
+- 审核策略支持作用域、上传者约束、多级审核；每条策略可查看流程图（开始 → 各审核阶段 → 结束）；没有启用规则时会回退到"管理员默认审核"
 - 推荐流使用资源行为事件和预计算分数；仓库里保留了推荐刷新占位脚本
 
 #### AI 任务域
@@ -97,6 +100,8 @@
 | AI 个训方案 | `personal_training_plan_generation` | 同步生成 |
 
 统一状态流转：`pending → processing → completed → confirmed`（异常则 `failed`）
+
+异步任务调度支持可配置并行数（`AI_TASK_MAX_CONCURRENCY`，默认 5）和超时自动清理（`AI_TASK_TIMEOUT_MINUTES`，默认 15 分钟）。Celery Beat 每分钟扫描超时任务并自动标记失败、revoke 对应 Worker 任务。
 
 各任务线实现差异：
 
@@ -116,7 +121,7 @@
 - 支持在任务结果中删除任务、删除任务中的课次、保存修改、周历预览和确认应用
 - 权限口径与培训班管理一致
 
-AI 出题 / 组卷 / 生成试卷的知识点选择已改成远程搜索，默认只加载前 20 条候选项。组卷 / 生成试卷的题型配置块支持单个题型数量为 `0`，但不允许全部为 `0`。
+AI 出题 / 组卷 / 生成试卷支持从题库选题。组卷 / 生成试卷的题型配置块支持单个题型数量为 `0`，但不允许全部为 `0`。
 
 #### 权限与范围
 
@@ -161,7 +166,7 @@ police-training-platform/
 │   │   │   ├── auth/            # 登录（用户名密码 / 手机验证码双模式）
 │   │   │   ├── dashboard/       # 工作台（角色分视图）
 │   │   │   ├── courses/         # 课程列表、课程详情、编辑器
-│   │   │   ├── training/        # 培训班、排课、签到、报名、看板、AI 排课 / 个训
+│   │   │   ├── training/        # 培训班、培训计划、培训基地、排课、签到、报名、班级资源、看板、AI 排课
 │   │   │   ├── exam/            # 考试管理、作答、成绩、试卷、题库、知识点、AI 出题 / 组卷
 │   │   │   ├── resource/        # 资源库、我的资源、审核、策略、推荐、AI 资源生成
 │   │   │   ├── instructor/      # 教官档案
@@ -207,14 +212,14 @@ police-training-platform/
 │   │   │   ├── teaching_resource_parser.py
 │   │   │   └── teaching_resource_content_agent.py
 │   │   ├── services/            # 业务服务（33 个服务模块）
-│   │   ├── tasks/               # Celery 异步任务（5 个任务模块）
+│   │   ├── tasks/               # Celery 异步任务（8 个任务模块 + 定时任务）
 │   │   ├── models/              # SQLAlchemy 模型（18 个模型模块）
 │   │   ├── schemas/             # Pydantic 模型（22 个 Schema 模块）
 │   │   ├── templates/           # HTML 模板（教学资源课件）
 │   │   ├── middleware/          # 鉴权、日志、异常处理
 │   │   ├── database/            # 数据库初始化、Redis 客户端、自动迁移
 │   │   └── utils/               # 授权判断、数据范围、初始化配置等
-│   ├── alembic/                 # 数据库迁移（30 个版本）
+│   ├── alembic/                 # 数据库迁移（57 个版本）
 │   ├── data/                    # 本地临时文件（.gitignore）
 │   ├── tests/
 │   ├── main.py                  # 应用入口
@@ -276,7 +281,7 @@ views/ai.py → controllers/ai.py → services/ai.py → tasks/*
 ```text
 router/             路由守卫（token + 权限 + 角色三重校验）
   ↓
-layouts/            MainLayout（侧边栏 + 顶栏 + 移动端抽屉 / 底栏）
+layouts/            MainLayout（侧边栏 + 多标签页栏 + 顶栏 + 移动端抽屉 / 底栏）
   ↓
 views/              页面组件（组合式 API）
   ↓
@@ -300,12 +305,13 @@ stores/             Pinia 状态（auth store：登录态、角色、权限）
 - Redis
 - MinIO
 
-如果你要验证以下能力，还需要额外启动 Celery Worker：
+如果你要验证以下能力，还需要额外启动 Celery Worker 和 Beat：
 
 - `AI 智能出题`
 - `AI 自动组卷`
 - `教学资源生成`
 - `AI 排课建议`
+- `AI 任务超时自动清理`（需要 Beat）
 
 #### 1. 配置前端环境变量
 
@@ -341,14 +347,22 @@ python main.py
 
 后端默认监听 `http://127.0.0.1:8001`。
 
-#### 3. 可选：启动 Celery Worker
+#### 3. 可选：启动 Celery Worker 和 Beat
 
-如果需要跑异步 AI 任务，再开一个终端：
+如果需要跑异步 AI 任务，再开一个终端启动 Worker：
 
 ```powershell
 Set-Location backend
 .\.venv\Scripts\Activate.ps1
 celery -A celery_app worker --loglevel=info --pool=gevent --concurrency=10
+```
+
+如果需要定时任务（如 AI 任务超时清理），再开一个终端启动 Beat：
+
+```powershell
+Set-Location backend
+.\.venv\Scripts\Activate.ps1
+celery -A celery_app beat --loglevel=info
 ```
 
 #### 4. 安装并启动前端
@@ -390,7 +404,7 @@ Set-Location docker
 docker compose --env-file .env -f docker-compose.yaml up -d --build
 ```
 
-默认会启动 6 个服务：
+默认会启动 7 个服务：
 
 | 服务 | 说明 |
 | --- | --- |
@@ -399,6 +413,7 @@ docker compose --env-file .env -f docker-compose.yaml up -d --build
 | `minio` | MinIO 对象存储，控制台 9001 端口 |
 | `backend` | FastAPI 服务（8001 端口，不对外暴露） |
 | `worker` | Celery Worker（gevent，并发 10） |
+| `beat` | Celery Beat 定时任务调度（AI 任务超时清理等） |
 | `frontend` | Nginx 入口（反代 backend + minio） |
 
 默认对外入口：
@@ -414,7 +429,7 @@ docker compose --env-file .env -f docker-compose.yaml up -d --build
 - `frontend` 容器本身就是 Nginx 入口，统一反向代理 `backend` 和 `minio`
 - Compose 默认不会把后端 `8001` 端口直接暴露到宿主机
 - `backend` 容器启动入口会检查数据库状态；空库时会自动执行 `init_data.py` 并 `stamp head`
-- 默认 Compose 没有启用 `beat` 服务；如果后续接入周期任务，需要单独加服务或手动启动
+- `beat` 服务负责定时任务调度（每分钟检查 AI 任务超时），依赖 Redis 和 backend
 
 ## 默认账号
 
@@ -441,7 +456,7 @@ docker compose --env-file .env -f docker-compose.yaml up -d --build
 | `backend/.env.example` | 后端环境变量模板 |
 | `backend/.env` | 本地后端实际配置 |
 | `backend/.env.dev` | 可选的本地覆盖配置，启动时会覆盖 `.env` |
-| `backend/config.py` | 后端配置中心（数据库、Redis、MinIO、JWT、LLM 等） |
+| `backend/config.py` | 后端配置中心（数据库、Redis、MinIO、JWT、AI 任务并发与超时等） |
 | `backend/logger.py` | Loguru 日志配置（控制台 + 按天轮转文件） |
 | `docker/.env` | Docker Compose 部署配置 |
 
@@ -503,6 +518,7 @@ pnpm api:generate
 - 资源上传依赖 MinIO；如果没有 MinIO，资源上传和文件直链能力不可用
 - 培训扫码签到依赖 Redis；Redis 不可用时，二维码签到链路不可用
 - AI 智能出题、AI 自动组卷、教学资源生成和 AI 排课建议依赖 Celery Worker；只启动 API 不启动 Worker 时，任务会停留在队列中
+- AI 任务超时自动清理依赖 Celery Beat；不启动 Beat 时，超时任务不会被自动标记失败
 - AI 智能出题和 AI 排课自然语言解析读取系统配置组 `ai` 的模型配置；如果 `default_text_model`、`api_base_url`、`api_key` 没配好，出题任务会失败，排课自然语言模式会退化为规则兜底
 
 ### 同步 vs 异步

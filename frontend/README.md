@@ -7,7 +7,7 @@
 前端基于 Vue 3 + Vite，负责：
 
 - 登录、工作台、个人中心
-- 课程资源、培训管理、考试系统、资源中心
+- 课程资源、培训管理（含培训计划）、考试系统、资源中心
 - 系统管理、数据看板、人员档案（学员 / 教官 / 人才库 / 结业证书）
 - AI 任务页：出题、组卷、生成试卷、教学资源生成、排课建议、个训方案
 - 移动端扫码签到
@@ -45,7 +45,7 @@ frontend/
 │   │   ├── training.js              # 培训管理
 │   │   ├── exam.js                  # 考试管理
 │   │   ├── question.js              # 题库管理
-│   │   ├── knowledgePoint.js        # 知识点管理
+│   │   ├── trainingPlan.js           # 培训计划管理
 │   │   ├── resource.js              # 资源库
 │   │   ├── review.js                # 审核工作流
 │   │   ├── recommendation.js        # 推荐流
@@ -67,11 +67,12 @@ frontend/
 │   │       └── mobile.css           # 移动端适配（≤768px）
 │   ├── components/
 │   │   └── common/
-│   │       └── PermissionsTooltip.vue   # 权限控制容器组件
+│   │       ├── PermissionsTooltip.vue   # 权限控制容器组件
+│   │       └── ReviewFlowChart.vue      # 审核流程图组件
 │   ├── constants/
 │   │   └── pagePermissions.js       # 页面权限常量（25+ 权限类别）
 │   ├── layouts/
-│   │   ├── MainLayout.vue           # 主布局（侧边栏 + 顶栏 + 移动端适配）
+│   │   ├── MainLayout.vue           # 主布局（侧边栏 + 多标签页栏 + 顶栏 + 移动端适配）
 │   │   ├── AuthLayout.vue           # 登录布局
 │   │   └── menuConfig.js            # 导航菜单结构（权限驱动）
 │   ├── router/
@@ -87,8 +88,8 @@ frontend/
 │   │   ├── auth/                    # 登录
 │   │   ├── dashboard/               # 工作台
 │   │   ├── courses/                 # 课程资源
-│   │   ├── training/                # 培训管理
-│   │   ├── exam/                    # 考试 / 试卷 / 题库 / 知识点
+│   │   ├── training/                # 培训管理（含培训计划、培训基地）
+│   │   ├── exam/                    # 考试 / 试卷 / 题库
 │   │   ├── resource/                # 资源中心
 │   │   ├── instructor/              # 教官档案
 │   │   ├── trainee/                 # 学员档案
@@ -207,6 +208,7 @@ pnpm dev
   └── 教学资源生成
 培训组织
   ├── 培训班列表
+  ├── 培训计划
   ├── 培训基地
   └── 周训练计划
 考试测评
@@ -214,7 +216,6 @@ pnpm dev
   ├── 考试管理
   ├── 试题仓库
   ├── 试卷仓库
-  ├── 知识点管理
   ├── 智能出题
   ├── 智能组卷
   └── 智能生成试卷
@@ -288,7 +289,7 @@ pnpm dev
 | 文件 | 说明 |
 | --- | --- |
 | `src/views/auth/Login.vue` | 登录页（用户名密码 / 手机验证码双模式） |
-| `src/layouts/MainLayout.vue` | 主布局（固定侧边栏 220px / 折叠 80px / 移动端隐藏） |
+| `src/layouts/MainLayout.vue` | 主布局（固定侧边栏 220px / 折叠 80px / 多标签页栏 / 移动端隐藏） |
 | `src/layouts/AuthLayout.vue` | 登录布局 |
 | `src/layouts/menuConfig.js` | 菜单配置（权限驱动） |
 | `src/router/index.js` | 路由定义与守卫 |
@@ -325,8 +326,6 @@ pnpm dev
 | `src/views/exam/PaperManage.vue` | 试卷仓库 |
 | `src/views/exam/PaperDetail.vue` | 试卷详情 |
 | `src/views/exam/QuestionBank.vue` | 题目仓库 |
-| `src/views/exam/KnowledgePointManage.vue` | 知识点管理 |
-
 AI 任务页：
 
 | 文件 | 说明 |
@@ -350,18 +349,15 @@ AI 任务页：
 
 | 文件 | 说明 |
 | --- | --- |
-| `knowledgePointRemoteSelect.js` | 知识点远程搜索（默认前 20 条） |
 | `paperTypeConfig.js` | 题型配置标准化 |
 | `questionSort.js` | 题目排序 |
 
 当前已覆盖的考试能力：
 
-- 题目支持多知识点选择、搜索与即时创建
-- "题库管理 / 知识点管理" 已拆成独立菜单入口
-- AI 智能出题结果带知识点列表，确认入库时自动关联
+- AI 智能出题结果确认后自动入库
 - AI 自动组卷页展示解析结果、选题放宽记录和试卷草稿
-- 知识点选择已统一为远程搜索，不再全量加载
 - 题型配置允许单项数量为 `0`，但不能全部为 `0`
+- 培训班内考试支持一站式快速创建
 
 ### 培训域
 
@@ -369,7 +365,8 @@ AI 任务页：
 | --- | --- |
 | `src/views/training/List.vue` | 培训列表（卡片式），内含智能创建（对话式 SSE）和表单创建双模式 |
 | `src/views/training/Detail.vue` | 培训详情（步骤条 + 多标签页） |
-| `src/views/training/Base.vue` | 培训基地管理 |
+| `src/views/training/Plan.vue` | 培训计划管理 |
+| `src/views/training/Base.vue` | 培训基地管理（含容量使用进度条） |
 | `src/views/training/Schedule.vue` | 周训练计划 |
 | `src/views/training/AiScheduleTask.vue` | AI 排课建议（完整任务流） |
 | `src/views/training/AiPersonalTrainingTask.vue` | AI 个训方案 |
@@ -435,7 +432,7 @@ AI 排课建议页是完整任务流页面：
 - 我的资源提供"教学资源生成"入口（路由 `/resource/teaching-generate`；旧 `/resource/ai-generate` 保留兼容跳转）
 - 教学资源生成页：创建阶段填写自然语言要求 → 生成预览后补资源摘要、标签和可见范围 → 标题由系统自动生成
 - 标签逻辑已抽成公共组合式工具 `src/utils/creatableTagSelect.js`，课程和资源共用
-- 审核策略页支持作用域、上传者约束、审核路径预览和前端校验
+- 审核策略页支持作用域、上传者约束、审核路径预览、流程图可视化（`ReviewFlowChart` 组件）和前端校验
 - 审核策略页会提示空规则时系统回退到管理员默认审核
 
 ### 系统与其他
@@ -494,7 +491,6 @@ AI 排课建议页是完整任务流页面：
 - 智能排课：创建任务后异步排队，在任务列表中完成规则确认和课表确认
 - 教学资源生成：创建任务后异步排队，预览课件后补充资源信息并确认
 - 智能生成试卷 / 智能个训方案：创建后通常直接拿到结果
-- 知识点选择已统一为远程搜索，不再全量加载
 - 题型配置允许单项数量为 `0`，但不能全部为 `0`
 
 ### 培训页面行为
@@ -503,6 +499,7 @@ AI 排课建议页是完整任务流页面：
 - 培训详情页可以从"考试安排"直接快捷创建培训班考试
 - 培训详情页中的"课程变更记录"等标签依赖后端返回的 `canView...` 标记决定是否展示
 - 排课规则默认值来自后端系统配置，培训班级别可覆盖
+- 创建 / 编辑培训班时，若班级容量超出所选培训基地剩余容量会弹窗提醒（不拒绝，用户确认后可继续）
 - 无 `CREATE_TRAINING` 权限时"智能创建"和"新建培训班"按钮不显示
 
 ### 课程页面行为
