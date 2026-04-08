@@ -60,7 +60,7 @@
         <template v-if="hasCheckedIn">
           <span class="cs-checked-label"><CheckCircleOutlined /> 已签到</span>
         </template>
-        <template v-else-if="session.checkin_mode === 'qr'">
+        <template v-else-if="session.checkin_gesture_pattern">
           <a-button type="primary" size="small" @click="$emit('gesture-checkin')">
             <CheckCircleOutlined /> 手势签到
           </a-button>
@@ -79,7 +79,7 @@
         <template v-if="hasCheckedOut">
           <span class="cs-checked-label"><CheckCircleOutlined /> 已签退</span>
         </template>
-        <template v-else-if="session.checkout_mode === 'qr'">
+        <template v-else-if="session.checkout_gesture_pattern">
           <a-button type="primary" size="small" @click="$emit('gesture-checkout')">
             <CheckCircleOutlined /> 手势签退
           </a-button>

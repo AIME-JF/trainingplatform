@@ -21,9 +21,11 @@ export interface CurrentSession {
   checkin_mode?: string | null
   checkin_duration_minutes?: number | null
   checkin_deadline?: string | null
+  checkin_gesture_pattern?: string | null
   checkout_mode?: string | null
   checkout_duration_minutes?: number | null
   checkout_deadline?: string | null
+  checkout_gesture_pattern?: string | null
 }
 
 export interface ScheduleItem {

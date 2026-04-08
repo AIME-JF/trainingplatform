@@ -14,6 +14,7 @@ from app.database import get_db
 from app.middleware.auth import get_current_user, get_current_user_optional
 from app.models import Permission, Role, Training, User
 from app.schemas import (
+    BatchManualCheckinRequest,
     CheckinCreate,
     CheckinResponse,
     CheckoutCreate,
@@ -821,6 +822,19 @@ def checkout(
     _require_self_or_manager(db, training_id, current_user.user_id, payload.user_id)
     controller = TrainingController(db)
     result = controller.checkout(training_id, current_user.user_id, payload)
+    return StandardResponse(data=result)
+
+
+@router.post("/{training_id}/checkin/batch-manual", response_model=StandardResponse[List[CheckinResponse]], summary="批量手动点名")
+def batch_manual_checkin(
+    training_id: int,
+    data: BatchManualCheckinRequest,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_training_manager(db, training_id, current_user.user_id)
+    controller = TrainingController(db)
+    result = controller.batch_manual_checkin(training_id, data)
     return StandardResponse(data=result)
 
 

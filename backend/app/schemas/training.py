@@ -366,6 +366,21 @@ class TrainingSkipCourseRequest(BaseModel):
     reason: Optional[str] = Field(None, max_length=200, description="跳过原因")
 
 
+class BatchManualCheckinItem(BaseModel):
+    """批量手动签到单条"""
+
+    user_id: int
+    status: str = Field("on_time", description="on_time / late / absent")
+    absence_reason: Optional[str] = Field(None, max_length=200, description="缺勤原因")
+
+
+class BatchManualCheckinRequest(BaseModel):
+    """批量手动签到请求"""
+
+    session_key: str = Field(..., description="课次标识")
+    items: List[BatchManualCheckinItem] = Field(..., min_length=1)
+
+
 class CheckinResponse(BaseModel):
     """签到响应"""
 
@@ -456,6 +471,7 @@ class TrainingResponse(BaseModel):
     current_step_key: str = "draft"
     current_session: Optional[TrainingCurrentSessionResponse] = None
     recent_activities: List[TrainingActivityResponse] = Field(default_factory=list)
+    is_related_user: bool = False
     can_manage_all: bool = False
     can_manage_training: bool = False
     can_edit_training: bool = False

@@ -38,6 +38,7 @@ from app.models.library import LibraryItem
 from app.schemas import PaginatedResponse
 from app.schemas.resource import ResourceListItemResponse, TrainingBoundResourceResponse, TrainingResourceBindRequest
 from app.schemas.training import (
+    BatchManualCheckinRequest,
     CalendarEventResponse,
     CheckinCreate,
     CheckinResponse,
@@ -1083,6 +1084,7 @@ class TrainingService:
         self.db.refresh(enrollment)
 
         logger.info("审批通过报名: %s", enrollment_id)
+        self._broadcast_event(training_id, "enrollment_updated")
         return self._enrollment_to_response(enrollment)
 
     def reject_enrollment(
@@ -1109,6 +1111,7 @@ class TrainingService:
         self.db.refresh(enrollment)
 
         logger.info("审批拒绝报名: %s", enrollment_id)
+        self._broadcast_event(training_id, "enrollment_updated")
         return self._enrollment_to_response(enrollment)
 
     def update_roster_assignments(self, training_id: int, assignments: List[dict]) -> List[EnrollmentResponse]:
@@ -1201,6 +1204,17 @@ class TrainingService:
         except RuntimeError:
             pass
 
+    def _broadcast_event(self, training_id: int, event_type: str, data: Optional[dict] = None):
+        """通过 WebSocket 广播事件"""
+        try:
+            import asyncio
+            from app.websocket import broadcast_event
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(broadcast_event(training_id, event_type, data))
+        except RuntimeError:
+            pass
+
     def checkin(self, training_id: int, user_id: int, data: CheckinCreate) -> CheckinResponse:
         """签到"""
         training = self.db.query(Training).options(
@@ -1255,6 +1269,7 @@ class TrainingService:
         self.db.refresh(record)
 
         logger.info("用户%s签到培训%s，场次=%s", target_user_id, training_id, session_key)
+        self._broadcast_event(training_id, "checkin_updated", {"session_key": session_key})
         return self._checkin_to_response(record)
 
     def checkout(self, training_id: int, user_id: int, data: CheckoutCreate) -> CheckinResponse:
@@ -1304,7 +1319,73 @@ class TrainingService:
         self.db.refresh(record)
 
         logger.info("用户%s签退培训%s，场次=%s", target_user_id, training_id, session_key)
+        self._broadcast_event(training_id, "checkin_updated", {"session_key": session_key})
         return self._checkin_to_response(record)
+
+    def batch_manual_checkin(self, training_id: int, data: BatchManualCheckinRequest) -> list[CheckinResponse]:
+        """批量手动点名（无需签到通道开启）"""
+        training = self.db.query(Training).options(
+            joinedload(Training.courses),
+        ).filter(Training.id == training_id).first()
+        if not training:
+            raise ValueError("培训班不存在")
+
+        session_key = data.session_key
+        session = self._find_schedule_session(training, session_key)
+        if not session:
+            raise ValueError("课次不存在")
+
+        checkin_date = self._resolve_session_date(training, session_key, datetime.now().date())
+        now_time = datetime.now().strftime("%H:%M")
+        affected_user_ids: list[int] = []
+        results: list[CheckinResponse] = []
+
+        for item in data.items:
+            self._ensure_training_member(training_id, item.user_id)
+
+            record = self.db.query(CheckinRecord).filter(
+                CheckinRecord.training_id == training_id,
+                CheckinRecord.user_id == item.user_id,
+                CheckinRecord.date == checkin_date,
+                CheckinRecord.session_key == session_key,
+            ).first()
+
+            if not record:
+                record = CheckinRecord(
+                    training_id=training_id,
+                    user_id=item.user_id,
+                    date=checkin_date,
+                    session_key=session_key,
+                )
+                self.db.add(record)
+
+            record.status = item.status
+            record.checkin_method = "manual"
+            if item.status == "absent":
+                record.absence_reason = item.absence_reason or None
+                record.time = None
+            else:
+                record.absence_reason = None
+                record.time = record.time or now_time
+
+            affected_user_ids.append(item.user_id)
+
+        self._refresh_training_histories(training_id, affected_user_ids)
+        self.db.commit()
+
+        for item in data.items:
+            record = self.db.query(CheckinRecord).filter(
+                CheckinRecord.training_id == training_id,
+                CheckinRecord.user_id == item.user_id,
+                CheckinRecord.date == checkin_date,
+                CheckinRecord.session_key == session_key,
+            ).first()
+            if record:
+                results.append(self._checkin_to_response(record))
+
+        logger.info("批量手动点名培训%s，课次=%s，%d人", training_id, session_key, len(data.items))
+        self._broadcast_event(training_id, "checkin_updated", {"session_key": session_key})
+        return results
 
     def submit_training_evaluation(self, training_id: int, user_id: int, data: TrainingEvaluationCreate) -> CheckinResponse:
         """提交评课"""
@@ -1404,6 +1485,7 @@ class TrainingService:
         _uname = (_user.nickname or _user.username) if _user else str(user_id)
         _cname = session["course"].name
         self._record_activity(training_id, user_id, _uname, "session_checkin_start", f"签到已开始：{_cname}")
+        self._broadcast_event(training_id, "session_checkin_start", {"session_key": session_key})
         self._refresh_training_histories(training_id)
         self.db.commit()
         detail = self.get_training_by_id(training_id, user_id)
@@ -1425,6 +1507,7 @@ class TrainingService:
         _uname = (_user.nickname or _user.username) if _user else str(user_id)
         _cname = session["course"].name
         self._record_activity(training_id, user_id, _uname, "session_checkin_end", f"签到已结束：{_cname}")
+        self._broadcast_event(training_id, "session_checkin_end", {"session_key": session_key})
         self.db.commit()
         detail = self.get_training_by_id(training_id, user_id)
         if not detail:
@@ -1451,6 +1534,7 @@ class TrainingService:
         _uname = (_user.nickname or _user.username) if _user else str(user_id)
         _cname = session["course"].name
         self._record_activity(training_id, user_id, _uname, "session_checkout_start", f"签退已开始：{_cname}")
+        self._broadcast_event(training_id, "session_checkout_start", {"session_key": session_key})
         self.db.commit()
         detail = self.get_training_by_id(training_id, user_id)
         if not detail:
@@ -1474,6 +1558,7 @@ class TrainingService:
         _uname = (_user.nickname or _user.username) if _user else str(user_id)
         _cname = session["course"].name
         self._record_activity(training_id, user_id, _uname, "session_checkout_end", f"签退已结束：{_cname}")
+        self._broadcast_event(training_id, "session_checkout_end", {"session_key": session_key})
         self._sync_absent_records(training, session_key, session["date"])
         self._refresh_training_histories(training_id)
         self.db.commit()
@@ -2890,6 +2975,7 @@ class TrainingService:
             current_step_key=current_step_key,
             current_session=self._build_current_session_response(training, current_user_id),
             recent_activities=recent_activities,
+            is_related_user=is_related,
             can_manage_all=can_manage_all,
             can_manage_training=can_manage_training_directly,
             can_edit_training=can_edit_training,

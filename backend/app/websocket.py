@@ -1,6 +1,6 @@
 """WebSocket 连接管理"""
 import json
-from typing import Dict, Set
+from typing import Dict, Optional, Set
 
 from fastapi import WebSocket
 from logger import logger
@@ -24,12 +24,11 @@ def disconnect(training_id: int, websocket: WebSocket):
             del _connections[training_id]
 
 
-async def broadcast_activity(training_id: int, activity_data: dict):
-    """广播动态到所有连接该培训班的客户端"""
+async def _broadcast(training_id: int, payload: dict):
     connections = _connections.get(training_id, set())
     if not connections:
         return
-    message = json.dumps(activity_data, ensure_ascii=False, default=str)
+    message = json.dumps(payload, ensure_ascii=False, default=str)
     dead = []
     for ws in connections:
         try:
@@ -38,3 +37,13 @@ async def broadcast_activity(training_id: int, activity_data: dict):
             dead.append(ws)
     for ws in dead:
         connections.discard(ws)
+
+
+async def broadcast_activity(training_id: int, activity_data: dict):
+    """广播动态到所有连接该培训班的客户端"""
+    await _broadcast(training_id, {"type": "activity", "data": activity_data})
+
+
+async def broadcast_event(training_id: int, event_type: str, data: Optional[dict] = None):
+    """广播事件到所有连接该培训班的客户端"""
+    await _broadcast(training_id, {"type": event_type, "data": data or {}})

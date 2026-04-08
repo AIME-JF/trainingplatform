@@ -128,6 +128,7 @@
                 :checkin-mode="currentSession?.checkin_mode ?? null"
                 :checkout-mode="currentSession?.checkout_mode ?? null"
                 :pending-enrollments="pendingEnrollments"
+                :ws-activity="latestWsActivity"
                 @student-checkin="studentCheckinVisible = true"
                 @student-checkout="studentCheckoutVisible = true"
                 @student-scan-qr="openQrScanner"
@@ -149,7 +150,13 @@
 
           <!-- ========== 课程 ========== -->
           <div v-if="activeTab === 'schedule'" class="tab-panel">
-            <CourseScheduleTab :courses="courses" />
+            <CourseScheduleTab
+              :courses="courses"
+              :training-id="detail?.id"
+              :students="students"
+              :is-instructor="isClassInstructor"
+              @refresh="fetchDetail"
+            />
           </div>
 
           <!-- ========== 资源 ========== -->
@@ -220,6 +227,7 @@
         :training-id="detail.id"
         :session="currentSession"
         :students="students"
+        :refresh-key="wsCheckinRefreshKey"
         @detail-updated="onCheckinManagerUpdated"
         @gesture-pattern-set="fetchDetail"
       />
@@ -229,6 +237,7 @@
         :training-id="detail.id"
         :session="currentSession"
         :students="students"
+        :refresh-key="wsCheckinRefreshKey"
         @detail-updated="onCheckoutManagerUpdated"
       />
 
@@ -304,7 +313,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   UserOutlined,
@@ -326,7 +335,7 @@ import {
 import {
   getNoticesApiV1NoticesGet,
 } from '@/api/generated/notice-management/notice-management'
-import type { TrainingResponse } from '@/api/generated/model'
+import type { TrainingResponse, TrainingActivityResponse } from '@/api/generated/model'
 
 import CurrentSessionCard from '@/components/classes/detail/CurrentSessionCard.vue'
 import ActivityFeed from '@/components/classes/detail/ActivityFeed.vue'
@@ -382,11 +391,13 @@ const statusLabels: Record<string, string> = {
 
 const isEnrolled = computed(() => detail.value?.current_enrollment_status === 'approved')
 
-// 是否是本班教官（班主任、管理员、或当前课次的任课教官）
+// 是否是本班教官（班主任、管理员、课程教官、创建人）
 const isClassInstructor = computed(() => {
   const d = detail.value
   if (!d) return false
   if (d.can_manage_all || d.can_manage_training || d.can_edit_training) return true
+  // 关联用户且非纯学员身份（即班主任、课程教官、创建人）
+  if (d.is_related_user && authStore.isInstructor) return true
   // 当前课次有操作权限，说明是任课教官
   const perms = currentSession.value?.action_permissions
   if (perms && (perms.can_start_checkin || perms.can_start_checkout)) return true
@@ -449,6 +460,7 @@ const hasFullAccess = computed(() => {
 const showEnrollHint = computed(() => {
   if (!detail.value) return false
   if (isEnrolled.value || isClassInstructor.value) return false
+  if (detail.value.is_related_user) return false
   return true
 })
 
@@ -634,16 +646,63 @@ async function fetchCourses() {
   }
 }
 
+// ====== WebSocket 实时事件 ======
+let trainingWs: WebSocket | null = null
+const latestWsActivity = ref<TrainingActivityResponse | null>(null)
+const wsCheckinRefreshKey = ref(0)
+
+function connectTrainingWs() {
+  const token = localStorage.getItem('token')
+  if (!token || !trainingId.value) return
+  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
+  const host = import.meta.env.VITE_API_BASE_URL
+    ? new URL(import.meta.env.VITE_API_BASE_URL as string).host
+    : location.host
+  const url = `${protocol}//${host}/ws/trainings/${trainingId.value}/activities?token=${token}`
+
+  trainingWs = new WebSocket(url)
+  trainingWs.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data)
+      const type = msg.type as string
+      if (type === 'activity') {
+        latestWsActivity.value = msg.data
+      } else if (type === 'session_checkin_start' || type === 'session_checkin_end'
+        || type === 'session_checkout_start' || type === 'session_checkout_end') {
+        fetchDetail()
+        fetchCheckinRecords()
+      } else if (type === 'checkin_updated') {
+        fetchCheckinRecords()
+        wsCheckinRefreshKey.value++
+      } else if (type === 'notice_published') {
+        fetchNotices()
+      } else if (type === 'enrollment_updated') {
+        fetchStudents()
+      }
+    } catch { /* ignore */ }
+  }
+  trainingWs.onclose = () => { trainingWs = null }
+}
+
+function disconnectTrainingWs() {
+  if (trainingWs) { trainingWs.close(); trainingWs = null }
+}
+
 onMounted(() => {
   fetchDetail()
   fetchCourses()
   fetchNotices()
   fetchCheckinRecords()
+  connectTrainingWs()
+})
+
+onUnmounted(() => {
+  disconnectTrainingWs()
 })
 
 // Lazy-load students when tab is activated (only instructors have access)
 watch(activeTab, (tab) => {
-  if (tab === 'students' && students.value.length === 0) {
+  if ((tab === 'students' || tab === 'schedule') && students.value.length === 0 && isClassInstructor.value) {
     fetchStudents()
   }
 })

@@ -158,6 +158,7 @@ const props = defineProps<{
   trainingId: number | string
   session: CurrentSession | null
   students: StudentItem[]
+  refreshKey?: number
 }>()
 
 const emit = defineEmits<{
@@ -241,6 +242,13 @@ watch(
   },
   { immediate: true },
 )
+
+// WebSocket 实时刷新
+watch(() => props.refreshKey, () => {
+  if (props.visible && props.session?.session_id) {
+    fetchCheckinRecords(props.session.session_id)
+  }
+})
 
 async function fetchCheckinRecords(sessionId = props.session?.session_id) {
   if (!sessionId) return

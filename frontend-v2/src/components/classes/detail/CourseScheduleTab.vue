@@ -62,24 +62,59 @@
               <div v-if="s.location" class="sched-session-location">
                 <EnvironmentOutlined /> {{ s.location }}
               </div>
+              <div v-if="canManualAttendance && s.session_id" class="sched-session-actions">
+                <a-button size="small" @click="openManualAttendance(s, course)">
+                  <EditOutlined /> 手动点名
+                </a-button>
+              </div>
             </div>
           </div>
         </div>
         <div v-else class="sched-no-session">暂无排课</div>
       </div>
     </div>
+
+    <ManualAttendance
+      v-if="canManualAttendance"
+      v-model:visible="manualAttendanceVisible"
+      :training-id="trainingId"
+      :session-id="manualSessionId"
+      :session-label="manualSessionLabel"
+      :students="students"
+      @submitted="emit('refresh')"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { UserOutlined, ClockCircleOutlined, EnvironmentOutlined } from '@ant-design/icons-vue'
+import { computed, ref } from 'vue'
+import { UserOutlined, ClockCircleOutlined, EnvironmentOutlined, EditOutlined } from '@ant-design/icons-vue'
 import dayjs from 'dayjs'
-import type { CourseItem, ScheduleItem } from './types'
+import ManualAttendance from './ManualAttendance.vue'
+import type { CourseItem, ScheduleItem, StudentItem } from './types'
 
 const props = defineProps<{
   courses: CourseItem[]
+  trainingId?: number | string
+  students?: StudentItem[]
+  isInstructor?: boolean
 }>()
+
+const emit = defineEmits<{
+  (e: 'refresh'): void
+}>()
+
+const canManualAttendance = computed(() => props.isInstructor && props.trainingId && props.students?.length)
+
+const manualAttendanceVisible = ref(false)
+const manualSessionId = ref('')
+const manualSessionLabel = ref('')
+
+function openManualAttendance(s: ScheduleItem, course: CourseItem) {
+  manualSessionId.value = s.session_id || ''
+  manualSessionLabel.value = `${course.name} · ${formatSessionDate(s.date)} ${s.time_range?.replace('~', ' - ') || ''}`
+  manualAttendanceVisible.value = true
+}
 
 const totalSessions = computed(() =>
   props.courses.reduce((sum, c) => sum + (c.schedules || []).length, 0),
@@ -266,6 +301,10 @@ function sessionStatusLabel(status: string): string {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.sched-session-actions {
+  margin-top: 4px;
 }
 
 .sched-no-session {

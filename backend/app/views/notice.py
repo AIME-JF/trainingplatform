@@ -118,6 +118,15 @@ def create_notice(
     db.add(notice)
     db.commit()
     db.refresh(notice)
+    if data.type == 'training' and data.training_id:
+        try:
+            import asyncio
+            from app.websocket import broadcast_event
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(broadcast_event(data.training_id, "notice_published"))
+        except RuntimeError:
+            pass
     service = NoticeService(db)
     return StandardResponse(data=service.to_response(notice))
 

@@ -46,7 +46,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import dayjs from 'dayjs'
 import { getTrainingActivitiesApiV1TrainingsTrainingIdActivitiesGet } from '@/api/generated/training-management/training-management'
 import type { TrainingActivityResponse } from '@/api/generated/model'
@@ -71,6 +71,7 @@ interface Props {
   checkinMode?: string | null
   checkoutMode?: string | null
   pendingEnrollments?: PendingEnrollment[]
+  wsActivity?: TrainingActivityResponse | null
 }
 
 const props = defineProps<Props>()
@@ -84,7 +85,6 @@ defineEmits<{
 }>()
 
 const activityList = ref<TrainingActivityResponse[]>([])
-let activityWs: WebSocket | null = null
 
 async function fetchActivities() {
   try {
@@ -98,29 +98,12 @@ async function fetchActivities() {
   }
 }
 
-function connectActivityWs() {
-  const token = localStorage.getItem('token')
-  if (!token) return
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:'
-  const host = import.meta.env.VITE_API_BASE_URL
-    ? new URL(import.meta.env.VITE_API_BASE_URL as string).host
-    : location.host
-  const url = `${protocol}//${host}/ws/trainings/${props.trainingId}/activities?token=${token}`
-
-  activityWs = new WebSocket(url)
-  activityWs.onmessage = (event) => {
-    try {
-      const data = JSON.parse(event.data) as TrainingActivityResponse
-      activityList.value.unshift(data)
-      if (activityList.value.length > 10) activityList.value.pop()
-    } catch { /* ignore malformed messages */ }
-  }
-  activityWs.onclose = () => { activityWs = null }
-}
-
-function disconnectActivityWs() {
-  if (activityWs) { activityWs.close(); activityWs = null }
-}
+// 父组件通过 wsActivity 传入实时动态
+watch(() => props.wsActivity, (activity) => {
+  if (!activity) return
+  activityList.value.unshift(activity)
+  if (activityList.value.length > 10) activityList.value.pop()
+})
 
 function formatRelativeTime(time: string | null | undefined): string {
   if (!time) return ''
@@ -134,12 +117,7 @@ function formatRelativeTime(time: string | null | undefined): string {
 onMounted(() => {
   if (props.hasFullAccess) {
     fetchActivities()
-    connectActivityWs()
   }
-})
-
-onUnmounted(() => {
-  disconnectActivityWs()
 })
 </script>
 

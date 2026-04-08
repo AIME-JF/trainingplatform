@@ -8,6 +8,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.schemas import (
+    BatchManualCheckinRequest,
     CheckinCreate,
     CheckoutCreate,
     EnrollmentCreate,
@@ -219,6 +220,15 @@ class TrainingController:
         except Exception as exc:
             logger.error("签退异常: %s", exc)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="签退失败")
+
+    def batch_manual_checkin(self, training_id: int, data: BatchManualCheckinRequest):
+        try:
+            return self.service.batch_manual_checkin(training_id, data)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("批量手动点名异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="批量手动点名失败")
 
     def submit_training_evaluation(self, training_id: int, user_id: int, data: TrainingEvaluationCreate):
         try:
