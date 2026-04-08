@@ -445,6 +445,39 @@ class TrainingLeaveResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class InstructorTeachingRecordResponse(BaseModel):
+    """教官授课档案响应"""
+
+    id: int
+    user_id: int
+    training_id: int
+    training_course_id: Optional[int] = None
+    training_name: str
+    course_name: Optional[str] = None
+    location: Optional[str] = None
+    hours: float = 0
+    role: str = "primary"
+    student_count: int = 0
+    evaluation_avg: Optional[float] = None
+    start_date: Optional[DateType] = None
+    end_date: Optional[DateType] = None
+    archived_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InstructorTeachingSummaryResponse(BaseModel):
+    """教官训历聚合统计"""
+
+    user_id: int
+    training_count: int = 0
+    total_hours: float = 0
+    course_names: List[str] = Field(default_factory=list)
+    evaluation_avg: Optional[float] = None
+    student_total: int = 0
+    records: List[InstructorTeachingRecordResponse] = Field(default_factory=list)
+
+
 class CheckinResponse(BaseModel):
     """签到响应"""
 

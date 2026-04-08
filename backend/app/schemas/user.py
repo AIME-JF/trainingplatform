@@ -40,7 +40,8 @@ class UserCreate(BaseModel):
     level: Optional[str] = Field(None, description="学员等级")
 
     instructor_title: Optional[str] = Field(None, max_length=50, description="教官职称")
-    instructor_level: Optional[str] = Field(None, max_length=20, description="教官等级")
+    instructor_level: Optional[str] = Field(None, max_length=20, description="教官专业等级: 初级/中级/高级")
+    instructor_admin_level: Optional[str] = Field(None, max_length=20, description="教官行政级别: 厅级/市级/县级")
     instructor_specialties: Optional[List[str]] = Field(None, description="教官专长")
     instructor_qualification: Optional[List[str]] = Field(None, description="教官资质")
     instructor_certificates: Optional[List[Dict[str, Any]]] = Field(None, description="教官证书列表")
@@ -69,7 +70,8 @@ class UserUpdate(BaseModel):
     level: Optional[str] = Field(None, description="学员等级")
 
     instructor_title: Optional[str] = Field(None, max_length=50, description="教官职称")
-    instructor_level: Optional[str] = Field(None, max_length=20, description="教官等级")
+    instructor_level: Optional[str] = Field(None, max_length=20, description="教官专业等级: 初级/中级/高级")
+    instructor_admin_level: Optional[str] = Field(None, max_length=20, description="教官行政级别: 厅级/市级/县级")
     instructor_specialties: Optional[List[str]] = Field(None, description="教官专长")
     instructor_qualification: Optional[List[str]] = Field(None, description="教官资质")
     instructor_certificates: Optional[List[Dict[str, Any]]] = Field(None, description="教官证书列表")
@@ -121,6 +123,7 @@ class UserSimpleResponse(BaseModel):
 
     instructor_title: Optional[str] = None
     instructor_level: Optional[str] = None
+    instructor_admin_level: Optional[str] = None
     instructor_specialties: Optional[List[str]] = None
     instructor_qualification: Optional[List[str]] = None
     instructor_certificates: Optional[List[Dict[str, Any]]] = None
@@ -159,6 +162,7 @@ class UserResponse(BaseModel):
 
     instructor_title: Optional[str] = None
     instructor_level: Optional[str] = None
+    instructor_admin_level: Optional[str] = None
     instructor_specialties: Optional[List[str]] = None
     instructor_qualification: Optional[List[str]] = None
     instructor_certificates: Optional[List[Dict[str, Any]]] = None

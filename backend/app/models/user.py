@@ -37,7 +37,8 @@ class User(Base):
 
     # 教官扩展字段（原 instructor_profiles）
     instructor_title = Column(String(50), nullable=True, comment='教官职称')
-    instructor_level = Column(String(20), nullable=True, comment='教官等级')
+    instructor_level = Column(String(20), nullable=True, comment='教官专业等级: 初级/中级/高级')
+    instructor_admin_level = Column(String(20), nullable=True, comment='教官行政级别: 厅级/市级/县级')
     instructor_specialties = Column(JSON, nullable=True, comment='教官专长数组')
     instructor_qualification = Column(JSON, nullable=True, comment='教官资质数组')
     instructor_certificates = Column(JSON, nullable=True, comment='教官证书列表')

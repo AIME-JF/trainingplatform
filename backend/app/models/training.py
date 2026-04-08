@@ -270,6 +270,37 @@ class TrainingHistory(Base):
     user = relationship("User", foreign_keys=[user_id])
 
 
+class InstructorTeachingRecord(Base):
+    """教官授课档案记录"""
+
+    __tablename__ = "instructor_teaching_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, comment="教官用户ID")
+    training_id = Column(Integer, ForeignKey("trainings.id", ondelete="CASCADE"), nullable=False, comment="培训班ID")
+    training_course_id = Column(Integer, ForeignKey("training_courses.id", ondelete="CASCADE"), nullable=True, comment="培训课程ID")
+    training_name = Column(String(200), nullable=False, comment="培训班名称快照")
+    course_name = Column(String(200), nullable=True, comment="课程名称快照")
+    location = Column(String(200), nullable=True, comment="授课地点")
+    hours = Column(Float, default=0, comment="授课课时")
+    role = Column(String(20), default="primary", comment="角色: primary/assistant")
+    student_count = Column(Integer, default=0, comment="学员人数")
+    evaluation_avg = Column(Float, nullable=True, comment="教学评价均分")
+    start_date = Column(Date, nullable=True, comment="培训开始日期")
+    end_date = Column(Date, nullable=True, comment="培训结束日期")
+    archived_at = Column(DateTime(timezone=True), server_default=func.now(), comment="归档时间")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "training_id", "training_course_id", name="uq_instructor_teaching_record"),
+        Index("ix_instructor_teaching_user", "user_id"),
+        Index("ix_instructor_teaching_training", "training_id"),
+    )
+
+    user = relationship("User", foreign_keys=[user_id])
+    training = relationship("Training", foreign_keys=[training_id])
+    training_course = relationship("TrainingCourse", foreign_keys=[training_course_id])
+
+
 class TrainingCourseChangeLog(Base):
     """培训班课程/课次变更日志"""
 

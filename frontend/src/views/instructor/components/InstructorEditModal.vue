@@ -14,10 +14,25 @@
       </a-form-item>
       <a-row :gutter="12">
         <a-col :span="12">
-          <a-form-item label="教官等级">
-            <a-input v-model:value="form.instructorLevel" placeholder="请输入教官等级" />
+          <a-form-item label="专业等级">
+            <a-select v-model:value="form.instructorLevel" placeholder="选择专业等级" allow-clear>
+              <a-select-option value="初级">初级教官</a-select-option>
+              <a-select-option value="中级">中级教官</a-select-option>
+              <a-select-option value="高级">高级教官</a-select-option>
+            </a-select>
           </a-form-item>
         </a-col>
+        <a-col :span="12">
+          <a-form-item label="行政级别">
+            <a-select v-model:value="form.instructorAdminLevel" placeholder="选择行政级别" allow-clear>
+              <a-select-option value="县级">县级</a-select-option>
+              <a-select-option value="市级">市级</a-select-option>
+              <a-select-option value="厅级">厅级</a-select-option>
+            </a-select>
+          </a-form-item>
+        </a-col>
+      </a-row>
+      <a-row :gutter="12">
         <a-col :span="12">
           <a-form-item label="教官资质">
             <a-select
@@ -29,16 +44,18 @@
             />
           </a-form-item>
         </a-col>
+        <a-col :span="12">
+          <a-form-item label="教官专长">
+            <a-select
+              v-model:value="form.instructorSpecialties"
+              mode="tags"
+              allow-clear
+              placeholder="可输入多个专长"
+              style="width: 100%"
+            />
+          </a-form-item>
+        </a-col>
       </a-row>
-      <a-form-item label="教官专长">
-        <a-select
-          v-model:value="form.instructorSpecialties"
-          mode="tags"
-          allow-clear
-          placeholder="可输入多个专长"
-          style="width: 100%"
-        />
-      </a-form-item>
       <a-form-item label="教官简介">
         <a-textarea
           v-model:value="form.instructorIntro"
@@ -65,7 +82,8 @@ const emit = defineEmits(['update:open', 'submit'])
 
 const form = reactive({
   instructorTitle: '',
-  instructorLevel: '',
+  instructorLevel: undefined,
+  instructorAdminLevel: undefined,
   instructorQualification: [],
   instructorSpecialties: [],
   instructorIntro: '',
@@ -73,7 +91,8 @@ const form = reactive({
 
 function syncForm() {
   form.instructorTitle = props.user?.instructorTitle || ''
-  form.instructorLevel = props.user?.instructorLevel || ''
+  form.instructorLevel = props.user?.instructorLevel || undefined
+  form.instructorAdminLevel = props.user?.instructorAdminLevel || undefined
   form.instructorQualification = [...(props.user?.instructorQualification || [])]
   form.instructorSpecialties = [...(props.user?.instructorSpecialties || [])]
   form.instructorIntro = props.user?.instructorIntro || ''
@@ -83,6 +102,7 @@ function handleSubmit() {
   emit('submit', {
     instructorTitle: form.instructorTitle || undefined,
     instructorLevel: form.instructorLevel || undefined,
+    instructorAdminLevel: form.instructorAdminLevel || undefined,
     instructorQualification: form.instructorQualification.length ? form.instructorQualification : undefined,
     instructorSpecialties: form.instructorSpecialties.length ? form.instructorSpecialties : undefined,
     instructorIntro: form.instructorIntro || undefined,

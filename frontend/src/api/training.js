@@ -265,3 +265,13 @@ export function downloadScheduleImportTemplate(trainingId) {
     responseType: 'blob',
   })
 }
+
+// ====== 教官授课档案 ======
+
+export function getInstructorTeachingSummary(userId, params) {
+  return request.get(`/instructors/${userId}/teaching-summary`, { params })
+}
+
+export function getInstructorTeachingRecords(userId, params) {
+  return request.get(`/instructors/${userId}/teaching-records`, { params })
+}

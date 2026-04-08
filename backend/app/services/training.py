@@ -674,6 +674,13 @@ class TrainingService:
 
         self._refresh_training_histories(training_id)
         self.db.commit()
+
+        try:
+            from app.services.instructor import InstructorService
+            InstructorService(self.db).refresh_teaching_records(training_id)
+        except Exception as exc:
+            logger.warning("刷新教官授课档案失败: %s", exc)
+
         logger.info("手动结班: %s", training_id)
         return self.get_training_by_id(training_id, actor_id)
 

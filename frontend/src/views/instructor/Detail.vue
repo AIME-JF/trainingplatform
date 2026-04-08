@@ -51,6 +51,10 @@
                 <span>{{ instructor.idCardNumber || '未设置' }}</span>
               </div>
               <div class="pi-row">
+                <span class="pi-label">行政级别</span>
+                <span>{{ instructor.instructorAdminLevel || '未设置' }}</span>
+              </div>
+              <div class="pi-row">
                 <span class="pi-label">警种</span>
                 <span>{{ specialtiesText }}</span>
               </div>
@@ -92,12 +96,44 @@
                 </div>
               </a-tab-pane>
 
-              <a-tab-pane key="courses" tab="主讲课程">
-                <a-empty description="暂无课程数据" />
+              <a-tab-pane key="courses" tab="授课档案">
+                <a-empty v-if="!teachingRecords.length" description="暂无授课记录" />
+                <a-table
+                  v-else
+                  :data-source="teachingRecords"
+                  :columns="teachingColumns"
+                  :pagination="false"
+                  row-key="id"
+                  size="small"
+                />
               </a-tab-pane>
 
-              <a-tab-pane key="reviews" tab="评价数据">
-                <a-empty description="暂无评价数据" />
+              <a-tab-pane key="reviews" tab="训历统计">
+                <div v-if="teachingSummary" class="summary-grid">
+                  <div class="summary-item">
+                    <div class="summary-num">{{ teachingSummary.trainingCount }}</div>
+                    <div class="summary-label">参与培训班</div>
+                  </div>
+                  <div class="summary-item">
+                    <div class="summary-num">{{ teachingSummary.totalHours }}</div>
+                    <div class="summary-label">总授课课时</div>
+                  </div>
+                  <div class="summary-item">
+                    <div class="summary-num">{{ teachingSummary.studentTotal }}</div>
+                    <div class="summary-label">累计学员</div>
+                  </div>
+                  <div class="summary-item">
+                    <div class="summary-num" style="color: #faad14">{{ teachingSummary.evaluationAvg || '-' }}</div>
+                    <div class="summary-label">教学评价</div>
+                  </div>
+                </div>
+                <div v-if="teachingSummary && teachingSummary.courseNames.length" class="summary-courses">
+                  <h4>授课课程</h4>
+                  <div class="specialty-tags">
+                    <a-tag v-for="name in teachingSummary.courseNames" :key="name" color="blue">{{ name }}</a-tag>
+                  </div>
+                </div>
+                <a-empty v-if="!teachingSummary" description="暂无统计数据" />
               </a-tab-pane>
             </a-tabs>
           </a-card>
@@ -120,6 +156,7 @@ import { useRoute } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
 import { getUser, updateUser } from '@/api/user'
+import { getInstructorTeachingSummary, getInstructorTeachingRecords } from '@/api/training'
 import InstructorEditModal from './components/InstructorEditModal.vue'
 
 const route = useRoute()
@@ -143,6 +180,7 @@ const instructor = ref({
   phone: '',
   joinDate: '',
   level: '',
+  instructorAdminLevel: '',
   specialties: [],
   instructorQualification: [],
   instructorIntro: '',
@@ -150,6 +188,19 @@ const instructor = ref({
   studyHours: 0,
   avgScore: 0,
 })
+
+const teachingRecords = ref([])
+const teachingSummary = ref(null)
+
+const teachingColumns = [
+  { title: '培训班', dataIndex: 'trainingName', key: 'trainingName', ellipsis: true },
+  { title: '课程', dataIndex: 'courseName', key: 'courseName', ellipsis: true },
+  { title: '角色', dataIndex: 'role', key: 'role', width: 80, customRender: ({ text }) => text === 'primary' ? '主讲' : '助教' },
+  { title: '课时', dataIndex: 'hours', key: 'hours', width: 70 },
+  { title: '学员数', dataIndex: 'studentCount', key: 'studentCount', width: 80 },
+  { title: '评价', dataIndex: 'evaluationAvg', key: 'evaluationAvg', width: 70, customRender: ({ text }) => text ?? '-' },
+  { title: '地点', dataIndex: 'location', key: 'location', ellipsis: true },
+]
 
 const avatarColors = ['#003087', '#c8a84b', '#8B1A1A', '#1a5c2e', '#6b3a8a', '#2e86de']
 const avatarColor = computed(() => avatarColors[(instructor.value.id || 0) % avatarColors.length])
@@ -201,6 +252,7 @@ async function loadInstructorDetail() {
       specialties: (data.instructorSpecialties && data.instructorSpecialties.length > 0)
         ? data.instructorSpecialties
         : (data.policeTypes || []).map((p) => p.name).filter(Boolean),
+      instructorAdminLevel: data.instructorAdminLevel || '',
       instructorQualification: data.instructorQualification || [],
       instructorIntro: data.instructorIntro || '',
       examCount: data.examCount || 0,
@@ -251,7 +303,24 @@ async function handleEditSubmit(payload) {
   }
 }
 
-onMounted(loadInstructorDetail)
+async function loadTeachingData() {
+  try {
+    const [summary, records] = await Promise.all([
+      getInstructorTeachingSummary(instructorId),
+      getInstructorTeachingRecords(instructorId),
+    ])
+    teachingSummary.value = summary
+    teachingRecords.value = records || []
+  } catch {
+    teachingSummary.value = null
+    teachingRecords.value = []
+  }
+}
+
+onMounted(() => {
+  loadInstructorDetail()
+  loadTeachingData()
+})
 </script>
 
 <style scoped>
@@ -277,4 +346,10 @@ onMounted(loadInstructorDetail)
 .bio-text { font-size: 14px; color: #555; line-height: 1.8; margin-bottom: 20px; }
 .specialty-section h4 { margin-bottom: 8px; color: #333; }
 .specialty-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.summary-grid { display: flex; gap: 24px; margin-bottom: 24px; }
+.summary-item { text-align: center; flex: 1; padding: 16px; background: #fafafa; border-radius: 8px; }
+.summary-num { font-size: 28px; font-weight: 700; color: #1a1a1a; }
+.summary-label { font-size: 12px; color: #888; margin-top: 4px; }
+.summary-courses { margin-top: 16px; }
+.summary-courses h4 { margin-bottom: 8px; color: #333; }
 </style>
