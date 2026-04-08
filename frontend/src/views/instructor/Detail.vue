@@ -51,14 +51,6 @@
                 <span>{{ instructor.idCardNumber || '未设置' }}</span>
               </div>
               <div class="pi-row">
-                <span class="pi-label">行政级别</span>
-                <span>{{ instructor.instructorAdminLevel || '未设置' }}</span>
-              </div>
-              <div class="pi-row">
-                <span class="pi-label">警种</span>
-                <span>{{ specialtiesText }}</span>
-              </div>
-              <div class="pi-row">
                 <span class="pi-label">联系方式</span>
                 <span>{{ instructor.phone || '未设置' }}</span>
               </div>
@@ -66,6 +58,17 @@
                 <span class="pi-label">入警日期</span>
                 <span>{{ instructor.joinDate || '未设置' }}</span>
               </div>
+
+              <a-divider style="margin: 12px 0" />
+              <div class="pi-label" style="margin-bottom: 8px">教官标签</div>
+              <div v-if="instructor.instructorTags && instructor.instructorTags.length" class="tag-list">
+                <div v-for="tag in instructor.instructorTags" :key="tag.id" class="tag-item">
+                  <a-tag color="blue">{{ tag.adminLevel }}</a-tag>
+                  <a-tag color="gold">{{ tag.professionalLevel }}</a-tag>
+                  <a-tag color="green">{{ tag.specialtyName }}</a-tag>
+                </div>
+              </div>
+              <span v-else style="color: #999; font-size: 13px">未设置</span>
             </div>
           </a-card>
         </a-col>
@@ -79,20 +82,6 @@
                   <p class="bio-text">
                     {{ introText }}
                   </p>
-                  <div class="specialty-section">
-                    <h4>专业领域</h4>
-                    <div class="specialty-tags">
-                      <a-tag v-for="s in instructor.specialties" :key="s" color="blue">{{ s }}</a-tag>
-                      <span v-if="!instructor.specialties || instructor.specialties.length === 0" style="color: #999">未设置</span>
-                    </div>
-                  </div>
-                  <div class="specialty-section">
-                    <h4>教官资质</h4>
-                    <div class="specialty-tags">
-                      <a-tag v-for="item in instructor.instructorQualification" :key="item" color="gold">{{ item }}</a-tag>
-                      <span v-if="!instructor.instructorQualification || instructor.instructorQualification.length === 0" style="color: #999">未设置</span>
-                    </div>
-                  </div>
                 </div>
               </a-tab-pane>
 
@@ -157,6 +146,7 @@ import { message } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
 import { getUser, updateUser } from '@/api/user'
 import { getInstructorTeachingSummary, getInstructorTeachingRecords } from '@/api/training'
+import request from '@/api/request'
 import InstructorEditModal from './components/InstructorEditModal.vue'
 
 const route = useRoute()
@@ -180,9 +170,7 @@ const instructor = ref({
   phone: '',
   joinDate: '',
   level: '',
-  instructorAdminLevel: '',
-  specialties: [],
-  instructorQualification: [],
+  instructorTags: [],
   instructorIntro: '',
   examCount: 0,
   studyHours: 0,
@@ -194,11 +182,18 @@ const teachingSummary = ref(null)
 
 const teachingColumns = [
   { title: '培训班', dataIndex: 'trainingName', key: 'trainingName', ellipsis: true },
+  { title: '状态', dataIndex: 'trainingStatus', key: 'trainingStatus', width: 80, customRender: ({ text }) => {
+    const map = { upcoming: '待开班', active: '进行中', ended: '已结班' }
+    return map[text] || text || '-'
+  }},
   { title: '课程', dataIndex: 'courseName', key: 'courseName', ellipsis: true },
   { title: '角色', dataIndex: 'role', key: 'role', width: 80, customRender: ({ text }) => text === 'primary' ? '主讲' : '助教' },
   { title: '课时', dataIndex: 'hours', key: 'hours', width: 70 },
   { title: '学员数', dataIndex: 'studentCount', key: 'studentCount', width: 80 },
-  { title: '评价', dataIndex: 'evaluationAvg', key: 'evaluationAvg', width: 70, customRender: ({ text }) => text ?? '-' },
+  { title: '评价', key: 'evaluationAvg', width: 90, customRender: ({ record }) => {
+    if (record.trainingStatus !== 'ended') return '待结班'
+    return record.evaluationAvg ?? '-'
+  }},
   { title: '地点', dataIndex: 'location', key: 'location', ellipsis: true },
 ]
 
@@ -206,22 +201,18 @@ const avatarColors = ['#003087', '#c8a84b', '#8B1A1A', '#1a5c2e', '#6b3a8a', '#2
 const avatarColor = computed(() => avatarColors[(instructor.value.id || 0) % avatarColors.length])
 
 const levelClass = computed(() => {
-  const level = instructor.value.level || ''
-  if (level.includes('高级') || level.includes('专家')) return 'expert'
-  if (level.includes('中级')) return 'senior'
+  const tags = instructor.value.instructorTags || []
+  if (tags.some((t) => t.professionalLevel === '高级')) return 'expert'
+  if (tags.some((t) => t.professionalLevel === '中级')) return 'senior'
   return 'standard'
 })
 
 const levelLabel = computed(() => {
-  const level = instructor.value.level || ''
-  if (level.includes('高级') || level.includes('专家')) return '专家'
-  if (level.includes('中级')) return '资深'
+  const tags = instructor.value.instructorTags || []
+  if (tags.some((t) => t.professionalLevel === '高级')) return '高级'
+  if (tags.some((t) => t.professionalLevel === '中级')) return '中级'
+  if (tags.some((t) => t.professionalLevel === '初级')) return '初级'
   return '教官'
-})
-
-const specialtiesText = computed(() => {
-  const arr = instructor.value.specialties || []
-  return arr.length ? arr.join('、') : '未设置'
 })
 
 const introText = computed(() => {
@@ -248,12 +239,8 @@ async function loadInstructorDetail() {
       idCardNumber: data.idCardNumber,
       phone: data.phone,
       joinDate: data.joinDate,
-      level: data.instructorLevel || data.level || '',
-      specialties: (data.instructorSpecialties && data.instructorSpecialties.length > 0)
-        ? data.instructorSpecialties
-        : (data.policeTypes || []).map((p) => p.name).filter(Boolean),
-      instructorAdminLevel: data.instructorAdminLevel || '',
-      instructorQualification: data.instructorQualification || [],
+      level: data.level || '',
+      instructorTags: data.instructorTags || [],
       instructorIntro: data.instructorIntro || '',
       examCount: data.examCount || 0,
       studyHours: data.studyHours || 0,
@@ -269,8 +256,7 @@ async function loadInstructorDetail() {
       phone: '',
       joinDate: '',
       level: '',
-      specialties: [],
-      instructorQualification: [],
+      instructorTags: [],
       instructorIntro: '',
       examCount: 0,
       studyHours: 0,
@@ -293,7 +279,34 @@ function openEditModal() {
 async function handleEditSubmit(payload) {
   editDialog.value = { ...editDialog.value, submitting: true }
   try {
-    await updateUser(instructorId, payload)
+    const { tags, ...userPayload } = payload
+    await updateUser(instructorId, userPayload)
+
+    // 同步标签：先获取现有标签，删除不在新列表中的，添加新的
+    if (tags !== undefined) {
+      const existingTags = await request.get(`/instructors/${instructorId}/tags`) || []
+      for (const existing of existingTags) {
+        const stillExists = tags.some((t) =>
+          t.adminLevel === existing.adminLevel
+          && t.professionalLevel === existing.professionalLevel
+          && t.specialtyId === existing.specialtyId
+        )
+        if (!stillExists) {
+          await request.delete(`/instructors/${instructorId}/tags/${existing.id}`)
+        }
+      }
+      for (const tag of tags) {
+        const alreadyExists = existingTags.some((e) =>
+          e.adminLevel === tag.adminLevel
+          && e.professionalLevel === tag.professionalLevel
+          && e.specialtyId === tag.specialtyId
+        )
+        if (!alreadyExists) {
+          await request.post(`/instructors/${instructorId}/tags`, tag)
+        }
+      }
+    }
+
     message.success('教官信息已更新')
     editDialog.value = { open: false, submitting: false, user: null }
     await loadInstructorDetail()
@@ -352,4 +365,6 @@ onMounted(() => {
 .summary-label { font-size: 12px; color: #888; margin-top: 4px; }
 .summary-courses { margin-top: 16px; }
 .summary-courses h4 { margin-bottom: 8px; color: #333; }
+.tag-list { display: flex; flex-direction: column; gap: 6px; }
+.tag-item { display: flex; gap: 4px; flex-wrap: wrap; }
 </style>

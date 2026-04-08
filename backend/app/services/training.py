@@ -316,6 +316,7 @@ class TrainingService:
         self.db.commit()
         self.db.refresh(training)
 
+        self._refresh_instructor_teaching_records(training.id)
         logger.info("创建培训班: %s", training.name)
         detail = self.get_training_by_id(training.id, user_id)
         if not detail:
@@ -572,6 +573,8 @@ class TrainingService:
         self.db.commit()
         self.db.refresh(training)
 
+        if courses is not None:
+            self._refresh_instructor_teaching_records(training_id)
         logger.info("更新培训班: %s", training.name)
         return self.get_training_by_id(training_id, actor_id)
 
@@ -675,11 +678,7 @@ class TrainingService:
         self._refresh_training_histories(training_id)
         self.db.commit()
 
-        try:
-            from app.services.instructor import InstructorService
-            InstructorService(self.db).refresh_teaching_records(training_id)
-        except Exception as exc:
-            logger.warning("刷新教官授课档案失败: %s", exc)
+        self._refresh_instructor_teaching_records(training_id)
 
         logger.info("手动结班: %s", training_id)
         return self.get_training_by_id(training_id, actor_id)
@@ -1361,6 +1360,14 @@ class TrainingService:
                 }))
         except RuntimeError:
             pass
+
+    def _refresh_instructor_teaching_records(self, training_id: int):
+        """刷新教官授课档案（课程变更或结班时调用）"""
+        try:
+            from app.services.instructor import InstructorService
+            InstructorService(self.db).refresh_teaching_records(training_id)
+        except Exception as exc:
+            logger.warning("刷新教官授课档案失败: %s", exc)
 
     def _broadcast_event(self, training_id: int, event_type: str, data: Optional[dict] = None):
         """通过 WebSocket 广播事件"""

@@ -15,6 +15,7 @@ from app.models import User, Role
 from app.models.department import Department
 from app.models.police_type import PoliceType
 from app.services.auth import auth_service
+from app.services.user import UserService
 from app.services.batch_import import BatchImportService
 from app.services.system_exchange import SystemExchangeService
 from app.utils.authz import can_access_user_record, can_access_user_record_with_context, is_admin_user
@@ -76,6 +77,9 @@ def get_users(
     size: int = Query(10, ge=-1),
     role: Optional[str] = Query(None, description="按角色code筛选: admin/instructor/student"),
     search: Optional[str] = Query(None, description="搜索姓名/用户名/警号"),
+    admin_level: Optional[str] = Query(None, description="教官行政级别筛选"),
+    professional_level: Optional[str] = Query(None, description="教官专业等级筛选"),
+    specialty_id: Optional[int] = Query(None, description="教官专长方向ID筛选"),
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -94,6 +98,16 @@ def get_users(
             (User.police_id.ilike(f"%{search}%"))
         )
 
+    if admin_level or professional_level or specialty_id:
+        from app.models.instructor_tag import InstructorTag
+        query = query.join(InstructorTag, InstructorTag.user_id == User.id)
+        if admin_level:
+            query = query.filter(InstructorTag.admin_level == admin_level)
+        if professional_level:
+            query = query.filter(InstructorTag.professional_level == professional_level)
+        if specialty_id:
+            query = query.filter(InstructorTag.specialty_id == specialty_id)
+
     records = query.order_by(User.id).all()
     scope_context = build_data_scope_context(db, current_user.user_id)
     records = [
@@ -106,7 +120,8 @@ def get_users(
         skip = (page - 1) * size
         records = records[skip: skip + size]
 
-    items = [UserSimpleResponse.model_validate(u) for u in records]
+    user_service = UserService(db)
+    items = [user_service._to_simple_response(u) for u in records]
 
     return StandardResponse(data=PaginatedResponse(
         page=page,

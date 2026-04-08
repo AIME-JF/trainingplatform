@@ -7,6 +7,7 @@ from app.database import engine, init_db
 from app.models import User, Role, Permission, Department, PoliceType
 from app.models.permission import PermissionGroup
 from app.models.training_type import TrainingType
+from app.models.dict_instructor_specialty import DictInstructorSpecialty
 from app.models.system import SystemMeta
 from app.services.auth import auth_service
 from app.services.system import SystemConfigService
@@ -641,6 +642,31 @@ def init_training_types():
         raise
 
 
+def init_instructor_specialties():
+    """初始化教官专长方向字典"""
+    try:
+        with Session(engine) as db:
+            if db.query(DictInstructorSpecialty).count() > 0:
+                logger.info("教官专长方向数据已存在，跳过初始化")
+                return
+
+            specialties = [
+                {"name": "刑事侦查", "sort_order": 1},
+                {"name": "人工智能", "sort_order": 2},
+                {"name": "网络安全", "sort_order": 3},
+            ]
+
+            for item in specialties:
+                db.add(DictInstructorSpecialty(name=item["name"], sort_order=item["sort_order"], enabled=True))
+
+            db.commit()
+            logger.info(f"教官专长方向初始化完成，共创建 {len(specialties)} 个专长方向")
+
+    except Exception as e:
+        logger.error(f"初始化教官专长方向失败: {e}")
+        raise
+
+
 def main():
     """主函数"""
     try:
@@ -649,6 +675,7 @@ def main():
         init_db()
         init_system_configs()
         init_training_types()
+        init_instructor_specialties()
         init_permission_groups()
         init_permissions()
         sync_permission_group_ids()

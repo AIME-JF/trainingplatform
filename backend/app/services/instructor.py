@@ -84,7 +84,9 @@ class InstructorService:
 
     def get_teaching_summary(self, user_id: int, year: Optional[int] = None) -> InstructorTeachingSummaryResponse:
         """获取教官训历聚合统计"""
-        query = self.db.query(InstructorTeachingRecord).filter(
+        query = self.db.query(InstructorTeachingRecord).options(
+            joinedload(InstructorTeachingRecord.training),
+        ).filter(
             InstructorTeachingRecord.user_id == user_id,
         )
         if year:
@@ -121,7 +123,9 @@ class InstructorService:
 
     def get_teaching_records(self, user_id: int, year: Optional[int] = None) -> List[InstructorTeachingRecordResponse]:
         """获取教官授课记录列表"""
-        query = self.db.query(InstructorTeachingRecord).filter(
+        query = self.db.query(InstructorTeachingRecord).options(
+            joinedload(InstructorTeachingRecord.training),
+        ).filter(
             InstructorTeachingRecord.user_id == user_id,
         )
         if year:
@@ -152,12 +156,16 @@ class InstructorService:
         return round(sum(s[0] for s in scores) / len(scores), 2)
 
     def _to_response(self, record: InstructorTeachingRecord) -> InstructorTeachingRecordResponse:
+        training_status = None
+        if record.training:
+            training_status = record.training.status or "upcoming"
         return InstructorTeachingRecordResponse(
             id=record.id,
             user_id=record.user_id,
             training_id=record.training_id,
             training_course_id=record.training_course_id,
             training_name=record.training_name,
+            training_status=training_status,
             course_name=record.course_name,
             location=record.location,
             hours=record.hours or 0,

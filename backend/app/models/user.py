@@ -35,12 +35,8 @@ class User(Base):
     exam_count = Column(Integer, default=0, comment='考试次数')
     avg_score = Column(Float, default=0, comment='平均分')
 
-    # 教官扩展字段（原 instructor_profiles）
+    # 教官扩展字段
     instructor_title = Column(String(50), nullable=True, comment='教官职称')
-    instructor_level = Column(String(20), nullable=True, comment='教官专业等级: 初级/中级/高级')
-    instructor_admin_level = Column(String(20), nullable=True, comment='教官行政级别: 厅级/市级/县级')
-    instructor_specialties = Column(JSON, nullable=True, comment='教官专长数组')
-    instructor_qualification = Column(JSON, nullable=True, comment='教官资质数组')
     instructor_certificates = Column(JSON, nullable=True, comment='教官证书列表')
     instructor_intro = Column(Text, nullable=True, comment='教官简介')
     instructor_rating = Column(Float, default=0, comment='教官评分')

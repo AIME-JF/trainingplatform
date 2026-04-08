@@ -15,7 +15,7 @@ class TokenData(BaseModel):
     username: str
     user_id: int
     permissions: List[str] = []
-    
+
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -40,10 +40,6 @@ class UserCreate(BaseModel):
     level: Optional[str] = Field(None, description="学员等级")
 
     instructor_title: Optional[str] = Field(None, max_length=50, description="教官职称")
-    instructor_level: Optional[str] = Field(None, max_length=20, description="教官专业等级: 初级/中级/高级")
-    instructor_admin_level: Optional[str] = Field(None, max_length=20, description="教官行政级别: 厅级/市级/县级")
-    instructor_specialties: Optional[List[str]] = Field(None, description="教官专长")
-    instructor_qualification: Optional[List[str]] = Field(None, description="教官资质")
     instructor_certificates: Optional[List[Dict[str, Any]]] = Field(None, description="教官证书列表")
     instructor_intro: Optional[str] = Field(None, description="教官简介")
     instructor_rating: Optional[float] = Field(None, description="教官评分")
@@ -70,10 +66,6 @@ class UserUpdate(BaseModel):
     level: Optional[str] = Field(None, description="学员等级")
 
     instructor_title: Optional[str] = Field(None, max_length=50, description="教官职称")
-    instructor_level: Optional[str] = Field(None, max_length=20, description="教官专业等级: 初级/中级/高级")
-    instructor_admin_level: Optional[str] = Field(None, max_length=20, description="教官行政级别: 厅级/市级/县级")
-    instructor_specialties: Optional[List[str]] = Field(None, description="教官专长")
-    instructor_qualification: Optional[List[str]] = Field(None, description="教官资质")
     instructor_certificates: Optional[List[Dict[str, Any]]] = Field(None, description="教官证书列表")
     instructor_intro: Optional[str] = Field(None, description="教官简介")
     instructor_rating: Optional[float] = Field(None, description="教官评分")
@@ -103,6 +95,51 @@ class PasswordChange(BaseModel):
     new_password: str = Field(..., min_length=6, description="新密码")
 
 
+class InstructorTagResponse(BaseModel):
+    """教官标签组响应"""
+    id: int
+    user_id: int
+    admin_level: str
+    professional_level: str
+    specialty_id: int
+    specialty_name: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InstructorTagCreate(BaseModel):
+    """创建教官标签组"""
+    admin_level: str = Field(..., description="行政级别: 厅级/市级/县级")
+    professional_level: str = Field(..., description="专业等级: 初级/中级/高级")
+    specialty_id: int = Field(..., description="专长方向ID")
+
+
+class DictInstructorSpecialtyResponse(BaseModel):
+    """教官专长方向字典响应"""
+    id: int
+    name: str
+    sort_order: int = 0
+    enabled: bool = True
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class DictInstructorSpecialtyCreate(BaseModel):
+    """创建教官专长方向"""
+    name: str = Field(..., max_length=50, description="专长方向名称")
+    sort_order: int = Field(0, description="排序序号")
+    enabled: bool = Field(True, description="是否启用")
+
+
+class DictInstructorSpecialtyUpdate(BaseModel):
+    """更新教官专长方向"""
+    name: Optional[str] = Field(None, max_length=50, description="专长方向名称")
+    sort_order: Optional[int] = Field(None, description="排序序号")
+    enabled: Optional[bool] = Field(None, description="是否启用")
+
+
 class UserSimpleResponse(BaseModel):
     """用户简单响应模型（角色不包含权限列表）"""
     id: int
@@ -122,16 +159,13 @@ class UserSimpleResponse(BaseModel):
     avg_score: float = 0
 
     instructor_title: Optional[str] = None
-    instructor_level: Optional[str] = None
-    instructor_admin_level: Optional[str] = None
-    instructor_specialties: Optional[List[str]] = None
-    instructor_qualification: Optional[List[str]] = None
     instructor_certificates: Optional[List[Dict[str, Any]]] = None
     instructor_intro: Optional[str] = None
     instructor_rating: float = 0
     instructor_course_count: int = 0
     instructor_student_count: int = 0
     instructor_review_count: int = 0
+    instructor_tags: List[InstructorTagResponse] = Field(default_factory=list)
 
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -161,16 +195,13 @@ class UserResponse(BaseModel):
     avg_score: float = 0
 
     instructor_title: Optional[str] = None
-    instructor_level: Optional[str] = None
-    instructor_admin_level: Optional[str] = None
-    instructor_specialties: Optional[List[str]] = None
-    instructor_qualification: Optional[List[str]] = None
     instructor_certificates: Optional[List[Dict[str, Any]]] = None
     instructor_intro: Optional[str] = None
     instructor_rating: float = 0
     instructor_course_count: int = 0
     instructor_student_count: int = 0
     instructor_review_count: int = 0
+    instructor_tags: List[InstructorTagResponse] = Field(default_factory=list)
 
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -187,5 +218,5 @@ class LoginResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
-    
+
     model_config = ConfigDict(from_attributes=True)

@@ -453,6 +453,7 @@ class InstructorTeachingRecordResponse(BaseModel):
     training_id: int
     training_course_id: Optional[int] = None
     training_name: str
+    training_status: Optional[str] = None
     course_name: Optional[str] = None
     location: Optional[str] = None
     hours: float = 0

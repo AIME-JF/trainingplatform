@@ -4,7 +4,9 @@ Pydantic模型导出
 
 from .user import (
     UserCreate, UserUpdate, UserResponse, UserSimpleResponse, UserLogin, LoginResponse,
-    PasswordChange, TokenData, UserRoleUpdate, UserDepartmentUpdate, UserPoliceTypeUpdate
+    PasswordChange, TokenData, UserRoleUpdate, UserDepartmentUpdate, UserPoliceTypeUpdate,
+    InstructorTagCreate, InstructorTagResponse,
+    DictInstructorSpecialtyCreate, DictInstructorSpecialtyUpdate, DictInstructorSpecialtyResponse,
 )
 from .role import (
     RoleCreate, RoleUpdate, RoleResponse, RoleSimpleResponse,

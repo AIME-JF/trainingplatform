@@ -33,7 +33,30 @@ class UserService:
     def _to_user_response(self, user: User) -> UserResponse:
         response = UserResponse.model_validate(user)
         response.permissions = auth_service.get_user_permissions(self.db, user.id)
+        response.instructor_tags = self._load_instructor_tags(user.id)
         return response
+
+    def _to_simple_response(self, user: User) -> UserSimpleResponse:
+        response = UserSimpleResponse.model_validate(user)
+        response.instructor_tags = self._load_instructor_tags(user.id)
+        return response
+
+    def _load_instructor_tags(self, user_id: int) -> list:
+        from app.models.instructor_tag import InstructorTag
+        from app.schemas.user import InstructorTagResponse
+        tags = self.db.query(InstructorTag).filter(InstructorTag.user_id == user_id).all()
+        result = []
+        for tag in tags:
+            result.append(InstructorTagResponse(
+                id=tag.id,
+                user_id=tag.user_id,
+                admin_level=tag.admin_level,
+                professional_level=tag.professional_level,
+                specialty_id=tag.specialty_id,
+                specialty_name=tag.specialty.name if tag.specialty else None,
+                created_at=tag.created_at,
+            ))
+        return result
     
     def create_user(self, user_data: UserCreate) -> UserResponse:
         """创建用户"""
@@ -107,8 +130,8 @@ class UserService:
         return self.db.query(User).filter(User.username == username).first()
     
     def get_users(
-        self, 
-        page: int = 1, 
+        self,
+        page: int = 1,
         size: int = 10,
         user_id: Optional[int] = None,
         username: Optional[str] = None,
@@ -116,7 +139,10 @@ class UserService:
         is_active: Optional[bool] = None,
         role_id: Optional[int] = None,
         department_id: Optional[int] = None,
-        show_all: bool = False
+        show_all: bool = False,
+        admin_level: Optional[str] = None,
+        professional_level: Optional[str] = None,
+        specialty_id: Optional[int] = None,
     ) -> PaginatedResponse[UserSimpleResponse]:
         """获取用户列表"""
         # 构建查询（不加载角色权限信息）
@@ -146,7 +172,19 @@ class UserService:
                 query = query.join(User.departments).filter(Department.id.in_(department_ids))
             else:
                 query = query.join(User.departments).filter(Department.id == department_id)
-        
+
+        # 教官标签筛选
+        if admin_level or professional_level or specialty_id:
+            from app.models.instructor_tag import InstructorTag
+            tag_filter = query.join(InstructorTag, InstructorTag.user_id == User.id)
+            if admin_level:
+                tag_filter = tag_filter.filter(InstructorTag.admin_level == admin_level)
+            if professional_level:
+                tag_filter = tag_filter.filter(InstructorTag.professional_level == professional_level)
+            if specialty_id:
+                tag_filter = tag_filter.filter(InstructorTag.specialty_id == specialty_id)
+            query = tag_filter
+
         # 如果size为-1，获取全部数据
         if size == -1:
             users = query.order_by(User.created_at.desc()).all()
@@ -156,7 +194,7 @@ class UserService:
                 page=1,
                 size=total,
                 total=total,
-                items=[UserSimpleResponse.model_validate(user) for user in users]
+                items=[self._to_simple_response(user) for user in users]
             )
         
         # 计算skip值
@@ -193,7 +231,7 @@ class UserService:
             page=page,
             size=size,
             total=total,
-            items=[UserSimpleResponse.model_validate(user) for user in users]
+            items=[self._to_simple_response(user) for user in users]
         )
     
     def update_user(self, user_id: int, user_data: UserUpdate) -> Optional[UserResponse]:

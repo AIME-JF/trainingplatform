@@ -25,6 +25,7 @@ from .review import router as review_router
 from .role import router as role_router
 from .system import router as system_router
 from .talent import router as talent_router
+from .dict_instructor_specialty import router as dict_instructor_specialty_router
 from .instructor import router as instructor_router
 from .training import router as training_router
 from .training_base import router as training_base_router
@@ -61,6 +62,7 @@ all_routers = [
     resource_router,
     library_router,
     review_router,
+    dict_instructor_specialty_router,
     instructor_router,
     recommendation_router,
 ]
@@ -95,6 +97,7 @@ __all__ = [
     "resource_router",
     "library_router",
     "review_router",
+    "dict_instructor_specialty_router",
     "instructor_router",
     "recommendation_router",
 ]

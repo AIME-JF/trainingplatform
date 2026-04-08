@@ -44,6 +44,37 @@
             </template>
           </a-table>
         </a-tab-pane>
+        <a-tab-pane key="instructorSpecialty" tab="教官专长方向">
+          <div class="tab-toolbar">
+            <span />
+            <a-button type="primary" @click="openIsModal()">
+              <template #icon><PlusOutlined /></template>
+              新增专长方向
+            </a-button>
+          </div>
+
+          <a-table
+            :data-source="isList"
+            :columns="isColumns"
+            :loading="isLoading"
+            row-key="id"
+            :pagination="false"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'enabled'">
+                <a-tag :color="record.enabled ? 'green' : 'default'">{{ record.enabled ? '启用' : '停用' }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'action'">
+                <a-space>
+                  <a-button type="link" size="small" @click="openIsModal(record)">编辑</a-button>
+                  <a-popconfirm title="确定删除该专长方向吗？" @confirm="handleDeleteIs(record.id)">
+                    <a-button type="link" size="small" danger>删除</a-button>
+                  </a-popconfirm>
+                </a-space>
+              </template>
+            </template>
+          </a-table>
+        </a-tab-pane>
         <a-tab-pane key="trainingType" tab="培训班类型">
           <div class="tab-toolbar">
             <a-input-search
@@ -135,6 +166,26 @@
         </a-form-item>
       </a-form>
     </a-modal>
+    <!-- 教官专长方向 新增/编辑弹窗 -->
+    <a-modal
+      v-model:open="isModalVisible"
+      :title="isEditingId ? '编辑专长方向' : '新增专长方向'"
+      :confirm-loading="isSaving"
+      ok-text="保存"
+      @ok="handleSaveIs"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="专长方向名称" required>
+          <a-input v-model:value="isForm.name" placeholder="请输入专长方向名称" :maxlength="50" />
+        </a-form-item>
+        <a-form-item label="排序">
+          <a-input-number v-model:value="isForm.sortOrder" :min="0" :max="9999" placeholder="数字越小越靠前" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="状态">
+          <a-switch v-model:checked="isForm.enabled" checked-children="启用" un-checked-children="停用" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
   </div>
 </template>
 
@@ -154,6 +205,7 @@ import {
   updateTrainingType,
   deleteTrainingType,
 } from '@/api/trainingType'
+import request from '@/api/request'
 
 const activeTab = ref('policeType')
 
@@ -388,9 +440,90 @@ async function handleDeleteTt(id) {
   }
 }
 
+// ===== 教官专长方向 =====
+const isLoading = ref(false)
+const isList = ref([])
+const isModalVisible = ref(false)
+const isSaving = ref(false)
+const isEditingId = ref(null)
+const isForm = reactive({
+  name: '',
+  sortOrder: 0,
+  enabled: true,
+})
+
+const isColumns = [
+  { title: '序号', key: 'index', width: 70, customRender: ({ index }) => index + 1 },
+  { title: '专长方向名称', dataIndex: 'name', key: 'name' },
+  { title: '排序', dataIndex: 'sortOrder', key: 'sortOrder', width: 80 },
+  { title: '状态', key: 'enabled', width: 80 },
+  { title: '操作', key: 'action', width: 140 },
+]
+
+async function fetchInstructorSpecialties() {
+  isLoading.value = true
+  try {
+    isList.value = await request.get('/dict/instructor-specialties') || []
+  } catch {
+    isList.value = []
+  } finally {
+    isLoading.value = false
+  }
+}
+
+function openIsModal(record) {
+  if (record) {
+    isEditingId.value = record.id
+    isForm.name = record.name || ''
+    isForm.sortOrder = record.sortOrder ?? 0
+    isForm.enabled = record.enabled !== false
+  } else {
+    isEditingId.value = null
+    isForm.name = ''
+    isForm.sortOrder = 0
+    isForm.enabled = true
+  }
+  isModalVisible.value = true
+}
+
+async function handleSaveIs() {
+  if (!isForm.name.trim()) {
+    message.warning('请输入专长方向名称')
+    return
+  }
+  isSaving.value = true
+  try {
+    const payload = { name: isForm.name.trim(), sortOrder: isForm.sortOrder, enabled: isForm.enabled }
+    if (isEditingId.value) {
+      await request.put(`/dict/instructor-specialties/${isEditingId.value}`, payload)
+      message.success('更新成功')
+    } else {
+      await request.post('/dict/instructor-specialties', payload)
+      message.success('创建成功')
+    }
+    isModalVisible.value = false
+    fetchInstructorSpecialties()
+  } catch (error) {
+    message.error(error.message || '保存失败')
+  } finally {
+    isSaving.value = false
+  }
+}
+
+async function handleDeleteIs(id) {
+  try {
+    await request.delete(`/dict/instructor-specialties/${id}`)
+    message.success('删除成功')
+    fetchInstructorSpecialties()
+  } catch (error) {
+    message.error(error.message || '删除失败')
+  }
+}
+
 onMounted(() => {
   fetchPoliceTypes()
   fetchTrainingTypes()
+  fetchInstructorSpecialties()
 })
 </script>
 
