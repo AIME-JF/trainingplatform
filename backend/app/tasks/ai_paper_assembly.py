@@ -12,6 +12,7 @@ from app.database import SessionLocal, get_redis
 from app.models import AITask
 from app.services.ai import AIService
 from celery_app import celery_app
+from config import settings
 from logger import logger
 
 
@@ -56,7 +57,9 @@ def generate_ai_paper_assembly_task(self, task_id: int) -> None:
 
     if should_schedule_next:
         try:
-            schedule_paper_assembly_task()
+            for _ in range(settings.AI_TASK_MAX_CONCURRENCY):
+                if not schedule_paper_assembly_task():
+                    break
         except Exception as exc:
             logger.error("AI 自动组卷任务后续调度失败: %s", exc)
 
@@ -69,10 +72,11 @@ def schedule_paper_assembly_task(preferred_task_id: Optional[int] = None, db: Op
 
     try:
         lock = _acquire_dispatch_lock()
-        if session.query(AITask.id).filter(
+        processing_count = session.query(AITask.id).filter(
             AITask.task_type == PAPER_ASSEMBLY_TASK_TYPE,
             AITask.status == "processing",
-        ).first():
+        ).count()
+        if processing_count >= settings.AI_TASK_MAX_CONCURRENCY:
             return None
 
         next_task = _pick_next_pending_task(session, preferred_task_id)

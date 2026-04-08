@@ -2,6 +2,7 @@
 Celery配置文件
 """
 from celery import Celery
+from celery.schedules import crontab
 from config import settings
 
 # 创建Celery实例
@@ -16,6 +17,7 @@ celery_app = Celery(
         "app.tasks.ai_paper_generation",
         "app.tasks.teaching_resource_generation",
         "app.tasks.schedule_file_parse",
+        "app.tasks.ai_task_timeout",
     ]
 )
 
@@ -56,4 +58,12 @@ celery_app.conf.update(
     worker_max_tasks_per_child=50,
     worker_pool='gevent',
     worker_concurrency=100,
+
+    # 定时任务
+    beat_schedule={
+        "check-ai-task-timeout": {
+            "task": "app.tasks.ai_task_timeout.check_ai_task_timeout",
+            "schedule": 60.0,
+        },
+    },
 )

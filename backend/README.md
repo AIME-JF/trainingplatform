@@ -517,7 +517,6 @@ celery -A celery_app beat --loglevel=info
 | `CELERY_RESULT_BACKEND` | Celery 结果后端（默认 Redis DB 2） |
 | `SECRET_KEY` | JWT 签名密钥 |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Token 过期时间（默认 30 天） |
-| `LLM_BASE_URL` / `LLM_API_KEY` / `LLM_MODEL` | 保留在 Settings 中的模型环境变量 |
 | `MAX_UPLOAD_SIZE` | 最大上传文件大小（默认 500MB） |
 
 ### 需要特别注意的点

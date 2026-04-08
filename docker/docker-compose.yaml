@@ -87,6 +87,24 @@ services:
       - ./volumes/worker/logs:/app/logs
     command: worker
 
+  beat:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    image: police_training_backend:latest
+    container_name: police-training-beat
+    restart: unless-stopped
+    env_file:
+      - ./.env
+    depends_on:
+      redis:
+        condition: service_healthy
+      backend:
+        condition: service_started
+    volumes:
+      - ./volumes/beat/logs:/app/logs
+    command: beat
+
   frontend:
     build:
       context: ..

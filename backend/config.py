@@ -60,10 +60,10 @@ class Settings(BaseSettings):
     # 数据库迁移配置
     AUTO_MIGRATE_ON_STARTUP: bool = True
 
-    # 大模型配置
-    LLM_BASE_URL: str = "https://api.deepseek.com"
-    LLM_API_KEY: str = ""
-    LLM_MODEL: str = "DeepSeek-V3-250324"
+    # AI 任务并发与超时
+    AI_TASK_MAX_CONCURRENCY: int = 5
+    AI_TASK_TIMEOUT_MINUTES: int = 15
+
 
     class Config:
         env_file = ".env"

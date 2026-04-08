@@ -13,6 +13,7 @@ from app.models import AITask
 from app.schemas import AIQuestionTaskCreateRequest
 from app.agents.question_generator import AIQuestionGenerator
 from celery_app import celery_app
+from config import settings
 from logger import logger
 
 
@@ -73,7 +74,9 @@ def generate_ai_question_task(self, task_id: int) -> None:
 
     if should_schedule_next:
         try:
-            schedule_question_task()
+            for _ in range(settings.AI_TASK_MAX_CONCURRENCY):
+                if not schedule_question_task():
+                    break
         except Exception as exc:
             logger.error("AI 智能出题任务后续调度失败: %s", exc)
 
@@ -86,10 +89,11 @@ def schedule_question_task(preferred_task_id: Optional[int] = None, db: Optional
 
     try:
         lock = _acquire_dispatch_lock()
-        if session.query(AITask.id).filter(
+        processing_count = session.query(AITask.id).filter(
             AITask.task_type == QUESTION_TASK_TYPE,
             AITask.status == "processing",
-        ).first():
+        ).count()
+        if processing_count >= settings.AI_TASK_MAX_CONCURRENCY:
             return None
 
         next_task = _pick_next_pending_task(session, preferred_task_id)
