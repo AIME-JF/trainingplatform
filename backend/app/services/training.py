@@ -2,12 +2,13 @@
 培训管理服务
 """
 import json
+import random
 import uuid
 from datetime import date, datetime, time, timedelta
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import func as sa_func
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import func as sa_func, or_
+from sqlalchemy.orm import Session, joinedload, selectinload
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.database import get_redis
@@ -21,6 +22,8 @@ from app.models import (
     Exam,
     ExamPaper,
     ExamRecord,
+    Question,
+    QuestionFolder,
     Notice,
     PoliceType,
     Role,
@@ -33,6 +36,7 @@ from app.models import (
     TrainingHistory,
     TrainingLeave,
     User,
+    question_folder_course_relations,
 )
 from app.models.resource import Resource, ResourceTagRelation, TrainingResourceRef
 from app.models.library import LibraryItem
@@ -58,6 +62,8 @@ from app.schemas.training import (
     TrainingCurrentSessionResponse,
     TrainingEvaluationCreate,
     TrainingExamSummary,
+    TrainingQuizPublishRequest,
+    TrainingQuizUpdateRequest,
     TrainingHistoryResponse,
     TrainingListResponse,
     TrainingStatsResponse,
@@ -67,6 +73,13 @@ from app.schemas.training import (
     TrainingSkipCourseRequest,
     TrainingUpdate,
     TrainingWorkflowStepResponse,
+)
+from app.schemas.exam import (
+    EXAM_PARTICIPANT_MODE_TRAINING,
+    EXAM_SCENE_TRAINING,
+    ExamCreate,
+    ExamResponse,
+    ExamUpdate,
 )
 from app.schemas.notice import NoticeResponse
 from app.services.batch_import import BatchImportService
@@ -332,6 +345,123 @@ class TrainingService:
         if changed:
             self.db.commit()
         return self._to_response(training, current_user_id)
+
+    def create_training_quiz(
+        self,
+        training_id: int,
+        data: TrainingQuizPublishRequest,
+        user_id: int,
+    ) -> TrainingExamSummary:
+        """在培训班内发布随堂测试。"""
+        if data.training_id and int(data.training_id) != training_id:
+            raise ValueError("请求中的培训班ID与路径参数不一致")
+
+        mode = (data.mode or "").strip().lower()
+        if mode not in {"paper", "course_generate"}:
+            raise ValueError("不支持的随堂测试发布模式")
+
+        training = self._load_training_for_quiz_management(training_id)
+
+        from app.services.exam import ExamService
+
+        exam_service = ExamService(self.db)
+        course_ids: List[int] = []
+
+        if mode == "paper":
+            if not data.paper_id:
+                raise ValueError("请选择测验试卷")
+            paper = self.db.query(ExamPaper).filter(ExamPaper.id == data.paper_id).first()
+            if not paper:
+                raise ValueError("试卷不存在")
+            if (paper.type or "").lower() != "quiz":
+                raise ValueError("仅支持选择测验试卷发布随堂测试")
+            paper_id = paper.id
+        else:
+            if not data.course_id:
+                raise ValueError("请选择课程")
+            if not data.question_count:
+                raise ValueError("请填写抽题数量")
+            question_types = self._normalize_training_quiz_question_types(data.question_types)
+            paper = self._generate_training_quiz_paper(
+                training=training,
+                course_id=data.course_id,
+                question_count=data.question_count,
+                question_types=question_types,
+                title=data.title,
+                duration=data.duration,
+                passing_score=data.passing_score,
+                description=data.description,
+                user_id=user_id,
+            )
+            paper_id = paper.id
+            course_ids = [data.course_id]
+
+        exam_response = exam_service.create_exam(
+            ExamCreate(
+                title=data.title,
+                paper_id=paper_id,
+                description=data.description,
+                duration=data.duration,
+                passing_score=data.passing_score,
+                status="upcoming",
+                type="quiz",
+                scene=EXAM_SCENE_TRAINING,
+                participant_mode=EXAM_PARTICIPANT_MODE_TRAINING,
+                purpose="quiz",
+                training_id=training_id,
+                course_ids=course_ids,
+                max_attempts=data.max_attempts,
+                allow_makeup=False,
+                start_time=data.start_time,
+                end_time=data.end_time,
+            ),
+            user_id,
+        )
+        return self._summary_from_exam_response(exam_response)
+
+    def update_training_quiz(
+        self,
+        training_id: int,
+        exam_id: int,
+        data: TrainingQuizUpdateRequest,
+        user_id: int,
+    ) -> TrainingExamSummary:
+        """更新培训班随堂测试。"""
+        self._load_training_for_quiz_management(training_id)
+        self._get_training_quiz_entity(training_id, exam_id)
+
+        from app.services.exam import ExamService
+
+        exam_service = ExamService(self.db)
+        exam_response = exam_service.update_exam(
+            exam_id,
+            ExamUpdate(
+                title=data.title,
+                description=data.description,
+                duration=data.duration,
+                passing_score=data.passing_score,
+                scene=EXAM_SCENE_TRAINING,
+                participant_mode=EXAM_PARTICIPANT_MODE_TRAINING,
+                purpose="quiz",
+                training_id=training_id,
+                max_attempts=data.max_attempts,
+                allow_makeup=False,
+                start_time=data.start_time,
+                end_time=data.end_time,
+                type="quiz",
+            ),
+        )
+        return self._summary_from_exam_response(exam_response)
+
+    def delete_training_quiz(self, training_id: int, exam_id: int, user_id: int) -> None:
+        """删除培训班随堂测试。"""
+        self._load_training_for_quiz_management(training_id)
+        self._get_training_quiz_entity(training_id, exam_id)
+
+        from app.services.exam import ExamService
+
+        exam_service = ExamService(self.db)
+        exam_service.delete_exam(exam_id)
 
     def update_training(
         self,
@@ -3051,6 +3181,161 @@ class TrainingService:
             action_permissions=self._build_session_action_permissions(training, session, current_user_id),
         )
 
+    def _build_training_exam_summary(
+        self,
+        exam: Exam,
+        current_user_id: Optional[int] = None,
+    ) -> TrainingExamSummary:
+        from app.services.exam import ExamService
+
+        exam_response = ExamService(self.db)._to_exam_response(exam, current_user_id)
+        return self._summary_from_exam_response(exam_response)
+
+    @staticmethod
+    def _summary_from_exam_response(exam_response: ExamResponse) -> TrainingExamSummary:
+        return TrainingExamSummary(
+            id=exam_response.id,
+            title=exam_response.title,
+            purpose=exam_response.purpose or "class_assessment",
+            type=exam_response.type,
+            status=exam_response.status or "upcoming",
+            start_time=exam_response.start_time,
+            end_time=exam_response.end_time,
+            description=exam_response.description,
+            duration=exam_response.duration or 60,
+            question_count=exam_response.question_count or 0,
+            passing_score=exam_response.passing_score or 60,
+            max_attempts=exam_response.max_attempts or 1,
+            attempt_count=exam_response.attempt_count or 0,
+            latest_result=exam_response.latest_result,
+            can_join=exam_response.can_join,
+        )
+
+    def _load_training_for_quiz_management(self, training_id: int) -> Training:
+        training = self.db.query(Training).options(
+            joinedload(Training.courses),
+        ).filter(Training.id == training_id).first()
+        if not training:
+            raise ValueError("培训班不存在")
+        if (training.status or "").lower() == "ended":
+            raise ValueError("已结束的培训班不能发布或修改随堂测试")
+        return training
+
+    def _get_training_quiz_entity(self, training_id: int, exam_id: int) -> Exam:
+        exam = self.db.query(Exam).options(
+            joinedload(Exam.paper).joinedload(ExamPaper.paper_questions),
+        ).filter(
+            Exam.id == exam_id,
+            Exam.training_id == training_id,
+            Exam.scene == EXAM_SCENE_TRAINING,
+            Exam.purpose == "quiz",
+        ).first()
+        if not exam:
+            raise ValueError("随堂测试不存在")
+        return exam
+
+    @staticmethod
+    def _normalize_training_quiz_question_types(question_types: List[str]) -> List[str]:
+        normalized: List[str] = []
+        allowed = {"single", "multi", "judge"}
+        for item in question_types or []:
+            value = str(item or "").strip().lower()
+            if not value or value in normalized:
+                continue
+            if value not in allowed:
+                raise ValueError(f"不支持的题型: {value}")
+            normalized.append(value)
+        if not normalized:
+            raise ValueError("请至少选择一种题型")
+        return normalized
+
+    def _generate_training_quiz_paper(
+        self,
+        training: Training,
+        course_id: int,
+        question_count: int,
+        question_types: List[str],
+        title: str,
+        duration: int,
+        passing_score: int,
+        description: Optional[str],
+        user_id: int,
+    ) -> ExamPaper:
+        training_course = next(
+            (
+                item
+                for item in (training.courses or [])
+                if item.course_id and int(item.course_id) == int(course_id)
+            ),
+            None,
+        )
+        if not training_course:
+            raise ValueError("所选课程不在当前培训班内，无法发布随堂测试")
+
+        available_questions = self._load_course_quiz_questions(course_id, question_types)
+        if len(available_questions) < question_count:
+            raise ValueError(
+                f"题量不足，当前课程仅有 {len(available_questions)} 道符合条件的题目"
+            )
+
+        selected_questions = random.SystemRandom().sample(available_questions, question_count)
+        total_score = sum(int(question.score or 0) for question in selected_questions)
+        if total_score <= 0:
+            raise ValueError("题目分值异常，无法生成随堂测试试卷")
+        if passing_score > total_score:
+            raise ValueError(f"及格分不能超过试卷总分 {total_score} 分")
+
+        paper_description = f"系统按课程抽题生成；关联课程：{training_course.name}"
+        if description:
+            paper_description = f"{paper_description}\n{description}"
+
+        paper = ExamPaper(
+            title=title,
+            description=paper_description,
+            duration=duration,
+            total_score=total_score,
+            passing_score=passing_score,
+            type="quiz",
+            status="published",
+            published_at=self._current_time(),
+            created_by=user_id,
+        )
+        self.db.add(paper)
+        self.db.flush()
+
+        from app.services.exam import ExamService
+
+        ExamService(self.db)._replace_paper_questions(
+            paper.id,
+            [question.id for question in selected_questions],
+            selected_questions,
+        )
+        self.db.flush()
+        return paper
+
+    def _load_course_quiz_questions(self, course_id: int, question_types: List[str]) -> List[Question]:
+        rows = self.db.query(Question).options(
+            selectinload(Question.knowledge_points),
+        ).join(
+            QuestionFolder,
+            Question.folder_id == QuestionFolder.id,
+        ).outerjoin(
+            question_folder_course_relations,
+            question_folder_course_relations.c.question_folder_id == QuestionFolder.id,
+        ).filter(
+            Question.type.in_(question_types),
+            or_(
+                question_folder_course_relations.c.course_id == course_id,
+                QuestionFolder.course_id == course_id,
+            ),
+        ).all()
+
+        deduplicated: Dict[int, Question] = {}
+        for row in rows:
+            if row.id not in deduplicated:
+                deduplicated[row.id] = row
+        return list(deduplicated.values())
+
     def _resolve_current_step_key(self, training: Training) -> str:
         if training.status == "ended":
             return "completed"
@@ -3097,16 +3382,7 @@ class TrainingService:
             for session in (training.exam_sessions or []):
                 if (session.purpose or "class_assessment") == "admission":
                     continue
-                exam_sessions.append(TrainingExamSummary(
-                    id=session.id,
-                    title=session.title,
-                    purpose=session.purpose or "class_assessment",
-                    status=session.status or "upcoming",
-                    start_time=session.start_time,
-                    end_time=session.end_time,
-                    question_count=len(session.paper.paper_questions or []) if session.paper else 0,
-                    passing_score=session.passing_score or 60,
-                ))
+                exam_sessions.append(self._build_training_exam_summary(session, current_user_id))
             resources = self.list_training_resources(training.id)
             recent_activities = self.get_training_activities(training.id, limit=5)
         else:

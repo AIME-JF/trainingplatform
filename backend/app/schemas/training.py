@@ -151,11 +151,48 @@ class TrainingExamSummary(BaseModel):
     id: int
     title: str
     purpose: str
+    type: Optional[str] = None
     status: str
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
+    description: Optional[str] = None
+    duration: int = 60
     question_count: int = 0
     passing_score: int = 60
+    max_attempts: int = 1
+    attempt_count: int = 0
+    latest_result: Optional[str] = None
+    can_join: Optional[bool] = None
+
+
+class TrainingQuizPublishRequest(BaseModel):
+    """培训班随堂测试发布请求"""
+
+    mode: str = Field(..., description="发布模式: paper/course_generate")
+    training_id: Optional[int] = Field(None, description="培训班ID，需与路径参数一致")
+    title: str = Field(..., max_length=200, description="随堂测试名称")
+    description: Optional[str] = Field(None, description="说明")
+    start_time: datetime = Field(..., description="开始时间")
+    end_time: datetime = Field(..., description="结束时间")
+    duration: int = Field(30, ge=5, le=300, description="测试时长(分钟)")
+    passing_score: int = Field(60, ge=0, le=999, description="及格分")
+    max_attempts: int = Field(1, ge=1, le=10, description="最大作答次数")
+    paper_id: Optional[int] = Field(None, description="已有测验试卷ID")
+    course_id: Optional[int] = Field(None, description="课程资源ID")
+    question_count: Optional[int] = Field(None, ge=1, le=100, description="抽题数量")
+    question_types: List[str] = Field(default_factory=list, description="题型: single/multi/judge")
+
+
+class TrainingQuizUpdateRequest(BaseModel):
+    """培训班随堂测试更新请求"""
+
+    title: Optional[str] = Field(None, max_length=200, description="随堂测试名称")
+    description: Optional[str] = Field(None, description="说明")
+    start_time: Optional[datetime] = Field(None, description="开始时间")
+    end_time: Optional[datetime] = Field(None, description="结束时间")
+    duration: Optional[int] = Field(None, ge=5, le=300, description="测试时长(分钟)")
+    passing_score: Optional[int] = Field(None, ge=0, le=999, description="及格分")
+    max_attempts: Optional[int] = Field(None, ge=1, le=10, description="最大作答次数")
 
 
 class TrainingBaseCreate(BaseModel):

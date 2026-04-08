@@ -24,3 +24,18 @@ export function getExamDashboard(params?: Record<string, unknown>) {
     params,
   })
 }
+
+export function getExamPapers(params?: Record<string, unknown>) {
+  return customInstance<any>({
+    url: '/exams/papers',
+    method: 'GET',
+    params,
+  })
+}
+
+export function getUnifiedExamDetail(examId: number) {
+  return customInstance<any>({
+    url: `/exams/${examId}`,
+    method: 'GET',
+  })
+}

@@ -13,6 +13,8 @@ from app.schemas import (
     CheckoutCreate,
     TrainingLeaveCreate,
     EnrollmentCreate,
+    TrainingQuizPublishRequest,
+    TrainingQuizUpdateRequest,
     TrainingSkipCourseRequest,
     TrainingCourseChangeLogResponse,
     TrainingCreate,
@@ -68,6 +70,34 @@ class TrainingController:
         if not result:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="培训班不存在")
         return result
+
+    def create_training_quiz(self, training_id: int, data: TrainingQuizPublishRequest, user_id: int):
+        try:
+            return self.service.create_training_quiz(training_id, data, user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("发布随堂测试异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="发布随堂测试失败")
+
+    def update_training_quiz(self, training_id: int, exam_id: int, data: TrainingQuizUpdateRequest, user_id: int):
+        try:
+            return self.service.update_training_quiz(training_id, exam_id, data, user_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("更新随堂测试异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="更新随堂测试失败")
+
+    def delete_training_quiz(self, training_id: int, exam_id: int, user_id: int):
+        try:
+            self.service.delete_training_quiz(training_id, exam_id, user_id)
+            return {"deleted": True}
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("删除随堂测试异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="删除随堂测试失败")
 
     def update_training(self, training_id: int, data: TrainingUpdate, actor_id: Optional[int] = None):
         try:
