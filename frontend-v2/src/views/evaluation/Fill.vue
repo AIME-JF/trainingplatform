@@ -36,7 +36,7 @@
               <div v-for="dim in currentItem.dimensions" :key="dim.id" class="fill-dim-row">
                 <div class="fill-dim-name">{{ dim.name }}</div>
                 <div v-if="dim.description" class="fill-dim-desc">{{ dim.description }}</div>
-                <a-rate v-model:value="currentScores[dim.id]" :count="5" />
+                <a-rate v-model:value="currentScores[dim.id]" :count="5" class="eval-rate" />
               </div>
             </div>
 
@@ -270,6 +270,14 @@ onMounted(fetchDetail)
   font-size: 12px;
   color: var(--v2-text-muted);
   margin-bottom: 8px;
+}
+
+.eval-rate {
+  font-size: 28px;
+}
+
+.eval-rate :deep(.ant-rate-star) {
+  margin-inline-end: 12px;
 }
 
 .fill-comment {

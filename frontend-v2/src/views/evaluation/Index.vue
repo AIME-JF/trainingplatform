@@ -27,18 +27,19 @@
         >
           <div class="eval-card-header">
             <span class="eval-card-title">{{ task.title }}</span>
-            <a-tag :color="task.status === 'active' ? 'green' : 'default'" size="small">
-              {{ task.status === 'active' ? '进行中' : '已结束' }}
-            </a-tag>
+            <a-tag v-if="task.user_completed" color="blue" size="small">已填写</a-tag>
+            <a-tag v-else-if="task.status === 'active'" color="green" size="small">进行中</a-tag>
+            <a-tag v-else color="default" size="small">已结束</a-tag>
           </div>
           <div class="eval-card-meta">
-            <span><TagOutlined /> {{ targetTypeLabel(task.targetType) }}</span>
-            <span v-if="task.endTime"><ClockCircleOutlined /> 截止 {{ formatTime(task.endTime) }}</span>
+            <span v-if="task.training_name"><TagOutlined /> {{ task.training_name }}</span>
+            <span v-if="task.end_time"><ClockCircleOutlined /> 截止 {{ formatTime(task.end_time) }}</span>
           </div>
           <div class="eval-card-footer">
-            <span>{{ task.recordCount || 0 }} 人已评</span>
-            <span v-if="task.status === 'active'" class="eval-card-action">去填写 →</span>
-            <span v-else class="eval-card-action muted">查看</span>
+            <span>共 {{ task.item_count || 0 }} 项评价</span>
+            <span v-if="task.user_completed" class="eval-card-action muted">已完成</span>
+            <span v-else-if="task.status === 'active'" class="eval-card-action">去填写 →</span>
+            <span v-else class="eval-card-action muted">已结束</span>
           </div>
         </div>
       </div>
@@ -61,8 +62,8 @@ const tasks = ref<any[]>([])
 
 const filteredTasks = computed(() =>
   tasks.value.filter(t => {
-    if (activeTab.value === 'active') return t.status === 'active'
-    return t.status === 'closed'
+    if (activeTab.value === 'active') return t.status === 'active' && !t.user_completed
+    return t.status === 'closed' || t.user_completed
   })
 )
 

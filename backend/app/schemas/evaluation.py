@@ -100,6 +100,7 @@ class EvaluationTaskResponse(BaseModel):
     created_at: Optional[datetime] = None
     record_count: int = 0
     item_count: int = 0
+    user_completed: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 

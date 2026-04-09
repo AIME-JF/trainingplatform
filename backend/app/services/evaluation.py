@@ -209,14 +209,15 @@ class EvaluationService:
             end_time=data.end_time,
         )
 
-    def list_tasks(self, target_type: Optional[str] = None, status: Optional[str] = None) -> List[EvaluationTaskResponse]:
+    def list_tasks(self, target_type: Optional[str] = None, status: Optional[str] = None,
+                   current_user_id: Optional[int] = None) -> List[EvaluationTaskResponse]:
         query = self.db.query(EvaluationTask)
         if target_type:
             query = query.filter(EvaluationTask.target_type == target_type)
         if status:
             query = query.filter(EvaluationTask.status == status)
         tasks = query.order_by(EvaluationTask.created_at.desc()).all()
-        return [self._task_to_response(t) for t in tasks]
+        return [self._task_to_response(t, current_user_id) for t in tasks]
 
     def get_task_detail(self, task_id: int, user_id: Optional[int] = None) -> Optional[EvaluationTaskDetailResponse]:
         """获取任务详情（含评价项清单和维度）"""
@@ -446,13 +447,20 @@ class EvaluationService:
 
     # ========== 内部方法 ==========
 
-    def _task_to_response(self, task: EvaluationTask) -> EvaluationTaskResponse:
+    def _task_to_response(self, task: EvaluationTask, current_user_id: Optional[int] = None) -> EvaluationTaskResponse:
         record_count = self.db.query(sa_func.count(EvaluationRecord.id)).filter(
             EvaluationRecord.task_id == task.id,
         ).scalar() or 0
         item_count = self.db.query(sa_func.count(EvaluationTaskItem.id)).filter(
             EvaluationTaskItem.task_id == task.id,
         ).scalar() or 0
+        user_completed = False
+        if current_user_id and item_count > 0:
+            user_record_count = self.db.query(sa_func.count(EvaluationRecord.id)).filter(
+                EvaluationRecord.task_id == task.id,
+                EvaluationRecord.user_id == current_user_id,
+            ).scalar() or 0
+            user_completed = user_record_count >= item_count
         training = self.db.query(Training).filter(Training.id == task.training_id).first() if task.training_id else None
         return EvaluationTaskResponse(
             id=task.id, template_id=task.template_id, target_type=task.target_type,
@@ -462,6 +470,7 @@ class EvaluationService:
             start_time=task.start_time, end_time=task.end_time,
             created_by=task.created_by, created_at=task.created_at,
             record_count=record_count, item_count=item_count,
+            user_completed=user_completed,
         )
 
     def _record_to_response(self, record: EvaluationRecord) -> EvaluationRecordResponse:

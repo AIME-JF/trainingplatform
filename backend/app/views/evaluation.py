@@ -98,7 +98,7 @@ def list_tasks(
     task_status: Optional[str] = Query(None, alias="status"),
     current_user: TokenData = Depends(get_current_user), db: Session = Depends(get_db),
 ):
-    return StandardResponse(data=EvaluationService(db).list_tasks(target_type, task_status))
+    return StandardResponse(data=EvaluationService(db).list_tasks(target_type, task_status, current_user.user_id))
 
 
 @router.post("/tasks", response_model=StandardResponse[EvaluationTaskResponse], summary="创建评价任务")
