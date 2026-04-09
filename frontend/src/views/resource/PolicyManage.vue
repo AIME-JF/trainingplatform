@@ -194,14 +194,7 @@
           </template>
         </a-alert>
 
-        <a-row :gutter="8" class="stage-header">
-          <a-col :span="3">阶段顺序</a-col>
-          <a-col :span="5">审核人类型</a-col>
-          <a-col :span="6">审核对象</a-col>
-          <a-col :span="4">最小通过数</a-col>
-          <a-col :span="3">允许自审</a-col>
-          <a-col :span="3">操作</a-col>
-        </a-row>
+        <div class="stage-header-hint">每行的字段含义会根据审核人类型自动切换：人工审核显示审核对象/通过数/自审；AI 审核显示拒绝策略/降级类型/降级审核人。</div>
 
         <div v-for="(stage, idx) in form.stages" :key="idx" class="stage-row">
           <a-row :gutter="8" align="middle">
@@ -218,26 +211,56 @@
                 <a-select-option value="user">用户</a-select-option>
                 <a-select-option value="role">角色</a-select-option>
                 <a-select-option value="department">部门</a-select-option>
+                <a-select-option value="ai">AI 审核</a-select-option>
               </a-select>
             </a-col>
-            <a-col :span="6">
-              <a-select
-                v-model:value="stage.reviewerRefId"
-                :options="getReviewerOptions(stage)"
-                show-search
-                option-filter-prop="label"
-                allow-clear
-                :loading="reviewerOptionsLoading"
-                style="width:100%"
-                :placeholder="getReviewerPlaceholder(stage.reviewerType)"
-              />
-            </a-col>
-            <a-col :span="4">
-              <a-input-number v-model:value="stage.minApprovals" :min="1" style="width:100%" placeholder="至少 1" />
-            </a-col>
-            <a-col :span="3">
-              <a-switch v-model:checked="stage.allowSelfReview" />
-            </a-col>
+            <template v-if="stage.reviewerType === 'ai'">
+              <a-col :span="6">
+                <a-select v-model:value="stage.aiRejectMode" style="width:100%" placeholder="AI拒绝策略">
+                  <a-select-option value="fallback">降级人工确认</a-select-option>
+                  <a-select-option value="direct">直接拒绝</a-select-option>
+                </a-select>
+              </a-col>
+              <a-col :span="4">
+                <a-select v-model:value="stage.fallbackReviewerType" style="width:100%" placeholder="降级类型" @change="onFallbackTypeChange(stage)">
+                  <a-select-option value="user">用户</a-select-option>
+                  <a-select-option value="role">角色</a-select-option>
+                  <a-select-option value="department">部门</a-select-option>
+                </a-select>
+              </a-col>
+              <a-col :span="3">
+                <a-select
+                  v-model:value="stage.fallbackReviewerRefId"
+                  :options="getFallbackReviewerOptions(stage)"
+                  show-search
+                  option-filter-prop="label"
+                  allow-clear
+                  :loading="reviewerOptionsLoading"
+                  style="width:100%"
+                  placeholder="降级审核人"
+                />
+              </a-col>
+            </template>
+            <template v-else>
+              <a-col :span="6">
+                <a-select
+                  v-model:value="stage.reviewerRefId"
+                  :options="getReviewerOptions(stage)"
+                  show-search
+                  option-filter-prop="label"
+                  allow-clear
+                  :loading="reviewerOptionsLoading"
+                  style="width:100%"
+                  :placeholder="getReviewerPlaceholder(stage.reviewerType)"
+                />
+              </a-col>
+              <a-col :span="4">
+                <a-input-number v-model:value="stage.minApprovals" :min="1" style="width:100%" placeholder="至少 1" />
+              </a-col>
+              <a-col :span="3">
+                <a-switch v-model:checked="stage.allowSelfReview" />
+              </a-col>
+            </template>
             <a-col :span="3">
               <permissions-tooltip
                 :allowed="canManagePolicy"
@@ -323,6 +346,12 @@ const reviewerTypeLabels = {
   user: '用户',
   role: '角色',
   department: '部门',
+  ai: 'AI 审核',
+}
+
+const aiRejectModeLabels = {
+  direct: '直接拒绝',
+  fallback: '降级人工确认',
 }
 
 const columns = [
@@ -408,6 +437,9 @@ function createStage(stageOrder = 1) {
     reviewerRefId: null,
     minApprovals: 1,
     allowSelfReview: false,
+    fallbackReviewerType: 'role',
+    fallbackReviewerRefId: null,
+    aiRejectMode: 'fallback',
   }
 }
 
@@ -482,6 +514,25 @@ function getFlowReviewerLabel(stage) {
 function onReviewerTypeChange(stage) {
   stage.reviewerRefId = null
   stage.minApprovals = 1
+  if (stage.reviewerType === 'ai') {
+    stage.fallbackReviewerType = 'role'
+    stage.fallbackReviewerRefId = null
+    stage.aiRejectMode = 'fallback'
+  }
+}
+
+function onFallbackTypeChange(stage) {
+  stage.fallbackReviewerRefId = null
+}
+
+function getFallbackReviewerOptions(stage) {
+  const type = stage?.fallbackReviewerType || 'role'
+  const fallbackPrefix = reviewerTypeLabels[type] || '对象'
+  return appendMissingOption(
+    getBaseReviewerOptions(type),
+    stage?.fallbackReviewerRefId,
+    `已失效${fallbackPrefix}（ID: ${stage?.fallbackReviewerRefId}）`,
+  )
 }
 
 function onScopeTypeChange(value) {
@@ -574,6 +625,9 @@ async function openEdit(policy) {
     reviewerRefId: normalizeId(stage.reviewerRefId),
     minApprovals: Number(stage.minApprovals || 1),
     allowSelfReview: !!stage.allowSelfReview,
+    fallbackReviewerType: stage.fallbackReviewerType || 'role',
+    fallbackReviewerRefId: normalizeId(stage.fallbackReviewerRefId),
+    aiRejectMode: stage.aiRejectMode || 'fallback',
   }))
   if (!form.stages.length) {
     form.stages = [createStage(1)]
@@ -628,9 +682,15 @@ function formatStageSummary(stages = []) {
 
 function formatSingleStageLine(stage, index = 0) {
   const reviewerType = stage?.reviewerType || 'role'
+  const order = Number(stage?.stageOrder || index + 1)
+  if (reviewerType === 'ai') {
+    const rejectLabel = aiRejectModeLabels[stage?.aiRejectMode] || '降级人工确认'
+    const fbType = reviewerTypeLabels[stage?.fallbackReviewerType] || '角色'
+    const fbLabel = getOptionLabel(getBaseReviewerOptions(stage?.fallbackReviewerType || 'role'), stage?.fallbackReviewerRefId, fbType)
+    return `第 ${order} 级，AI 审核，拒绝策略：${rejectLabel}，降级审核人：${fbType}（${fbLabel}）`
+  }
   const typeLabel = reviewerTypeLabels[reviewerType] || reviewerType
   const reviewerLabel = getOptionLabel(getBaseReviewerOptions(reviewerType), stage?.reviewerRefId, typeLabel)
-  const order = Number(stage?.stageOrder || index + 1)
   const parts = [`第 ${order} 级`, `${typeLabel}：${reviewerLabel}`, `至少 ${Number(stage?.minApprovals || 1)} 人通过`]
   if (stage?.allowSelfReview) {
     parts.push('允许自审')
@@ -650,6 +710,9 @@ function validateStagesBeforeSave() {
     reviewerRefId: normalizeId(stage.reviewerRefId),
     minApprovals: Number(stage.minApprovals || 1),
     allowSelfReview: !!stage.allowSelfReview,
+    fallbackReviewerType: stage.fallbackReviewerType || null,
+    fallbackReviewerRefId: normalizeId(stage.fallbackReviewerRefId),
+    aiRejectMode: stage.aiRejectMode || 'fallback',
     index,
   }))
 
@@ -662,17 +725,24 @@ function validateStagesBeforeSave() {
       message.warning(`第 ${stage.index + 1} 行缺少审核人类型`)
       return null
     }
-    if (!stage.reviewerRefId) {
-      message.warning(`第 ${stage.index + 1} 行缺少审核对象`)
-      return null
-    }
-    if (stage.minApprovals < 1) {
-      message.warning(`第 ${stage.index + 1} 行的最小通过数必须大于 0`)
-      return null
-    }
-    if (stage.reviewerType === 'user' && stage.minApprovals > 1) {
-      message.warning(`第 ${stage.index + 1} 行按用户审核时，最小通过数不能超过 1`)
-      return null
+    if (stage.reviewerType === 'ai') {
+      if (!stage.fallbackReviewerType || !stage.fallbackReviewerRefId) {
+        message.warning(`第 ${stage.index + 1} 行 AI 审核需要配置降级审核人`)
+        return null
+      }
+    } else {
+      if (!stage.reviewerRefId) {
+        message.warning(`第 ${stage.index + 1} 行缺少审核对象`)
+        return null
+      }
+      if (stage.minApprovals < 1) {
+        message.warning(`第 ${stage.index + 1} 行的最小通过数必须大于 0`)
+        return null
+      }
+      if (stage.reviewerType === 'user' && stage.minApprovals > 1) {
+        message.warning(`第 ${stage.index + 1} 行按用户审核时，最小通过数不能超过 1`)
+        return null
+      }
     }
   }
 
@@ -693,9 +763,12 @@ function validateStagesBeforeSave() {
   return sortedStages.map((stage) => ({
     stageOrder: stage.stageOrder,
     reviewerType: stage.reviewerType,
-    reviewerRefId: stage.reviewerRefId,
-    minApprovals: stage.minApprovals,
-    allowSelfReview: stage.allowSelfReview,
+    reviewerRefId: stage.reviewerType === 'ai' ? null : stage.reviewerRefId,
+    minApprovals: stage.reviewerType === 'ai' ? 1 : stage.minApprovals,
+    allowSelfReview: stage.reviewerType === 'ai' ? false : stage.allowSelfReview,
+    fallbackReviewerType: stage.reviewerType === 'ai' ? stage.fallbackReviewerType : null,
+    fallbackReviewerRefId: stage.reviewerType === 'ai' ? stage.fallbackReviewerRefId : null,
+    aiRejectMode: stage.reviewerType === 'ai' ? stage.aiRejectMode : null,
   }))
 }
 
@@ -808,11 +881,11 @@ async function save() {
   color: #001234;
 }
 
-.stage-header {
-  margin-bottom: 8px;
-  padding: 0 10px;
-  color: #666;
+.stage-header-hint {
+  margin-bottom: 10px;
+  color: #8c8c8c;
   font-size: 12px;
+  line-height: 1.6;
 }
 
 .stage-row {

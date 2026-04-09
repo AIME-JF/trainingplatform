@@ -52,6 +52,9 @@ class ReviewPolicyStage(Base):
     reviewer_ref_id = Column(Integer, nullable=False, comment='审核对象ID')
     min_approvals = Column(Integer, default=1, comment='最小通过数')
     allow_self_review = Column(Boolean, default=False, comment='允许自审')
+    fallback_reviewer_type = Column(String(30), nullable=True, comment='AI降级审核人类型: role/department/user')
+    fallback_reviewer_ref_id = Column(Integer, nullable=True, comment='AI降级审核对象ID')
+    ai_reject_mode = Column(String(20), nullable=True, default='fallback', comment='AI拒绝策略: direct/fallback')
 
     __table_args__ = (
         UniqueConstraint('policy_id', 'stage_order', name='uq_review_policy_stage_order'),

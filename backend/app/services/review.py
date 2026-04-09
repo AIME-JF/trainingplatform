@@ -25,7 +25,7 @@ from app.schemas.review import (
 
 VALID_SCOPE_TYPES = {'global', 'department', 'department_tree'}
 VALID_UPLOADER_CONSTRAINTS = {'all', 'specific_role', 'specific_department'}
-VALID_REVIEWER_TYPES = {'role', 'department', 'user'}
+VALID_REVIEWER_TYPES = {'role', 'department', 'user', 'ai'}
 VALID_BUSINESS_TYPES = {'resource', 'training', 'exam'}
 DEFAULT_REVIEW_POLICY_NAME = '系统默认审核策略'
 DEFAULT_REVIEW_POLICY_PRIORITY = 9999
@@ -174,6 +174,9 @@ class ReviewService:
                 reviewer_ref_id=s['reviewer_ref_id'],
                 min_approvals=s['min_approvals'],
                 allow_self_review=s['allow_self_review'],
+                fallback_reviewer_type=s.get('fallback_reviewer_type'),
+                fallback_reviewer_ref_id=s.get('fallback_reviewer_ref_id'),
+                ai_reject_mode=s.get('ai_reject_mode'),
             ))
 
         self.db.commit()
@@ -224,6 +227,9 @@ class ReviewService:
                 reviewer_ref_id=stage_payload['reviewer_ref_id'],
                 min_approvals=stage_payload['min_approvals'],
                 allow_self_review=stage_payload['allow_self_review'],
+                fallback_reviewer_type=stage_payload.get('fallback_reviewer_type'),
+                fallback_reviewer_ref_id=stage_payload.get('fallback_reviewer_ref_id'),
+                ai_reject_mode=stage_payload.get('ai_reject_mode'),
             ))
 
         self.db.commit()
@@ -574,6 +580,30 @@ class ReviewService:
         if not stage:
             return 0
 
+        if stage.reviewer_type == 'ai':
+            # 创建占位任务
+            placeholder_task = ReviewTask(
+                workflow_id=workflow_id,
+                business_type=business_type,
+                business_id=business_id,
+                stage_order=stage_order,
+                assignee_user_id=0,
+                status='pending',
+            )
+            self.db.add(placeholder_task)
+            self.db.flush()
+
+            # 触发 AI 审核异步任务
+            from app.tasks.ai_review import schedule_ai_review_task
+            schedule_ai_review_task(
+                workflow_id=workflow_id,
+                task_id=placeholder_task.id,
+                business_type=business_type,
+                business_id=business_id,
+                stage_order=stage_order,
+            )
+            return 1  # 返回 1 表示有任务
+
         assignees = self._resolve_reviewer_user_ids(stage, uploader_id=uploader_id)
         for uid in assignees:
             self.db.add(ReviewTask(
@@ -695,6 +725,9 @@ class ReviewService:
                 reviewer_ref_id=s.reviewer_ref_id,
                 min_approvals=s.min_approvals,
                 allow_self_review=s.allow_self_review,
+                fallback_reviewer_type=s.fallback_reviewer_type,
+                fallback_reviewer_ref_id=s.fallback_reviewer_ref_id,
+                ai_reject_mode=s.ai_reject_mode,
             )
             for s in sorted((policy.stages or []), key=lambda x: x.stage_order)
         ]
@@ -710,6 +743,161 @@ class ReviewService:
             priority=policy.priority,
             stages=stages,
         )
+
+    def complete_ai_review(
+        self,
+        workflow_id: int,
+        task_id: int,
+        passed: bool,
+        summary: str,
+        should_fallback: bool = False,
+    ):
+        """
+        AI 审核完成回调。
+
+        参数:
+            workflow_id: 工作流 ID
+            task_id: 占位任务 ID
+            passed: AI 审核是否通过
+            summary: 审核摘要
+            should_fallback: 是否需要降级到人工审核（AI 失败或 ai_reject_mode=fallback）
+        """
+        workflow = self.db.query(ReviewWorkflow).filter(ReviewWorkflow.id == workflow_id).first()
+        if not workflow:
+            return
+
+        policy = self.db.query(ReviewPolicy).options(joinedload(ReviewPolicy.stages)).filter(
+            ReviewPolicy.id == workflow.policy_id
+        ).first()
+        if not policy:
+            return
+
+        placeholder = self.db.query(ReviewTask).filter(ReviewTask.id == task_id).first()
+        if not placeholder or placeholder.status != 'pending':
+            return
+
+        current_stage = workflow.current_stage
+        stage_cfg = next((s for s in (policy.stages or []) if s.stage_order == current_stage), None)
+        if not stage_cfg:
+            return
+
+        if should_fallback:
+            # 降级到人工审核：删除占位任务，创建人工任务
+            self.db.delete(placeholder)
+            self.db.flush()
+
+            fallback_type = stage_cfg.fallback_reviewer_type
+            fallback_ref_id = stage_cfg.fallback_reviewer_ref_id
+            if not fallback_type or not fallback_ref_id:
+                # 没有配置降级审核人，直接失败
+                placeholder_new = ReviewTask(
+                    workflow_id=workflow_id,
+                    business_type=workflow.business_type,
+                    business_id=workflow.business_id,
+                    stage_order=current_stage,
+                    assignee_user_id=0,
+                    status='rejected',
+                    comment=f'AI 审核异常且未配置降级审核人: {summary}',
+                )
+                self.db.add(placeholder_new)
+                workflow.status = 'rejected'
+                workflow.finished_at = datetime.now()
+                callbacks = ReviewCallbackRegistry.get(workflow.business_type)
+                if callbacks and callbacks.on_rejected:
+                    callbacks.on_rejected(self.db, workflow.business_id)
+                self.db.commit()
+                return
+
+            # 按降级配置创建人工审核任务
+            uploader_id = self._get_uploader_id(workflow)
+            assignee_ids = self._resolve_reviewer_ids(
+                fallback_type, fallback_ref_id,
+                stage_cfg.allow_self_review, uploader_id,
+            )
+            if not assignee_ids:
+                assignee_ids = [fallback_ref_id] if fallback_type == 'user' else []
+
+            for uid in assignee_ids:
+                task = ReviewTask(
+                    workflow_id=workflow_id,
+                    business_type=workflow.business_type,
+                    business_id=workflow.business_id,
+                    stage_order=current_stage,
+                    assignee_user_id=uid,
+                    status='pending',
+                    comment=f'AI 审核降级到人工: {summary}',
+                )
+                self.db.add(task)
+
+            workflow.status = 'reviewing'
+            self.db.commit()
+            self._write_log(
+                workflow.business_type, workflow.business_id, workflow.id,
+                actor_id=0, action='ai_fallback', detail={'reason': summary},
+            )
+            return
+
+        if passed:
+            # AI 审核通过
+            placeholder.status = 'approved'
+            placeholder.comment = summary
+            placeholder.reviewed_at = datetime.now()
+            self.db.commit()
+            self._advance_if_stage_passed(workflow, policy)
+            self.db.commit()
+        else:
+            # AI 审核拒绝（direct 模式才会到这里）
+            placeholder.status = 'rejected'
+            placeholder.comment = summary
+            placeholder.reviewed_at = datetime.now()
+            self._skip_pending_tasks(workflow.id, stage_order=current_stage)
+            workflow.status = 'rejected'
+            workflow.finished_at = datetime.now()
+            callbacks = ReviewCallbackRegistry.get(workflow.business_type)
+            if callbacks and callbacks.on_rejected:
+                callbacks.on_rejected(self.db, workflow.business_id)
+            self.db.commit()
+            self._write_log(
+                workflow.business_type, workflow.business_id, workflow.id,
+                actor_id=0, action='reject', detail={'ai_review': summary},
+            )
+
+    def _get_uploader_id(self, workflow: ReviewWorkflow) -> int:
+        """获取提交人ID"""
+        if workflow.business_type == 'resource':
+            resource = self.db.query(Resource).filter(Resource.id == workflow.business_id).first()
+            return resource.uploader_id if resource else 0
+        submit_log = self.db.query(ReviewLog).filter(
+            ReviewLog.workflow_id == workflow.id,
+            ReviewLog.action == 'submit',
+        ).first()
+        return submit_log.actor_id if submit_log else 0
+
+    def _resolve_reviewer_ids(
+        self, reviewer_type: str, reviewer_ref_id: int,
+        allow_self_review: bool, uploader_id: int,
+    ) -> List[int]:
+        """解析审核人ID列表"""
+        ids = []
+        if reviewer_type == 'user':
+            ids = [reviewer_ref_id]
+        elif reviewer_type == 'role':
+            users = self.db.query(User).join(User.roles).filter(
+                Role.id == reviewer_ref_id,
+                User.is_active == True,
+            ).all()
+            ids = [u.id for u in users]
+        elif reviewer_type == 'department':
+            users = self.db.query(User).join(User.departments).filter(
+                Department.id == reviewer_ref_id,
+                User.is_active == True,
+            ).all()
+            ids = [u.id for u in users]
+
+        if not allow_self_review and uploader_id:
+            ids = [uid for uid in ids if uid != uploader_id]
+
+        return sorted(set(ids))
 
     def _normalize_policy_payload(self, payload: dict) -> dict:
         name = str(payload.get('name') or '').strip()
@@ -781,26 +969,56 @@ class ReviewService:
                 raise ValueError(f'第 {index} 个审核阶段的审核人类型不合法')
 
             reviewer_ref_id = self._normalize_optional_int(stage_payload.get('reviewer_ref_id'))
-            if not reviewer_ref_id:
-                raise ValueError(f'第 {index} 个审核阶段缺少审核对象')
 
-            min_approvals = int(stage_payload.get('min_approvals') or 1)
-            if min_approvals < 1:
-                raise ValueError(f'第 {index} 个审核阶段的最小通过数必须大于 0')
+            # AI 类型特殊校验
+            if reviewer_type == 'ai':
+                fallback_reviewer_type = str(stage_payload.get('fallback_reviewer_type') or '').strip()
+                fallback_reviewer_ref_id = self._normalize_optional_int(stage_payload.get('fallback_reviewer_ref_id'))
+                ai_reject_mode = str(stage_payload.get('ai_reject_mode') or 'fallback').strip()
 
-            self._ensure_reviewer_reference_exists(reviewer_type, reviewer_ref_id, index)
-            self._validate_stage_approval_capacity(reviewer_type, reviewer_ref_id, min_approvals, index)
+                if ai_reject_mode not in ('direct', 'fallback'):
+                    raise ValueError(f'第 {index} 个审核阶段的 AI 拒绝策略必须是 direct 或 fallback')
 
-            if reviewer_type == 'user' and min_approvals > 1:
-                raise ValueError(f'第 {index} 个审核阶段按用户审核时，最小通过数不能超过 1')
+                if not fallback_reviewer_type or not fallback_reviewer_ref_id:
+                    raise ValueError(f'第 {index} 个审核阶段使用 AI 审核时，必须配置降级审核人')
+                if fallback_reviewer_type not in {'role', 'department', 'user'}:
+                    raise ValueError(f'第 {index} 个审核阶段的降级审核人类型不合法')
+                self._ensure_reviewer_reference_exists(fallback_reviewer_type, fallback_reviewer_ref_id, index)
 
-            normalized_stages.append({
-                'stage_order': stage_order,
-                'reviewer_type': reviewer_type,
-                'reviewer_ref_id': reviewer_ref_id,
-                'min_approvals': min_approvals,
-                'allow_self_review': bool(stage_payload.get('allow_self_review', False)),
-            })
+                normalized_stages.append({
+                    'stage_order': stage_order,
+                    'reviewer_type': reviewer_type,
+                    'reviewer_ref_id': reviewer_ref_id or 0,
+                    'min_approvals': 1,
+                    'allow_self_review': bool(stage_payload.get('allow_self_review', False)),
+                    'fallback_reviewer_type': fallback_reviewer_type,
+                    'fallback_reviewer_ref_id': fallback_reviewer_ref_id,
+                    'ai_reject_mode': ai_reject_mode,
+                })
+            else:
+                if not reviewer_ref_id:
+                    raise ValueError(f'第 {index} 个审核阶段缺少审核对象')
+
+                min_approvals = int(stage_payload.get('min_approvals') or 1)
+                if min_approvals < 1:
+                    raise ValueError(f'第 {index} 个审核阶段的最小通过数必须大于 0')
+
+                self._ensure_reviewer_reference_exists(reviewer_type, reviewer_ref_id, index)
+                self._validate_stage_approval_capacity(reviewer_type, reviewer_ref_id, min_approvals, index)
+
+                if reviewer_type == 'user' and min_approvals > 1:
+                    raise ValueError(f'第 {index} 个审核阶段按用户审核时，最小通过数不能超过 1')
+
+                normalized_stages.append({
+                    'stage_order': stage_order,
+                    'reviewer_type': reviewer_type,
+                    'reviewer_ref_id': reviewer_ref_id,
+                    'min_approvals': min_approvals,
+                    'allow_self_review': bool(stage_payload.get('allow_self_review', False)),
+                    'fallback_reviewer_type': None,
+                    'fallback_reviewer_ref_id': None,
+                    'ai_reject_mode': None,
+                })
 
         normalized_stages.sort(key=lambda item: item['stage_order'])
         expected_orders = list(range(1, len(normalized_stages) + 1))
@@ -817,11 +1035,16 @@ class ReviewService:
                 'reviewer_ref_id': stage.reviewer_ref_id,
                 'min_approvals': stage.min_approvals,
                 'allow_self_review': stage.allow_self_review,
+                'fallback_reviewer_type': stage.fallback_reviewer_type,
+                'fallback_reviewer_ref_id': stage.fallback_reviewer_ref_id,
+                'ai_reject_mode': stage.ai_reject_mode,
             }
             for stage in sorted(stages, key=lambda item: item.stage_order)
         ]
 
     def _ensure_reviewer_reference_exists(self, reviewer_type: str, reviewer_ref_id: int, stage_index: int) -> None:
+        if reviewer_type == 'ai':
+            return  # AI 类型不需要校验审核对象
         if reviewer_type == 'user':
             self._ensure_user_exists(reviewer_ref_id, f'第 {stage_index} 个审核阶段指定的用户不存在')
             return

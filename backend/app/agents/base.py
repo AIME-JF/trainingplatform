@@ -103,6 +103,62 @@ class BaseAIAgent:
             raise ValueError("OpenAI 未返回有效内容")
         return str(content).strip()
 
+    def _generate_vision(self, *, system_prompt: str, image_base64: str, user_prompt: str = "") -> str:
+        """多模态图片分析"""
+        config = self._load_runtime_config()
+        # 优先使用 vision 模型
+        vision_model = get_config_value("ai", "default_vision_model", "")
+        if vision_model:
+            config = AIRuntimeConfig(
+                provider=config.provider,
+                model=vision_model,
+                base_url=config.base_url,
+                api_key=config.api_key,
+                max_tokens=config.max_tokens,
+                temperature=config.temperature,
+                timeout=config.timeout,
+            )
+
+        if config.provider == "ollama":
+            return self._call_ollama_vision(config, system_prompt, image_base64, user_prompt)
+        return self._call_openai_vision(config, system_prompt, image_base64, user_prompt)
+
+    def _call_openai_vision(self, config, system_prompt: str, image_base64: str, user_prompt: str = "") -> str:
+        client = OpenAI(
+            api_key=config.api_key,
+            base_url=config.base_url,
+            timeout=httpx.Timeout(config.timeout or 120, connect=30),
+            max_retries=0,
+        )
+        user_content = []
+        if user_prompt:
+            user_content.append({"type": "text", "text": user_prompt})
+        user_content.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:image/jpeg;base64,{image_base64}"},
+        })
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_content},
+        ]
+        request_kwargs: dict[str, Any] = {"model": config.model, "messages": messages}
+        if config.max_tokens:
+            request_kwargs["max_tokens"] = int(config.max_tokens)
+        if config.temperature is not None:
+            request_kwargs["temperature"] = float(config.temperature)
+        response = client.chat.completions.create(**request_kwargs)
+        return (response.choices[0].message.content or "").strip()
+
+    def _call_ollama_vision(self, config, system_prompt: str, image_base64: str, user_prompt: str = "") -> str:
+        import ollama
+        client = ollama.Client(host=config.base_url)
+        prompt = f"{system_prompt}\n\n{user_prompt}" if user_prompt else system_prompt
+        response = client.chat(
+            model=config.model,
+            messages=[{"role": "user", "content": prompt, "images": [image_base64]}],
+        )
+        return (response.get("message", {}).get("content", "") or "").strip()
+
     def _call_ollama(self, config: AIRuntimeConfig, messages: list[dict[str, str]]) -> str:
         try:
             from ollama import Client

@@ -10,10 +10,13 @@ from pydantic import BaseModel, Field, ConfigDict
 
 class ReviewPolicyStageCreate(BaseModel):
     stage_order: int = Field(..., ge=1)
-    reviewer_type: str = Field(..., description='role/department/user')
-    reviewer_ref_id: int = Field(..., description='审核对象ID')
+    reviewer_type: str = Field(..., description='role/department/user/ai')
+    reviewer_ref_id: Optional[int] = Field(None, description='审核对象ID（ai类型时可为空）')
     min_approvals: int = Field(1, ge=1)
     allow_self_review: bool = False
+    fallback_reviewer_type: Optional[str] = Field(None, description="AI降级审核人类型: role/department/user")
+    fallback_reviewer_ref_id: Optional[int] = Field(None, description="AI降级审核对象ID")
+    ai_reject_mode: Optional[str] = Field("fallback", description="AI拒绝策略: direct(直接拒绝)/fallback(降级人工)")
 
 
 class ReviewPolicyCreate(BaseModel):
@@ -47,6 +50,9 @@ class ReviewPolicyStageResponse(BaseModel):
     reviewer_ref_id: int
     min_approvals: int
     allow_self_review: bool
+    fallback_reviewer_type: Optional[str] = None
+    fallback_reviewer_ref_id: Optional[int] = None
+    ai_reject_mode: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

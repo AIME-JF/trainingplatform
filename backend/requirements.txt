@@ -28,3 +28,6 @@ psycopg2
 opencv-python-headless
 scenedetect[opencv]
 imagehash
+PyMuPDF
+markitdown
+python-pptx

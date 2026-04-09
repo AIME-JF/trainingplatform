@@ -73,6 +73,10 @@ class Settings(BaseSettings):
     KEYFRAME_THUMBNAIL_FPS: int = 5
     KEYFRAME_JPEG_QUALITY: int = 80
 
+    # AI 审核
+    AI_REVIEW_MAX_PARALLEL: int = 3
+    AI_REVIEW_TEXT_CHUNK_SIZE: int = 4000
+
     @field_validator("DEBUG", mode="before")
     @classmethod
     def normalize_debug_flag(cls, value):

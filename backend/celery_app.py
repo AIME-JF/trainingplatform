@@ -22,6 +22,7 @@ celery_app = Celery(
         "app.tasks.video_keyframe",
         "app.tasks.evaluation",
         "app.tasks.daily_check",
+        "app.tasks.ai_review",
     ]
 )
 

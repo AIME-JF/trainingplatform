@@ -181,6 +181,22 @@ INITIAL_CONFIG_GROUPS = [
             },
         ],
     },
+    {
+        "group_name": "AI审核配置",
+        "group_key": "ai_review",
+        "group_description": "AI 内容审核规则与参数配置",
+        "configs": [
+            {
+                "config_name": "审核规则",
+                "config_key": "review_rules",
+                "config_description": "AI 审核时使用的内容审核规则，描述哪些内容应被判定为不合规",
+                "config_format": ConfigFormat.LONG_TEXT,
+                "config_value": "请检查内容是否包含以下违规类型：\n1. 暴力血腥内容\n2. 色情低俗内容\n3. 政治敏感内容\n4. 违法犯罪相关内容\n5. 虚假信息或误导性内容\n6. 侵犯个人隐私的内容\n7. 其他不符合公安培训教育要求的内容",
+                "is_required": True,
+                "is_public": False,
+            },
+        ],
+    },
 ]
 
 
