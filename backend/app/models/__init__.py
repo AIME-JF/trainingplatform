@@ -8,7 +8,8 @@ from .department import Department, user_departments
 from .police_type import PoliceType, user_police_types
 from .training_type import TrainingType
 from .dict_instructor_specialty import DictInstructorSpecialty
-from .instructor_tag import InstructorTag
+from .dict_teaching_direction import DictTeachingDirection
+from .instructor_profile import InstructorTag, InstructorTeachingDirection, InstructorTeachingExperience
 from .evaluation import EvaluationTemplate, EvaluationDimension, EvaluationTask, EvaluationTaskItem, EvaluationRecord, EvaluationScore
 from .system import Config, ConfigGroup, ConfigFormat, DashboardModuleConfig
 from .course import (
@@ -70,7 +71,10 @@ __all__ = [
     "user_police_types",
     "TrainingType",
     "DictInstructorSpecialty",
+    "DictTeachingDirection",
     "InstructorTag",
+    "InstructorTeachingDirection",
+    "InstructorTeachingExperience",
     "EvaluationTemplate", "EvaluationDimension", "EvaluationTask", "EvaluationTaskItem", "EvaluationRecord", "EvaluationScore",
     "department_permissions",
     # 课程相关

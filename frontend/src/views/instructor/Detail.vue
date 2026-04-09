@@ -59,6 +59,50 @@
                 <span>{{ instructor.joinDate || '未设置' }}</span>
               </div>
 
+              <div class="pi-row">
+                <span class="pi-label">岗位类型</span>
+                <span>{{ instructor.positionType || '未设置' }}</span>
+              </div>
+              <div class="pi-row">
+                <span class="pi-label">师资类型</span>
+                <span>{{ instructor.teacherType || '未设置' }}</span>
+              </div>
+              <div class="pi-row">
+                <span class="pi-label">教官等级</span>
+                <span>{{ instructor.instructorLevel || '未设置' }}</span>
+              </div>
+              <div class="pi-row">
+                <span class="pi-label">聘任时间</span>
+                <span>{{ instructor.appointmentStartDate && instructor.appointmentEndDate ? `${instructor.appointmentStartDate} ~ ${instructor.appointmentEndDate}` : '未设置' }}</span>
+              </div>
+              <div class="pi-row">
+                <span class="pi-label">出生日期</span>
+                <span>{{ instructor.birthDate || '未设置' }}</span>
+              </div>
+              <div class="pi-row">
+                <span class="pi-label">籍贯</span>
+                <span>{{ instructor.nativePlace || '未设置' }}</span>
+              </div>
+              <div class="pi-row">
+                <span class="pi-label">民族</span>
+                <span>{{ instructor.ethnicity || '未设置' }}</span>
+              </div>
+              <div class="pi-row">
+                <span class="pi-label">学历</span>
+                <span>{{ instructor.education || '未设置' }}</span>
+              </div>
+              <div class="pi-row">
+                <span class="pi-label">学位</span>
+                <span>{{ instructor.degree || '未设置' }}</span>
+              </div>
+
+              <a-divider style="margin: 12px 0" />
+              <div class="pi-label" style="margin-bottom: 8px">教学方向</div>
+              <div v-if="teachingDirections.length" class="specialty-tags">
+                <a-tag v-for="td in teachingDirections" :key="td.id" color="cyan">{{ td.name }}</a-tag>
+              </div>
+              <span v-else style="color: #999; font-size: 13px">未设置</span>
+
               <a-divider style="margin: 12px 0" />
               <div class="pi-label" style="margin-bottom: 8px">教官标签</div>
               <div v-if="instructor.instructorTags && instructor.instructorTags.length" class="tag-list">
@@ -91,6 +135,18 @@
                   v-else
                   :data-source="teachingRecords"
                   :columns="teachingColumns"
+                  :pagination="false"
+                  row-key="id"
+                  size="small"
+                />
+              </a-tab-pane>
+
+              <a-tab-pane key="experiences" tab="授课经历">
+                <a-empty v-if="!teachingExperiences.length" description="暂无授课经历" />
+                <a-table
+                  v-else
+                  :data-source="teachingExperiences"
+                  :columns="experienceColumns"
                   :pagination="false"
                   row-key="id"
                   size="small"
@@ -179,6 +235,15 @@ const instructor = ref({
 
 const teachingRecords = ref([])
 const teachingSummary = ref(null)
+const teachingDirections = ref([])
+const teachingExperiences = ref([])
+
+const experienceColumns = [
+  { title: '时间段', key: 'period', width: 200, customRender: ({ record }) => `${record.startDate || ''} ~ ${record.endDate || ''}` },
+  { title: '授课对象', dataIndex: 'targetAudience', key: 'targetAudience', ellipsis: true },
+  { title: '授课内容', dataIndex: 'content', key: 'content', ellipsis: true },
+  { title: '评课情况', dataIndex: 'evaluation', key: 'evaluation', ellipsis: true },
+]
 
 const teachingColumns = [
   { title: '培训班', dataIndex: 'trainingName', key: 'trainingName', ellipsis: true },
@@ -245,6 +310,16 @@ async function loadInstructorDetail() {
       examCount: data.examCount || 0,
       studyHours: data.studyHours || 0,
       avgScore: data.avgScore || 0,
+      positionType: data.positionType || '',
+      teacherType: data.teacherType || '',
+      instructorLevel: data.instructorLevel || '',
+      appointmentStartDate: data.appointmentStartDate || '',
+      appointmentEndDate: data.appointmentEndDate || '',
+      birthDate: data.birthDate || '',
+      nativePlace: data.nativePlace || '',
+      ethnicity: data.ethnicity || '',
+      education: data.education || '',
+      degree: data.degree || '',
     }
   } catch {
     instructor.value = {
@@ -316,6 +391,22 @@ async function handleEditSubmit(payload) {
   }
 }
 
+async function loadTeachingDirections() {
+  try {
+    teachingDirections.value = await request.get(`/instructors/${instructorId}/teaching-directions`) || []
+  } catch {
+    teachingDirections.value = []
+  }
+}
+
+async function loadTeachingExperiences() {
+  try {
+    teachingExperiences.value = await request.get(`/instructors/${instructorId}/teaching-experiences`) || []
+  } catch {
+    teachingExperiences.value = []
+  }
+}
+
 async function loadTeachingData() {
   try {
     const [summary, records] = await Promise.all([
@@ -333,6 +424,8 @@ async function loadTeachingData() {
 onMounted(() => {
   loadInstructorDetail()
   loadTeachingData()
+  loadTeachingDirections()
+  loadTeachingExperiences()
 })
 </script>
 

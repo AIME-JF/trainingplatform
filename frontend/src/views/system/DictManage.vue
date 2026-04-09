@@ -75,6 +75,37 @@
             </template>
           </a-table>
         </a-tab-pane>
+        <a-tab-pane key="teachingDirection" tab="教学方向">
+          <div class="tab-toolbar">
+            <span />
+            <a-button type="primary" @click="openTdModal()">
+              <template #icon><PlusOutlined /></template>
+              新增教学方向
+            </a-button>
+          </div>
+
+          <a-table
+            :data-source="tdList"
+            :columns="tdColumns"
+            :loading="tdLoading"
+            row-key="id"
+            :pagination="false"
+          >
+            <template #bodyCell="{ column, record }">
+              <template v-if="column.key === 'enabled'">
+                <a-tag :color="record.enabled ? 'green' : 'default'">{{ record.enabled ? '启用' : '停用' }}</a-tag>
+              </template>
+              <template v-else-if="column.key === 'action'">
+                <a-space>
+                  <a-button type="link" size="small" @click="openTdModal(record)">编辑</a-button>
+                  <a-popconfirm title="确定删除该教学方向吗？" @confirm="handleDeleteTd(record.id)">
+                    <a-button type="link" size="small" danger>删除</a-button>
+                  </a-popconfirm>
+                </a-space>
+              </template>
+            </template>
+          </a-table>
+        </a-tab-pane>
         <a-tab-pane key="trainingType" tab="培训班类型">
           <div class="tab-toolbar">
             <a-input-search
@@ -163,6 +194,26 @@
         </a-form-item>
         <a-form-item label="状态">
           <a-switch v-model:checked="ttForm.isActive" checked-children="启用" un-checked-children="停用" />
+        </a-form-item>
+      </a-form>
+    </a-modal>
+    <!-- 教学方向 新增/编辑弹窗 -->
+    <a-modal
+      v-model:open="tdModalVisible"
+      :title="tdEditingId ? '编辑教学方向' : '新增教学方向'"
+      :confirm-loading="tdSaving"
+      ok-text="保存"
+      @ok="handleSaveTd"
+    >
+      <a-form layout="vertical">
+        <a-form-item label="教学方向名称" required>
+          <a-input v-model:value="tdForm.name" placeholder="请输入教学方向名称" :maxlength="50" />
+        </a-form-item>
+        <a-form-item label="排序">
+          <a-input-number v-model:value="tdForm.sortOrder" :min="0" :max="9999" placeholder="数字越小越靠前" style="width: 100%" />
+        </a-form-item>
+        <a-form-item label="状态">
+          <a-switch v-model:checked="tdForm.enabled" checked-children="启用" un-checked-children="停用" />
         </a-form-item>
       </a-form>
     </a-modal>
@@ -440,6 +491,86 @@ async function handleDeleteTt(id) {
   }
 }
 
+// ===== 教学方向 =====
+const tdLoading = ref(false)
+const tdList = ref([])
+const tdModalVisible = ref(false)
+const tdSaving = ref(false)
+const tdEditingId = ref(null)
+const tdForm = reactive({
+  name: '',
+  sortOrder: 0,
+  enabled: true,
+})
+
+const tdColumns = [
+  { title: '序号', key: 'index', width: 70, customRender: ({ index }) => index + 1 },
+  { title: '教学方向名称', dataIndex: 'name', key: 'name' },
+  { title: '排序', dataIndex: 'sortOrder', key: 'sortOrder', width: 80 },
+  { title: '状态', key: 'enabled', width: 80 },
+  { title: '操作', key: 'action', width: 140 },
+]
+
+async function fetchTeachingDirections() {
+  tdLoading.value = true
+  try {
+    tdList.value = await request.get('/dict/teaching-directions') || []
+  } catch {
+    tdList.value = []
+  } finally {
+    tdLoading.value = false
+  }
+}
+
+function openTdModal(record) {
+  if (record) {
+    tdEditingId.value = record.id
+    tdForm.name = record.name || ''
+    tdForm.sortOrder = record.sortOrder ?? 0
+    tdForm.enabled = record.enabled !== false
+  } else {
+    tdEditingId.value = null
+    tdForm.name = ''
+    tdForm.sortOrder = 0
+    tdForm.enabled = true
+  }
+  tdModalVisible.value = true
+}
+
+async function handleSaveTd() {
+  if (!tdForm.name.trim()) {
+    message.warning('请输入教学方向名称')
+    return
+  }
+  tdSaving.value = true
+  try {
+    const payload = { name: tdForm.name.trim(), sortOrder: tdForm.sortOrder, enabled: tdForm.enabled }
+    if (tdEditingId.value) {
+      await request.put(`/dict/teaching-directions/${tdEditingId.value}`, payload)
+      message.success('更新成功')
+    } else {
+      await request.post('/dict/teaching-directions', payload)
+      message.success('创建成功')
+    }
+    tdModalVisible.value = false
+    fetchTeachingDirections()
+  } catch (error) {
+    message.error(error.message || '保存失败')
+  } finally {
+    tdSaving.value = false
+  }
+}
+
+async function handleDeleteTd(id) {
+  try {
+    await request.delete(`/dict/teaching-directions/${id}`)
+    message.success('删除成功')
+    fetchTeachingDirections()
+  } catch (error) {
+    message.error(error.message || '删除失败')
+  }
+}
+
 // ===== 教官专长方向 =====
 const isLoading = ref(false)
 const isList = ref([])
@@ -523,6 +654,7 @@ async function handleDeleteIs(id) {
 onMounted(() => {
   fetchPoliceTypes()
   fetchTrainingTypes()
+  fetchTeachingDirections()
   fetchInstructorSpecialties()
 })
 </script>

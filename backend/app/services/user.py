@@ -34,15 +34,17 @@ class UserService:
         response = UserResponse.model_validate(user)
         response.permissions = auth_service.get_user_permissions(self.db, user.id)
         response.instructor_tags = self._load_instructor_tags(user.id)
+        response.teaching_directions = self._load_teaching_directions(user.id)
         return response
 
     def _to_simple_response(self, user: User) -> UserSimpleResponse:
         response = UserSimpleResponse.model_validate(user)
         response.instructor_tags = self._load_instructor_tags(user.id)
+        response.teaching_directions = self._load_teaching_directions(user.id)
         return response
 
     def _load_instructor_tags(self, user_id: int) -> list:
-        from app.models.instructor_tag import InstructorTag
+        from app.models.instructor_profile import InstructorTag
         from app.schemas.user import InstructorTagResponse
         tags = self.db.query(InstructorTag).filter(InstructorTag.user_id == user_id).all()
         result = []
@@ -57,7 +59,25 @@ class UserService:
                 created_at=tag.created_at,
             ))
         return result
-    
+
+    def _load_teaching_directions(self, user_id: int) -> list:
+        from app.models.instructor_teaching_direction import InstructorTeachingDirection
+        from app.schemas.user import DictTeachingDirectionResponse
+        relations = self.db.query(InstructorTeachingDirection).filter(
+            InstructorTeachingDirection.user_id == user_id
+        ).all()
+        result = []
+        for rel in relations:
+            if rel.direction:
+                result.append(DictTeachingDirectionResponse(
+                    id=rel.direction.id,
+                    name=rel.direction.name,
+                    sort_order=rel.direction.sort_order,
+                    enabled=rel.direction.enabled,
+                    created_at=rel.direction.created_at,
+                ))
+        return result
+
     def create_user(self, user_data: UserCreate) -> UserResponse:
         """创建用户"""
         if self.db.query(User).filter(User.username == user_data.username).first():
@@ -81,16 +101,23 @@ class UserService:
             avatar=user_data.avatar,
             join_date=user_data.join_date,
             level=user_data.level,
+            birth_date=user_data.birth_date,
+            native_place=user_data.native_place,
+            ethnicity=user_data.ethnicity,
+            education=user_data.education,
+            degree=user_data.degree,
             instructor_title=user_data.instructor_title,
-            instructor_level=user_data.instructor_level,
-            instructor_specialties=user_data.instructor_specialties,
-            instructor_qualification=user_data.instructor_qualification,
             instructor_certificates=user_data.instructor_certificates,
             instructor_intro=user_data.instructor_intro,
             instructor_rating=user_data.instructor_rating if user_data.instructor_rating is not None else 0,
             instructor_course_count=user_data.instructor_course_count if user_data.instructor_course_count is not None else 0,
             instructor_student_count=user_data.instructor_student_count if user_data.instructor_student_count is not None else 0,
             instructor_review_count=user_data.instructor_review_count if user_data.instructor_review_count is not None else 0,
+            instructor_job_type=user_data.instructor_job_type,
+            instructor_category=user_data.instructor_category,
+            instructor_level=user_data.instructor_level,
+            instructor_hire_start=user_data.instructor_hire_start,
+            instructor_hire_end=user_data.instructor_hire_end,
         )
 
         if user_data.role_ids:
@@ -175,7 +202,7 @@ class UserService:
 
         # 教官标签筛选
         if admin_level or professional_level or specialty_id:
-            from app.models.instructor_tag import InstructorTag
+            from app.models.instructor_profile import InstructorTag
             tag_filter = query.join(InstructorTag, InstructorTag.user_id == User.id)
             if admin_level:
                 tag_filter = tag_filter.filter(InstructorTag.admin_level == admin_level)

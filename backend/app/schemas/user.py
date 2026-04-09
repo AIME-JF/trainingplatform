@@ -38,6 +38,11 @@ class UserCreate(BaseModel):
     avatar: Optional[str] = Field(None, description="头像URL")
     join_date: Optional[date] = Field(None, description="入警日期")
     level: Optional[str] = Field(None, description="学员等级")
+    birth_date: Optional[date] = Field(None, description="出生日期")
+    native_place: Optional[str] = Field(None, max_length=100, description="籍贯")
+    ethnicity: Optional[str] = Field(None, max_length=50, description="民族")
+    education: Optional[str] = Field(None, max_length=50, description="学历")
+    degree: Optional[str] = Field(None, max_length=50, description="学位")
 
     instructor_title: Optional[str] = Field(None, max_length=50, description="教官职称")
     instructor_certificates: Optional[List[Dict[str, Any]]] = Field(None, description="教官证书列表")
@@ -46,6 +51,11 @@ class UserCreate(BaseModel):
     instructor_course_count: Optional[int] = Field(None, description="教官课程数")
     instructor_student_count: Optional[int] = Field(None, description="教官学员数")
     instructor_review_count: Optional[int] = Field(None, description="教官评价数")
+    instructor_job_type: Optional[str] = Field(None, max_length=20, description="岗位类型: 专职/兼职")
+    instructor_category: Optional[str] = Field(None, max_length=20, description="师资类型: 业务/技能")
+    instructor_level: Optional[str] = Field(None, max_length=20, description="教官等级: 高级/中级/初级")
+    instructor_hire_start: Optional[date] = Field(None, description="聘任开始日期")
+    instructor_hire_end: Optional[date] = Field(None, description="聘任结束日期")
 
     role_ids: Optional[List[int]] = Field([], description="角色ID列表")
     department_ids: Optional[List[int]] = Field([], description="部门ID列表")
@@ -64,6 +74,11 @@ class UserUpdate(BaseModel):
     avatar: Optional[str] = Field(None, description="头像URL")
     join_date: Optional[date] = Field(None, description="入警日期")
     level: Optional[str] = Field(None, description="学员等级")
+    birth_date: Optional[date] = Field(None, description="出生日期")
+    native_place: Optional[str] = Field(None, max_length=100, description="籍贯")
+    ethnicity: Optional[str] = Field(None, max_length=50, description="民族")
+    education: Optional[str] = Field(None, max_length=50, description="学历")
+    degree: Optional[str] = Field(None, max_length=50, description="学位")
 
     instructor_title: Optional[str] = Field(None, max_length=50, description="教官职称")
     instructor_certificates: Optional[List[Dict[str, Any]]] = Field(None, description="教官证书列表")
@@ -72,6 +87,11 @@ class UserUpdate(BaseModel):
     instructor_course_count: Optional[int] = Field(None, description="教官课程数")
     instructor_student_count: Optional[int] = Field(None, description="教官学员数")
     instructor_review_count: Optional[int] = Field(None, description="教官评价数")
+    instructor_job_type: Optional[str] = Field(None, max_length=20, description="岗位类型: 专职/兼职")
+    instructor_category: Optional[str] = Field(None, max_length=20, description="师资类型: 业务/技能")
+    instructor_level: Optional[str] = Field(None, max_length=20, description="教官等级: 高级/中级/初级")
+    instructor_hire_start: Optional[date] = Field(None, description="聘任开始日期")
+    instructor_hire_end: Optional[date] = Field(None, description="聘任结束日期")
 
 
 class UserRoleUpdate(BaseModel):
@@ -157,6 +177,11 @@ class UserSimpleResponse(BaseModel):
     study_hours: float = 0
     exam_count: int = 0
     avg_score: float = 0
+    birth_date: Optional[date] = None
+    native_place: Optional[str] = None
+    ethnicity: Optional[str] = None
+    education: Optional[str] = None
+    degree: Optional[str] = None
 
     instructor_title: Optional[str] = None
     instructor_certificates: Optional[List[Dict[str, Any]]] = None
@@ -165,7 +190,13 @@ class UserSimpleResponse(BaseModel):
     instructor_course_count: int = 0
     instructor_student_count: int = 0
     instructor_review_count: int = 0
+    instructor_job_type: Optional[str] = None
+    instructor_category: Optional[str] = None
+    instructor_level: Optional[str] = None
+    instructor_hire_start: Optional[date] = None
+    instructor_hire_end: Optional[date] = None
     instructor_tags: List[InstructorTagResponse] = Field(default_factory=list)
+    teaching_directions: List["DictTeachingDirectionResponse"] = Field(default_factory=list)
 
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -193,6 +224,11 @@ class UserResponse(BaseModel):
     study_hours: float = 0
     exam_count: int = 0
     avg_score: float = 0
+    birth_date: Optional[date] = None
+    native_place: Optional[str] = None
+    ethnicity: Optional[str] = None
+    education: Optional[str] = None
+    degree: Optional[str] = None
 
     instructor_title: Optional[str] = None
     instructor_certificates: Optional[List[Dict[str, Any]]] = None
@@ -201,7 +237,13 @@ class UserResponse(BaseModel):
     instructor_course_count: int = 0
     instructor_student_count: int = 0
     instructor_review_count: int = 0
+    instructor_job_type: Optional[str] = None
+    instructor_category: Optional[str] = None
+    instructor_level: Optional[str] = None
+    instructor_hire_start: Optional[date] = None
+    instructor_hire_end: Optional[date] = None
     instructor_tags: List[InstructorTagResponse] = Field(default_factory=list)
+    teaching_directions: List["DictTeachingDirectionResponse"] = Field(default_factory=list)
 
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -211,6 +253,74 @@ class UserResponse(BaseModel):
     police_types: List[PoliceTypeSimpleResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class InstructorTeachingExperienceCreate(BaseModel):
+    """创建教官授课经历"""
+    start_date: Optional[date] = Field(None, description="开始日期")
+    end_date: Optional[date] = Field(None, description="结束日期")
+    target_audience: Optional[str] = Field(None, max_length=200, description="授课对象")
+    content: Optional[str] = Field(None, description="授课内容")
+    evaluation: Optional[str] = Field(None, description="评课情况")
+
+
+class InstructorTeachingExperienceResponse(BaseModel):
+    """教官授课经历响应"""
+    id: int
+    user_id: int
+    start_date: Optional[date] = None
+    end_date: Optional[date] = None
+    target_audience: Optional[str] = None
+    content: Optional[str] = None
+    evaluation: Optional[str] = None
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InstructorTeachingDirectionResponse(BaseModel):
+    """教官教学方向响应"""
+    id: int
+    user_id: int
+    direction_id: int
+    direction_name: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InstructorTeachingDirectionUpdate(BaseModel):
+    """设置教官教学方向（全量替换）"""
+    direction_ids: List[int] = Field(..., description="教学方向ID列表")
+
+
+class DictTeachingDirectionCreate(BaseModel):
+    """创建教学方向"""
+    name: str = Field(..., max_length=50, description="教学方向名称")
+    sort_order: int = Field(0, description="排序序号")
+    enabled: bool = Field(True, description="是否启用")
+
+
+class DictTeachingDirectionUpdate(BaseModel):
+    """更新教学方向"""
+    name: Optional[str] = Field(None, max_length=50, description="教学方向名称")
+    sort_order: Optional[int] = Field(None, description="排序序号")
+    enabled: Optional[bool] = Field(None, description="是否启用")
+
+
+class DictTeachingDirectionResponse(BaseModel):
+    """教学方向字典响应"""
+    id: int
+    name: str
+    sort_order: int = 0
+    enabled: bool = True
+    created_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+# 解析前向引用
+UserSimpleResponse.model_rebuild()
+UserResponse.model_rebuild()
 
 
 class LoginResponse(BaseModel):
