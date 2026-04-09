@@ -75,8 +75,9 @@ backend/
 │   │   ├── batch_import.py         # 批量导入
 │   │   ├── system_exchange.py      # 数据导入导出
 │   │   └── ...                     # auth, user, course, training, exam 等
-│   ├── agents/                     # 智能体封装（8 个 Agent）
-│   │   ├── base.py                 # BaseAIAgent（OpenAI / Ollama 双通道）
+│   ├── agents/                     # 智能体封装（9 个 Agent）
+│   │   ├── base.py                 # BaseAIAgent（OpenAI / Ollama 双通道 + 多模态 Vision）
+│   │   ├── content_review_agent.py # AI 内容审核（文本/图片/视频关键帧）
 │   │   ├── question_generator.py   # 题目生成
 │   │   ├── schedule_agent.py       # 排课引擎（冲突检测、多方案生成）
 │   │   ├── schedule_config_parser.py   # 排课自然语言解析
@@ -85,12 +86,21 @@ backend/
 │   │   ├── teaching_resource_parser.py      # 教学资源需求解析
 │   │   ├── teaching_resource_content_agent.py  # 教学资源内容生成
 │   │   └── training_create_parser.py   # 培训班智能创建解析（多轮对话）
-│   ├── tasks/                      # Celery 异步任务（8 个任务模块 + 定时任务）
+│   ├── parsers/                    # 文档解析器（AI 审核专用）
+│   │   ├── pdf_parser.py           # PDF（按页转图片 OCR）
+│   │   ├── word_parser.py          # Word（文本 + 嵌入图片）
+│   │   ├── pptx_parser.py          # PowerPoint
+│   │   ├── xlsx_parser.py          # Excel
+│   │   ├── image_parser.py         # 图片（多模态 OCR）
+│   │   └── text_parser.py          # 纯文本 / Markdown / CSV
+│   ├── tasks/                      # Celery 异步任务（10 个任务模块 + 定时任务）
 │   │   ├── ai_question.py          # 智能出题
 │   │   ├── ai_paper_assembly.py    # 自动组卷
 │   │   ├── ai_paper_generation.py  # 自动生成试卷
 │   │   ├── ai_schedule.py          # 排课建议
+│   │   ├── ai_review.py            # AI 内容审核
 │   │   ├── ai_task_timeout.py      # AI 任务超时自动清理（Beat 定时任务）
+│   │   ├── video_keyframe.py       # 视频关键帧抽取
 │   │   ├── teaching_resource_generation.py  # 教学资源生成
 │   │   ├── schedule_file_parse.py  # 课表文件解析
 │   │   └── recommendation.py       # 推荐刷新（占位）
@@ -236,6 +246,12 @@ AI 运行时配置：
 - 资源上传入口的标签交互与课程标签一致，支持搜索已有标签并直接新建
 - 审核策略支持 `global / department / department_tree` 三种作用域
 - 审核策略支持上传者约束、连续多级审核、最小通过数校验
+- 审核阶段支持 `reviewer_type=ai`（AI 智能审核节点）：
+  - 按资源类型分流：文本→ parsers 解析→分段→文本模型、图片→多模态模型、视频→关键帧→多模态并行审核
+  - AI 拒绝策略可配置：`direct`（直接拒绝）或 `fallback`（降级到人工审核）
+  - AI 执行失败（模型调用异常、格式不支持）自动降级到配置的人工审核人
+  - 审核规则通过系统配置组 `ai_review` 自定义
+- 视频资源提交审核时自动触发关键帧抽取（`VideoKeyframeTask`），关键帧供 AI 审核消费
 - 如果当前没有任何启用的自定义审核规则，资源提交审核时会自动回退到"管理员默认审核"
 - 教学资源生成确认后自动创建资源草稿，并生成 `TeachingResourceGenerationSnapshot` 快照
 
@@ -337,7 +353,7 @@ AI 个训任务支持：
 
 - 配置组接口：`/api/v1/system/config-groups*`
 - 配置项接口：`/api/v1/system/configs*`
-- 当前核心初始化配置组：`ai`、`training_schedule`
+- 当前核心初始化配置组：`ai`、`training_schedule`、`ai_review`
 - `init_data.py` 会执行配置模板同步，并刷新 Redis 缓存
 - 所有系统配置接口目前都只允许 `admin` 使用
 
@@ -471,6 +487,8 @@ python main.py
 | `app.tasks.ai_paper_generation` | AI 自动生成试卷 | 需要 Worker |
 | `app.tasks.ai_schedule` | AI 排课建议 | 需要 Worker |
 | `app.tasks.teaching_resource_generation` | 教学资源生成 | 需要 Worker |
+| `app.tasks.ai_review` | AI 内容审核 | 需要 Worker |
+| `app.tasks.video_keyframe` | 视频关键帧抽取 | 需要 Worker |
 | `app.tasks.schedule_file_parse` | 课表文件解析 | 需要 Worker |
 | `app.tasks.ai_task_timeout` | AI 任务超时清理 | 需要 Beat |
 
@@ -550,7 +568,10 @@ celery -A celery_app beat --loglevel=info
 
 - `AI_TASK_MAX_CONCURRENCY`：AI 异步任务最大并行数（默认 5）
 - `AI_TASK_TIMEOUT_MINUTES`：AI 任务超时时间（默认 15 分钟）
+- `AI_REVIEW_MAX_PARALLEL`：AI 审核多模态并行数（默认 3）
+- `AI_REVIEW_TEXT_CHUNK_SIZE`：AI 审核文本分段大小（默认 4000 字符）
 - AI 智能出题和 AI 排课自然语言解析读取系统配置组 `ai`
+- AI 内容审核规则读取系统配置组 `ai_review`
 - 培训排课默认规则来自系统配置组 `training_schedule`
 - 系统配置会同步到 Redis 缓存；修改配置后由配置服务负责刷新缓存
 - 数据库连接池配置：`pool_size=20`、`max_overflow=50`、`pool_timeout=30s`、`pool_recycle=1h`
