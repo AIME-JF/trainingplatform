@@ -1,6 +1,7 @@
 import type { RouteRecordRaw } from 'vue-router'
 import {
   DASHBOARD_PERMISSIONS,
+  REPORT_PERMISSIONS,
   TRAINING_PERMISSIONS,
   TRAINING_SCHEDULE_PERMISSIONS,
   COURSE_PERMISSIONS,
@@ -114,6 +115,12 @@ export const routes: RouteRecordRaw[] = [
         name: 'ExamResult',
         component: () => import('@/views/exam/Result.vue'),
         meta: { title: '考试结果' },
+      },
+      {
+        path: 'report/exam',
+        name: 'ExamStatistics',
+        component: () => import('@/views/report/ExamStatistics.vue'),
+        meta: { title: '考试统计', anyPermissions: REPORT_PERMISSIONS },
       },
       // -- 刷题练习 --
       {

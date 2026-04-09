@@ -435,6 +435,7 @@ function getSelectedMenuKeyByPath(path) {
   if (path.startsWith('/instructor')) return '/instructor'
   if (path.startsWith('/talent')) return '/talent'
   if (path.startsWith('/certificate')) return '/certificate'
+  if (path.startsWith('/report/exam')) return '/report/exam'
   if (path.startsWith('/report')) return '/report'
   if (path.startsWith('/system/users')) return '/system/users'
   if (path.startsWith('/system/roles')) return '/system/roles'

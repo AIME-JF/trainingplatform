@@ -1,128 +1,145 @@
 <template>
   <div class="exam-manage-page">
-    <section class="page-hero">
-      <div>
-        <div class="hero-kicker">Unified Exam Center</div>
-        <h2>统一考试管理</h2>
-        <p>这里主要用于独立考试管理。培训班考试请前往培训班管理中创建，独立考试支持名单导入和多种考试类型配置。</p>
-      </div>
-      <div class="hero-actions">
-        <a-button type="primary" size="large" @click="openCreateDrawer('standalone')">创建独立考试</a-button>
-        <a-button size="large" @click="openTrainingExamGuide">{{ routeTrainingLocked ? '前往培训班管理创建考试' : '创建培训班考试' }}</a-button>
-        <a-button size="large" @click="loadAllData">刷新数据</a-button>
-      </div>
-    </section>
-
-    <section class="dashboard-grid">
-      <article class="metric-card">
-        <span class="metric-label">考试总量</span>
-        <strong>{{ dashboard.totalExams }}</strong>
-        <small>统一统计独立考试与培训班考试</small>
-      </article>
-      <article class="metric-card">
-        <span class="metric-label">独立考试</span>
-        <strong>{{ dashboard.standaloneExams }}</strong>
-        <small>专项考试、准入制考试等独立场景</small>
-      </article>
-      <article class="metric-card">
-        <span class="metric-label">培训班考试</span>
-        <strong>{{ dashboard.trainingExams }}</strong>
-        <small>培训班内结课考核与测验</small>
-      </article>
-      <article class="metric-card">
-        <span class="metric-label">进行中</span>
-        <strong>{{ dashboard.activeExams }}</strong>
-        <small>当前正在开放作答</small>
-      </article>
-      <article class="metric-card">
-        <span class="metric-label">近期待开考</span>
-        <strong>{{ dashboard.upcomingExams }}</strong>
-        <small>已发布但尚未开始的考试</small>
-      </article>
-    </section>
-
-    <section class="filter-card">
-      <div class="filter-row">
-        <a-input-search v-model:value="filters.search" placeholder="搜索考试名称、培训班或参试对象摘要" allow-clear class="search-input" @search="handleSearch" />
-        <a-select v-model:value="filters.scene" class="filter-select" @change="handleSceneChange">
-          <a-select-option value="all">全部考试</a-select-option>
-          <a-select-option value="standalone">独立考试</a-select-option>
-          <a-select-option value="training">培训班考试</a-select-option>
-        </a-select>
-        <a-select v-model:value="filters.purpose" allow-clear class="filter-select" placeholder="考试类型" @change="loadExams">
-          <a-select-option v-for="item in purposeOptions" :key="item.value" :value="item.value">{{ item.label }}</a-select-option>
-        </a-select>
-        <a-select v-model:value="filters.status" allow-clear class="filter-select" placeholder="状态" @change="loadExams">
-          <a-select-option value="upcoming">未开始</a-select-option>
-          <a-select-option value="active">进行中</a-select-option>
-          <a-select-option value="ended">已结束</a-select-option>
-        </a-select>
-        <a-select v-model:value="filters.departmentId" allow-clear show-search option-filter-prop="label" class="filter-select" placeholder="部门" @change="loadExams">
-          <a-select-option v-for="item in departmentOptions" :key="item.id" :value="item.id" :label="item.name">{{ item.name }}</a-select-option>
-        </a-select>
-        <a-select v-model:value="filters.policeTypeId" allow-clear show-search option-filter-prop="label" class="filter-select" placeholder="警种" @change="loadExams">
-          <a-select-option v-for="item in policeTypeOptions" :key="item.id" :value="item.id" :label="item.name">{{ item.name }}</a-select-option>
-        </a-select>
-      </div>
-      <div class="filter-hint">
-        <span v-if="routeTrainingLocked">当前已锁定到培训班 {{ routeTrainingId }}，如需创建培训班考试，请返回培训班管理页面操作。</span>
-        <span v-else>独立考试通过 Excel 名单导入参试对象；培训班考试请前往培训班管理页面创建。</span>
-      </div>
-    </section>
-
-    <section class="table-card">
-      <div class="table-head">
-        <div>
-          <h3>考试列表</h3>
-          <p>同一试卷可关联多场不同类型考试，列表统一展示场景、类型和参试统计。</p>
+    <!-- 主内容区 -->
+    <div class="main-content">
+      <!-- 头部标题区 -->
+      <div class="main-section page-hero">
+        <div class="hero-left">
+          <div class="hero-kicker">Unified Exam Center</div>
+          <h2>统一考试管理</h2>
+          <p>这里主要用于独立考试管理。培训班考试请前往培训班管理中创建，独立考试支持名单导入和多种考试类型配置。</p>
         </div>
-        <a-button danger :disabled="!selectedRowKeys.length" @click="handleBatchDelete">批量删除</a-button>
+        <div class="hero-actions">
+          <a-button type="primary" size="large" @click="openCreateDrawer('standalone')">创建独立考试</a-button>
+          <a-button size="large" @click="openTrainingExamGuide">{{ routeTrainingLocked ? '前往培训班管理创建考试' : '创建培训班考试' }}</a-button>
+          <a-button size="large" @click="loadAllData">刷新数据</a-button>
+        </div>
       </div>
-      <a-table row-key="id" :loading="loading" :columns="columns" :data-source="examList" :pagination="pagination" :row-selection="{ selectedRowKeys, onChange: onSelectChange }" @change="handleTableChange">
-        <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'title'">
-            <div class="title-cell">
-              <button class="link-button" @click="openViewDrawer(record)">{{ record.title }}</button>
-              <div class="title-meta">
-                <a-tag :color="record.scene === 'standalone' ? 'blue' : 'cyan'">{{ sceneLabelMap[record.scene] }}</a-tag>
-                <a-tag>{{ formatPurposeLabel(record.purpose) }}</a-tag>
-                <a-tag>{{ record.type === 'quiz' ? '测试' : '正式考试' }}</a-tag>
+
+      <div class="section-divider"></div>
+
+      <!-- 统计指标区 -->
+      <div class="main-section dashboard-strip">
+        <div class="metric-item">
+          <span class="metric-label">考试总量</span>
+          <strong>{{ dashboard.totalExams }}</strong>
+          <small>统一统计独立考试与培训班考试</small>
+        </div>
+        <div class="metric-divider"></div>
+        <div class="metric-item">
+          <span class="metric-label">独立考试</span>
+          <strong>{{ dashboard.standaloneExams }}</strong>
+          <small>专项考试、准入制考试等独立场景</small>
+        </div>
+        <div class="metric-divider"></div>
+        <div class="metric-item">
+          <span class="metric-label">培训班考试</span>
+          <strong>{{ dashboard.trainingExams }}</strong>
+          <small>培训班内结课考核与测验</small>
+        </div>
+        <div class="metric-divider"></div>
+        <div class="metric-item">
+          <span class="metric-label">进行中</span>
+          <strong>{{ dashboard.activeExams }}</strong>
+          <small>当前正在开放作答</small>
+        </div>
+        <div class="metric-divider"></div>
+        <div class="metric-item">
+          <span class="metric-label">近期待开考</span>
+          <strong>{{ dashboard.upcomingExams }}</strong>
+          <small>已发布但尚未开始的考试</small>
+        </div>
+      </div>
+
+      <div class="section-divider"></div>
+
+      <!-- 筛选区 -->
+      <div class="main-section filter-section">
+        <div class="filter-row">
+          <a-input-search v-model:value="filters.search" placeholder="搜索考试名称、培训班或参试对象摘要" allow-clear class="search-input" @search="handleSearch" />
+          <a-select v-model:value="filters.scene" class="filter-select" @change="handleSceneChange">
+            <a-select-option value="all">全部考试</a-select-option>
+            <a-select-option value="standalone">独立考试</a-select-option>
+            <a-select-option value="training">培训班考试</a-select-option>
+          </a-select>
+          <a-select v-model:value="filters.purpose" allow-clear class="filter-select" placeholder="考试类型" @change="loadExams">
+            <a-select-option v-for="item in purposeOptions" :key="item.value" :value="item.value">{{ item.label }}</a-select-option>
+          </a-select>
+          <a-select v-model:value="filters.status" allow-clear class="filter-select" placeholder="状态" @change="loadExams">
+            <a-select-option value="upcoming">未开始</a-select-option>
+            <a-select-option value="active">进行中</a-select-option>
+            <a-select-option value="ended">已结束</a-select-option>
+          </a-select>
+          <a-select v-model:value="filters.departmentId" allow-clear show-search option-filter-prop="label" class="filter-select" placeholder="部门" @change="loadExams">
+            <a-select-option v-for="item in departmentOptions" :key="item.id" :value="item.id" :label="item.name">{{ item.name }}</a-select-option>
+          </a-select>
+          <a-select v-model:value="filters.policeTypeId" allow-clear show-search option-filter-prop="label" class="filter-select" placeholder="警种" @change="loadExams">
+            <a-select-option v-for="item in policeTypeOptions" :key="item.id" :value="item.id" :label="item.name">{{ item.name }}</a-select-option>
+          </a-select>
+        </div>
+        <div class="filter-hint">
+          <span v-if="routeTrainingLocked">当前已锁定到培训班 {{ routeTrainingId }}，如需创建培训班考试，请返回培训班管理页面操作。</span>
+          <span v-else>独立考试通过 Excel 名单导入参试对象；培训班考试请前往培训班管理页面创建。</span>
+        </div>
+      </div>
+
+      <div class="section-divider"></div>
+
+      <!-- 考试列表区 -->
+      <div class="main-section table-section">
+        <div class="table-head">
+          <div>
+            <h3>考试列表</h3>
+            <p>同一试卷可关联多场不同类型考试，列表统一展示场景、类型和参试统计。</p>
+          </div>
+          <a-button danger :disabled="!selectedRowKeys.length" @click="handleBatchDelete">批量删除</a-button>
+        </div>
+        <a-table row-key="id" :loading="loading" :columns="columns" :data-source="examList" :pagination="pagination" :row-selection="{ selectedRowKeys, onChange: onSelectChange }" @change="handleTableChange">
+          <template #bodyCell="{ column, record }">
+            <template v-if="column.key === 'title'">
+              <div class="title-cell">
+                <button class="link-button" @click="openViewDrawer(record)">{{ record.title }}</button>
+                <div class="title-meta">
+                  <a-tag :color="record.scene === 'standalone' ? 'blue' : 'cyan'">{{ sceneLabelMap[record.scene] }}</a-tag>
+                  <a-tag>{{ formatPurposeLabel(record.purpose) }}</a-tag>
+                  <a-tag>{{ record.type === 'quiz' ? '测试' : '正式考试' }}</a-tag>
+                </div>
               </div>
-            </div>
+            </template>
+            <template v-else-if="column.key === 'participants'">
+              <div class="stat-block"><strong>{{ record.participantCount ?? 0 }}</strong><span>应考</span></div>
+              <div class="stat-sub">已交卷 {{ record.submittedCount ?? 0 }} · 缺考 {{ record.absentCount ?? 0 }}</div>
+            </template>
+            <template v-else-if="column.key === 'training'">
+              <span>{{ record.trainingName || (record.scene === 'training' ? '未选择培训班' : '-') }}</span>
+            </template>
+            <template v-else-if="column.key === 'target'">
+              <div class="target-list">
+                <span class="target-list__summary">{{ record.participantSummary || (record.scene === 'standalone' ? '待导入名单' : '培训班已报名学员') }}</span>
+                <small v-if="record.departmentNames?.length || record.policeTypeNames?.length">
+                  {{ buildTargetMeta(record) }}
+                </small>
+              </div>
+            </template>
+            <template v-else-if="column.key === 'time'">
+              <div class="time-cell"><span>{{ formatDateTime(record.startTime) }}</span><span>{{ formatDateTime(record.endTime) }}</span></div>
+            </template>
+            <template v-else-if="column.key === 'status'">
+              <a-tag :color="statusColorMap[record.status] || 'default'">{{ statusLabelMap[record.status] || record.status || '未设置' }}</a-tag>
+            </template>
+            <template v-else-if="column.key === 'actions'">
+              <a-space wrap>
+                <a-button type="link" @click="openEditDrawer(record)">编辑</a-button>
+                <a-button type="link" @click="openViewDrawer(record)">详情</a-button>
+                <a-button type="link" @click="goToScores(record)">考试情况</a-button>
+                <a-button v-if="record.scene === 'standalone'" type="link" @click="openImportModal(record)">导入名单</a-button>
+                <a-button type="link" danger @click="handleDelete(record)">删除</a-button>
+              </a-space>
+            </template>
           </template>
-          <template v-else-if="column.key === 'participants'">
-            <div class="stat-block"><strong>{{ record.participantCount ?? 0 }}</strong><span>应考</span></div>
-            <div class="stat-sub">已交卷 {{ record.submittedCount ?? 0 }} · 缺考 {{ record.absentCount ?? 0 }}</div>
-          </template>
-          <template v-else-if="column.key === 'training'">
-            <span>{{ record.trainingName || (record.scene === 'training' ? '未选择培训班' : '-') }}</span>
-          </template>
-          <template v-else-if="column.key === 'target'">
-            <div class="target-list">
-              <span class="target-list__summary">{{ record.participantSummary || (record.scene === 'standalone' ? '待导入名单' : '培训班已报名学员') }}</span>
-              <small v-if="record.departmentNames?.length || record.policeTypeNames?.length">
-                {{ buildTargetMeta(record) }}
-              </small>
-            </div>
-          </template>
-          <template v-else-if="column.key === 'time'">
-            <div class="time-cell"><span>{{ formatDateTime(record.startTime) }}</span><span>{{ formatDateTime(record.endTime) }}</span></div>
-          </template>
-          <template v-else-if="column.key === 'status'">
-            <a-tag :color="statusColorMap[record.status] || 'default'">{{ statusLabelMap[record.status] || record.status || '未设置' }}</a-tag>
-          </template>
-          <template v-else-if="column.key === 'actions'">
-            <a-space wrap>
-              <a-button type="link" @click="openEditDrawer(record)">编辑</a-button>
-              <a-button type="link" @click="openViewDrawer(record)">详情</a-button>
-              <a-button type="link" @click="goToScores(record)">考试情况</a-button>
-              <a-button v-if="record.scene === 'standalone'" type="link" @click="openImportModal(record)">导入名单</a-button>
-              <a-button type="link" danger @click="handleDelete(record)">删除</a-button>
-            </a-space>
-          </template>
-        </template>
-      </a-table>
-    </section>
+        </a-table>
+      </div>
+    </div>
 
     <a-drawer :open="drawerVisible" :title="isViewOnly ? '考试详情' : (isEdit ? '编辑考试' : '创建独立考试')" :width="860" @close="closeDrawer">
       <a-form layout="vertical">
@@ -987,23 +1004,39 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.exam-manage-page { display: flex; flex-direction: column; gap: 20px; min-height: 100%; padding: 12px 0 24px; }
-.page-hero { display: flex; justify-content: space-between; gap: 24px; padding: 28px 32px; border-radius: 24px; background: radial-gradient(circle at top right, rgba(59, 130, 246, 0.22), transparent 34%), linear-gradient(135deg, #0f172a 0%, #13315d 100%); color: #f8fafc; }
+.exam-manage-page { min-height: 100%; padding: 12px 0 24px; }
+
+/* 主内容区 - 一个大块容器 */
+.main-content { display: flex; flex-direction: column; border-radius: 20px; overflow: hidden; }
+
+/* 分区之间的横线分隔 */
+.section-divider { height: 1px; background: #e2e8f0; margin: 0; }
+
+/* 每个主分区 */
+.main-section { padding: 24px 28px; }
+.page-hero { display: flex; justify-content: space-between; gap: 24px; background: radial-gradient(circle at top right, rgba(59, 130, 246, 0.22), transparent 34%), linear-gradient(135deg, #0f172a 0%, #13315d 100%); color: #f8fafc; }
 .hero-kicker { font-size: 12px; letter-spacing: 0.18em; text-transform: uppercase; color: rgba(191, 219, 254, 0.92); }
 .page-hero h2 { margin: 10px 0 8px; font-size: 30px; color: #fff; }
 .page-hero p { margin: 0; max-width: 720px; line-height: 1.7; color: rgba(226, 232, 240, 0.92); }
 .hero-actions { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
-.dashboard-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 16px; }
-.metric-card, .filter-card, .table-card { border: 1px solid #e2e8f0; border-radius: 20px; background: #fff; box-shadow: 0 14px 30px rgba(15, 23, 42, 0.04); }
-.metric-card { padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+
+/* 统计指标条 - 横向排列，用竖线分隔 */
+.dashboard-strip { display: flex; align-items: center; gap: 0; background: #fff; }
+.metric-item { flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 0 24px; }
+.metric-divider { width: 1px; height: 48px; background: #e2e8f0; flex-shrink: 0; }
 .metric-label { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #64748b; text-transform: uppercase; }
-.metric-card strong { font-size: 28px; color: #0f172a; }
-.metric-card small { line-height: 1.6; color: #64748b; }
-.filter-card { padding: 20px 24px; }
-.filter-row { display: grid; grid-template-columns: minmax(260px, 1.4fr) repeat(5, minmax(140px, 1fr)); gap: 12px; }
-.search-input, .filter-select { width: 100%; }
+.metric-item strong { font-size: 28px; color: #0f172a; }
+.metric-item small { line-height: 1.6; color: #64748b; }
+
+/* 筛选区 */
+.filter-section { background: #fff; }
+.filter-row { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+.search-input { width: 260px; }
+.filter-select { width: 150px; }
 .filter-hint { margin-top: 12px; font-size: 12px; color: #64748b; }
-.table-card { padding: 22px 24px 18px; }
+
+/* 列表区 */
+.table-section { background: #fff; }
 .table-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; margin-bottom: 18px; }
 .table-head h3 { margin: 0 0 6px; font-size: 20px; color: #0f172a; }
 .table-head p { margin: 0; color: #64748b; }
@@ -1016,12 +1049,9 @@ onMounted(async () => {
 .stat-block span, .stat-sub, .target-list small { color: #64748b; }
 .time-cell, .target-list { display: flex; flex-direction: column; gap: 6px; }
 .target-list { min-width: 0; }
-.target-list__summary,
-.target-list small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
+.target-list__summary, .target-list small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Drawer 内部 */
 .drawer-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 .drawer-panel { padding: 18px; border-radius: 18px; background: #f8fafc; border: 1px solid #e2e8f0; }
 .drawer-panel h4 { margin: 0 0 16px; font-size: 16px; color: #0f172a; }
@@ -1032,6 +1062,8 @@ onMounted(async () => {
 .paper-preview__head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 10px; color: #1e3a8a; font-weight: 600; }
 .paper-preview__head small, .paper-preview__meta { color: #64748b; }
 .paper-preview__meta { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 12px; }
+
+/* 导入弹窗 */
 .import-layout { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 16px; }
 .import-side, .import-main, .preview-grid { display: flex; flex-direction: column; gap: 16px; }
 .import-card { padding: 18px; border-radius: 18px; border: 1px solid #e2e8f0; background: #fff; }
@@ -1040,6 +1072,7 @@ onMounted(async () => {
 .import-meta { margin-bottom: 8px; color: #475569; }
 .preview-summary { display: flex; flex-wrap: wrap; gap: 8px; }
 .modal-footer { display: flex; justify-content: flex-end; gap: 12px; }
-@media (max-width: 1400px) { .dashboard-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } .filter-row { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 960px) { .page-hero, .table-head { flex-direction: column; } .dashboard-grid, .filter-row, .drawer-grid, .import-layout { grid-template-columns: 1fr; } }
+
+@media (max-width: 1400px) { .filter-row { flex-wrap: wrap; } }
+@media (max-width: 960px) { .page-hero, .table-head, .dashboard-strip { flex-direction: column; } .metric-divider { display: none; } .dashboard-strip { align-items: flex-start; } .metric-item { padding: 0 0 16px; width: 100%; } .filter-row, .drawer-grid, .import-layout { grid-template-columns: 1fr; } .search-input, .filter-select { width: 100%; } }
 </style>

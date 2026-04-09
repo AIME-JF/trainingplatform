@@ -289,6 +289,12 @@ const router = createRouter({
           meta: { title: '数据看板', anyPermissions: REPORT_PAGE_PERMISSIONS },
         },
         {
+          path: 'report/exam',
+          name: 'ExamStatisticsBoard',
+          component: () => import('../views/report/DataBoard.vue'),
+          meta: { title: '考试统计', anyPermissions: REPORT_PAGE_PERMISSIONS, reportCategory: 'exam' },
+        },
+        {
           path: 'system/dashboard-modules',
           name: 'DashboardModuleManage',
           component: () => import('../views/system/DashboardModuleManage.vue'),

@@ -1092,20 +1092,20 @@ class ExamService:
 
     def get_exam_statistics(self, time_range: str = "30d") -> Dict[str, Any]:
         """获取考试统计详情，支持时间筛选"""
-        from datetime import timedelta
+        from datetime import timedelta, timezone
 
         from app.models import ExamRecord, AdmissionExamRecord
 
         # 计算时间范围
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         if time_range == "7d":
             start_date = now - timedelta(days=7)
         elif time_range == "30d":
             start_date = now - timedelta(days=30)
         elif time_range == "month":
-            start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            start_date = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
         elif time_range == "year":
-            start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0)
+            start_date = now.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0, tzinfo=timezone.utc)
         else:
             start_date = None
 

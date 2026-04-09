@@ -1,85 +1,122 @@
 <template>
   <div class="data-board-page">
-    <div class="page-header">
-      <div>
-        <h2>数据看板</h2>
-        <p class="page-sub">根据角色权限展示可见的数据模块</p>
-      </div>
-      <a-space>
-        <a-select v-model:value="activeCategory" style="width: 160px" @change="onCategoryChange">
-          <a-select-option value="all">全部模块</a-select-option>
-          <a-select-option value="general">综合数据</a-select-option>
-          <a-select-option value="training">培训运营</a-select-option>
-          <a-select-option value="exam">考试统计</a-select-option>
-        </a-select>
-        <a-button @click="handleExport" :loading="exporting">导出报表</a-button>
-      </a-space>
-    </div>
-
     <a-spin :spinning="loading">
-      <a-empty v-if="!loading && !visibleModules.length" description="暂无可查看的看板模块" />
+    <a-empty v-if="!loading && !visibleModules.length" description="暂无可查看的看板模块" />
+    <div class="main-content" v-if="visibleModules.length">
 
-      <a-row :gutter="[16, 16]">
-        <!-- 核心指标概览 -->
-        <a-col :span="24" v-if="hasModule('kpi_overview')">
-          <a-card :bordered="false" class="module-card">
-            <template #title>核心指标概览</template>
-            <a-row :gutter="16">
-              <a-col :span="6" v-for="item in kpiCards" :key="item.label">
-                <a-statistic :title="item.label" :value="item.value" :suffix="item.suffix" :value-style="{ color: item.color }" />
-              </a-col>
-            </a-row>
-          </a-card>
-        </a-col>
+      <!-- 页面头部 -->
+      <div class="main-section page-hero">
+        <div class="hero-left">
+          <h2>{{ pageTitle }}</h2>
+          <p class="page-sub">{{ pageSub }}</p>
+        </div>
+        <div class="hero-actions">
+          <a-select v-model:value="activeCategory" style="width: 160px" @change="onCategoryChange">
+            <a-select-option value="all">全部模块</a-select-option>
+            <a-select-option value="general">综合数据</a-select-option>
+            <a-select-option value="training">培训运营</a-select-option>
+            <a-select-option value="exam">考试统计</a-select-option>
+          </a-select>
+          <a-button :loading="exporting" @click="handleExport">导出报表</a-button>
+        </div>
+      </div>
 
-        <!-- 培训运营指标 -->
-        <a-col :span="24" v-if="hasModule('training_kpi')">
-          <a-card :bordered="false" class="module-card">
-            <template #title>培训运营指标</template>
-            <a-row :gutter="16">
-              <a-col :span="6" v-for="item in trainingKpiCards" :key="item.label">
-                <a-statistic :title="item.label" :value="item.value" :suffix="item.suffix" :value-style="{ color: item.color }" />
-              </a-col>
-            </a-row>
-          </a-card>
-        </a-col>
+      <div class="section-divider"></div>
 
-        <!-- 完成率趋势 -->
-        <a-col :span="12" v-if="hasModule('completion_trend')">
-          <a-card :bordered="false" class="module-card chart-card">
-            <template #title>完成率趋势</template>
-            <v-chart :option="completionTrendOption" autoresize style="height: 320px" />
-          </a-card>
-        </a-col>
+      <!-- 核心指标概览 -->
+      <div v-if="hasModule('kpi_overview')" class="main-section kpi-section">
+        <div class="section-title">核心指标概览</div>
+        <div class="dashboard-strip">
+          <div class="metric-item" v-for="item in kpiCards" :key="item.label">
+            <span class="metric-label">{{ item.label }}</span>
+            <strong :style="{ color: item.color }">{{ item.value }}<small>{{ item.suffix }}</small></strong>
+          </div>
+        </div>
+      </div>
 
-        <!-- 培训趋势 -->
-        <a-col :span="12" v-if="hasModule('training_trend')">
-          <a-card :bordered="false" class="module-card chart-card">
-            <template #title>培训完成率趋势</template>
-            <v-chart :option="trainingTrendOption" autoresize style="height: 320px" />
-          </a-card>
-        </a-col>
+      <div class="section-divider" v-if="hasModule('kpi_overview')"></div>
 
-        <!-- 警种分布 -->
-        <a-col :span="12" v-if="hasModule('police_type_dist')">
-          <a-card :bordered="false" class="module-card chart-card">
-            <template #title>警种学习分布</template>
-            <v-chart :option="policeTypeOption" autoresize style="height: 320px" />
-          </a-card>
-        </a-col>
+      <!-- 培训运营指标 -->
+      <div v-if="hasModule('training_kpi')" class="main-section kpi-section">
+        <div class="section-title">培训运营指标</div>
+        <div class="dashboard-strip">
+          <div class="metric-item" v-for="item in trainingKpiCards" :key="item.label">
+            <span class="metric-label">{{ item.label }}</span>
+            <strong :style="{ color: item.color }">{{ item.value }}<small>{{ item.suffix }}</small></strong>
+          </div>
+        </div>
+      </div>
 
-        <!-- 各单位参训人数 -->
-        <a-col :span="12" v-if="hasModule('city_attendance')">
-          <a-card :bordered="false" class="module-card chart-card">
-            <template #title>各单位参训人数</template>
-            <v-chart :option="cityAttendanceOption" autoresize style="height: 320px" />
-          </a-card>
-        </a-col>
+      <div class="section-divider" v-if="hasModule('training_kpi')"></div>
 
-        <!-- 各单位考核排名 -->
-        <a-col :span="12" v-if="hasModule('city_ranking')">
-          <a-card :bordered="false" class="module-card">
-            <template #title>各单位考核排名</template>
+      <!-- 考试统计 -->
+      <div v-if="hasModule('exam_statistics')" class="main-section kpi-section">
+        <div class="section-title-row">
+          <div class="section-title">考试统计</div>
+          <a-select v-model:value="examTimeRange" style="width: 120px" @change="loadExamStatistics">
+            <a-select-option value="7d">近7天</a-select-option>
+            <a-select-option value="30d">近30天</a-select-option>
+            <a-select-option value="month">本月</a-select-option>
+            <a-select-option value="year">本年</a-select-option>
+          </a-select>
+        </div>
+        <div class="dashboard-strip">
+          <div class="metric-item" v-for="item in examKpiCards" :key="item.label">
+            <span class="metric-label">{{ item.label }}</span>
+            <strong :style="{ color: item.color }">{{ item.value }}<small>{{ item.suffix }}</small></strong>
+          </div>
+        </div>
+      </div>
+
+      <div class="section-divider" v-if="hasModule('exam_statistics')"></div>
+
+      <!-- 图表区 -->
+      <div v-if="hasCharts" class="main-section chart-grid-section">
+        <!-- 趋势图 -->
+        <div v-if="hasModule('completion_trend') || hasModule('training_trend')" class="chart-row">
+          <div class="chart-panel" v-if="hasModule('completion_trend')">
+            <div class="chart-panel__title">完成率趋势</div>
+            <v-chart :option="completionTrendOption" autoresize style="height: 280px" />
+          </div>
+          <div class="chart-panel" v-if="hasModule('training_trend')">
+            <div class="chart-panel__title">培训完成率趋势</div>
+            <v-chart :option="trainingTrendOption" autoresize style="height: 280px" />
+          </div>
+        </div>
+
+        <!-- 警种分布 + 分数段分布 -->
+        <div class="chart-row" v-if="hasModule('police_type_dist') || hasModule('exam_statistics')">
+          <div class="chart-panel" v-if="hasModule('police_type_dist')">
+            <div class="chart-panel__title">警种学习分布</div>
+            <v-chart :option="policeTypeOption" autoresize style="height: 280px" />
+          </div>
+          <div class="chart-panel" v-if="hasModule('exam_statistics')">
+            <div class="chart-panel__title">分数段分布</div>
+            <v-chart :option="scoreDistributionOption" autoresize style="height: 280px" />
+          </div>
+        </div>
+
+        <!-- 各单位参训人数 + 各维度得分雷达 -->
+        <div class="chart-row" v-if="hasModule('city_attendance') || hasModule('exam_statistics')">
+          <div class="chart-panel" v-if="hasModule('city_attendance')">
+            <div class="chart-panel__title">各单位参训人数</div>
+            <v-chart :option="cityAttendanceOption" autoresize style="height: 280px" />
+          </div>
+          <div class="chart-panel" v-if="hasModule('exam_statistics')">
+            <div class="chart-panel__title">各维度平均得分</div>
+            <v-chart :option="dimensionScoreOption" autoresize style="height: 280px" />
+          </div>
+        </div>
+      </div>
+
+      <div class="section-divider" v-if="hasCharts"></div>
+
+      <!-- 排名区 -->
+      <div v-if="hasRankings" class="main-section ranking-section">
+        <div class="ranking-grid">
+          <!-- 各单位考核排名 -->
+          <div class="ranking-panel" v-if="hasModule('city_ranking')">
+            <div class="ranking-panel__title">各单位考核排名</div>
             <div class="ranking-list">
               <div v-for="(item, idx) in cityRankingData" :key="item.city" class="ranking-item">
                 <span class="ranking-medal" :class="'rank-' + (idx + 1)">{{ idx + 1 }}</span>
@@ -88,13 +125,11 @@
                 <span class="ranking-score">{{ item.score.toFixed(1) }}分</span>
               </div>
             </div>
-          </a-card>
-        </a-col>
+          </div>
 
-        <!-- 各单位完成率排名 -->
-        <a-col :span="12" v-if="hasModule('city_completion')">
-          <a-card :bordered="false" class="module-card">
-            <template #title>各单位培训完成率</template>
+          <!-- 各单位完成率排名 -->
+          <div class="ranking-panel" v-if="hasModule('city_completion')">
+            <div class="ranking-panel__title">各单位培训完成率</div>
             <div class="ranking-list">
               <div v-for="(item, idx) in cityCompletionData" :key="item.city" class="ranking-item">
                 <span class="ranking-medal" :class="'rank-' + (idx + 1)">{{ idx + 1 }}</span>
@@ -103,51 +138,11 @@
                 <span class="ranking-score">{{ item.rate.toFixed(1) }}%</span>
               </div>
             </div>
-          </a-card>
-        </a-col>
+          </div>
 
-        <!-- 考试统计模块 -->
-        <a-col :span="24" v-if="hasModule('exam_statistics')">
-          <a-card :bordered="false" class="module-card">
-            <template #title>
-              <div style="display: flex; justify-content: space-between; align-items: center;">
-                <span>考试统计</span>
-                <a-select v-model:value="examTimeRange" style="width: 120px" @change="loadExamStatistics">
-                  <a-select-option value="7d">近7天</a-select-option>
-                  <a-select-option value="30d">近30天</a-select-option>
-                  <a-select-option value="month">本月</a-select-option>
-                  <a-select-option value="year">本年</a-select-option>
-                </a-select>
-              </div>
-            </template>
-            <a-row :gutter="16">
-              <a-col :span="6" v-for="item in examKpiCards" :key="item.label">
-                <a-statistic :title="item.label" :value="item.value" :suffix="item.suffix" :value-style="{ color: item.color }" />
-              </a-col>
-            </a-row>
-          </a-card>
-        </a-col>
-
-        <!-- 考试月度趋势 -->
-        <a-col :span="12" v-if="hasModule('exam_statistics')">
-          <a-card :bordered="false" class="module-card chart-card">
-            <template #title>考试月度趋势</template>
-            <v-chart :option="examTrendOption" autoresize style="height: 320px" />
-          </a-card>
-        </a-col>
-
-        <!-- 分数段分布 -->
-        <a-col :span="12" v-if="hasModule('exam_statistics')">
-          <a-card :bordered="false" class="module-card chart-card">
-            <template #title>分数段分布</template>
-            <v-chart :option="scoreDistributionOption" autoresize style="height: 320px" />
-          </a-card>
-        </a-col>
-
-        <!-- 各单位考试排名 -->
-        <a-col :span="12" v-if="hasModule('exam_statistics')">
-          <a-card :bordered="false" class="module-card">
-            <template #title>各单位考试排名</template>
+          <!-- 各单位考试排名 -->
+          <div class="ranking-panel" v-if="hasModule('exam_statistics')">
+            <div class="ranking-panel__title">各单位考试排名</div>
             <div class="ranking-list">
               <div v-for="(item, idx) in cityExamRankingData" :key="item.city" class="ranking-item">
                 <span class="ranking-medal" :class="'rank-' + (idx + 1)">{{ idx + 1 }}</span>
@@ -156,24 +151,19 @@
                 <span class="ranking-score">{{ item.avgScore.toFixed(1) }}分</span>
               </div>
             </div>
-          </a-card>
-        </a-col>
+          </div>
+        </div>
+      </div>
 
-        <!-- 各维度平均得分 -->
-        <a-col :span="12" v-if="hasModule('exam_statistics')">
-          <a-card :bordered="false" class="module-card chart-card">
-            <template #title>各维度平均得分</template>
-            <v-chart :option="dimensionScoreOption" autoresize style="height: 320px" />
-          </a-card>
-        </a-col>
-      </a-row>
+    </div>
     </a-spin>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
+import { useRoute } from 'vue-router'
 import { use } from 'echarts/core'
 import { CanvasRenderer } from 'echarts/renderers'
 import { LineChart, PieChart, BarChart, RadarChart } from 'echarts/charts'
@@ -193,9 +183,10 @@ import { getExamStatistics } from '@/api/exam'
 import { downloadBlob } from '@/utils/download'
 
 const authStore = useAuthStore()
+const route = useRoute()
 const loading = ref(true)
 const exporting = ref(false)
-const activeCategory = ref('all')
+const activeCategory = ref(resolveInitialCategory())
 const modules = ref([])
 
 // data
@@ -211,6 +202,11 @@ const cityCompletionData = ref([])
 const examTimeRange = ref('30d')
 const examStatisticsData = ref({})
 
+const pageTitle = computed(() => route.meta.title || (activeCategory.value === 'exam' ? '考试统计' : '数据看板'))
+const pageSub = computed(() => activeCategory.value === 'exam'
+  ? '聚焦考试场次、成绩趋势与单位排名'
+  : '根据角色权限展示可见的数据模块')
+
 const visibleModules = computed(() => {
   if (activeCategory.value === 'all') return modules.value
   return modules.value.filter(m => m.category === activeCategory.value)
@@ -219,6 +215,16 @@ const visibleModules = computed(() => {
 function hasModule(key) {
   return visibleModules.value.some(m => m.moduleKey === key)
 }
+
+const hasCharts = computed(() =>
+  hasModule('completion_trend') || hasModule('training_trend') ||
+  hasModule('police_type_dist') || hasModule('city_attendance') ||
+  hasModule('exam_statistics')
+)
+
+const hasRankings = computed(() =>
+  hasModule('city_ranking') || hasModule('city_completion') || hasModule('exam_statistics')
+)
 
 const kpiCards = computed(() => [
   { label: '参训民警总数', value: kpiData.value.totalStudents || 0, suffix: '人', color: '#003087' },
@@ -433,19 +439,84 @@ function onCategoryChange() {
   // 仅切换过滤，数据已全部加载
 }
 
+function resolveInitialCategory() {
+  return route.meta.reportCategory || route.query.category || 'all'
+}
+
 onMounted(async () => {
   await loadModules()
   await loadData()
 })
+
+watch(
+  () => [route.meta.reportCategory, route.query.category],
+  ([metaCategory, queryCategory]) => {
+    activeCategory.value = metaCategory || queryCategory || 'all'
+  },
+)
 </script>
 
 <style scoped>
-.data-board-page { padding: 0; }
-.page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
-.page-header h2 { margin: 0; color: #001234; }
-.page-sub { margin: 4px 0 0; color: #8c8c8c; font-size: 13px; }
-.module-card { border-radius: 12px; }
-.chart-card { min-height: 380px; }
+.data-board-page { min-height: 100%; padding: 12px 0 24px; }
+
+/* 主内容区 - 圆角大容器 */
+.main-content {
+  display: flex;
+  flex-direction: column;
+  border-radius: 20px;
+  overflow: hidden;
+}
+
+/* 横线分隔 */
+.section-divider {
+  height: 1px;
+  background: #e2e8f0;
+}
+
+/* 各主分区 */
+.main-section {
+  padding: 24px 28px;
+}
+
+/* 页面头部 - 深色渐变 */
+.page-hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  background: radial-gradient(circle at top right, rgba(59, 130, 246, 0.22), transparent 34%),
+              linear-gradient(135deg, #0f172a 0%, #13315d 100%);
+  color: #f8fafc;
+}
+.page-hero h2 { margin: 0; font-size: 28px; color: #fff; }
+.page-sub { margin: 6px 0 0; font-size: 13px; color: rgba(226, 232, 240, 0.85); }
+.hero-actions { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+
+/* KPI 统计条 - 白底 + 竖线分隔 */
+.kpi-section { background: #fff; }
+.section-title { font-size: 16px; font-weight: 700; color: #0f172a; margin-bottom: 16px; }
+.section-title-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.section-title-row .section-title { margin-bottom: 0; }
+.dashboard-strip { display: flex; align-items: center; }
+.metric-item { flex: 1; display: flex; flex-direction: column; gap: 6px; padding: 0 24px; }
+.metric-item:first-child { padding-left: 0; }
+.metric-item:last-child { padding-right: 0; }
+.metric-divider { width: 1px; height: 48px; background: #e2e8f0; flex-shrink: 0; }
+.metric-label { font-size: 12px; font-weight: 700; letter-spacing: 0.06em; color: #64748b; text-transform: uppercase; }
+.metric-item strong { font-size: 28px; color: #0f172a; }
+.metric-item strong small { font-size: 14px; font-weight: 400; margin-left: 2px; }
+
+/* 图表网格区 */
+.chart-grid-section { background: #fff; display: flex; flex-direction: column; gap: 20px; }
+.chart-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.chart-panel { background: #f8fafc; border-radius: 14px; padding: 18px; border: 1px solid #e2e8f0; }
+.chart-panel__title { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 12px; }
+
+/* 排名区 */
+.ranking-section { background: #fff; }
+.ranking-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+.ranking-panel { background: #f8fafc; border-radius: 14px; padding: 18px; border: 1px solid #e2e8f0; }
+.ranking-panel__title { font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 14px; }
 .ranking-list { display: flex; flex-direction: column; gap: 12px; max-height: 320px; overflow-y: auto; }
 .ranking-item { display: flex; align-items: center; gap: 10px; }
 .ranking-medal {
@@ -457,4 +528,16 @@ onMounted(async () => {
 .ranking-medal.rank-3 { background: #cd7f32; color: #fff; }
 .ranking-name { min-width: 80px; font-size: 13px; color: #333; }
 .ranking-score { min-width: 50px; text-align: right; font-size: 13px; font-weight: 600; color: #1f1f1f; }
+
+/* 响应式 */
+@media (max-width: 1400px) {
+  .ranking-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 960px) {
+  .page-hero { flex-direction: column; }
+  .chart-row { grid-template-columns: 1fr; }
+  .ranking-grid { grid-template-columns: 1fr; }
+  .dashboard-strip { flex-direction: column; align-items: flex-start; }
+  .metric-item { padding: 0 0 12px; width: 100%; }
+}
 </style>

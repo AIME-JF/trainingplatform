@@ -113,7 +113,7 @@
           </a-col>
           <a-col :span="12">
             <a-form-item label="及格分" required>
-              <a-input-number v-model:value="form.passingScore" :min="0" :max="999" style="width: 100%" />
+              <a-input-number v-model:value="form.passingScore" :min="0" :max="paperPassingScoreMax" style="width: 100%" />
             </a-form-item>
           </a-col>
         </a-row>
@@ -176,6 +176,13 @@ interface CourseOption {
   name?: string
 }
 
+interface QuizPaperOption {
+  id: number
+  title: string
+  totalScore: number
+  questionCount: number
+}
+
 const props = withDefaults(defineProps<{
   trainingId: number
   quizSessions?: QuizSession[]
@@ -201,7 +208,7 @@ const submitting = ref(false)
 const paperLoading = ref(false)
 const editingQuizId = ref<number | null>(null)
 const dateRange = ref<string[]>([])
-const paperOptions = ref<Array<{ id: number; title: string; totalScore?: number; questionCount?: number }>>([])
+const paperOptions = ref<QuizPaperOption[]>([])
 
 const form = ref({
   title: '',
@@ -229,24 +236,28 @@ const courseSelectOptions = computed(() => {
 const paperSelectOptions = computed(() =>
   paperOptions.value.map((item) => ({
     value: item.id,
-    label: `${item.title} · ${item.questionCount || 0}题 · ${item.totalScore || 0}分`,
+    label: `${item.title} · ${item.questionCount}题 · ${item.totalScore}分`,
   })),
 )
+
+const selectedPaper = computed(() =>
+  paperOptions.value.find((item) => item.id === form.value.paperId),
+)
+
+const paperPassingScoreMax = computed(() => {
+  if (publishMode.value !== 'paper') return 999
+  return Math.max(0, Number(selectedPaper.value?.totalScore || 0))
+})
 
 function filterSelectOption(input: string, option?: { label?: string }) {
   return String(option?.label || '').toLowerCase().includes(input.toLowerCase())
 }
 
-watch(
-  () => form.value.paperId,
-  (paperId) => {
-    if (isEditing.value || publishMode.value !== 'paper' || !paperId) return
-    const selectedPaper = paperOptions.value.find((item) => item.id === paperId)
-    if (selectedPaper?.title) {
-      form.value.title = selectedPaper.title
-    }
-  },
-)
+watch([() => form.value.paperId, () => dateRange.value[0], publishMode], () => {
+  if (isEditing.value || publishMode.value !== 'paper' || !selectedPaper.value) return
+  form.value.title = buildPaperQuizTitle(selectedPaper.value.title, dateRange.value[0])
+  form.value.passingScore = resolvePaperPassingScore(selectedPaper.value.totalScore)
+})
 
 function resetForm() {
   publishMode.value = 'paper'
@@ -279,7 +290,13 @@ async function fetchQuizPapers() {
       status: 'published',
       type: 'quiz',
     })
-    paperOptions.value = result?.items || result || []
+    const rows = result?.items || result || []
+    paperOptions.value = rows.map((item: Record<string, unknown>) => ({
+      id: Number(item.id || 0),
+      title: String(item.title || ''),
+      totalScore: Number(item.totalScore ?? item.total_score ?? 0),
+      questionCount: Number(item.questionCount ?? item.question_count ?? 0),
+    })).filter((item: QuizPaperOption) => item.id > 0)
   } catch (error) {
     paperOptions.value = []
     message.error(error instanceof Error ? error.message : '加载测验试卷失败')
@@ -316,6 +333,10 @@ async function openEditModal(quiz: QuizSession) {
 function validateForm() {
   if (!form.value.title.trim()) {
     message.warning('请输入随堂测试名称')
+    return false
+  }
+  if (publishMode.value === 'paper' && form.value.passingScore > paperPassingScoreMax.value) {
+    message.warning(`及格分不能超过试卷满分（${paperPassingScoreMax.value}分）`)
     return false
   }
   if (!dateRange.value.length || !dateRange.value[0] || !dateRange.value[1]) {
@@ -413,6 +434,25 @@ async function handleDeleteQuiz(quiz: QuizSession) {
 function formatDateTime(value?: string | null) {
   if (!value) return '-'
   return String(value).slice(0, 16).replace('T', ' ')
+}
+
+function buildPaperQuizTitle(paperTitle?: string, startAt?: string) {
+  const baseTitle = String(paperTitle || '').trim()
+  if (!baseTitle) return ''
+  const dateText = formatQuizDateLabel(startAt)
+  return `${baseTitle}${dateText}随堂测试`
+}
+
+function formatQuizDateLabel(value?: string) {
+  const date = value ? new Date(value) : new Date()
+  const time = Number.isNaN(date.getTime()) ? new Date() : date
+  return `${time.getMonth() + 1}月${time.getDate()}日`
+}
+
+function resolvePaperPassingScore(totalScore?: number) {
+  const score = Number(totalScore || 0)
+  if (score <= 0) return 0
+  return Math.min(score, Math.ceil(score * 0.6))
 }
 
 function statusLabel(status?: string) {

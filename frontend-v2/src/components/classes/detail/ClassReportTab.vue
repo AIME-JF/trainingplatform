@@ -68,40 +68,66 @@
         <a-card :bordered="false">
           <a-spin :spinning="loadingDetail || saving || confirming || deleting">
             <template v-if="selectedTask">
-              <div class="main-head">
-                <div>
-                  <div class="main-title">待审核草稿</div>
-                  <div class="main-subtitle">可编辑标题和正文，确认后将沉淀为正式版本。</div>
+              <template v-if="isEditableTask">
+                <div class="main-head">
+                  <div>
+                    <div class="main-title">待审核草稿</div>
+                    <div class="main-subtitle">可编辑标题和正文，确认后将沉淀为正式版本。</div>
+                  </div>
+                  <a-space v-if="canManage">
+                    <a-button @click="saveTask">保存草稿</a-button>
+                    <a-button type="primary" @click="confirmTask">确认发布</a-button>
+                    <a-button danger @click="removeTask">删除任务</a-button>
+                  </a-space>
                 </div>
-                <a-space v-if="canManage">
-                  <a-button @click="saveTask">保存草稿</a-button>
-                  <a-button type="primary" @click="confirmTask">确认发布</a-button>
-                  <a-button danger @click="removeTask">删除任务</a-button>
-                </a-space>
-              </div>
 
-              <a-form layout="vertical">
-                <a-form-item label="报告标题">
-                  <a-input v-model:value="editor.title" :maxlength="200" />
-                </a-form-item>
-                <div class="kpi-grid">
-                  <div v-for="item in currentKpis" :key="item.key" class="kpi-card">
-                    <div class="kpi-label">{{ item.label }}</div>
-                    <div class="kpi-value">
-                      {{ item.value }}<span v-if="item.unit" class="kpi-unit">{{ item.unit }}</span>
+                <a-form layout="vertical">
+                  <a-form-item label="报告标题">
+                    <a-input v-model:value="editor.title" :maxlength="200" />
+                  </a-form-item>
+                  <div class="kpi-grid">
+                    <div v-for="item in currentKpis" :key="item.key" class="kpi-card">
+                      <div class="kpi-label">{{ item.label }}</div>
+                      <div class="kpi-value">
+                        {{ item.value }}<span v-if="item.unit" class="kpi-unit">{{ item.unit }}</span>
+                      </div>
+                      <div v-if="item.highlight" class="kpi-highlight">{{ item.highlight }}</div>
                     </div>
-                    <div v-if="item.highlight" class="kpi-highlight">{{ item.highlight }}</div>
+                  </div>
+                  <a-form-item label="报告正文（Markdown）" style="margin-top: 16px">
+                    <a-textarea v-model:value="editor.reportMarkdown" :rows="18" />
+                  </a-form-item>
+                </a-form>
+
+                <div class="preview-box">
+                  <div class="main-title">预览</div>
+                  <div class="markdown-box">{{ editor.reportMarkdown }}</div>
+                </div>
+              </template>
+
+              <template v-else-if="isRunningTask">
+                <div class="state-box">
+                  <div class="main-title">{{ statusLabel(selectedTask.status) }}</div>
+                  <div class="main-subtitle">报告正在后台异步生成，页面会自动刷新任务状态。</div>
+                  <div class="state-meta">
+                    <span>任务名称：{{ selectedTask.task_name || selectedTask.taskName }}</span>
+                    <span>创建时间：{{ formatDateTime(selectedTask.created_at || selectedTask.createdAt) }}</span>
                   </div>
                 </div>
-                <a-form-item label="报告正文（Markdown）" style="margin-top: 16px">
-                  <a-textarea v-model:value="editor.reportMarkdown" :rows="18" />
-                </a-form-item>
-              </a-form>
+              </template>
 
-              <div class="preview-box">
-                <div class="main-title">预览</div>
-                <div class="markdown-box">{{ editor.reportMarkdown }}</div>
-              </div>
+              <template v-else-if="isFailedTask">
+                <div class="state-box state-box-error">
+                  <div class="main-title">生成失败</div>
+                  <div class="main-subtitle">
+                    {{ selectedTask.error_message || selectedTask.errorMessage || 'AI 报告生成失败，请稍后重试。' }}
+                  </div>
+                  <a-space v-if="canManage" style="margin-top: 12px">
+                    <a-button type="primary" :loading="creating" @click="createTask">重新生成</a-button>
+                    <a-button danger @click="removeTask">删除任务</a-button>
+                  </a-space>
+                </div>
+              </template>
             </template>
 
             <template v-else-if="activeSnapshot">
@@ -142,7 +168,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { message, Modal } from 'ant-design-vue'
 import {
   confirmTrainingReportTask,
@@ -182,6 +208,7 @@ const snapshots = ref<ReportSnapshot[]>([])
 const selectedTaskId = ref<number | null>(null)
 const selectedSnapshotId = ref<number | null>(null)
 const selectedTask = ref<ReportTask | null>(null)
+const pollingTimer = ref<number | null>(null)
 
 const editor = reactive({
   title: '',
@@ -189,6 +216,9 @@ const editor = reactive({
 })
 
 const draftTasks = computed(() => tasks.value.filter((item) => item.status !== 'confirmed'))
+const isEditableTask = computed(() => selectedTask.value?.status === 'completed')
+const isRunningTask = computed(() => ['pending', 'processing'].includes(selectedTask.value?.status))
+const isFailedTask = computed(() => selectedTask.value?.status === 'failed')
 
 const activeSnapshot = computed<ReportSnapshot | null>(() => {
   if (!selectedSnapshotId.value) return snapshots.value[0] || null
@@ -203,19 +233,21 @@ const currentKpis = computed<Record<string, any>[]>(() => {
   return activeSnapshot.value?.kpiOverview || []
 })
 
-async function loadTasks() {
+async function loadTasks(options: { silent?: boolean } = {}) {
   loadingTasks.value = true
   try {
     const data = await getTrainingReportTasks({ training_id: props.trainingId, size: -1 })
     tasks.value = data.items || []
   } catch (error: any) {
-    message.error(error?.message || '加载报告任务失败')
+    if (!options.silent) {
+      message.error(error?.message || '加载报告任务失败')
+    }
   } finally {
     loadingTasks.value = false
   }
 }
 
-async function loadSnapshots() {
+async function loadSnapshots(options: { silent?: boolean } = {}) {
   loadingSnapshots.value = true
   try {
     snapshots.value = await getTrainingReportSnapshots(props.trainingId)
@@ -223,13 +255,36 @@ async function loadSnapshots() {
       selectedSnapshotId.value = snapshots.value[0].id
     }
   } catch (error: any) {
-    message.error(error?.message || '加载报告版本失败')
+    if (!options.silent) {
+      message.error(error?.message || '加载报告版本失败')
+    }
   } finally {
     loadingSnapshots.value = false
   }
 }
 
-async function openTask(taskId: number) {
+function clearPolling() {
+  if (pollingTimer.value !== null) {
+    window.clearTimeout(pollingTimer.value)
+    pollingTimer.value = null
+  }
+}
+
+function startPolling(taskId: number) {
+  clearPolling()
+  pollingTimer.value = window.setTimeout(async () => {
+    try {
+      await Promise.all([loadTasks({ silent: true }), loadSnapshots({ silent: true })])
+      if (selectedTaskId.value === taskId) {
+        await openTask(taskId, true)
+      }
+    } catch {
+      startPolling(taskId)
+    }
+  }, 3000)
+}
+
+async function openTask(taskId: number, silent = false) {
   loadingDetail.value = true
   try {
     const detail = await getTrainingReportTaskDetail(taskId)
@@ -238,8 +293,16 @@ async function openTask(taskId: number) {
     selectedSnapshotId.value = null
     editor.title = detail.draft?.title || ''
     editor.reportMarkdown = detail.draft?.report_markdown || detail.draft?.reportMarkdown || ''
+    if (['pending', 'processing'].includes(detail.status)) {
+      startPolling(detail.id)
+    } else {
+      clearPolling()
+    }
   } catch (error: any) {
-    message.error(error?.message || '加载任务详情失败')
+    if (!silent) {
+      message.error(error?.message || '加载任务详情失败')
+    }
+    clearPolling()
   } finally {
     loadingDetail.value = false
   }
@@ -249,6 +312,7 @@ function selectSnapshot(snapshotId: number) {
   selectedTaskId.value = null
   selectedTask.value = null
   selectedSnapshotId.value = snapshotId
+  clearPolling()
 }
 
 async function reload(taskId?: number) {
@@ -269,7 +333,7 @@ async function createTask() {
       training_id: props.trainingId,
       task_name: props.trainingName ? `${props.trainingName}总结报告` : undefined,
     })
-    message.success('总结报告草稿已生成')
+    message.success('已提交 AI 生成任务，系统正在后台生成报告')
     await reload(detail.id)
     emit('refresh')
   } catch (error: any) {
@@ -360,6 +424,7 @@ function statusLabel(status?: string) {
 }
 
 watch(() => props.trainingId, () => {
+  clearPolling()
   selectedTaskId.value = null
   selectedSnapshotId.value = null
   selectedTask.value = null
@@ -368,6 +433,10 @@ watch(() => props.trainingId, () => {
 
 onMounted(() => {
   reload()
+})
+
+onBeforeUnmount(() => {
+  clearPolling()
 })
 </script>
 
@@ -528,6 +597,27 @@ onMounted(() => {
 
 .preview-box {
   margin-top: 18px;
+}
+
+.state-box {
+  padding: 24px;
+  border-radius: var(--v2-radius);
+  background: #f8fbff;
+  border: 1px solid #dbeafe;
+}
+
+.state-box-error {
+  background: #fff7f7;
+  border-color: #fecaca;
+}
+
+.state-meta {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  color: var(--v2-text-muted);
+  font-size: 13px;
 }
 
 .markdown-box {

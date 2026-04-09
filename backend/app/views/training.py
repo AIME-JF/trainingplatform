@@ -51,7 +51,15 @@ from app.schemas import (
     TrainingWorkflowActionRequest,
 )
 from app.services.training import TrainingService
-from app.utils.authz import can_manage_training, can_update_training, can_view_training, is_admin_user, is_instructor_user, is_training_director
+from app.utils.authz import (
+    can_manage_training,
+    can_manage_training_quiz,
+    can_update_training,
+    can_view_training,
+    is_admin_user,
+    is_instructor_user,
+    is_training_director,
+)
 from logger import logger
 
 router = APIRouter(prefix="/trainings", tags=["training_management"])
@@ -105,6 +113,13 @@ def _get_training_or_404(db: Session, training_id: int) -> Training:
 def _require_training_manager(db: Session, training_id: int, user_id: int):
     training = _get_training_or_404(db, training_id)
     if not can_manage_training(db, training, user_id):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权操作该培训班")
+    return training
+
+
+def _require_training_quiz_manager(db: Session, training_id: int, user_id: int):
+    training = _get_training_or_404(db, training_id)
+    if not can_manage_training_quiz(db, training, user_id):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权操作该培训班")
     return training
 
@@ -302,7 +317,7 @@ def create_training_quiz(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _require_training_manager(db, training_id, current_user.user_id)
+    _require_training_quiz_manager(db, training_id, current_user.user_id)
     controller = TrainingController(db)
     result = controller.create_training_quiz(training_id, data, current_user.user_id)
     return StandardResponse(data=result)
@@ -320,7 +335,7 @@ def update_training_quiz(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _require_training_manager(db, training_id, current_user.user_id)
+    _require_training_quiz_manager(db, training_id, current_user.user_id)
     controller = TrainingController(db)
     result = controller.update_training_quiz(training_id, exam_id, data, current_user.user_id)
     return StandardResponse(data=result)
@@ -337,7 +352,7 @@ def delete_training_quiz(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _require_training_manager(db, training_id, current_user.user_id)
+    _require_training_quiz_manager(db, training_id, current_user.user_id)
     controller = TrainingController(db)
     result = controller.delete_training_quiz(training_id, exam_id, current_user.user_id)
     return StandardResponse(data=result)

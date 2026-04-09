@@ -2,6 +2,7 @@ import type { Component } from 'vue'
 import {
   AppstoreOutlined,
   BellOutlined,
+  BarChartOutlined,
   BookFilled,
   CalendarFilled,
   CalendarOutlined,
@@ -17,6 +18,7 @@ import {
   EXAM_LIST_PERMISSIONS,
   MY_RESOURCE_PERMISSIONS,
   PROFILE_PERMISSIONS,
+  REPORT_PERMISSIONS,
   TRAINING_PERMISSIONS,
   TRAINING_SCHEDULE_PERMISSIONS,
 } from '@/constants/permissions'
@@ -114,6 +116,18 @@ export const quickActionConfigs: QuickActionConfig[] = [
     mobileShadowColor: 'rgba(222, 94, 112, 0.14)',
     permissions: EXAM_LIST_PERMISSIONS,
     surfaces: ['profile'],
+  },
+  {
+    title: '考试统计',
+    description: '查看考试场次、成绩趋势与单位排名',
+    path: '/report/exam',
+    icon: BarChartOutlined,
+    background: 'linear-gradient(135deg, #183b8c 0%, #4b6ef5 100%)',
+    mobileBackground: '#e8efff',
+    mobileIconColor: '#3153d4',
+    mobileShadowColor: 'rgba(49, 83, 212, 0.14)',
+    permissions: REPORT_PERMISSIONS,
+    surfaces: ['dashboard', 'profile'],
   },
   {
     title: '我的资源',

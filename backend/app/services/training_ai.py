@@ -31,6 +31,7 @@ from app.schemas import (
 from app.agents.personal_training_plan_agent import PersonalTrainingPlanAgentService
 from app.agents.schedule_config_parser import AIScheduleConfigParserService
 from app.agents.schedule_agent import ScheduleAgentService
+from app.agents.training_report_agent import TrainingReportAgentService
 from app.services.training_schedule_rule import TrainingScheduleRuleService
 from app.utils.authz import can_manage_training
 from logger import logger
@@ -48,6 +49,7 @@ class TrainingAIService:
         self.schedule_agent = ScheduleAgentService(db)
         self.schedule_config_parser = AIScheduleConfigParserService()
         self.personal_plan_agent = PersonalTrainingPlanAgentService(db)
+        self.training_report_agent = TrainingReportAgentService()
 
     def list_schedule_tasks(
         self,
@@ -309,19 +311,52 @@ class TrainingAIService:
             self.TRAINING_REPORT_TASK_TYPE,
             self._build_training_report_request_payload(data, training.name),
             current_user_id,
+            status="pending",
         )
+        task.result_payload = {
+            "draft": None,
+            "confirmed_snapshot_id": None,
+        }
+        self.db.commit()
+        self.db.refresh(task)
+
         try:
-            task.result_payload = {
-                "draft": self._build_training_report_draft(training, data).model_dump(mode="json"),
-                "confirmed_snapshot_id": None,
-            }
-            self._mark_task_completed(task)
+            from app.tasks.ai_training_report import schedule_training_report_task
+
+            schedule_training_report_task(preferred_task_id=task.id, db=self.db)
+            self.db.refresh(task)
         except Exception as exc:
-            self._mark_task_failed(task, str(exc))
-            raise
-        finally:
-            self.db.commit()
+            logger.error("调度培训班总结报告 AI 任务失败: %s", exc)
         return self.get_training_report_task_detail(task.id, current_user_id)
+
+    def execute_training_report_task(self, task_id: int) -> None:
+        task = self.db.query(AITask).filter(
+            AITask.id == task_id,
+            AITask.task_type == self.TRAINING_REPORT_TASK_TYPE,
+        ).first()
+        if not task:
+            raise ValueError("任务不存在")
+        if task.status in {"completed", "confirmed", "failed"}:
+            return
+
+        if task.status != "processing":
+            task.status = "processing"
+            task.started_at = task.started_at or datetime.now()
+            task.completed_at = None
+            task.error_message = None
+            self.db.commit()
+
+        request_payload = AITrainingReportTaskCreateRequest.model_validate(task.request_payload or {})
+        training = self._load_report_training_or_raise(request_payload.training_id, task.created_by)
+        task.task_name = request_payload.task_name or f"{training.name}总结报告"
+        task.request_payload = self._build_training_report_request_payload(request_payload, training.name)
+        task.result_payload = {
+            **(task.result_payload or {}),
+            "draft": self._build_training_report_draft(training, request_payload).model_dump(mode="json"),
+            "confirmed_snapshot_id": (task.result_payload or {}).get("confirmed_snapshot_id"),
+        }
+        self._mark_task_completed(task)
+        self.db.commit()
 
     def update_schedule_task(
         self,
@@ -645,7 +680,7 @@ class TrainingAIService:
             summary_text = plan.get("summary")
         elif task.task_type == self.TRAINING_REPORT_TASK_TYPE:
             item_count = len(draft_payload.get("kpi_overview") or [])
-            summary_text = draft_payload.get("title")
+            summary_text = draft_payload.get("title") or task.error_message or task.task_name
 
         return AITaskSummaryResponse(
             id=task.id,
@@ -745,63 +780,34 @@ class TrainingAIService:
         data: AITrainingReportTaskCreateRequest,
     ) -> TrainingReportDraft:
         metrics = self._collect_training_report_metrics(training.id)
-        focus_points = list(data.focus_points or [])
-        title = f"{training.name}培训总结报告"
-        kpi_overview = [
+        ai_result = self.training_report_agent.generate_report(
+            training_name=training.name,
+            metrics=metrics,
+            focus_points=list(data.focus_points or []),
+            extra_requirements=data.extra_requirements,
+        )
+        risk_items = list(ai_result.get("risk_items") or metrics["risk_items"])
+        suggestions = list(ai_result.get("suggestions") or metrics["suggestions"])
+
+        return TrainingReportDraft(
+            title=str(ai_result.get("title") or f"{training.name}培训总结报告"),
+            report_markdown=str(ai_result.get("report_markdown") or "").strip(),
+            kpi_overview=self._build_training_report_kpis(metrics),
+            attendance_summary=metrics["attendance_summary"],
+            exam_summary=metrics["exam_summary"],
+            risk_items=risk_items,
+            suggestions=suggestions,
+        )
+
+    @staticmethod
+    def _build_training_report_kpis(metrics: dict) -> List[TrainingReportKpiItem]:
+        return [
             TrainingReportKpiItem(key="enrolled_count", label="报名人数", value=str(metrics["enrolled_count"]), unit="人"),
             TrainingReportKpiItem(key="attendance_rate", label="整体出勤率", value=metrics["attendance_rate_text"]),
             TrainingReportKpiItem(key="course_completion", label="课次完成率", value=metrics["course_completion_text"]),
             TrainingReportKpiItem(key="formal_pass_rate", label="正式考试通过率", value=metrics["formal_pass_rate_text"]),
             TrainingReportKpiItem(key="quiz_count", label="随堂测试场次", value=str(metrics["quiz_exam_count"]), unit="场"),
         ]
-        risk_items = list(metrics["risk_items"])
-        suggestions = list(metrics["suggestions"])
-        if focus_points:
-            suggestions.insert(0, f"本次重点关注：{'、'.join(focus_points)}。")
-
-        risk_lines = [f"- {item}" for item in risk_items] or ["- 当前未发现明显风险项。"]
-        suggestion_lines = [f"- {item}" for item in suggestions] or ["- 当前数据量有限，建议继续积累出勤和考试数据后再复核。"]
-        report_markdown = "\n".join([
-            f"# {title}",
-            "",
-            "## 一、培训概况",
-            f"- 培训班名称：{training.name}",
-            f"- 培训周期：{metrics['training_period_text']}",
-            f"- 已报名人数：{metrics['enrolled_count']} 人",
-            f"- 已编组人数：{metrics['grouped_count']} 人",
-            f"- 课程数量：{metrics['course_count']} 门",
-            "",
-            "## 二、出勤与执行情况",
-            f"- 课次完成情况：{metrics['completed_session_count']}/{metrics['total_session_count']}，完成率 {metrics['course_completion_text']}",
-            f"- 签到记录：共 {metrics['attendance_record_count']} 条，其中准时 {metrics['on_time_count']} 条、迟到 {metrics['late_count']} 条、缺勤 {metrics['absent_count']} 条",
-            f"- 整体出勤率：{metrics['attendance_rate_text']}",
-            f"- 数据说明：{metrics['attendance_data_hint']}",
-            "",
-            "## 三、考试分析",
-            f"- 正式考试场次：{metrics['formal_exam_count']} 场",
-            f"- 正式考试作答：{metrics['formal_submitted_count']} 次，缺考 {metrics['formal_absent_count']} 次",
-            f"- 正式考试通过：{metrics['formal_pass_count']} 次，通过率 {metrics['formal_pass_rate_text']}",
-            f"- 正式考试平均分：{metrics['formal_avg_score_text']}",
-            f"- 随堂测试：{metrics['quiz_exam_count']} 场，作答 {metrics['quiz_submitted_count']} 次",
-            "",
-            "## 四、风险提示",
-            *risk_lines,
-            "",
-            "## 五、改进建议",
-            *suggestion_lines,
-        ])
-        if data.extra_requirements:
-            report_markdown += f"\n\n## 六、补充要求\n- {data.extra_requirements.strip()}"
-
-        return TrainingReportDraft(
-            title=title,
-            report_markdown=report_markdown,
-            kpi_overview=kpi_overview,
-            attendance_summary=metrics["attendance_summary"],
-            exam_summary=metrics["exam_summary"],
-            risk_items=risk_items,
-            suggestions=suggestions,
-        )
 
     def _collect_training_report_metrics(self, training_id: int) -> dict:
         training = self.db.query(Training).filter(Training.id == training_id).first()

@@ -135,6 +135,17 @@ def can_manage_training(db: Session, training: Optional[Training], user_id: int)
     return is_admin_user(db, user_id) or is_training_director(training, user_id)
 
 
+def can_manage_training_quiz(db: Session, training: Optional[Training], user_id: int) -> bool:
+    if not can_view_training(db, training, user_id):
+        return False
+    if is_admin_user(db, user_id) or is_training_director(training, user_id):
+        return True
+    for course in (training.courses or []):
+        if is_course_primary_instructor(course, user_id) or is_course_assistant_instructor(course, user_id):
+            return True
+    return False
+
+
 def can_update_training(db: Session, training: Optional[Training], user_id: int) -> bool:
     if not can_view_training(db, training, user_id):
         return False

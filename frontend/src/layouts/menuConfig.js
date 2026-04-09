@@ -126,6 +126,11 @@ export const appMenuConfig = [
         anyPermissions: REPORT_PAGE_PERMISSIONS,
       },
       {
+        key: '/report/exam',
+        label: '考试统计',
+        anyPermissions: REPORT_PAGE_PERMISSIONS,
+      },
+      {
         key: '/trainee',
         label: '学员统计',
         anyPermissions: USER_ARCHIVE_PAGE_PERMISSIONS,
