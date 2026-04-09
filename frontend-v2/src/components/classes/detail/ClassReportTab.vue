@@ -95,7 +95,7 @@
                     </div>
                   </div>
                   <a-form-item label="报告正文（Markdown）" style="margin-top: 16px">
-                    <a-textarea v-model:value="editor.reportMarkdown" :rows="18" />
+                    <a-button type="link" @click="openMarkdownModal">编辑报告正文</a-button>
                   </a-form-item>
                 </a-form>
 
@@ -162,6 +162,27 @@
             </a-empty>
           </a-spin>
         </a-card>
+
+        <!-- 报告正文编辑弹窗 -->
+        <a-modal
+          v-model:open="markdownModalVisible"
+          title="编辑报告正文"
+          :width="800"
+          :footer="null"
+          centered
+        >
+          <div class="markdown-edit-modal">
+            <a-textarea
+              v-model:value="markdownModalContent"
+              :rows="20"
+              placeholder="请输入报告正文（支持 Markdown 格式）..."
+            />
+            <div class="markdown-edit-actions">
+              <a-button @click="markdownModalVisible = false">取消</a-button>
+              <a-button type="primary" @click="saveMarkdownModal">保存</a-button>
+            </div>
+          </div>
+        </a-modal>
       </section>
     </div>
   </div>
@@ -202,6 +223,8 @@ const creating = ref(false)
 const saving = ref(false)
 const confirming = ref(false)
 const deleting = ref(false)
+const markdownModalVisible = ref(false)
+const markdownModalContent = ref('')
 
 const tasks = ref<ReportTask[]>([])
 const snapshots = ref<ReportSnapshot[]>([])
@@ -406,6 +429,16 @@ function removeTask() {
       }
     },
   })
+}
+
+function openMarkdownModal() {
+  markdownModalContent.value = editor.reportMarkdown
+  markdownModalVisible.value = true
+}
+
+function saveMarkdownModal() {
+  editor.reportMarkdown = markdownModalContent.value
+  markdownModalVisible.value = false
 }
 
 function formatDateTime(value?: string | null) {
@@ -629,6 +662,18 @@ onBeforeUnmount(() => {
   white-space: pre-wrap;
   line-height: 1.75;
   color: var(--v2-text-secondary);
+}
+
+.markdown-edit-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.markdown-edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 @media (max-width: 1200px) {

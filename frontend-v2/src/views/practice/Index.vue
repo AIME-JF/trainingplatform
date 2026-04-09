@@ -1,211 +1,237 @@
 <template>
-  <!-- ========== 教官模式 ========== -->
-  <DarkPageHeader
-    v-if="isInstructor"
-    title="题库管理"
-    subtitle="管理个人题库，上传材料生成题目。"
-    search-placeholder="搜索题库名称..."
-    v-model="searchKeyword"
-    @search="() => {}"
-  >
-    <template #actions>
-      <a-select v-model:value="instructorCourseId" placeholder="按课程筛选" allow-clear class="dark-course-select" @change="handleCourseSelectChange">
-        <a-select-option v-for="item in courses" :key="item.id" :value="item.id">{{ item.title }}</a-select-option>
-      </a-select>
-      <a-button ghost @click="openAiTaskListModal">任务列表</a-button>
-      <a-button type="primary" ghost @click="openCreateAiModal"><PlusOutlined /> 新建题库</a-button>
-    </template>
-
-      <!-- 统计 -->
-      <div class="practice-stats">
-        <span>共 <strong>{{ filteredInstructorFolders.length }}</strong> 个题库</span>
+  <div class="practice-page">
+    <!-- 移动端顶部 Header -->
+    <header class="practice-mobile-header">
+      <div class="practice-mobile-header-left">
+        <button class="practice-mobile-menu-btn">
+          <svg class="w-6 h-6 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+          </svg>
+        </button>
+        <span class="practice-mobile-title">{{ isInstructor ? '题库管理' : '刷题练习' }}</span>
       </div>
+      <div class="practice-mobile-avatar">{{ avatarText }}</div>
+    </header>
 
-      <!-- 加载状态 -->
-      <div v-if="loading" class="loading-wrapper">
-        <a-spin size="large" />
-      </div>
-
-      <a-empty v-else-if="!filteredInstructorFolders.length" description="暂无题库，点击上方按钮新建" class="empty-block" />
-
-      <!-- 题库网格 -->
-      <div v-else class="practice-grid">
-        <div
-          v-for="(item, index) in filteredInstructorFolders"
-          :key="item.id"
-          class="practice-card"
-          :class="{ expanded: expandedFolderId === item.id }"
-          :style="{ '--card-accent': getCardAccent(index) }"
-        >
-          <div class="card-cover" :style="{ background: getCardCoverBackground(index) }">
-            <div class="cover-labels">
-              <span class="cover-tag-label">题库</span>
-              <span class="cover-count-tag">{{ item.question_count || 0 }} 题</span>
-            </div>
-            <div class="cover-visual">
-              <span class="cover-visual-ring">
-                <FolderOutlined class="cover-visual-icon" />
-              </span>
-            </div>
-            <div class="cover-footer">
-              <span class="cover-footer-item">{{ item.category || '默认分类' }}</span>
-              <span v-if="item.course_names?.length" class="cover-footer-item">{{ item.course_names.join('、') }}</span>
-              <span v-else-if="item.course_name" class="cover-footer-item">{{ item.course_name }}</span>
-            </div>
+    <!-- 主布局 -->
+    <div class="practice-layout">
+      <!-- 顶部功能控制区 -->
+      <header class="practice-header">
+        <!-- 上半部：标题与操作 -->
+        <div class="practice-header-top">
+          <div class="practice-header-title">
+            <h1>{{ isInstructor ? '题库管理' : '刷题练习' }}</h1>
+            <p>{{ isInstructor ? '管理个人题库，上传材料生成题目。' : '选择知识点或题库，开启专项练习。' }}</p>
           </div>
-
-          <div class="card-body">
-            <div class="card-head">
-              <h3>{{ item.name }}</h3>
-              <p v-if="item.course_names?.length">关联课程：{{ item.course_names.join('、') }}</p>
-              <p v-else-if="item.course_name">关联课程：{{ item.course_name }}</p>
-              <p v-else style="color: var(--v2-text-muted)">未关联课程</p>
+          <div class="practice-header-controls">
+            <div class="practice-search-wrapper">
+              <svg class="practice-search-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+              </svg>
+              <input
+                type="text"
+                class="practice-search-input"
+                :placeholder="isInstructor ? '搜索题库名称...' : '搜索知识点名称...'"
+                v-model="searchKeyword"
+              />
             </div>
-
-            <div class="meta-grid">
-              <span>
-                <QuestionCircleOutlined />
-                {{ item.question_count || 0 }} 题
-              </span>
-              <span>
-                <StarOutlined />
-                {{ item.status || '未使用' }}
-              </span>
-            </div>
-
-            <div class="action-row">
-              <a-button type="primary" block @click.stop="openQuestionDetailModal(item.id)">
-                <template #icon><EyeOutlined /></template>
-                查看全部 {{ item.question_count || 0 }} 道题目
-              </a-button>
-            </div>
-
-            <div class="action-row" style="margin-top: 12px">
-              <a-button block @click.stop="openEditFolderModal(item)">
-                <template #icon><EditOutlined /></template>
-                编辑题库
-              </a-button>
+            <div class="practice-header-btns">
+              <template v-if="isInstructor">
+                <a-select v-model:value="instructorCourseId" placeholder="按课程筛选" allow-clear class="practice-course-select" @change="handleCourseSelectChange">
+                  <a-select-option v-for="item in courses" :key="item.id" :value="item.id">{{ item.title }}</a-select-option>
+                </a-select>
+                <a-button ghost @click="openAiTaskListModal">任务列表</a-button>
+                <a-button type="primary" class="practice-create-btn" @click="openCreateAiModal">
+                  <template #icon>
+                    <svg class="icon-sm" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 4v16m8-8H4"/>
+                    </svg>
+                  </template>
+                  新建题库
+                </a-button>
+              </template>
+              <template v-else>
+                <a-select v-model:value="questionLimitMode" class="practice-sort-select">
+                  <a-select-option value="10">最多 10 题</a-select-option>
+                  <a-select-option value="20">最多 20 题</a-select-option>
+                  <a-select-option value="50">最多 50 题</a-select-option>
+                  <a-select-option value="all">题量不限</a-select-option>
+                </a-select>
+              </template>
             </div>
           </div>
         </div>
-      </div>
-  </DarkPageHeader>
 
-    <!-- ========== 学员模式 ========== -->
-  <DarkPageHeader
-    v-else
-    title="刷题练习"
-    subtitle="选择知识点或题库，开启专项练习。"
-    search-placeholder="搜索知识点名称..."
-    v-model="searchKeyword"
-    @search="handleSearch"
-  >
-    <template #filters>
-      <button type="button" class="dark-chip" :class="{ active: activeSourceType === 'knowledge-point' }" @click="selectSourceType('knowledge-point')">按知识点</button>
-      <button type="button" class="dark-chip" :class="{ active: activeSourceType === 'question-folder' }" @click="selectSourceType('question-folder')">按题库/科目</button>
-    </template>
-    <template #actions>
-      <a-select v-model:value="questionLimitMode" class="dark-sort-select">
-        <a-select-option value="10">最多 10 题</a-select-option>
-        <a-select-option value="20">最多 20 题</a-select-option>
-        <a-select-option value="50">最多 50 题</a-select-option>
-        <a-select-option value="all">题量不限</a-select-option>
-      </a-select>
-    </template>
-    <template #extra>
-      <div class="dark-adv-row">
-        <a-select v-model:value="selectedQuestionType" mode="multiple" placeholder="全部题型" allow-clear class="dark-adv-select">
-          <a-select-option value="single">单选题</a-select-option>
-          <a-select-option value="multi">多选题</a-select-option>
-          <a-select-option value="judge">判断题</a-select-option>
-        </a-select>
-        <a-select v-model:value="selectedDifficulty" mode="multiple" placeholder="全部难度" allow-clear class="dark-adv-select">
-          <a-select-option value="1">难度 1</a-select-option>
-          <a-select-option value="2">难度 2</a-select-option>
-          <a-select-option value="3">难度 3</a-select-option>
-          <a-select-option value="4">难度 4</a-select-option>
-          <a-select-option value="5">难度 5</a-select-option>
-        </a-select>
-        <a-select v-model:value="selectedPoliceTypeId" placeholder="全部警种" allow-clear class="dark-adv-select">
-          <a-select-option v-for="item in policeTypes" :key="item.id" :value="String(item.id)">{{ item.name }}</a-select-option>
-        </a-select>
-        <a-select v-model:value="selectedCourseId" placeholder="全部课程" allow-clear class="dark-adv-select">
-          <a-select-option v-for="item in courses" :key="item.id" :value="String(item.id)">{{ item.title }}</a-select-option>
-        </a-select>
-      </div>
-    </template>
+        <!-- 下半部：Tab与过滤栏 -->
+        <div class="practice-header-bottom">
+          <template v-if="isInstructor">
+            <!-- 教官模式：无Tab，只显示统计 -->
+            <div class="practice-source-type-hint">
+              <span>共 <strong>{{ filteredInstructorFolders.length }}</strong> 个题库</span>
+            </div>
+          </template>
+          <template v-else>
+            <!-- 学员模式：切换来源类型 -->
+            <div class="practice-tabs">
+              <button class="practice-tab" :class="{ active: activeSourceType === 'knowledge-point' }" @click="selectSourceType('knowledge-point')">按知识点</button>
+              <button class="practice-tab" :class="{ active: activeSourceType === 'question-folder' }" @click="selectSourceType('question-folder')">按题库/科目</button>
+            </div>
+            <div class="practice-filter-row">
+              <a-select v-model:value="selectedQuestionType" mode="multiple" placeholder="全部题型" allow-clear class="practice-filter-select">
+                <a-select-option value="single">单选题</a-select-option>
+                <a-select-option value="multi">多选题</a-select-option>
+                <a-select-option value="judge">判断题</a-select-option>
+              </a-select>
+              <a-select v-model:value="selectedDifficulty" mode="multiple" placeholder="全部难度" allow-clear class="practice-filter-select">
+                <a-select-option value="1">难度 1</a-select-option>
+                <a-select-option value="2">难度 2</a-select-option>
+                <a-select-option value="3">难度 3</a-select-option>
+                <a-select-option value="4">难度 4</a-select-option>
+                <a-select-option value="5">难度 5</a-select-option>
+              </a-select>
+              <a-select v-model:value="selectedPoliceTypeId" placeholder="全部警种" allow-clear class="practice-filter-select">
+                <a-select-option v-for="item in policeTypes" :key="item.id" :value="String(item.id)">{{ item.name }}</a-select-option>
+              </a-select>
+              <a-select v-model:value="selectedCourseId" placeholder="全部课程" allow-clear class="practice-filter-select">
+                <a-select-option v-for="item in courses" :key="item.id" :value="String(item.id)">{{ item.title }}</a-select-option>
+              </a-select>
+            </div>
+          </template>
+        </div>
+      </header>
 
-      <!-- 统计 -->
-      <div class="practice-stats">
+      <!-- 数据统计摘要 -->
+      <div class="practice-stats" v-if="isInstructor">
+        <span>共 <strong>{{ filteredInstructorFolders.length }}</strong> 个题库</span>
+      </div>
+      <div class="practice-stats" v-else>
         <span>共 <strong>{{ filteredSources.length }}</strong> 个{{ activeSourceType === 'knowledge-point' ? '知识点' : '题库' }}</span>
       </div>
 
-      <div v-if="loading" class="loading-wrapper">
-      <a-spin size="large" />
-    </div>
+      <!-- 加载状态 -->
+      <div v-if="loading" class="practice-loading">
+        <a-spin size="large" />
+      </div>
 
-    <a-empty v-else-if="!filteredSources.length" description="暂无符合条件的练习来源" class="empty-block" />
+      <!-- 空状态 -->
+      <a-empty v-else-if="(isInstructor ? filteredInstructorFolders.length : filteredSources.length) === 0" :description="isInstructor ? '暂无题库，点击上方按钮新建' : '暂无符合条件的练习来源'" class="practice-empty" />
 
-    <div v-else class="practice-grid">
-      <div
-        v-for="(item, index) in filteredSources"
-        :key="item.id"
-        class="practice-card"
-        :style="{ '--card-accent': getCardAccent(index) }"
-        @click="handleCardClick(item)"
-      >
-        <div class="card-cover" :style="{ background: getCardCoverBackground(index) }">
-          <div class="cover-labels">
-            <span class="cover-tag-label">{{ activeSourceType === 'knowledge-point' ? '知识点' : '题库' }}</span>
-            <span class="cover-count-tag">{{ item.question_count || 0 }} 题</span>
-          </div>
-
-          <div class="cover-visual">
-            <span class="cover-visual-ring">
-              <NodeIndexOutlined v-if="activeSourceType === 'knowledge-point'" class="cover-visual-icon" />
-              <FolderOutlined v-else class="cover-visual-icon" />
-            </span>
-          </div>
-
-          <div class="cover-footer">
-            <span v-if="activeSourceType === 'question-folder'" class="cover-footer-item">
-              {{ item.category || '默认分类' }}
-            </span>
-            <span v-if="activeSourceType === 'knowledge-point' && item.police_type_name" class="cover-footer-item">
-              {{ item.police_type_name }}
-            </span>
-          </div>
+      <!-- 题库/练习数据列表 -->
+      <div v-else class="practice-list">
+        <!-- PC端列表头 -->
+        <div class="practice-list-header">
+          <div class="practice-list-col practice-list-col-main">{{ isInstructor ? '题库基本信息' : '练习来源' }}</div>
+          <div class="practice-list-col practice-list-col-qty">题量</div>
+          <div class="practice-list-col practice-list-col-info">{{ isInstructor ? '关联课程' : '难度/警种' }}</div>
+          <div class="practice-list-col practice-list-col-status">{{ isInstructor ? '状态' : '描述' }}</div>
+          <div class="practice-list-col practice-list-col-action">操作</div>
         </div>
 
-        <div class="card-body">
-          <div class="card-head">
-            <h3>{{ item.name }}</h3>
-            <p v-if="item.description">{{ item.description }}</p>
-            <p v-else style="color: var(--v2-text-muted)">暂无描述</p>
-          </div>
+        <!-- 教官模式列表行 -->
+        <template v-if="isInstructor">
+          <div
+            v-for="(item, index) in filteredInstructorFolders"
+            :key="item.id"
+            class="practice-row"
+            :style="{ '--row-accent': getCardAccent(index) }"
+          >
+            <div class="practice-row-accent" :style="{ background: getCardAccent(index) }"></div>
 
-          <div class="meta-grid">
-            <span v-if="item.question_count">
-              <QuestionCircleOutlined />
-              {{ item.question_count }} 题
-            </span>
-            <span v-if="item.difficulty_avg">
-              <StarOutlined />
-              平均难度 {{ item.difficulty_avg.toFixed(1) }}
-            </span>
-          </div>
+            <!-- 题库信息 -->
+            <div class="practice-row-main">
+              <h3 class="practice-row-title">{{ item.name }}</h3>
+              <div class="practice-row-sub">
+                <span class="practice-row-tag">题库</span>
+                <span class="practice-row-category">{{ item.category || '默认分类' }}</span>
+              </div>
+            </div>
 
-          <div class="action-row">
-            <a-button type="primary" block @click.stop="startPractice(item)">
-              开始练习
-            </a-button>
+            <!-- 题量 -->
+            <div class="practice-row-qty">
+              <span class="practice-qty-value">{{ item.question_count || 0 }}</span>
+              <span class="practice-qty-label">题</span>
+            </div>
+
+            <!-- 关联课程 -->
+            <div class="practice-row-info">
+              <span v-if="item.course_names?.length" class="practice-info-text">{{ item.course_names.join('、') }}</span>
+              <span v-else-if="item.course_name" class="practice-info-text">{{ item.course_name }}</span>
+              <span v-else class="practice-info-empty">未关联课程</span>
+            </div>
+
+            <!-- 状态 -->
+            <div class="practice-row-status">
+              <span class="practice-status-tag">{{ item.status || '未使用' }}</span>
+            </div>
+
+            <!-- 操作 -->
+            <div class="practice-row-action">
+              <a-button class="practice-action-btn" @click.stop="openQuestionDetailModal(item.id)">
+                <template #icon><EyeOutlined /></template>
+                查看题目
+              </a-button>
+              <a-button class="practice-action-btn" @click.stop="openEditFolderModal(item)">
+                <template #icon><EditOutlined /></template>
+                编辑
+              </a-button>
+            </div>
           </div>
-        </div>
+        </template>
+
+        <!-- 学员模式列表行 -->
+        <template v-else>
+          <div
+            v-for="(item, index) in filteredSources"
+            :key="item.id"
+            class="practice-row"
+            :style="{ '--row-accent': getCardAccent(index) }"
+            @click="handleCardClick(item)"
+          >
+            <div class="practice-row-accent" :style="{ background: getCardAccent(index) }"></div>
+
+            <!-- 练习来源信息 -->
+            <div class="practice-row-main">
+              <h3 class="practice-row-title">{{ item.name }}</h3>
+              <div class="practice-row-sub">
+                <span class="practice-row-tag">{{ activeSourceType === 'knowledge-point' ? '知识点' : '题库' }}</span>
+                <span v-if="activeSourceType === 'question-folder' && item.category" class="practice-row-category">{{ item.category }}</span>
+                <span v-if="activeSourceType === 'knowledge-point' && item.police_type_name" class="practice-row-category">{{ item.police_type_name }}</span>
+              </div>
+            </div>
+
+            <!-- 题量 -->
+            <div class="practice-row-qty">
+              <span class="practice-qty-value">{{ item.question_count || 0 }}</span>
+              <span class="practice-qty-label">题</span>
+            </div>
+
+            <!-- 难度/警种 -->
+            <div class="practice-row-info">
+              <span v-if="item.difficulty_avg" class="practice-info-text">
+                <StarOutlined /> 平均难度 {{ item.difficulty_avg.toFixed(1) }}
+              </span>
+              <span v-else-if="item.police_type_name" class="practice-info-text">{{ item.police_type_name }}</span>
+              <span v-else class="practice-info-empty">--</span>
+            </div>
+
+            <!-- 描述 -->
+            <div class="practice-row-status">
+              <span v-if="item.description" class="practice-desc-text">{{ item.description }}</span>
+              <span v-else class="practice-info-empty">暂无描述</span>
+            </div>
+
+            <!-- 操作 -->
+            <div class="practice-row-action">
+              <a-button type="primary" class="practice-action-btn primary" @click.stop="startPractice(item)">
+                开始练习
+              </a-button>
+            </div>
+          </div>
+        </template>
       </div>
     </div>
-  </DarkPageHeader>
 
-    <!-- 练习设置弹窗 -->
+  <!-- 练习设置弹窗 -->
     <a-modal
       v-model:open="settingsVisible"
       :title="null"
@@ -781,6 +807,7 @@
         </div>
       </div>
     </a-modal>
+  </div>
 </template>
 
 <script setup lang="ts">
@@ -819,6 +846,11 @@ const authStore = useAuthStore()
 // ============ 角色判断 ============
 const isInstructor = computed(() => authStore.isInstructor || authStore.role === 'instructor')
 const isStudent = computed(() => authStore.isStudent || authStore.role === 'student')
+const avatarText = computed(() => {
+  const user = authStore.currentUser
+  const name = user?.nickname || user?.name || user?.username || ''
+  return name.charAt(0).toUpperCase()
+})
 
 // ============ 通用状态 ============
 const loading = ref(false)
@@ -1735,283 +1767,685 @@ onMounted(() => {
 .dark-adv-row :deep(.ant-select-clear),
 :deep(.dark-course-select .ant-select-clear) { background: transparent !important; color: rgba(255,255,255,0.5) !important; }
 
-.practice-stats {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-  margin-bottom: 20px;
-  color: var(--v2-text-secondary);
-}
-
-.loading-wrapper,
-.empty-block {
-  padding: 80px 0;
-}
-
-.practice-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 20px;
-}
-
-.practice-card {
-  overflow: hidden;
-  background: var(--v2-bg-card);
-  border-radius: 24px;
-  box-shadow: 0 18px 40px rgba(24, 39, 75, 0.08);
-  cursor: pointer;
-  transition:
-    transform 0.22s ease,
-    box-shadow 0.22s ease;
-}
-
-.practice-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 24px 48px rgba(75, 110, 245, 0.12);
-}
-
-.card-cover {
-  position: relative;
-  height: 180px;
-  padding: 18px;
-  overflow: hidden;
-}
-
-.card-cover::before {
-  content: '';
-  position: absolute;
-  right: -34px;
-  bottom: -70px;
-  width: 210px;
-  height: 210px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.16);
-  filter: blur(8px);
-}
-
-.cover-labels {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  align-items: flex-start;
+/* ── 移动端顶部 Header ── */
+.practice-mobile-header {
+  display: none;
+  align-items: center;
   justify-content: space-between;
+  height: 48px;
+  padding: 0 16px;
+  background: #1A56DB;
+  color: #fff;
+}
+
+.practice-mobile-header-left {
+  display: flex;
+  align-items: center;
   gap: 12px;
 }
 
-.cover-tag-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--v2-text-secondary);
+.practice-mobile-menu-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+  border-radius: 8px;
 }
 
-.cover-count-tag {
-  display: inline-flex;
-  align-items: center;
-  padding: 4px 12px;
-  border-radius: 999px;
-  font-size: 12px;
+.practice-mobile-menu-btn:hover {
+  background: rgba(255,255,255,0.1);
+}
+
+.practice-mobile-title {
+  font-size: 16px;
   font-weight: 700;
-  color: var(--v2-primary);
-  background: rgba(75, 110, 245, 0.1);
-  border: 1px solid rgba(75, 110, 245, 0.2);
 }
 
-.cover-visual {
-  position: absolute;
-  inset: 0;
+.practice-mobile-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.2);
   display: flex;
   align-items: center;
   justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
 }
 
-.cover-visual-ring {
-  position: relative;
-  width: 82px;
-  height: 82px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.78);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.88), rgba(255, 255, 255, 0.7));
-  box-shadow:
-    0 16px 28px var(--card-accent, rgba(75, 110, 245, 0.14)),
-    inset 0 1px 0 rgba(255, 255, 255, 0.92);
-  backdrop-filter: blur(12px);
-}
-
-.cover-visual-icon {
-  position: relative;
-  z-index: 1;
-  font-size: 34px;
-  color: var(--card-accent, #4B6EF5);
-}
-
-.cover-footer {
-  position: absolute;
-  left: 12px;
-  right: 22px;
-  bottom: 10px;
-  z-index: 2;
+/* ── 主布局 ── */
+.practice-page {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: row;
+  min-height: 100vh;
+  overflow: hidden;
+  background: #F4F8FC;
+}
+
+.practice-layout {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* ── 顶部功能控制区 ── */
+.practice-header {
+  background: #fff;
+  border-bottom: 1px solid #E8F1F8;
+  padding: 24px 40px 0;
+}
+
+.practice-header-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  margin-bottom: 20px;
+}
+
+.practice-header-title h1 {
+  margin: 0 0 4px;
+  font-size: 24px;
+  font-weight: 800;
+  color: #1E3A5F;
+}
+
+.practice-header-title p {
+  margin: 0;
+  font-size: 14px;
+  color: #64748B;
+}
+
+.practice-header-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+/* 搜索框 */
+.practice-search-wrapper {
+  position: relative;
+  width: 280px;
+}
+
+.practice-search-icon {
+  position: absolute;
+  left: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  color: #64748B;
+  pointer-events: none;
+}
+
+.practice-search-input {
+  width: 100%;
+  height: 44px;
+  padding: 0 16px 0 44px;
+  border: 1px solid #CDE0F5;
+  border-radius: 8px;
+  background: #FFFFFF;
+  font-size: 14px;
+  color: #1E3A5F;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.practice-search-input:focus {
+  border-color: #1A56DB;
+  box-shadow: 0 0 0 3px rgba(26, 86, 219, 0.1);
+}
+
+.practice-search-input::placeholder {
+  color: #94A3B8;
+}
+
+/* 按钮组 */
+.practice-header-btns {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 课程选择器 */
+.practice-course-select {
+  width: 180px;
+}
+
+.practice-course-select :deep(.ant-select-selector) {
+  height: 40px !important;
+  line-height: 38px !important;
+  border: 1px solid #CDE0F5 !important;
+  border-radius: 8px !important;
+  background: #FFFFFF !important;
+}
+
+.practice-course-select :deep(.ant-select-selection-item) {
+  color: #1E3A5F !important;
+  font-weight: 600 !important;
+}
+
+/* 排序选择器 */
+.practice-sort-select {
+  width: 130px;
+}
+
+.practice-sort-select :deep(.ant-select-selector) {
+  height: 40px !important;
+  line-height: 38px !important;
+  border: 1px solid #CDE0F5 !important;
+  border-radius: 8px !important;
+  background: #FFFFFF !important;
+}
+
+.practice-sort-select :deep(.ant-select-selection-item) {
+  color: #1E3A5F !important;
+  font-weight: 600 !important;
+}
+
+/* 创建按钮 */
+.practice-create-btn {
+  height: 40px;
+  padding: 0 20px;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 14px;
+  background: #1A56DB !important;
+  border-color: #1A56DB !important;
+  display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.cover-footer-item {
-  display: inline-flex;
+.practice-create-btn:hover {
+  background: #1546B5 !important;
+  border-color: #1546B5 !important;
+}
+
+/* ── Tab与过滤栏 ── */
+.practice-header-bottom {
+  display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 6px;
-  min-height: 28px;
-  padding: 0 11px;
-  border-radius: 999px;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 0;
+}
+
+.practice-source-type-hint {
+  font-size: 14px;
+  color: #64748B;
+  padding: 12px 0;
+}
+
+.practice-source-type-hint strong {
+  color: #1E3A5F;
+  font-size: 18px;
+  margin: 0 4px;
+}
+
+.practice-tabs {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.practice-tab {
+  padding: 12px 16px;
+  font-size: 15px;
+  font-weight: 500;
+  color: #64748B;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  margin-right: 24px;
+}
+
+.practice-tab:hover {
+  color: #1E3A5F;
+}
+
+.practice-tab.active {
+  color: #1A56DB;
+  font-weight: 700;
+  border-bottom-color: #1A56DB;
+}
+
+/* 过滤行 */
+.practice-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.practice-filter-select {
+  width: 130px;
+}
+
+.practice-filter-select :deep(.ant-select-selector) {
+  height: 36px !important;
+  line-height: 34px !important;
+  border: 1px solid #E8F1F8 !important;
+  border-radius: 8px !important;
+  background: #F8FBFF !important;
+}
+
+.practice-filter-select :deep(.ant-select-selection-item) {
+  color: #4B5563 !important;
+  font-size: 13px !important;
+}
+
+/* ── 数据统计摘要 ── */
+.practice-stats {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 40px;
+  background: #F8FBFF;
+  border-bottom: 1px solid #E8F1F8;
+  font-size: 14px;
+  color: #64748B;
+}
+
+.practice-stats strong {
+  color: #1E3A5F;
+  font-size: 18px;
+  margin: 0 4px;
+}
+
+/* ── 加载 & 空状态 ── */
+.practice-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 80px 0;
+}
+
+.practice-empty {
+  padding: 80px 0;
+}
+
+/* ── 列表 ── */
+.practice-list {
+  flex: 1;
+  background: #F4F8FC;
+}
+
+/* PC端列表头 */
+.practice-list-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 40px;
+  background: #FFFFFF;
+  border-bottom: 1px solid #E8F1F8;
+  font-size: 13px;
+  font-weight: 700;
+  color: #64748B;
+  letter-spacing: 0.5px;
+}
+
+.practice-list-col {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.practice-list-col-main {
+  flex: 1;
+  padding-right: 24px;
+}
+
+.practice-list-col-qty {
+  width: 104px;
+  text-align: center;
+  padding: 0 8px;
+  border-left: 1px solid #E8F1F8;
+}
+
+.practice-list-col-info {
+  width: 182px;
+  padding-left: 24px;
+  border-left: 1px solid #E8F1F8;
+}
+
+.practice-list-col-status {
+  width: 130px;
+  padding-left: 24px;
+  border-left: 1px solid #E8F1F8;
+}
+
+.practice-list-col-action {
+  width: 200px;
+  text-align: right;
+  padding-left: 24px;
+  border-left: 1px solid #E8F1F8;
+}
+
+/* 列表行 */
+.practice-row {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  padding: 0 40px;
+  background: #FFFFFF;
+  border-bottom: 1px solid #E8F1F8;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.practice-row:hover {
+  background: #F8FBFF;
+}
+
+/* 状态指示条 */
+.practice-row-accent {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+}
+
+/* 主要信息 */
+.practice-row-main {
+  flex: 1;
+  padding: 20px 24px 20px 0;
+  min-width: 0;
+}
+
+.practice-row-title {
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #1E3A5F;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.practice-row:hover .practice-row-title {
+  color: #1A56DB;
+}
+
+.practice-row-sub {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.practice-row-tag {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  border-radius: 4px;
+  background: #EFF6FF;
+  color: #1A56DB;
+  border: 1px solid #BFDBFE;
+}
+
+.practice-row-category {
+  font-size: 13px;
+  color: #64748B;
+}
+
+/* 题量 */
+.practice-row-qty {
+  width: 104px;
+  padding: 20px 8px;
+  border-left: 1px solid #E8F1F8;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.practice-qty-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1E3A5F;
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+.practice-qty-label {
+  font-size: 12px;
+  color: #64748B;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 4px;
+}
+
+/* 关联信息 */
+.practice-row-info {
+  width: 182px;
+  padding-left: 24px;
+  padding-right: 8px;
+  border-left: 1px solid #E8F1F8;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.practice-info-text {
+  font-size: 13px;
+  color: #4B5563;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.practice-info-empty {
+  font-size: 13px;
+  color: #94A3B8;
+}
+
+/* 状态 */
+.practice-row-status {
+  width: 130px;
+  padding-left: 24px;
+  padding-right: 8px;
+  border-left: 1px solid #E8F1F8;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.practice-status-tag {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 700;
+  border-radius: 4px;
+  background: #F1F5F9;
+  color: #64748B;
+  border: 1px solid #E2E8F0;
+  width: fit-content;
+}
+
+.practice-desc-text {
+  font-size: 13px;
+  color: #64748B;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 操作 */
+.practice-row-action {
+  width: 200px;
+  padding-left: 24px;
+  padding-right: 16px;
+  border-left: 1px solid #E8F1F8;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.practice-action-btn {
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 6px;
   font-size: 12px;
   font-weight: 600;
-  color: rgba(18, 25, 38, 0.78);
-  background: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.72);
-}
-
-.card-body {
-  padding: 22px 22px 24px;
-}
-
-.card-head {
-  margin-bottom: 16px;
-}
-
-.card-head h3 {
-  margin: 0 0 10px;
-  font-size: 21px;
-  line-height: 1.35;
-  color: var(--v2-text-primary);
-}
-
-.card-head p {
-  margin: 0;
-  min-height: 44px;
-  color: var(--v2-text-secondary);
-  font-size: 14px;
-  line-height: 1.6;
-}
-
-.meta-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 14px;
-  margin-bottom: 16px;
-  color: var(--v2-text-secondary);
-  font-size: 14px;
-}
-
-.meta-grid span {
-  display: inline-flex;
+  border: 1px solid #E2E8F0;
+  background: #FFFFFF;
+  color: #4B5563;
+  display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  white-space: nowrap;
 }
 
-.action-row {
-  padding-top: 4px;
+.practice-action-btn:hover {
+  border-color: #1A56DB;
+  color: #1A56DB;
 }
 
+.practice-action-btn.primary {
+  background: #1A56DB !important;
+  border-color: #1A56DB !important;
+  color: #FFFFFF !important;
+}
+
+.practice-action-btn.primary:hover {
+  background: #1546B5 !important;
+  border-color: #1546B5 !important;
+}
+
+/* SVG icon sizing */
+svg.icon-sm {
+  display: block;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+
+/* ── 响应式 ── */
 @media (max-width: 768px) {
-  .dark-adv-row { flex-direction: column; }
-  .dark-adv-select { width: 100%; }
-
-  .practice-grid,
-  .meta-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .card-cover {
-    height: 164px;
-  }
-}
-
-@media (max-width: 480px) {
   .practice-page {
-    padding-bottom: 80px;
-  }
-
-  .practice-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 10px;
-  }
-
-  .practice-card {
-    border-radius: 16px;
-  }
-
-  .card-cover {
-    height: 100px;
-    padding: 12px;
-  }
-
-  .cover-labels {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 4px;
   }
 
-  .cover-tag-label {
-    font-size: 10px;
+  .practice-mobile-header {
+    display: flex;
   }
 
-  .cover-count-tag {
-    font-size: 10px;
-    padding: 2px 8px;
+  .practice-header {
+    padding: 16px 16px 0;
   }
 
-  .cover-visual-ring {
-    width: 48px;
-    height: 48px;
-    border-radius: 14px;
+  .practice-header-top {
+    flex-direction: column;
+    gap: 16px;
   }
 
-  .cover-visual-icon {
+  .practice-header-title h1 {
     font-size: 20px;
   }
 
-  .cover-footer {
-    display: none;
-  }
-
-  .card-body {
-    padding: 12px;
-  }
-
-  .card-head h3 {
-    font-size: 14px;
-    margin-bottom: 6px;
-  }
-
-  .card-head p {
-    font-size: 12px;
-    min-height: auto;
-    line-height: 1.4;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-  }
-
-  .meta-grid {
-    display: none;
-  }
-
-  .action-row :deep(.ant-btn) {
-    font-size: 12px;
-    height: 30px;
-    padding: 0 10px;
-  }
-
-  .filter-row {
-    flex-direction: column;
-  }
-
-  .filter-select {
+  .practice-search-wrapper {
     width: 100%;
+  }
+
+  .practice-header-btns {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .practice-course-select,
+  .practice-sort-select {
+    width: 100%;
+    flex: 1;
+  }
+
+  .practice-header-bottom {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    padding-bottom: 12px;
+  }
+
+  .practice-filter-row {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .practice-filter-select {
+    width: calc(50% - 5px);
+  }
+
+  .practice-stats {
+    padding: 12px 16px;
+    font-size: 13px;
+  }
+
+  .practice-stats strong {
+    font-size: 16px;
+  }
+
+  .practice-list-header {
+    display: none;
+  }
+
+  .practice-row {
+    flex-direction: column;
+    padding: 16px;
+    gap: 12px;
+  }
+
+  .practice-row-accent {
+    display: none;
+  }
+
+  .practice-row-main {
+    padding: 0;
+  }
+
+  .practice-row-title {
+    font-size: 15px;
+  }
+
+  .practice-row-qty,
+  .practice-row-info,
+  .practice-row-status {
+    width: 100%;
+    padding: 0;
+    border: none;
+    flex-direction: row;
+    gap: 8px;
+  }
+
+  .practice-qty-value,
+  .practice-info-text,
+  .practice-desc-text {
+    font-size: 14px;
+  }
+
+  .practice-row-action {
+    width: 100%;
+    padding: 0;
+    border: none;
+    justify-content: flex-start;
+  }
+
+  .practice-loading,
+  .practice-empty {
+    padding: 40px 0;
   }
 }
 
@@ -2129,10 +2563,6 @@ onMounted(() => {
 }
 
 /* 题库展开样式 */
-.practice-card.expanded {
-  border: 2px solid var(--v2-primary);
-}
-
 .folder-questions {
   margin-top: 16px;
   padding: 16px;
