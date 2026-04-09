@@ -877,6 +877,7 @@ onMounted(() => { void loadQuestions() })
   flex: 1;
   display: flex;
   overflow: hidden;
+  min-height: 0;
 }
 
 .practice-content-area {
@@ -885,6 +886,7 @@ onMounted(() => { void loadQuestions() })
   padding: 32px 48px;
   display: flex;
   flex-direction: column;
+  min-height: 0;
 }
 
 .loading-wrapper {

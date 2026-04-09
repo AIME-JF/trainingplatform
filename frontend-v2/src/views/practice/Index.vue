@@ -23,7 +23,7 @@
             <h1>{{ isInstructor ? '题库管理' : '刷题练习' }}</h1>
             <p>{{ isInstructor ? '管理个人题库，上传材料生成题目。' : '选择知识点或题库，开启专项练习。' }}</p>
           </div>
-          <div class="practice-header-controls">
+          <div class="practice-header-controls" :class="{ 'practice-header-controls-instructor': isInstructor }">
             <div class="practice-search-wrapper">
               <svg class="practice-search-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
@@ -35,12 +35,12 @@
                 v-model="searchKeyword"
               />
             </div>
-            <div class="practice-header-btns">
+            <div class="practice-header-btns" :class="{ 'practice-header-btns-instructor': isInstructor, 'practice-header-btns-student': !isInstructor }">
               <template v-if="isInstructor">
                 <a-select v-model:value="instructorCourseId" placeholder="按课程筛选" allow-clear class="practice-course-select" @change="handleCourseSelectChange">
                   <a-select-option v-for="item in courses" :key="item.id" :value="item.id">{{ item.title }}</a-select-option>
                 </a-select>
-                <a-button ghost @click="openAiTaskListModal">任务列表</a-button>
+                <a-button ghost class="practice-task-btn" @click="openAiTaskListModal">任务列表</a-button>
                 <a-button type="primary" class="practice-create-btn" @click="openCreateAiModal">
                   <template #icon>
                     <svg class="icon-sm" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -143,6 +143,21 @@
               </div>
             </div>
 
+            <div class="practice-row-mobile-table">
+              <div class="practice-row-mobile-cell">
+                <span class="practice-row-mobile-label">题量</span>
+                <span class="practice-row-mobile-value">{{ item.question_count || 0 }} 题</span>
+              </div>
+              <div class="practice-row-mobile-cell">
+                <span class="practice-row-mobile-label">状态</span>
+                <span class="practice-row-mobile-value">{{ item.status || '未使用' }}</span>
+              </div>
+              <div class="practice-row-mobile-cell practice-row-mobile-cell-wide">
+                <span class="practice-row-mobile-label">关联课程</span>
+                <span class="practice-row-mobile-value practice-row-mobile-value-multiline">{{ getInstructorCourseText(item) }}</span>
+              </div>
+            </div>
+
             <!-- 题量 -->
             <div class="practice-row-qty">
               <span class="practice-qty-value">{{ item.question_count || 0 }}</span>
@@ -193,6 +208,21 @@
                 <span class="practice-row-tag">{{ activeSourceType === 'knowledge-point' ? '知识点' : '题库' }}</span>
                 <span v-if="activeSourceType === 'question-folder' && item.category" class="practice-row-category">{{ item.category }}</span>
                 <span v-if="activeSourceType === 'knowledge-point' && item.police_type_name" class="practice-row-category">{{ item.police_type_name }}</span>
+              </div>
+            </div>
+
+            <div class="practice-row-mobile-table">
+              <div class="practice-row-mobile-cell">
+                <span class="practice-row-mobile-label">题量</span>
+                <span class="practice-row-mobile-value">{{ item.question_count || 0 }} 题</span>
+              </div>
+              <div class="practice-row-mobile-cell">
+                <span class="practice-row-mobile-label">难度/警种</span>
+                <span class="practice-row-mobile-value practice-row-mobile-value-multiline">{{ getStudentMetaText(item) }}</span>
+              </div>
+              <div class="practice-row-mobile-cell practice-row-mobile-cell-wide">
+                <span class="practice-row-mobile-label">描述</span>
+                <span class="practice-row-mobile-value practice-row-mobile-value-multiline">{{ item.description || '暂无描述' }}</span>
               </div>
             </div>
 
@@ -982,6 +1012,18 @@ function getCardAccent(index: number) {
 
 function getCardCoverBackground(index: number) {
   return coverGradients[index % coverGradients.length]
+}
+
+function getInstructorCourseText(item: any) {
+  if (item.course_names?.length) return item.course_names.join('、')
+  if (item.course_name) return item.course_name
+  return '未关联课程'
+}
+
+function getStudentMetaText(item: any) {
+  if (item.difficulty_avg) return `平均难度 ${item.difficulty_avg.toFixed(1)}`
+  if (item.police_type_name) return item.police_type_name
+  return '--'
 }
 
 const currentSources = computed(() => (
@@ -1969,6 +2011,21 @@ onMounted(() => {
   border-color: #1546B5 !important;
 }
 
+.practice-task-btn {
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 8px;
+  font-weight: 600;
+  border-color: #CDE0F5;
+  color: #45637D;
+  background: #FFFFFF;
+}
+
+.practice-task-btn:hover {
+  border-color: #1A56DB !important;
+  color: #1A56DB !important;
+}
+
 /* ── Tab与过滤栏 ── */
 .practice-header-bottom {
   display: flex;
@@ -2201,6 +2258,10 @@ onMounted(() => {
   color: #64748B;
 }
 
+.practice-row-mobile-table {
+  display: none;
+}
+
 /* 题量 */
 .practice-row-qty {
   width: 104px;
@@ -2343,38 +2404,86 @@ svg.icon-sm {
   }
 
   .practice-header {
-    padding: 16px 16px 0;
+    margin: 12px 12px 0;
+    padding: 18px 16px 14px;
+    border: 1px solid rgba(205, 224, 245, 0.8);
+    border-radius: 22px;
+    box-shadow: 0 18px 40px rgba(30, 58, 95, 0.08);
   }
 
   .practice-header-top {
     flex-direction: column;
-    gap: 16px;
+    gap: 14px;
+    margin-bottom: 14px;
   }
 
   .practice-header-title h1 {
-    font-size: 20px;
+    font-size: 24px;
+  }
+
+  .practice-header-title p {
+    font-size: 13px;
+    line-height: 1.5;
   }
 
   .practice-search-wrapper {
     width: 100%;
   }
 
-  .practice-header-btns {
+  .practice-header-controls {
     width: 100%;
-    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
   }
 
-  .practice-course-select,
+  .practice-header-btns {
+    width: 100%;
+  }
+
+  .practice-header-btns-instructor {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: stretch;
+  }
+
+  .practice-header-btns-student {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .practice-course-select {
+    width: 100%;
+    grid-column: 1 / -1;
+  }
+
   .practice-sort-select {
     width: 100%;
     flex: 1;
   }
 
+  .practice-task-btn,
+  .practice-create-btn {
+    height: 42px;
+    justify-content: center;
+  }
+
+  .practice-task-btn {
+    min-width: 104px;
+    padding: 0 14px;
+  }
+
+  .practice-create-btn {
+    min-width: 124px;
+    padding: 0 18px;
+  }
+
   .practice-header-bottom {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: stretch;
     gap: 12px;
-    padding-bottom: 12px;
+    padding-bottom: 0;
   }
 
   .practice-filter-row {
@@ -2387,8 +2496,10 @@ svg.icon-sm {
   }
 
   .practice-stats {
-    padding: 12px 16px;
+    padding: 12px;
     font-size: 13px;
+    background: transparent;
+    border-bottom: none;
   }
 
   .practice-stats strong {
@@ -2402,7 +2513,11 @@ svg.icon-sm {
   .practice-row {
     flex-direction: column;
     padding: 16px;
-    gap: 12px;
+    gap: 14px;
+    border-radius: 18px;
+    border: 1px solid #DDE8F3;
+    box-shadow: 0 12px 28px rgba(30, 58, 95, 0.06);
+    margin: 0 12px 12px;
   }
 
   .practice-row-accent {
@@ -2414,35 +2529,133 @@ svg.icon-sm {
   }
 
   .practice-row-title {
-    font-size: 15px;
+    font-size: 16px;
+    white-space: normal;
+    line-height: 1.4;
   }
 
   .practice-row-qty,
   .practice-row-info,
   .practice-row-status {
-    width: 100%;
-    padding: 0;
-    border: none;
-    flex-direction: row;
-    gap: 8px;
+    display: none;
   }
 
-  .practice-qty-value,
-  .practice-info-text,
-  .practice-desc-text {
-    font-size: 14px;
+  .practice-row-mobile-table {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    overflow: hidden;
+    border: 1px solid #D9E5F2;
+    border-radius: 16px;
+    background: #F8FBFF;
+  }
+
+  .practice-row-mobile-cell {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 6px;
+    min-height: 68px;
+    padding: 10px 12px;
+    border-right: 1px solid #E2EBF5;
+    border-bottom: 1px solid #E2EBF5;
+    text-align: center;
+  }
+
+  .practice-row-mobile-cell:nth-child(2) {
+    border-right: none;
+  }
+
+  .practice-row-mobile-cell-wide {
+    grid-column: 1 / -1;
+    border-right: none;
+    border-bottom: none;
+    text-align: left;
+    align-items: flex-start;
+  }
+
+  .practice-row-mobile-label {
+    font-size: 12px;
+    color: #7A8CA5;
+    line-height: 1;
+  }
+
+  .practice-row-mobile-value {
+    font-size: 15px;
+    font-weight: 700;
+    color: #17365D;
+    line-height: 1.35;
+  }
+
+  .practice-row-mobile-value-multiline {
+    font-size: 13px;
+    font-weight: 600;
+    white-space: normal;
+    word-break: break-word;
   }
 
   .practice-row-action {
     width: 100%;
     padding: 0;
     border: none;
-    justify-content: flex-start;
+    justify-content: stretch;
+  }
+
+  .practice-row-action :deep(.ant-btn) {
+    width: 100%;
+    height: 40px;
+    justify-content: center;
+    border-radius: 12px;
   }
 
   .practice-loading,
   .practice-empty {
     padding: 40px 0;
+  }
+}
+
+@media (max-width: 480px) {
+  .practice-header {
+    margin: 10px 10px 0;
+    padding: 16px 14px 12px;
+    border-radius: 18px;
+  }
+
+  .practice-header-title h1 {
+    font-size: 22px;
+  }
+
+  .practice-header-title p {
+    font-size: 12px;
+  }
+
+  .practice-header-btns-instructor {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .practice-course-select {
+    grid-column: 1 / -1;
+  }
+
+  .practice-row {
+    padding: 14px;
+    margin: 0 10px 10px;
+  }
+
+  .practice-row-mobile-cell {
+    min-height: 62px;
+    padding: 8px 10px;
+  }
+
+  .practice-row-mobile-label {
+    font-size: 11px;
+  }
+
+  .practice-row-mobile-value {
+    font-size: 14px;
+  }
+
+  .practice-row-mobile-value-multiline {
+    font-size: 12px;
   }
 }
 
