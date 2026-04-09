@@ -49,28 +49,6 @@ export const appMenuConfig = [
     anyPermissions: DASHBOARD_PAGE_PERMISSIONS,
   },
   {
-    key: 'learn',
-    label: LEARNING_CENTER_TITLE,
-    icon: ReadOutlined,
-    children: [
-      {
-        key: '/library',
-        label: '知识库管理',
-        roles: ['admin', 'instructor', 'student'],
-      },
-      {
-        key: '/knowledge/scenarios',
-        label: '场景模板管理',
-        roles: ['admin', 'instructor'],
-      },
-      {
-        key: '/courses',
-        label: COURSE_RESOURCES_TITLE,
-        anyPermissions: COURSE_PAGE_PERMISSIONS,
-      },
-    ],
-  },
-  {
     key: 'train',
     label: '培训中心',
     icon: TeamOutlined,
@@ -89,6 +67,28 @@ export const appMenuConfig = [
         key: '/training',
         label: '培训班管理',
         anyPermissions: TRAINING_PAGE_PERMISSIONS,
+      },
+    ],
+  },
+  {
+    key: 'learn',
+    label: LEARNING_CENTER_TITLE,
+    icon: ReadOutlined,
+    children: [
+      {
+        key: '/library',
+        label: '知识库管理',
+        roles: ['admin', 'instructor', 'student'],
+      },
+      {
+        key: '/knowledge/scenarios',
+        label: '场景模板管理',
+        roles: ['admin', 'instructor'],
+      },
+      {
+        key: '/courses',
+        label: COURSE_RESOURCES_TITLE,
+        anyPermissions: COURSE_PAGE_PERMISSIONS,
       },
     ],
   },
