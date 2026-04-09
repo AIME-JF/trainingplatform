@@ -65,10 +65,7 @@
         <!-- 下半部：Tab与过滤栏 -->
         <div class="practice-header-bottom">
           <template v-if="isInstructor">
-            <!-- 教官模式：无Tab，只显示统计 -->
-            <div class="practice-source-type-hint">
-              <span>共 <strong>{{ filteredInstructorFolders.length }}</strong> 个题库</span>
-            </div>
+            <!-- 教官模式：无Tab，统计在下方practice-stats区域显示 -->
           </template>
           <template v-else>
             <!-- 学员模式：切换来源类型 -->
