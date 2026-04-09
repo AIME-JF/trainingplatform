@@ -62,7 +62,6 @@ class UserService:
         return result
 
     def _load_teaching_directions(self, user_id: int) -> list:
-
         from app.schemas.user import DictTeachingDirectionResponse
         relations = self.db.query(InstructorTeachingDirection).filter(
             InstructorTeachingDirection.user_id == user_id

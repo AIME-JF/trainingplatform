@@ -3,6 +3,16 @@
     <!-- 主体内容 -->
     <main class="main-content">
       <div class="content-wrapper">
+        <div class="sub-nav-bar">
+          <div class="sub-nav-left">
+            <span class="sub-nav-item active">试卷仓库</span>
+          </div>
+          <div class="sub-nav-right">
+            <span class="sub-nav-meta">共 {{ statsState.total }} 份</span>
+            <span class="sub-nav-meta">已发布 {{ statsState.published }}</span>
+            <span class="sub-nav-meta">草稿 {{ statsState.draft }}</span>
+          </div>
+        </div>
 
         <!-- 统一的大边框容器 -->
         <div class="main-container">
@@ -32,6 +42,9 @@
             </div>
 
             <div class="toolbar-right">
+              <button class="btn-aux" @click="openManageFolderModal">
+                管理分类
+              </button>
               <!-- 警种筛选 -->
               <a-select
                 v-if="currentView === 'policeType'"
@@ -77,6 +90,14 @@
             <table class="data-table">
               <thead>
                 <tr>
+                  <th v-if="canManagePaper" class="col-check">
+                    <input
+                      type="checkbox"
+                      class="custom-checkbox"
+                      :checked="isAllSelected"
+                      @change="toggleSelectAll"
+                    >
+                  </th>
                   <th class="col-index">序号</th>
                   <th class="col-paper-name">试卷名称</th>
                   <th class="col-type text-center">试卷类型</th>
@@ -93,7 +114,15 @@
               </thead>
               <tbody>
                 <tr v-for="(record, index) in displayedPapers" :key="record.id" class="table-row">
-                  <td class="col-index">{{ index + 1 }}</td>
+                  <td v-if="canManagePaper" class="col-check">
+                    <input
+                      type="checkbox"
+                      class="custom-checkbox"
+                      :checked="selectedIds.includes(record.id)"
+                      @change="toggleSelect(record.id)"
+                    >
+                  </td>
+                  <td class="col-index">{{ (pagination.current - 1) * pagination.pageSize + index + 1 }}</td>
                   <td class="col-paper-name">
                     <span class="name-text">{{ record.title }}</span>
                     <p class="desc-text">{{ record.description || '暂无描述' }}</p>
@@ -114,12 +143,12 @@
                       <button class="btn-link" @click="openViewDrawer(record)">查看</button>
                       <button v-if="record.status === 'draft'" class="btn-link" @click="openEditDrawer(record)">编辑</button>
                       <button v-if="record.status === 'draft'" class="btn-link" @click="handlePublish(record)">发布</button>
-                      <button v-if="record.usageCount === 0 || record.status === 'published'" class="btn-link btn-link-danger" @click="handleDelete(record)">删除</button>
+                      <button v-if="canDeletePaper(record)" class="btn-link btn-link-danger" @click="handleDelete(record)">删除</button>
                     </div>
                   </td>
                 </tr>
                 <tr v-if="displayedPapers.length === 0">
-                  <td colspan="12" class="empty-row">暂无试卷数据</td>
+                  <td :colspan="canManagePaper ? 13 : 12" class="empty-row">暂无试卷数据</td>
                 </tr>
               </tbody>
             </table>
@@ -127,12 +156,48 @@
 
           <!-- 第三层：说明与分页 -->
           <div class="footer-area">
+            <div class="notice-area">
+              <svg class="notice-icon" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              <div class="notice-text">
+                <p>说明：1. 批量移动仅调整试卷分类，不会改动试卷题目和考试记录。</p>
+                <p class="mt-4">2. 删除后不可恢复，建议先确认试卷未被正式考试长期引用。</p>
+              </div>
+            </div>
             <div class="footer-divider"></div>
             <div class="footer-actions">
               <div class="footer-left">
-                <span class="page-info">共 {{ statsState.total }} 条记录</span>
+                <template v-if="canManagePaper">
+                  <label class="checkbox-label">
+                    <input
+                      type="checkbox"
+                      class="custom-checkbox"
+                      :checked="isAllSelected"
+                      @change="toggleSelectAll"
+                    >
+                    <span>全选</span>
+                  </label>
+                  <div class="divider-v"></div>
+                  <div class="batch-ops">
+                    <span class="batch-label">批量操作</span>
+                    <button class="btn-batch" :disabled="selectedIds.length === 0" @click="openBatchMoveModal">
+                      批量移动
+                    </button>
+                    <button class="btn-batch btn-batch-danger" :disabled="deletableSelectedRows.length === 0" @click="handleBatchDelete">
+                      批量删除
+                    </button>
+                    <span class="batch-count">已选 {{ selectedIds.length }} 份</span>
+                  </div>
+                  <div class="divider-v"></div>
+                </template>
+                <span class="page-info">共 {{ pagination.total }} 条记录</span>
               </div>
               <div class="footer-right">
+                <div class="page-size-selector">
+                  <span class="page-size-label">每页显示</span>
+                  <select class="page-size-select" :value="pagination.pageSize" @change="handlePageSizeChange(Number($event.target.value))">
+                    <option v-for="size in pageSizeOptions" :key="size" :value="size">{{ size }} 条</option>
+                  </select>
+                </div>
                 <div class="pagination-btns">
                   <button class="page-btn" :disabled="pagination.current <= 1" @click="handlePrevPage">‹</button>
                   <button v-for="page in visiblePages" :key="page" class="page-btn" :class="{ 'page-btn-active': page === pagination.current }" @click="pagination.current = page">{{ page }}</button>
@@ -221,12 +286,12 @@
     <!-- 批量移动弹窗 -->
     <a-modal
       v-model:open="batchMoveModalVisible"
-      title="批量移动试卷"
+      title="批量移动已选试卷"
       @ok="handleBatchMove"
     >
       <a-form layout="vertical">
-        <a-form-item label="选择目标文件夹">
-          <a-select v-model:value="batchMoveTargetFolderId" placeholder="请选择目标文件夹">
+        <a-form-item label="选择目标分类">
+          <a-select v-model:value="batchMoveTargetFolderId" placeholder="请选择目标分类">
             <a-select-option :value="null">根目录（移出文件夹）</a-select-option>
             <a-select-option v-for="folder in allFolderList" :key="folder.id" :value="folder.id">
               {{ folder.name }}
@@ -297,8 +362,7 @@ const folderSearchText = ref('')
 const editingFolderId = ref(null)
 const folderForm = reactive({ name: '', parentId: null })
 const batchMoveModalVisible = ref(false)
-const batchMoveTargetFolderId = ref(null)
-const currentBatchMoveFolderId = ref(null)
+const batchMoveTargetFolderId = ref(undefined)
 const folderModalMode = ref('create')
 
 // 视角切换
@@ -320,7 +384,9 @@ const selectedKpIds = ref([])
 const kpLoading = ref(false)
 
 // 分页
-const pagination = reactive({ current: 1, pageSize: 50 })
+const pagination = reactive({ current: 1, pageSize: 10, total: 0 })
+const pageSizeOptions = [10, 20, 50]
+const selectedIds = ref([])
 
 // 每页显示的展开文件夹列表
 const expandedFolderList = ref([])
@@ -333,7 +399,12 @@ const typeLabels = { formal: '正式考核', quiz: '测验' }
 const typeTagColors = { formal: 'tag-blue', quiz: 'tag-purple' }
 
 // 扁平试卷列表（用于表格展示）
-const displayedPapers = computed(() => paperList.value)
+const displayedPapers = computed(() => {
+  const start = (pagination.current - 1) * pagination.pageSize
+  return paperList.value.slice(start, start + pagination.pageSize)
+})
+const selectedPaperRows = computed(() => paperList.value.filter((paper) => selectedIds.value.includes(paper.id)))
+const deletableSelectedRows = computed(() => selectedPaperRows.value.filter((paper) => canDeletePaper(paper)))
 
 const flatFolderList = computed(() => {
   const result = []
@@ -374,7 +445,7 @@ const folderTreeData = computed(() => {
 
 const folderCount = computed(() => folderList.value.length)
 
-const totalPages = computed(() => Math.ceil(statsState.total / pagination.pageSize) || 1)
+const totalPages = computed(() => Math.ceil((pagination.total || paperList.value.length) / pagination.pageSize) || 1)
 
 const visiblePages = computed(() => {
   const pages = [], total = totalPages.value, cur = pagination.current
@@ -421,6 +492,34 @@ function formatDate(dateStr) {
   const d = new Date(dateStr)
   const pad = n => n.toString().padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+function canDeletePaper(record) {
+  return Number(record?.usageCount || 0) === 0 || record?.status === 'published'
+}
+
+const isAllSelected = computed(() => {
+  if (!displayedPapers.value.length) return false
+  return displayedPapers.value.every((paper) => selectedIds.value.includes(paper.id))
+})
+
+function toggleSelect(id) {
+  const index = selectedIds.value.indexOf(id)
+  if (index >= 0) {
+    selectedIds.value.splice(index, 1)
+    return
+  }
+  selectedIds.value.push(id)
+}
+
+function toggleSelectAll() {
+  const pageIds = displayedPapers.value.map((paper) => paper.id)
+  if (!pageIds.length) return
+  if (isAllSelected.value) {
+    selectedIds.value = selectedIds.value.filter((id) => !pageIds.includes(id))
+    return
+  }
+  selectedIds.value = Array.from(new Set([...selectedIds.value, ...pageIds]))
 }
 
 function toggleFolder(folderId) {
@@ -564,6 +663,11 @@ async function loadPapers() {
 
     refreshExpandedState()
     pagination.total = result.total || 0
+    if (pagination.current > totalPages.value) {
+      pagination.current = totalPages.value
+    }
+    const availableIds = new Set(paperList.value.map((paper) => paper.id))
+    selectedIds.value = selectedIds.value.filter((id) => availableIds.has(id))
   } catch (error) {
     message.error(error.message || '加载试卷失败')
   } finally {
@@ -787,6 +891,11 @@ async function loadStats() {
 function handleSearch() {
   pagination.current = 1
   loadPapers()
+}
+
+function handlePageSizeChange(size) {
+  pagination.pageSize = size
+  pagination.current = 1
 }
 
 function handlePrevPage() {
@@ -1066,6 +1175,7 @@ function handleDelete(record) {
     async onOk() {
       try {
         await deleteExamPaper(record.id)
+        selectedIds.value = selectedIds.value.filter((id) => id !== record.id)
         message.success('试卷已删除')
         loadPapers()
         loadStats()
@@ -1156,26 +1266,81 @@ async function handleDeleteFolder(folder) {
   })
 }
 
+function handleBatchDelete() {
+  if (!selectedIds.value.length) {
+    message.warning('请先选择试卷')
+    return
+  }
+
+  const deletableRows = deletableSelectedRows.value
+  if (!deletableRows.length) {
+    message.warning('当前选中的试卷暂不支持删除')
+    return
+  }
+
+  const blockedCount = selectedIds.value.length - deletableRows.length
+  const confirmText = blockedCount > 0
+    ? `将删除 ${deletableRows.length} 份可删除试卷，并跳过 ${blockedCount} 份受限制试卷，是否继续？`
+    : `删除后不可恢复，是否删除选中的 ${deletableRows.length} 份试卷？`
+
+  Modal.confirm({
+    title: '确认批量删除',
+    content: confirmText,
+    okType: 'danger',
+    async onOk() {
+      const results = await Promise.allSettled(deletableRows.map((record) => deleteExamPaper(record.id)))
+      const successCount = results.filter((item) => item.status === 'fulfilled').length
+      const failedCount = results.length - successCount
+
+      selectedIds.value = selectedIds.value.filter((id) => !deletableRows.some((record) => record.id === id))
+      if (successCount) {
+        message.success(`已删除 ${successCount} 份试卷`)
+      }
+      if (failedCount) {
+        message.warning(`${failedCount} 份试卷删除失败，请稍后重试`)
+      }
+      loadPapers()
+      loadStats()
+    },
+  })
+}
+
 // ==================== 批量移动相关 ====================
 
-function openBatchMoveModal(folder) {
-  currentBatchMoveFolderId.value = folder.id
-  batchMoveTargetFolderId.value = null
+function openBatchMoveModal() {
+  if (!selectedIds.value.length) {
+    message.warning('请先选择试卷')
+    return
+  }
+  batchMoveTargetFolderId.value = undefined
   batchMoveModalVisible.value = true
 }
 
 async function handleBatchMove() {
-  if (currentBatchMoveFolderId.value === null) {
-    message.warning('请选择目标文件夹')
+  if (!selectedIds.value.length) {
+    message.warning('请先选择试卷')
+    return
+  }
+  if (typeof batchMoveTargetFolderId.value === 'undefined') {
+    message.warning('请选择目标分类')
     return
   }
   try {
-    const papersInFolder = expandedFolderList.value.find(f => f.id === currentBatchMoveFolderId.value)?.papers || []
-    for (const paper of papersInFolder) {
-      await movePaperToFolder(paper.id, batchMoveTargetFolderId.value)
+    const moveTargets = [...selectedPaperRows.value]
+    const results = await Promise.allSettled(
+      moveTargets.map((paper) => movePaperToFolder(paper.id, batchMoveTargetFolderId.value ?? null)),
+    )
+    const successCount = results.filter((item) => item.status === 'fulfilled').length
+    const failedCount = results.length - successCount
+
+    if (successCount) {
+      message.success(`已移动 ${successCount} 份试卷`)
     }
-    message.success(`已将 ${papersInFolder.length} 份试卷移动到目标文件夹`)
+    if (failedCount) {
+      message.warning(`${failedCount} 份试卷移动失败，请稍后重试`)
+    }
     batchMoveModalVisible.value = false
+    selectedIds.value = []
     loadPapers()
     loadStats()
   } catch (error) {
@@ -1235,6 +1400,53 @@ watch(() => route.fullPath, () => {
   width: 100%;
 }
 
+/* ============ 二级导航 ============ */
+.sub-nav-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.sub-nav-left {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.sub-nav-item {
+  font-size: 14px;
+  font-weight: 600;
+  color: #94A3B8;
+  padding-bottom: 8px;
+  border-bottom: 2px solid transparent;
+}
+
+.sub-nav-item.active {
+  color: #1E293B;
+  border-color: #2563EB;
+}
+
+.sub-nav-right {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sub-nav-meta {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 10px;
+  border: 1px solid #E2E8F0;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.88);
+  color: #64748B;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 
 /* ============ 按钮样式 ============ */
 .btn-aux {
@@ -1289,6 +1501,7 @@ watch(() => route.fullPath, () => {
 .toolbar-left {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 16px;
 }
 
@@ -1357,7 +1570,34 @@ watch(() => route.fullPath, () => {
 .toolbar-right {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
+}
+
+.divider-v {
+  width: 1px;
+  height: 16px;
+  background: #E2E8F0;
+  margin: 0 8px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748B;
+}
+
+.custom-checkbox {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid #CBD5E1;
+  accent-color: #2563EB;
+  cursor: pointer;
 }
 
 .filter-select {
@@ -1414,6 +1654,12 @@ watch(() => route.fullPath, () => {
   text-align: right;
 }
 
+.col-check {
+  padding-left: 32px !important;
+  padding-right: 16px !important;
+  width: 48px;
+}
+
 .col-index {
   width: 50px;
   text-align: center;
@@ -1456,7 +1702,7 @@ watch(() => route.fullPath, () => {
 }
 
 .col-action {
-  width: 120px;
+  width: 150px;
   padding-right: 32px !important;
 }
 
@@ -1600,36 +1846,152 @@ watch(() => route.fullPath, () => {
 /* ============ 底部区域 ============ */
 .footer-area {
   padding: 20px 32px;
+  border-top: 1px solid #F1F5F9;
+  background: rgba(248, 250, 252, 0.1);
+}
+
+.notice-area {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 11px;
+  color: #94A3B8;
+  line-height: 1.6;
+  max-width: 800px;
+}
+
+.notice-icon {
+  width: 16px;
+  height: 16px;
+  color: #CBD5E1;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.notice-text p {
+  margin: 0;
+}
+
+.mt-4 {
+  margin-top: 4px;
 }
 
 .footer-divider {
   height: 1px;
   background: #F1F5F9;
-  margin-bottom: 20px;
+  margin: 16px 0;
 }
 
 .footer-actions {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
 }
 
 .footer-left {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 16px;
 }
 
 .footer-right {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 16px;
+}
+
+.batch-ops {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.batch-label {
+  font-size: 12px;
+  color: #94A3B8;
+  font-weight: 700;
+}
+
+.batch-count {
+  font-size: 12px;
+  color: #2563EB;
+  font-weight: 600;
+}
+
+.btn-batch {
+  font-size: 12px;
+  font-weight: 700;
+  color: #64748B;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid transparent;
+  background: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-batch:hover:not(:disabled) {
+  background: #F1F5F9;
+  border-color: #E2E8F0;
+}
+
+.btn-batch:disabled {
+  color: #CBD5E1;
+  cursor: not-allowed;
+}
+
+.btn-batch-danger {
+  color: #EF4444;
+}
+
+.btn-batch-danger:hover:not(:disabled) {
+  background: #FEF2F2;
+  border-color: #FECACA;
 }
 
 .page-info {
   font-size: 12px;
   color: #94A3B8;
   font-weight: 500;
+}
+
+.page-size-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-size-label {
+  font-size: 11px;
+  color: #94A3B8;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.page-size-select {
+  font-size: 12px;
+  color: #64748B;
+  border: 1px solid #E2E8F0;
+  border-radius: 6px;
+  padding: 4px 24px 4px 8px;
+  background: white;
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=US-ASCII,%3Csvg%20width%3D%2220%22%20height%3D%2220%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cpath%20d%3D%22M5%207l5%205%205-5%22%20stroke%3D%22%2394A3B8%22%20stroke-width%3D%221.5%22%20fill%3D%22none%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%2F%3E%3C%2Fsvg%3E");
+  background-repeat: no-repeat;
+  background-position: right 4px center;
+  background-size: 16px;
+}
+
+.page-size-select:focus {
+  outline: none;
+  border-color: #3B82F6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .pagination-btns {
@@ -1728,4 +2090,32 @@ watch(() => route.fullPath, () => {
 .gap-4 { gap: 16px; }
 .w-2 { width: 8px; }
 .h-2 { height: 8px; }
+
+@media (max-width: 960px) {
+  .main-content {
+    padding: 16px;
+  }
+
+  .sub-nav-bar,
+  .toolbar-row,
+  .footer-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .toolbar-left,
+  .toolbar-right,
+  .footer-left,
+  .footer-right {
+    width: 100%;
+  }
+
+  .search-wrapper {
+    width: 100%;
+  }
+
+  .page-size-selector {
+    justify-content: space-between;
+  }
+}
 </style>
