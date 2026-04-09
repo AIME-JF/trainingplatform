@@ -898,10 +898,16 @@ class ReviewService:
         # 兼容资源类型：返回 resource_id 和 resource_title
         resource_id = None
         resource_title = None
+        business_title = None
         if task.business_type == 'resource':
             resource_id = task.business_id
             resource = self.db.query(Resource).filter(Resource.id == task.business_id).first()
             resource_title = resource.title if resource else None
+            business_title = resource_title
+        elif task.business_type == 'library':
+            from app.models.library import LibraryItem
+            item = self.db.query(LibraryItem).filter(LibraryItem.id == task.business_id).first()
+            business_title = item.title if item else None
 
         return ReviewTaskResponse(
             id=task.id,
@@ -910,6 +916,7 @@ class ReviewService:
             business_id=task.business_id,
             resource_id=resource_id,
             resource_title=resource_title,
+            business_title=business_title,
             stage_order=task.stage_order,
             assignee_user_id=task.assignee_user_id,
             assignee_name=task.assignee.nickname if task.assignee else None,

@@ -228,7 +228,11 @@ class LibraryService:
         if not item or not self._can_view_item(item, current_user_id, is_admin=is_admin):
             return None
         response = self._to_item_list_response(item, current_user_id)
-        return LibraryItemDetailResponse(**response.model_dump(), knowledge_content_html=item.knowledge_content_html)
+        return LibraryItemDetailResponse(
+            **response.model_dump(),
+            knowledge_content_html=item.knowledge_content_html,
+            plain_text_content=item.plain_text_content,
+        )
 
     def list_accessible_assistant_items(
         self,

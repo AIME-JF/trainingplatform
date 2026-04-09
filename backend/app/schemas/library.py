@@ -201,6 +201,7 @@ class LibraryItemDetailResponse(LibraryItemListResponse):
     """资源库资源项详情响应"""
 
     knowledge_content_html: Optional[str] = None
+    plain_text_content: Optional[str] = None
 
 
 class LibraryItemListParams(BaseModel):

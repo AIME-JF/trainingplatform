@@ -97,6 +97,7 @@ class ReviewTaskResponse(BaseModel):
     business_id: int = 0
     resource_id: Optional[int] = None
     resource_title: Optional[str] = None
+    business_title: Optional[str] = None
     stage_order: int
     assignee_user_id: Optional[int] = None
     assignee_name: Optional[str] = None
