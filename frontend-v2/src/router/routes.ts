@@ -152,7 +152,13 @@ export const routes: RouteRecordRaw[] = [
         path: 'library',
         name: 'Library',
         component: () => import('@/views/library/Index.vue'),
-        meta: { title: '资源库', roles: ['admin', 'instructor'] },
+        meta: { title: '知识库', roles: ['admin', 'instructor'] },
+      },
+      {
+        path: 'trainingplatform/library',
+        name: 'TrainingPlatformLibrary',
+        component: () => import('@/views/library/Index.vue'),
+        meta: { title: '知识库', roles: ['student'] },
       },
       {
         path: 'resource/library',

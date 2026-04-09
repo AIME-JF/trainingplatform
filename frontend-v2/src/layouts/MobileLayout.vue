@@ -150,9 +150,17 @@ const sidebarNavConfig: NavItem[] = [
   },
   {
     path: '/library',
-    label: '资源库',
+    label: '知识库',
     icon: DatabaseOutlined,
     roles: ['admin', 'instructor'],
+    matchPaths: ['/library'],
+  },
+  {
+    path: '/trainingplatform/library',
+    label: '知识库',
+    icon: DatabaseOutlined,
+    roles: ['student'],
+    matchPaths: ['/trainingplatform/library'],
   },
   {
     path: '/resource/community',
