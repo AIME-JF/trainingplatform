@@ -56,6 +56,25 @@ class ReviewCallbackRegistry:
         return cls._callbacks.get(business_type)
 
 
+# ===================== 审核通知 =====================
+
+def _send_review_notification(db: Session, target_user_id: int, title: str, content: str, reminder_type: str):
+    """发送审核结果通知"""
+    from app.models import Notice
+    from logger import logger
+    try:
+        notice = Notice(
+            title=title,
+            content=content,
+            type="reminder",
+            target_user_id=target_user_id,
+            reminder_type=reminder_type,
+        )
+        db.add(notice)
+    except Exception as exc:
+        logger.warning("发送审核通知失败: {}", exc)
+
+
 # ===================== 资源审核回调 =====================
 
 def _resource_on_submitted(db: Session, business_id: int):
@@ -71,12 +90,26 @@ def _resource_on_approved(db: Session, business_id: int):
         resource.status = 'published'
         if not resource.publish_at:
             resource.publish_at = datetime.now()
+        if resource.uploader_id:
+            _send_review_notification(
+                db, resource.uploader_id,
+                f"资源「{resource.title}」审核通过",
+                f"您提交的资源「{resource.title}」已通过审核并发布。",
+                "review_approved",
+            )
 
 
 def _resource_on_rejected(db: Session, business_id: int):
     resource = db.query(Resource).filter(Resource.id == business_id).first()
     if resource:
         resource.status = 'rejected'
+        if resource.uploader_id:
+            _send_review_notification(
+                db, resource.uploader_id,
+                f"资源「{resource.title}」审核未通过",
+                f"您提交的资源「{resource.title}」未通过审核，请修改后重新提交。",
+                "review_rejected",
+            )
 
 
 def _resource_on_stage_advanced(db: Session, business_id: int):
@@ -147,6 +180,13 @@ def _library_on_approved(db: Session, business_id: int):
     if item:
         item.status = 'published'
         item.is_public = True
+        if item.owner_user_id:
+            _send_review_notification(
+                db, item.owner_user_id,
+                f"知识「{item.title}」审核通过",
+                f"您提交的知识「{item.title}」已通过审核并公开到公共知识库。",
+                "review_approved",
+            )
 
 
 def _library_on_rejected(db: Session, business_id: int):
@@ -155,6 +195,13 @@ def _library_on_rejected(db: Session, business_id: int):
     if item:
         item.status = 'rejected'
         item.is_public = False
+        if item.owner_user_id:
+            _send_review_notification(
+                db, item.owner_user_id,
+                f"知识「{item.title}」审核未通过",
+                f"您提交的知识「{item.title}」未通过审核，请修改后重新提交。",
+                "review_rejected",
+            )
 
 
 def _library_on_stage_advanced(db: Session, business_id: int):

@@ -1,7 +1,7 @@
 <template>
   <div class="policy-manage-page">
     <div class="page-header">
-      <h2>审核策略管理</h2>
+      <h2>审核流程管理</h2>
       <permissions-tooltip
         :allowed="canManagePolicy"
         tips="需要 MANAGE_REVIEW_POLICY 或 VIEW_RESOURCE_ALL 权限"

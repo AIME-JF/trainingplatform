@@ -181,7 +181,7 @@ export const appMenuConfig = [
       },
       {
         key: '/resource/policy',
-        label: '审核策略',
+        label: '审核流程管理',
         anyPermissions: RESOURCE_POLICY_PAGE_PERMISSIONS,
       },
     ],

@@ -246,13 +246,13 @@ const router = createRouter({
           path: 'resource/review',
           name: 'ResourceReviewQueue',
           component: () => import('../views/resource/ReviewQueue.vue'),
-          meta: { title: '审核工作台', anyPermissions: RESOURCE_REVIEW_PAGE_PERMISSIONS },
+          meta: { title: '社区审核', anyPermissions: RESOURCE_REVIEW_PAGE_PERMISSIONS },
         },
         {
           path: 'resource/policy',
           name: 'ResourcePolicyManage',
           component: () => import('../views/resource/PolicyManage.vue'),
-          meta: { title: '审核策略', anyPermissions: RESOURCE_POLICY_PAGE_PERMISSIONS },
+          meta: { title: '审核流程管理', anyPermissions: RESOURCE_POLICY_PAGE_PERMISSIONS },
         },
         {
           path: 'resource/knowledge-review',
