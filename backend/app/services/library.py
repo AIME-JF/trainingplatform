@@ -510,7 +510,27 @@ class LibraryService:
         item = self._get_owned_or_admin_item(item_id, current_user_id, is_admin=is_admin)
         if not item:
             raise ValueError("资源不存在")
-        item.is_public = bool(is_public)
+
+        if is_public:
+            # 公开 — 触发审核流程
+            if item.status == 'published' and item.is_public:
+                # 已公开，无需重复操作
+                pass
+            elif item.status in ('pending_review', 'reviewing'):
+                raise ValueError('该资源正在审核中，请勿重复提交')
+            else:
+                from app.services.review import ReviewService
+                review_service = ReviewService(self.db)
+                scope_context = {
+                    'department_id': None,
+                    'uploader_user_id': current_user_id,
+                }
+                review_service.submit_for_review('library', item.id, current_user_id, scope_context)
+        else:
+            # 取消公开 — 直接设置，不需要审核
+            item.is_public = False
+            item.status = 'draft'
+
         self.db.commit()
         self.db.refresh(item)
         response = self._to_item_list_response(item, current_user_id)
@@ -779,6 +799,7 @@ class LibraryService:
             size=int(media.size or 0) if media else 0,
             duration_seconds=int(media.duration_seconds or 0) if media else 0,
             is_public=bool(item.is_public),
+            status=item.status or 'draft',
             is_owner=item.owner_user_id == current_user_id,
             created_at=item.created_at,
             updated_at=item.updated_at,

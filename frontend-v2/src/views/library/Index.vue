@@ -479,6 +479,11 @@
                   <div class="list-name-cell">
                     <div class="doc-icon" :class="getDocIconClass(item)">{{ getLibraryTypeIcon(item.content_type) }}</div>
                     <span class="list-title">{{ item.title }}</span>
+                    <a-tag
+                      v-if="item.status && statusLabels[item.status]"
+                      :color="statusColors[item.status] || 'default'"
+                      class="ml-2"
+                    >{{ statusLabels[item.status] }}</a-tag>
                     <span
                       v-if="item.source_kind === 'ai_generated'"
                       class="ai-chip"
@@ -532,6 +537,11 @@
                     <div class="resource-card-head">
                       <div class="resource-card-badges">
                         <span class="mini-badge">{{ item.folder_name || '根目录' }}</span>
+                        <a-tag
+                          v-if="item.status && statusLabels[item.status]"
+                          :color="statusColors[item.status] || 'default'"
+                          size="small"
+                        >{{ statusLabels[item.status] }}</a-tag>
                         <span v-if="item.source_kind === 'ai_generated'" class="mini-badge mini-badge-ai">AI</span>
                         <span v-if="item.is_public" class="mini-badge mini-badge-public">公开</span>
                       </div>
@@ -619,6 +629,22 @@ export default {
   },
   setup() {
     const categories = LIBRARY_CATEGORIES
+
+    const statusLabels = {
+      draft: '草稿',
+      pending_review: '待审核',
+      reviewing: '审核中',
+      published: '已发布',
+      rejected: '已驳回',
+    }
+
+    const statusColors = {
+      draft: 'default',
+      pending_review: 'processing',
+      reviewing: 'processing',
+      published: 'success',
+      rejected: 'error',
+    }
 
     const loading = ref(false)
     const items = ref([])
@@ -1113,6 +1139,8 @@ export default {
 
     return {
       // state
+      statusLabels,
+      statusColors,
       categories,
       loading,
       items,

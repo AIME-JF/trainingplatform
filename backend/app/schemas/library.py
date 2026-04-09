@@ -189,6 +189,7 @@ class LibraryItemListResponse(BaseModel):
     size: int = 0
     duration_seconds: int = 0
     is_public: bool = False
+    status: Optional[str] = None
     is_owner: bool = False
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None

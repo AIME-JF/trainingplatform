@@ -64,6 +64,7 @@ class LibraryItem(Base):
         server_default=text("false"),
         comment="Whether item is public",
     )
+    status = Column(String(30), nullable=False, default='draft', index=True, comment='状态: draft/pending_review/reviewing/published/rejected')
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="Created at")
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), comment="Updated at")
 

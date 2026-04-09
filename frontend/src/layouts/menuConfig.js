@@ -171,7 +171,12 @@ export const appMenuConfig = [
     children: [
       {
         key: '/resource/review',
-        label: '资源审核',
+        label: '社区审核',
+        anyPermissions: RESOURCE_REVIEW_PAGE_PERMISSIONS,
+      },
+      {
+        key: '/resource/knowledge-review',
+        label: '知识审核',
         anyPermissions: RESOURCE_REVIEW_PAGE_PERMISSIONS,
       },
       {
@@ -179,7 +184,6 @@ export const appMenuConfig = [
         label: '审核策略',
         anyPermissions: RESOURCE_POLICY_PAGE_PERMISSIONS,
       },
-      { key: '/resource/review-history', label: '审核记录' },
     ],
   },
   {

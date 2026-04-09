@@ -92,19 +92,49 @@
 
         <!-- 教学方向区 -->
         <div class="form-section">
-          <h2 class="section-title">教学方向</h2>
-          <div class="direction-tags">
-            <a-checkable-tag
-              v-for="dir in directionOptions"
-              :key="dir.id"
-              :checked="selectedDirectionIds.includes(dir.id)"
-              @change="toggleDirection(dir.id)"
-            >
-              {{ dir.name }}
-            </a-checkable-tag>
+          <h2 class="section-title">
+            教学方向
+            <a-button type="primary" size="small" @click="openDirSelect">添加</a-button>
+          </h2>
+          <a-empty v-if="!selectedDirections.length" description="暂无教学方向" />
+          <div v-else class="direction-list">
+            <div v-for="dir in selectedDirections" :key="dir.id" class="direction-row">
+              <span>{{ dir.name }}</span>
+              <a-button type="link" size="small" danger @click="removeDirection(dir.id)">移除</a-button>
+            </div>
           </div>
-          <a-empty v-if="!directionOptions.length" description="暂无可选教学方向" />
         </div>
+
+        <!-- 教学方向选择弹窗 -->
+        <a-modal
+          v-model:open="dirSelectOpen"
+          title="选择教学方向"
+          width="560px"
+          ok-text="确认添加"
+          :ok-button-props="{ disabled: !tempSelectedDirIds.length }"
+          @ok="confirmDirectionSelect"
+        >
+          <a-input-search
+            v-model:value="dirSearchText"
+            placeholder="搜索教学方向"
+            allow-clear
+            style="margin-bottom: 12px"
+          />
+          <div class="dir-table-wrap">
+            <a-table
+              :data-source="filteredDirOptions"
+              :columns="dirSelectColumns"
+              :pagination="false"
+              :show-header="false"
+              row-key="id"
+              size="small"
+              :row-selection="{ selectedRowKeys: tempSelectedDirIds, onChange: (keys: number[]) => { tempSelectedDirIds = keys } }"
+            />
+          </div>
+          <div v-if="tempSelectedDirIds.length" class="dir-select-hint">
+            已选 {{ tempSelectedDirIds.length }} 项
+          </div>
+        </a-modal>
 
         <!-- 授课经历区 -->
         <div class="form-section">
@@ -200,7 +230,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { message } from 'ant-design-vue'
 import axiosInstance from '@/api/custom-instance'
 import { useAuthStore } from '@/stores/auth'
@@ -229,14 +259,41 @@ const form = reactive({
 // 教学方向
 const directionOptions = ref<Array<{ id: number; name: string }>>([])
 const selectedDirectionIds = ref<number[]>([])
+const dirSelectOpen = ref(false)
+const dirSearchText = ref('')
+const tempSelectedDirIds = ref<number[]>([])
 
-function toggleDirection(id: number) {
-  const idx = selectedDirectionIds.value.indexOf(id)
-  if (idx >= 0) {
-    selectedDirectionIds.value.splice(idx, 1)
-  } else {
-    selectedDirectionIds.value.push(id)
-  }
+const selectedDirections = computed(() =>
+  directionOptions.value.filter(d => selectedDirectionIds.value.includes(d.id))
+)
+
+const dirSelectColumns = [
+  { title: '教学方向', dataIndex: 'name', key: 'name' },
+]
+
+const filteredDirOptions = computed(() => {
+  const existing = new Set(selectedDirectionIds.value)
+  let list = directionOptions.value.filter(d => !existing.has(d.id))
+  const kw = dirSearchText.value.trim().toLowerCase()
+  if (kw) list = list.filter(d => d.name.toLowerCase().includes(kw))
+  return list
+})
+
+function openDirSelect() {
+  tempSelectedDirIds.value = []
+  dirSearchText.value = ''
+  dirSelectOpen.value = true
+}
+
+function removeDirection(id: number) {
+  selectedDirectionIds.value = selectedDirectionIds.value.filter(v => v !== id)
+}
+
+function confirmDirectionSelect() {
+  // 合并已有和新选的（去重）
+  const merged = new Set([...selectedDirectionIds.value, ...tempSelectedDirIds.value])
+  selectedDirectionIds.value = [...merged]
+  dirSelectOpen.value = false
 }
 
 // 授课经历
@@ -299,8 +356,8 @@ async function loadSelectedDirections() {
   if (!userId) return
   try {
     const res = await axiosInstance.get(`/instructors/${userId}/teaching-directions`)
-    const items = (res.data as Array<{ id: number }>) || []
-    selectedDirectionIds.value = items.map((d) => d.id)
+    const items = (res.data as Array<{ direction_id: number }>) || []
+    selectedDirectionIds.value = items.map((d) => d.direction_id)
   } catch {
     selectedDirectionIds.value = []
   }
@@ -481,16 +538,31 @@ onMounted(() => {
   color: var(--v2-text-primary);
 }
 
-.direction-tags {
+.direction-list {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.direction-tags :deep(.ant-tag-checkable) {
-  padding: 4px 12px;
+.direction-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: var(--v2-bg);
   border-radius: 6px;
+  font-size: 14px;
+}
+
+.dir-table-wrap {
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.dir-select-hint {
+  margin-top: 8px;
   font-size: 13px;
+  color: var(--v2-text-muted);
 }
 
 .experience-list {

@@ -255,10 +255,10 @@ const router = createRouter({
           meta: { title: '审核策略', anyPermissions: RESOURCE_POLICY_PAGE_PERMISSIONS },
         },
         {
-          path: 'resource/review-history',
-          name: 'ResourceReviewHistory',
-          component: () => import('../views/resource/ReviewHistory.vue'),
-          meta: { title: '审核记录' },
+          path: 'resource/knowledge-review',
+          name: 'KnowledgeReview',
+          component: () => import('../views/resource/KnowledgeReview.vue'),
+          meta: { title: '知识审核' },
         },
         {
           path: 'instructor',

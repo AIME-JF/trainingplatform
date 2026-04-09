@@ -26,7 +26,7 @@ from app.schemas.review import (
 VALID_SCOPE_TYPES = {'global', 'department', 'department_tree'}
 VALID_UPLOADER_CONSTRAINTS = {'all', 'specific_role', 'specific_department'}
 VALID_REVIEWER_TYPES = {'role', 'department', 'user', 'ai'}
-VALID_BUSINESS_TYPES = {'resource', 'training', 'exam'}
+VALID_BUSINESS_TYPES = {'resource', 'training', 'exam', 'library'}
 DEFAULT_REVIEW_POLICY_NAME = '系统默认审核策略'
 DEFAULT_REVIEW_POLICY_PRIORITY = 9999
 DEFAULT_REVIEW_ROLE_CODE = 'admin'
@@ -129,6 +129,46 @@ ReviewCallbackRegistry.register('resource', ReviewCallbacks(
     on_approved=_resource_on_approved,
     on_rejected=_resource_on_rejected,
     on_stage_advanced=_resource_on_stage_advanced,
+))
+
+
+# ===================== 知识库审核回调 =====================
+
+def _library_on_submitted(db: Session, business_id: int):
+    from app.models.library import LibraryItem
+    item = db.query(LibraryItem).filter(LibraryItem.id == business_id).first()
+    if item:
+        item.status = 'pending_review'
+
+
+def _library_on_approved(db: Session, business_id: int):
+    from app.models.library import LibraryItem
+    item = db.query(LibraryItem).filter(LibraryItem.id == business_id).first()
+    if item:
+        item.status = 'published'
+        item.is_public = True
+
+
+def _library_on_rejected(db: Session, business_id: int):
+    from app.models.library import LibraryItem
+    item = db.query(LibraryItem).filter(LibraryItem.id == business_id).first()
+    if item:
+        item.status = 'rejected'
+        item.is_public = False
+
+
+def _library_on_stage_advanced(db: Session, business_id: int):
+    from app.models.library import LibraryItem
+    item = db.query(LibraryItem).filter(LibraryItem.id == business_id).first()
+    if item:
+        item.status = 'reviewing'
+
+
+ReviewCallbackRegistry.register('library', ReviewCallbacks(
+    on_submitted=_library_on_submitted,
+    on_approved=_library_on_approved,
+    on_rejected=_library_on_rejected,
+    on_stage_advanced=_library_on_stage_advanced,
 ))
 
 

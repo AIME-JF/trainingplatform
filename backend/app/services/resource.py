@@ -14,7 +14,7 @@ from app.models import (
 )
 from app.models.course import Course
 from app.models.training import Training
-from app.models.review import ReviewTask
+from app.models.review import ReviewTask, ReviewWorkflow
 from app.schemas import PaginatedResponse
 from app.schemas.exam import (
     ADMISSION_SCOPE_ALL,
@@ -310,6 +310,19 @@ class ResourceService:
             return False
         if not self._can_edit_resource(resource, current_user_id, user_permissions):
             raise PermissionError('无权限删除该资源')
+
+        # 取消进行中的审核工作流
+        active_workflows = self.db.query(ReviewWorkflow).filter(
+            ReviewWorkflow.business_type == 'resource',
+            ReviewWorkflow.business_id == resource_id,
+            ReviewWorkflow.status.in_(['pending', 'reviewing']),
+        ).all()
+        for wf in active_workflows:
+            wf.status = 'cancelled'
+            wf.finished_at = datetime.now()
+            for task in (wf.tasks or []):
+                if task.status == 'pending':
+                    task.status = 'skipped'
 
         self.db.delete(resource)
         self.db.commit()

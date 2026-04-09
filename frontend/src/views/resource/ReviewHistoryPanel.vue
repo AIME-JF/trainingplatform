@@ -1,16 +1,7 @@
 <template>
-  <div class="review-history-page">
-    <div class="page-header">
-      <h2>审核记录</h2>
-    </div>
-
+  <div class="review-history-panel">
     <a-card :bordered="false" style="margin-bottom: 16px">
       <a-space wrap>
-        <a-select v-model:value="filters.businessType" allow-clear placeholder="业务类型" style="width: 140px" @change="fetchWorkflows">
-          <a-select-option value="resource">资源审核</a-select-option>
-          <a-select-option value="training">培训审核</a-select-option>
-          <a-select-option value="exam">考试审核</a-select-option>
-        </a-select>
         <a-select v-model:value="filters.status" allow-clear placeholder="审核状态" style="width: 140px" @change="fetchWorkflows">
           <a-select-option value="pending">待审核</a-select-option>
           <a-select-option value="reviewing">审核中</a-select-option>
@@ -19,7 +10,7 @@
         </a-select>
         <a-input-search
           v-model:value="filters.search"
-          placeholder="搜索资源名称"
+          placeholder="搜索名称"
           allow-clear
           style="width: 220px"
           @search="fetchWorkflows"
@@ -37,9 +28,6 @@
         @change="onTableChange"
       >
         <template #bodyCell="{ column, record }">
-          <template v-if="column.key === 'businessType'">
-            <a-tag :color="businessTypeColor[record.businessType]">{{ businessTypeLabel[record.businessType] || record.businessType }}</a-tag>
-          </template>
           <template v-if="column.key === 'status'">
             <a-tag :color="statusColor[record.status]">{{ statusLabel[record.status] || record.status }}</a-tag>
           </template>
@@ -83,10 +71,10 @@
               <div v-if="log.detailJson" class="log-detail">
                 <template v-if="log.action === 'ai_review'">
                   <div class="log-comment" :class="{ 'ai-passed': log.detailJson.result === 'passed', 'ai-rejected': log.detailJson.result === 'rejected', 'ai-fallback': log.detailJson.result === 'fallback' || log.detailJson.result === 'error' }">
-                    <span v-if="log.detailJson.result === 'passed'">✓ AI 审核通过</span>
-                    <span v-else-if="log.detailJson.result === 'rejected'">✗ AI 审核不通过</span>
-                    <span v-else-if="log.detailJson.result === 'fallback'">⚠ AI 审核需人工确认</span>
-                    <span v-else-if="log.detailJson.result === 'error'">⚠ AI 审核异常</span>
+                    <span v-if="log.detailJson.result === 'passed'">&#10003; AI 审核通过</span>
+                    <span v-else-if="log.detailJson.result === 'rejected'">&#10007; AI 审核不通过</span>
+                    <span v-else-if="log.detailJson.result === 'fallback'">&#9888; AI 审核需人工确认</span>
+                    <span v-else-if="log.detailJson.result === 'error'">&#9888; AI 审核异常</span>
                     <div v-if="log.detailJson.summary" class="log-summary">{{ log.detailJson.summary }}</div>
                   </div>
                 </template>
@@ -116,15 +104,18 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, watch } from 'vue'
 import { message } from 'ant-design-vue'
 import { getReviewWorkflows, getReviewWorkflowLogs } from '@/api/review'
 import dayjs from 'dayjs'
 
+const props = defineProps({
+  businessType: { type: String, required: true },
+})
+
 const loading = ref(false)
 const workflows = ref([])
 const filters = reactive({
-  businessType: undefined,
   status: undefined,
   search: '',
 })
@@ -141,16 +132,6 @@ const logLoading = ref(false)
 const logTitle = ref('审核详情')
 const logs = ref([])
 
-const businessTypeLabel = {
-  resource: '资源',
-  training: '培训',
-  exam: '考试',
-}
-const businessTypeColor = {
-  resource: 'blue',
-  training: 'green',
-  exam: 'orange',
-}
 const statusLabel = {
   pending: '待审核',
   reviewing: '审核中',
@@ -190,7 +171,6 @@ const actionColor = {
 
 const columns = [
   { title: 'ID', dataIndex: 'id', key: 'id', width: 70 },
-  { title: '业务类型', key: 'businessType', width: 100 },
   { title: '业务对象', dataIndex: 'businessTitle', key: 'businessTitle', width: 200, ellipsis: true },
   { title: '提交人', dataIndex: 'submitterName', key: 'submitterName', width: 100 },
   { title: '策略', dataIndex: 'policyName', key: 'policyName', width: 150, ellipsis: true },
@@ -210,7 +190,7 @@ async function fetchWorkflows() {
   loading.value = true
   try {
     const result = await getReviewWorkflows({
-      businessType: filters.businessType || undefined,
+      businessType: props.businessType,
       status: filters.status || undefined,
       search: filters.search || undefined,
       page: pagination.current,
@@ -232,7 +212,7 @@ function onTableChange(pag) {
 }
 
 async function openLogs(record) {
-  logTitle.value = `审核详情 — ${record.businessTitle || `#${record.businessId}`}`
+  logTitle.value = `审核详情 — ${record.businessTitle || '#' + record.businessId}`
   logVisible.value = true
   logLoading.value = true
   logs.value = []
@@ -245,56 +225,25 @@ async function openLogs(record) {
   }
 }
 
+watch(() => props.businessType, () => {
+  pagination.current = 1
+  fetchWorkflows()
+})
+
 onMounted(() => {
   fetchWorkflows()
 })
 </script>
 
 <style scoped>
-.review-history-page { padding: 0; }
-.page-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 16px;
-}
-.page-header h2 { margin: 0; font-size: 22px; color: #001234; }
-
 .log-item { margin-bottom: 4px; }
-.log-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
+.log-header { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .log-actor { font-weight: 500; color: #1f1f1f; }
 .log-time { color: #8c8c8c; font-size: 12px; }
 .log-detail { margin-top: 6px; }
-.log-comment {
-  color: #595959;
-  font-size: 13px;
-  line-height: 1.6;
-  padding: 6px 10px;
-  background: #fafafa;
-  border-radius: 4px;
-  margin-top: 4px;
-}
-.log-comment.ai-passed {
-  background: #f6ffed;
-  color: #389e0d;
-}
-.log-comment.ai-rejected {
-  background: #fff2f0;
-  color: #cf1322;
-}
-.log-comment.ai-fallback {
-  background: #f9f0ff;
-  color: #722ed1;
-}
-.log-summary {
-  margin-top: 4px;
-  color: #595959;
-  font-size: 12px;
-  line-height: 1.5;
-}
+.log-comment { color: #595959; font-size: 13px; line-height: 1.6; padding: 6px 10px; background: #fafafa; border-radius: 4px; margin-top: 4px; }
+.log-comment.ai-passed { background: #f6ffed; color: #389e0d; }
+.log-comment.ai-rejected { background: #fff2f0; color: #cf1322; }
+.log-comment.ai-fallback { background: #f9f0ff; color: #722ed1; }
+.log-summary { margin-top: 4px; color: #595959; font-size: 12px; line-height: 1.5; }
 </style>

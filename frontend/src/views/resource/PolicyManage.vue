@@ -35,7 +35,8 @@
     </a-alert>
 
     <a-tabs v-model:activeKey="activeBusinessType" @change="onBusinessTypeChange" style="margin-bottom: 16px;">
-      <a-tab-pane key="resource" tab="资源审核" />
+      <a-tab-pane key="resource" tab="社区审核" />
+      <a-tab-pane key="library" tab="知识审核" />
       <!-- <a-tab-pane key="training" tab="培训审核" /> -->
       <!-- <a-tab-pane key="exam" tab="考试审核" /> -->
     </a-tabs>
@@ -331,7 +332,8 @@ const flowPolicy = ref(null)
 const activeBusinessType = ref('resource')
 
 const businessTypeLabels = {
-  resource: '资源审核',
+  resource: '社区审核',
+  library: '知识审核',
   // training: '培训审核',
   // exam: '考试审核',
 }

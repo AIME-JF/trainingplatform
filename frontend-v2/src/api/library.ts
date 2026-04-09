@@ -26,6 +26,7 @@ export interface LibraryItemResponse {
   size: number
   duration_seconds: number
   is_public: boolean
+  status?: string | null
   is_owner: boolean
   knowledge_content_html?: string | null
   created_at?: string | null

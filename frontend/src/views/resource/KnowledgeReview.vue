@@ -1,7 +1,7 @@
 <template>
   <div class="review-queue-page">
     <div class="page-header">
-      <h2>社区审核</h2>
+      <h2>知识审核</h2>
     </div>
 
     <a-tabs v-model:activeKey="activeTab">
@@ -19,31 +19,23 @@
                   {{ statusLabel(record.status) }}
                 </a-tag>
               </template>
-            <template v-if="column.key === 'action'">
-              <a-space>
-                <a-button size="small" @click="viewDetail(record)">查看</a-button>
-                <permissions-tooltip
-                  :allowed="canReviewTask"
-                  tips="需要 REVIEW_RESOURCE_STAGE1、REVIEW_RESOURCE_STAGE2 或 VIEW_RESOURCE_ALL 权限"
-                  v-slot="{ disabled }"
-                >
-                  <a-button size="small" type="primary" :disabled="disabled" @click="approve(record)">通过</a-button>
-                </permissions-tooltip>
-                <permissions-tooltip
-                  :allowed="canReviewTask"
-                  tips="需要 REVIEW_RESOURCE_STAGE1、REVIEW_RESOURCE_STAGE2 或 VIEW_RESOURCE_ALL 权限"
-                  v-slot="{ disabled }"
-                >
-                  <a-button size="small" danger :disabled="disabled" @click="openReject(record)">驳回</a-button>
-                </permissions-tooltip>
-              </a-space>
+              <template v-if="column.key === 'action'">
+                <a-space>
+                  <a-button size="small" @click="viewDetail(record)">查看</a-button>
+                  <permissions-tooltip :allowed="canReviewTask" tips="需要审核权限" v-slot="{ disabled }">
+                    <a-button size="small" type="primary" :disabled="disabled" @click="approve(record)">通过</a-button>
+                  </permissions-tooltip>
+                  <permissions-tooltip :allowed="canReviewTask" tips="需要审核权限" v-slot="{ disabled }">
+                    <a-button size="small" danger :disabled="disabled" @click="openReject(record)">驳回</a-button>
+                  </permissions-tooltip>
+                </a-space>
+              </template>
             </template>
-          </template>
           </a-table>
         </a-card>
       </a-tab-pane>
       <a-tab-pane key="history" tab="审核记录">
-        <ReviewHistoryPanel business-type="resource" />
+        <ReviewHistoryPanel business-type="library" />
       </a-tab-pane>
     </a-tabs>
 
@@ -55,24 +47,15 @@
       <template v-if="aiInfoTask">
         <a-alert type="warning" show-icon style="margin-bottom: 16px">
           <template #message>AI 审核已降级到人工审核</template>
-          <template #description>
-            该任务由 AI 自动审核后降级到人工确认，请参考以下 AI 审核信息做出最终判断。
-          </template>
+          <template #description>请参考以下 AI 审核信息做出最终判断。</template>
         </a-alert>
         <a-descriptions :column="1" bordered size="small">
-          <a-descriptions-item label="资源">{{ aiInfoTask.resourceTitle || '-' }}</a-descriptions-item>
+          <a-descriptions-item label="知识">{{ aiInfoTask.businessTitle || aiInfoTask.resourceTitle || '-' }}</a-descriptions-item>
           <a-descriptions-item label="审核阶段">第 {{ aiInfoTask.stageOrder }} 级</a-descriptions-item>
           <a-descriptions-item label="AI 审核摘要">
             <div style="white-space: pre-wrap; word-break: break-all;">{{ getAiSummary(aiInfoTask) || '无摘要信息' }}</div>
           </a-descriptions-item>
         </a-descriptions>
-        <div style="margin-top: 16px; text-align: right;">
-          <a-space>
-            <a-button @click="() => { aiInfoVisible = false; if (aiInfoTask?.resourceId) router.push('/resource/detail/' + aiInfoTask.resourceId) }">
-              查看资源
-            </a-button>
-          </a-space>
-        </div>
       </template>
     </a-modal>
   </div>
@@ -80,20 +63,19 @@
 
 <script setup>
 import { computed, ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useAuthStore } from '@/stores/auth'
 import { getReviewTasks, approveReviewTask, rejectReviewTask } from '@/api/review'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 import ReviewHistoryPanel from './ReviewHistoryPanel.vue'
 
-const router = useRouter()
 const authStore = useAuthStore()
 const tasks = ref([])
 const activeTab = ref('tasks')
 const canReviewTask = computed(() => authStore.hasAnyPermission(['REVIEW_RESOURCE_STAGE1', 'REVIEW_RESOURCE_STAGE2', 'VIEW_RESOURCE_ALL']))
+
 const columns = [
-  { title: '资源', dataIndex: 'resourceTitle', key: 'resourceTitle' },
+  { title: '知识名称', dataIndex: 'businessTitle', key: 'businessTitle' },
   { title: '阶段', dataIndex: 'stageOrder', key: 'stageOrder', width: 100 },
   { title: '来源', key: 'source', width: 120 },
   { title: '状态', dataIndex: 'status', key: 'status', width: 120 },
@@ -114,14 +96,6 @@ function statusLabel(status) {
   return map[status] || status
 }
 
-async function fetchTasks() {
-  try {
-    tasks.value = await getReviewTasks({ status: 'pending', businessType: 'resource' }) || []
-  } catch (e) {
-    message.error(e.message || '加载任务失败')
-  }
-}
-
 function isAiFallback(task) {
   return task.comment && task.comment.startsWith('AI 审核降级到人工')
 }
@@ -136,13 +110,15 @@ function viewDetail(task) {
   if (isAiFallback(task)) {
     aiInfoTask.value = task
     aiInfoVisible.value = true
-    return
   }
-  if (!task?.resourceId) {
-    message.warning('未找到对应资源')
-    return
+}
+
+async function fetchTasks() {
+  try {
+    tasks.value = await getReviewTasks({ status: 'pending', businessType: 'library' }) || []
+  } catch (e) {
+    message.error(e.message || '加载任务失败')
   }
-  router.push(`/resource/detail/${task.resourceId}`)
 }
 
 async function approve(task) {
@@ -164,8 +140,7 @@ function openReject(task) {
 }
 
 async function doReject() {
-  if (!canReviewTask.value) return
-  if (!currentTask.value) return
+  if (!canReviewTask.value || !currentTask.value) return
   try {
     await rejectReviewTask(currentTask.value.id, { comment: rejectComment.value || '不符合发布要求' })
     message.success('已驳回')
@@ -180,4 +155,5 @@ async function doReject() {
 <style scoped>
 .review-queue-page { padding: 0; }
 .page-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+.page-header h2 { margin: 0; font-size: 22px; color: #001234; }
 </style>
