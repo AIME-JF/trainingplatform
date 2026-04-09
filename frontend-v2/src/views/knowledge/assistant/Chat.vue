@@ -9,17 +9,17 @@
 
   <div class="page-content knowledge-chat-page">
     <div class="chat-header">
-      <a-button @click="router.push('/knowledge/assistant')">返回</a-button>
+      <a-button @click="router.push(backTarget)">返回</a-button>
       <h1 class="chat-title">{{ pageTitle }}</h1>
     </div>
 
     <div class="chat-toolbar">
       <KnowledgeItemSelector
         v-model="selectedKnowledgeItemIds"
-        placeholder="可多选知识点，不选择则为通识问答"
+        placeholder="可多选知识点或资料，不选择则为通识问答"
       />
       <div class="toolbar-hint">
-        {{ selectedKnowledgeItemIds.length ? `已选择 ${selectedKnowledgeItemIds.length} 个知识点` : '当前为通识问答' }}
+        {{ selectedKnowledgeItemIds.length ? `已选择 ${selectedKnowledgeItemIds.length} 个知识点/资料` : '当前为通识问答' }}
       </div>
     </div>
 
@@ -78,7 +78,7 @@
         </div>
         <div class="message-bubble">
           <a-spin size="small" />
-          <span class="generating-text">正在思考...</span>
+          <span class="generating-text">正在思考中...</span>
         </div>
       </div>
     </div>
@@ -147,18 +147,32 @@ const saveDraft = ref({
 })
 const syncingRoute = ref(false)
 const suppressSelectionWatcher = ref(true)
+const restoringSession = ref(false)
 
 const avatarText = computed(() => (authStore.currentUser?.name || '').slice(0, 1))
 const rawMode = computed(() => String(route.query.mode || 'qa'))
 const mode = computed<AssistantMode>(() => (isAssistantMode(rawMode.value) ? rawMode.value : 'qa'))
 const modeMeta = computed(() => getAssistantModeMeta(mode.value))
 const isCaseMode = computed(() => mode.value === 'case')
+const backTarget = computed(() => (route.query.source === 'records' ? '/knowledge/records' : '/knowledge/assistant'))
 
 const folderOptions = computed(() => flattenLibraryFolders(libraryFolders.value))
-const pageTitle = computed(() => modeMeta.value.pageTitle)
-const welcomeTitle = computed(() => modeMeta.value.welcomeTitle)
-const welcomeDesc = computed(() => modeMeta.value.welcomeDesc)
-const quickPrompts = computed(() => modeMeta.value.quickPrompts)
+const pageTitle = computed(() => (isCaseMode.value ? '知识问答' : modeMeta.value.pageTitle))
+const welcomeTitle = computed(() => (isCaseMode.value ? '知识问答助手' : modeMeta.value.welcomeTitle))
+const welcomeDesc = computed(() => (
+  isCaseMode.value
+    ? '可直接发起通识问答；若选择知识点，我会优先基于这些知识点回答。'
+    : modeMeta.value.welcomeDesc
+))
+const quickPrompts = computed(() => (
+  isCaseMode.value
+    ? [
+        '什么情况下可以使用警械？',
+        '治安调解的适用条件有哪些？',
+        '询问未成年人有哪些特殊规定？',
+      ]
+    : modeMeta.value.quickPrompts
+))
 
 watch(
   rawMode,
@@ -195,7 +209,7 @@ watch(
 watch(
   selectedKnowledgeItemIds,
   (value) => {
-    if (suppressSelectionWatcher.value) {
+    if (suppressSelectionWatcher.value || restoringSession.value) {
       return
     }
     if (route.query.sessionId) {
@@ -203,6 +217,7 @@ watch(
       void router.replace({
         path: '/knowledge/assistant/chat',
         query: {
+          ...(route.query.source ? { source: String(route.query.source) } : {}),
           ...(mode.value !== 'qa' ? { mode: mode.value } : {}),
           ...(value.length ? { knowledgeItemIds: value.join(',') } : {}),
         },
@@ -236,6 +251,7 @@ async function loadSession(rawSessionId: number) {
     return
   }
   loadingSession.value = true
+  restoringSession.value = true
   try {
     const detail = await getChatSession(rawSessionId)
     suppressSelectionWatcher.value = true
@@ -254,6 +270,7 @@ async function loadSession(rawSessionId: number) {
         path: '/knowledge/assistant/chat',
         query: {
           sessionId: String(rawSessionId),
+          ...(route.query.source ? { source: String(route.query.source) } : {}),
           ...(detail.mode !== 'qa' ? { mode: detail.mode } : {}),
         },
       })
@@ -264,6 +281,7 @@ async function loadSession(rawSessionId: number) {
   } catch (error) {
     message.error(error instanceof Error ? error.message : '加载会话失败')
   } finally {
+    restoringSession.value = false
     loadingSession.value = false
   }
 }
@@ -273,6 +291,7 @@ async function syncSelectionToRoute(value: number[]) {
   await router.replace({
     path: '/knowledge/assistant/chat',
     query: {
+      ...(route.query.source ? { source: String(route.query.source) } : {}),
       ...(mode.value !== 'qa' ? { mode: mode.value } : {}),
       ...(value.length ? { knowledgeItemIds: value.join(',') } : {}),
     },
@@ -310,7 +329,7 @@ async function sendMessage(text: string) {
 
     const currentSessionId = sessionId.value
     if (!currentSessionId) {
-      throw new Error('会话创建失败')
+      throw new Error('创建会话失败')
     }
 
     const res = await sendChatMessage(currentSessionId, content)
@@ -321,18 +340,17 @@ async function sendMessage(text: string) {
       time: replyTime,
     })
     knowledgeWarning.value = selectedKnowledgeItemIds.value.length && res.knowledgeMatched === false
-      ? '当前问题与所选知识点未直接匹配，建议换一个关键词、调整知识点，或清空后改为通识问答。'
+      ? '当前问题与所选知识点未直接匹配，建议更换关键词、调整知识点，或清空后改为通识问答。'
       : ''
   } catch (error) {
     const replyTime = new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    const errorMessage = error instanceof Error ? error.message : '发送消息失败'
     messages.value.push({
       role: 'assistant',
-      content: 'AI 服务暂时不可用，请稍后再试。',
+      content: `<p>${escapeHtml(errorMessage)}</p>`,
       time: replyTime,
     })
-    if (error instanceof Error) {
-      message.error(error.message)
-    }
+    message.error(errorMessage)
   } finally {
     generating.value = false
     await nextTick()
@@ -384,7 +402,7 @@ function buildDefaultResultTitle(messageIndex: number) {
     .reverse()
     .find((item) => item.role === 'user')
   const base = stripHtml(previousUserMessage?.content || '').replace(/\s+/g, ' ').trim()
-  const fallback = getKnowledgeChatModeLabel(mode.value)
+  const fallback = isCaseMode.value ? '问答记录' : getKnowledgeChatModeLabel(mode.value)
   return base ? `${fallback}-${base.slice(0, 24)}` : `${fallback}-保存结果`
 }
 

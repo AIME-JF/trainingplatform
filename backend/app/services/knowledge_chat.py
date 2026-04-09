@@ -1,6 +1,7 @@
 """
-知识问答对话服务
+Knowledge assistant chat service.
 """
+
 from typing import Optional
 
 from sqlalchemy.orm import Session
@@ -14,15 +15,15 @@ SYSTEM_PROMPTS = {
     "qa": (
         "你是一名专业的公安培训知识助手。\n"
         "{context_block}\n"
-        "如果提供了已选知识点，请优先依据这些知识点回答；若当前问题与已选知识点不直接相关，"
-        "请明确告知用户当前所选知识点可能不包含此内容，并建议重新选择知识点或改为通识问答。\n"
+        "如果提供了已选知识点或资料，请优先依据这些内容回答；若当前问题与已选内容不直接相关，"
+        "请明确告知用户当前所选内容可能不包含此信息，并建议重新选择知识点/资料或改为通识问答。\n"
         "回答要准确、简洁、专业，不要编造。"
     ),
     "case": (
         "你是一名专业的公安培训案例分析助手。\n"
         "{context_block}\n"
-        "请围绕用户输入生成具有教学价值的案例分析内容，优先依据已选知识点；"
-        "如果知识点与问题不直接相关，要明确说明并避免脱离知识点随意扩写。\n"
+        "请围绕用户输入生成具有教学价值的案例分析内容，优先依据已选知识点或资料。"
+        "如果所选内容与问题不直接相关，要明确说明并避免脱离资料随意扩写。\n"
         "输出建议包含案情概述、法律适用、执法要点和教学讨论点。"
     ),
 }
@@ -41,7 +42,7 @@ class KnowledgeChatService:
         if normalized_mode not in VALID_MODES:
             raise ValueError("不支持的知识问答模式")
 
-        selected_items = self.library_service.resolve_accessible_knowledge_items(
+        selected_items = self.library_service.resolve_accessible_assistant_items(
             user_id,
             list(knowledge_item_ids or []),
             is_admin=is_admin,
@@ -70,7 +71,7 @@ class KnowledgeChatService:
         messages = list(session.messages or [])
         messages.append({"role": "user", "content": content})
 
-        selected_items = self.library_service.resolve_accessible_knowledge_items(
+        selected_items = self.library_service.resolve_accessible_assistant_items(
             user_id,
             list(session.knowledge_item_ids or []),
             is_admin=is_admin,
@@ -78,10 +79,16 @@ class KnowledgeChatService:
         )
         knowledge_payload = self.library_service.build_knowledge_context(selected_items, content)
 
-        if selected_items:
-            context_block = f"【已选知识点参考内容】\n{knowledge_payload['context']}"
+        if selected_items and knowledge_payload["context"]:
+            context_block = f"【已选知识点/资料参考内容】\n{knowledge_payload['context']}"
+        elif selected_items:
+            context_block = (
+                "【已选知识点/资料】\n"
+                "当前暂未能从所选内容中提取到可用文本。请在回答时明确说明这一点，"
+                "并建议用户更换资料、换关键词或切换为通识问答。"
+            )
         else:
-            context_block = "【当前模式】未选择知识点，请按通识问答回答。若无法确认，请明确说明。"
+            context_block = "【当前模式】未选择知识点或资料，请按通识问答回答；若无法确认，请明确说明。"
 
         system_prompt = SYSTEM_PROMPTS.get(session.mode, SYSTEM_PROMPTS["qa"]).format(context_block=context_block)
         recent_messages = messages[-20:]
@@ -130,7 +137,7 @@ class KnowledgeChatService:
         return self._to_session_dict(session)
 
     def _to_session_dict(self, session: KnowledgeChatSession) -> dict:
-        items = self.library_service.get_knowledge_items_by_ids(list(session.knowledge_item_ids or []))
+        items = self.library_service.get_assistant_items_by_ids(list(session.knowledge_item_ids or []))
         titles = [item.title for item in items]
         return {
             "id": session.id,

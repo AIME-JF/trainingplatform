@@ -46,7 +46,7 @@
           />
         </a-form-item>
 
-        <a-form-item label="AI扮演角色" name="npcRole" :rules="[{ required: true, message: '请描述 AI 扮演的角色' }]">
+        <a-form-item label="AI 扮演角色" name="npcRole" :rules="[{ required: true, message: '请描述 AI 扮演的角色' }]">
           <a-textarea
             v-model:value="form.npcRole"
             :rows="3"
@@ -54,11 +54,11 @@
           />
         </a-form-item>
 
-        <a-form-item label="AI角色名称" name="npcName">
+        <a-form-item label="AI 角色名称" name="npcName">
           <a-input v-model:value="form.npcName" placeholder="如：驾驶员、报警人、嫌疑人" />
         </a-form-item>
 
-        <a-form-item label="AI开场白" name="npcOpening">
+        <a-form-item label="AI 开场白" name="npcOpening">
           <a-textarea
             v-model:value="form.npcOpening"
             :rows="2"
@@ -67,7 +67,7 @@
         </a-form-item>
       </a-card>
 
-      <a-card :bordered="false" title="考察要点与评判" class="editor-card">
+      <a-card :bordered="false" title="考察要点与评分" class="editor-card">
         <div class="checkpoints-list">
           <div v-for="(cp, idx) in form.checkpoints" :key="idx" class="checkpoint-item">
             <a-input v-model:value="cp.label" placeholder="考察要点，如：是否出示执法证件" class="checkpoint-input" />
@@ -80,14 +80,14 @@
         </a-button>
       </a-card>
 
-      <a-card :bordered="false" title="关联知识点" class="editor-card">
-        <a-form-item label="知识点" name="knowledgeItemIds">
+      <a-card :bordered="false" title="关联知识点或资料" class="editor-card">
+        <a-form-item label="知识点/资料" name="knowledgeItemIds">
           <KnowledgeItemSelector
             v-model="form.knowledgeItemIds"
-            placeholder="可多选知识点，场景模拟时会将这些知识点注入提示词"
+            placeholder="可多选知识点或可解析资料，场景模拟时会将这些内容注入提示词"
           />
         </a-form-item>
-        <p class="form-tip">关联知识点后，AI 会优先基于这些知识点进行场景对话和反馈。</p>
+        <p class="form-tip">关联后，AI 会优先基于这些知识点或资料进行场景对话和反馈。</p>
       </a-card>
 
       <div class="editor-actions">
@@ -218,7 +218,6 @@ async function handleSubmit() {
 .checkpoint-item {
   display: flex;
   gap: 10px;
-  align-items: center;
 }
 
 .checkpoint-input {
@@ -226,19 +225,19 @@ async function handleSubmit() {
 }
 
 .checkpoint-score {
-  width: 100px;
+  width: 120px;
 }
 
 .form-tip {
-  font-size: 13px;
-  color: var(--v2-text-muted);
   margin: 0;
+  color: var(--v2-text-muted);
+  font-size: 13px;
+  line-height: 1.6;
 }
 
 .editor-actions {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
-  padding: 24px 0;
 }
 </style>

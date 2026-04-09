@@ -33,7 +33,7 @@ Base = declarative_base()
 _db_tested = False
 
 
-EXAM_SCHEMA_BOOTSTRAP_REQUIREMENTS: dict[str, tuple[str, ...]] = {
+SCHEMA_BOOTSTRAP_REQUIREMENTS: dict[str, tuple[str, ...]] = {
     "exams": (
         "scene",
         "participant_mode",
@@ -64,6 +64,15 @@ EXAM_SCHEMA_BOOTSTRAP_REQUIREMENTS: dict[str, tuple[str, ...]] = {
     ),
     "trainings": (
         "entry_exam_id",
+    ),
+    "library_items": (
+        "plain_text_content",
+    ),
+    "knowledge_chat_sessions": (
+        "knowledge_item_ids",
+    ),
+    "scenario_templates": (
+        "knowledge_item_ids",
     ),
 }
 
@@ -160,8 +169,8 @@ def _build_add_column_sql(table_name: str, column) -> str:
     return f"ALTER TABLE {quoted_table_name} ADD COLUMN {compiled_column}"
 
 
-def bootstrap_exam_schema() -> None:
-    """Backfill unified exam tables/columns outside the migration system."""
+def bootstrap_declared_schema() -> None:
+    """Backfill declared tables and critical columns outside the migration system."""
     import app.models  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
@@ -169,7 +178,7 @@ def bootstrap_exam_schema() -> None:
     with engine.begin() as connection:
         inspector = inspect(connection)
 
-        for table_name in EXAM_SCHEMA_BOOTSTRAP_REQUIREMENTS:
+        for table_name in SCHEMA_BOOTSTRAP_REQUIREMENTS:
             metadata_table = Base.metadata.tables.get(table_name)
             if metadata_table is None:
                 raise RuntimeError(f"模型中未声明表 `{table_name}`，无法完成启动补齐")
@@ -182,7 +191,7 @@ def bootstrap_exam_schema() -> None:
 
         inspector = inspect(connection)
 
-        for table_name, required_columns in EXAM_SCHEMA_BOOTSTRAP_REQUIREMENTS.items():
+        for table_name, required_columns in SCHEMA_BOOTSTRAP_REQUIREMENTS.items():
             metadata_table = Base.metadata.tables[table_name]
             existing_columns = {
                 column["name"] for column in inspector.get_columns(table_name)
@@ -204,7 +213,7 @@ def bootstrap_exam_schema() -> None:
 
         inspector = inspect(connection)
         issues: list[str] = []
-        for table_name, required_columns in EXAM_SCHEMA_BOOTSTRAP_REQUIREMENTS.items():
+        for table_name, required_columns in SCHEMA_BOOTSTRAP_REQUIREMENTS.items():
             if not inspector.has_table(table_name):
                 issues.append(f"缺少表 `{table_name}`")
                 continue
@@ -228,9 +237,9 @@ def bootstrap_exam_schema() -> None:
 
 
 def init_db():
-    """Create declared tables and backfill unified-exam bootstrap columns."""
+    """Create declared tables and backfill critical bootstrap columns."""
     try:
-        bootstrap_exam_schema()
+        bootstrap_declared_schema()
         logger.info("Database initialized successfully")
     except Exception as e:
         logger.error(f"Database initialization failed: {e}")

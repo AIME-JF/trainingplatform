@@ -2,18 +2,18 @@
   <div class="page-content knowledge-assistant-page">
     <div class="page-header">
       <h1 class="page-title">知识助手</h1>
-      <p class="page-subtitle">从知识库中选择知识点后发起定向问答；不选择时则进入通识问答。</p>
+      <p class="page-subtitle">从知识库中选择知识点或可解析资料后发起定向问答；不选择时则进入通识问答。</p>
     </div>
 
     <section class="assistant-section selector-section">
-      <h2 class="section-title">选择知识点</h2>
+      <h2 class="section-title">选择知识点或资料</h2>
       <a-card class="selector-card" :bordered="false">
         <KnowledgeItemSelector
           v-model="selectedKnowledgeItemIds"
-          placeholder="可多选知识点，不选择则为通识问答"
+          placeholder="可多选知识点或可解析资料，不选择则为通识问答"
         />
         <div class="selector-summary">
-          <span>{{ selectedKnowledgeItemIds.length ? `已选择 ${selectedKnowledgeItemIds.length} 个知识点` : '当前未选择知识点，将进入通识问答' }}</span>
+          <span>{{ selectedKnowledgeItemIds.length ? `已选择 ${selectedKnowledgeItemIds.length} 个知识点/资料` : '当前未选择知识点或资料，将进入通识问答' }}</span>
           <a-space>
             <a-button @click="clearSelection">清空选择</a-button>
             <a-button type="primary" @click="enterQaChat">开始问答</a-button>
@@ -29,7 +29,7 @@
           <MessageOutlined class="feature-icon" />
           <div class="feature-info">
             <h3>知识问答</h3>
-            <p>围绕已选知识点进行问答；不选知识点时自动切换为通识问答。</p>
+            <p>围绕已选知识点或资料进行问答；不选择时自动切换为通识问答。</p>
           </div>
         </div>
 
@@ -38,14 +38,6 @@
           <div class="feature-info">
             <h3>教案/课件生成</h3>
             <p>进入教学资源生成任务页，支持任务管理、预览和保存结果。</p>
-          </div>
-        </div>
-
-        <div v-if="isInstructor || isAdmin" class="feature-card" @click="enterCaseChat">
-          <SolutionOutlined class="feature-icon" />
-          <div class="feature-info">
-            <h3>案例分析生成</h3>
-            <p>可结合已选知识点生成案例分析，并支持将结果保存回知识库。</p>
           </div>
         </div>
 
@@ -61,7 +53,7 @@
           <SettingOutlined class="feature-icon" />
           <div class="feature-info">
             <h3>场景模板管理</h3>
-            <p>创建和管理场景模板，可关联知识点作为模拟依据。</p>
+            <p>创建和管理场景模板，可关联知识点或资料作为模拟依据。</p>
           </div>
         </div>
 
@@ -83,7 +75,6 @@ import { useRouter } from 'vue-router'
 import {
   MessageOutlined,
   FileTextOutlined,
-  SolutionOutlined,
   TeamOutlined,
   SettingOutlined,
   HistoryOutlined,
@@ -107,16 +98,6 @@ function enterQaChat() {
   void router.push({
     path: '/knowledge/assistant/chat',
     query: buildKnowledgeItemQuery(),
-  })
-}
-
-function enterCaseChat() {
-  void router.push({
-    path: '/knowledge/assistant/chat',
-    query: {
-      mode: 'case',
-      ...buildKnowledgeItemQuery(),
-    },
   })
 }
 
@@ -218,15 +199,5 @@ function buildKnowledgeItemQuery() {
   color: var(--v2-text-muted);
   margin: 0;
   line-height: 1.5;
-}
-
-@media (max-width: 768px) {
-  .selector-summary {
-    align-items: stretch;
-  }
-
-  .feature-grid {
-    grid-template-columns: 1fr;
-  }
 }
 </style>

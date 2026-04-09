@@ -90,13 +90,13 @@ export async function listLibraryItems(params?: LibraryItemQuery) {
   return response.data as PaginatedResult<LibraryItemResponse>
 }
 
+export async function listAccessibleAssistantItems() {
+  const response = await axiosInstance.get('/library/assistant-items')
+  return response.data as LibraryItemResponse[]
+}
+
 export async function listAccessibleKnowledgeItems() {
-  return listLibraryItems({
-    page: 1,
-    size: -1,
-    scope: 'accessible',
-    category: 'knowledge',
-  })
+  return listAccessibleAssistantItems()
 }
 
 export async function getLibraryItemDetail(itemId: number) {

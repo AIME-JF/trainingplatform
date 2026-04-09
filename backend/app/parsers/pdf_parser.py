@@ -1,17 +1,18 @@
 """
-PDF 文档解析器（按页转图片 + OCR）
+PDF parser that converts pages to images and runs OCR.
 """
-import fitz
+
 from typing import List
-from .base import BaseParser, ParseResult, DocumentType, DocumentMetadata
+
+from .base import BaseParser, DocumentMetadata, DocumentType, ParseResult
 from .image_parser import ImageParser, ParseImage
 from logger import logger
 
 
 class PDFParser(BaseParser):
-    """PDF 解析器"""
+    """Parse PDF files page by page."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.image_parser = ImageParser()
 
     @property
@@ -20,10 +21,11 @@ class PDFParser(BaseParser):
 
     @property
     def parser_name(self) -> str:
-        return "PDF解析器"
+        return "PDFParser"
 
     def can_parse(self, filename: str, mime_type: str = None) -> bool:
-        return filename.lower().endswith(".pdf") or (
+        normalized_name = str(filename or "").lower()
+        return normalized_name.endswith(".pdf") or (
             mime_type and "pdf" in mime_type.lower()
         )
 
@@ -31,8 +33,8 @@ class PDFParser(BaseParser):
         try:
             images = self._convert_pages_to_images(file_data)
             image_results = self.image_parser.process_images_parallel(images)
-            image_results.sort(key=lambda x: x.index)
-            content = "\n".join(r.content for r in image_results)
+            image_results.sort(key=lambda item: item.index)
+            content = "\n".join(result.content for result in image_results)
 
             metadata = DocumentMetadata(
                 parser=self.parser_name,
@@ -41,17 +43,42 @@ class PDFParser(BaseParser):
                 lines=len(content.splitlines()),
             )
             return ParseResult(content, metadata)
-        except Exception as e:
-            logger.error("PDF 解析失败: %s, 错误: %s", filename, e)
-            return ParseResult("", DocumentMetadata(
-                parser=self.parser_name, document_type=DocumentType.PDF,
-                size=len(file_data), lines=0,
-            ))
+        except ImportError as exc:
+            logger.error("PDF parser dependency missing for %s: %s", filename, exc)
+            return self._empty_result(len(file_data))
+        except Exception as exc:
+            logger.error("PDF parse failed for %s: %s", filename, exc)
+            return self._empty_result(len(file_data))
 
     def _convert_pages_to_images(self, file_data: bytes) -> List[ParseImage]:
-        doc = fitz.open(stream=file_data, filetype="pdf")
-        images = []
-        for page in doc:
-            pix = page.get_pixmap()
-            images.append(ParseImage(id=str(page.number), index=page.number, data=pix.tobytes("png")))
-        return images
+        try:
+            import fitz
+        except ImportError as exc:
+            raise ImportError("PyMuPDF is required to parse PDF files") from exc
+
+        document = fitz.open(stream=file_data, filetype="pdf")
+        try:
+            images: List[ParseImage] = []
+            for page in document:
+                pixmap = page.get_pixmap()
+                images.append(
+                    ParseImage(
+                        id=str(page.number),
+                        index=page.number,
+                        data=pixmap.tobytes("png"),
+                    )
+                )
+            return images
+        finally:
+            document.close()
+
+    def _empty_result(self, file_size: int) -> ParseResult:
+        return ParseResult(
+            "",
+            DocumentMetadata(
+                parser=self.parser_name,
+                document_type=DocumentType.PDF,
+                size=file_size,
+                lines=0,
+            ),
+        )

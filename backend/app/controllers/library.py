@@ -1,6 +1,7 @@
 """
-资源库模块控制器
+Library controller.
 """
+
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
@@ -17,7 +18,7 @@ from app.services.library import LibraryService
 
 
 class LibraryController:
-    """资源库控制器"""
+    """Thin controller wrapper around the library service."""
 
     def __init__(self, db: Session):
         self.service = LibraryService(db)
@@ -50,10 +51,13 @@ class LibraryController:
     def list_items(self, current_user_id: int, params: LibraryItemListParams, page: int, size: int, is_admin: bool = False):
         return self.service.list_items(current_user_id, params, page=page, size=size, is_admin=is_admin)
 
+    def list_assistant_items(self, current_user_id: int, is_admin: bool = False):
+        return self.service.list_accessible_assistant_items(current_user_id, is_admin=is_admin)
+
     def get_item_detail(self, item_id: int, current_user_id: int, is_admin: bool = False):
         data = self.service.get_item_detail(item_id, current_user_id, is_admin=is_admin)
         if not data:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="知识点不存在或无权限查看")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="资源不存在或无权限查看")
         return data
 
     def create_items_from_files(self, current_user_id: int, data: LibraryBatchFileCreateRequest, is_admin: bool = False):

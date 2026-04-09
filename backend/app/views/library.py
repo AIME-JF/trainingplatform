@@ -1,6 +1,7 @@
 """
-资源库模块路由
+Library routes.
 """
+
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -74,7 +75,7 @@ def delete_library_folder(
     return StandardResponse(message="文件夹已删除")
 
 
-@router.get("/items", response_model=StandardResponse[PaginatedResponse[LibraryItemListResponse]], summary="获取知识库条目列表")
+@router.get("/items", response_model=StandardResponse[PaginatedResponse[LibraryItemListResponse]], summary="获取知识库资源列表")
 def get_library_items(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=-1),
@@ -98,7 +99,17 @@ def get_library_items(
     return StandardResponse(data=controller.list_items(current_user.user_id, params, page, size, is_admin=is_admin))
 
 
-@router.get("/items/{item_id}", response_model=StandardResponse[LibraryItemDetailResponse], summary="获取知识点详情")
+@router.get("/assistant-items", response_model=StandardResponse[list[LibraryItemListResponse]], summary="获取知识助手可选资源")
+def get_library_assistant_items(
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    is_admin = _resolve_library_admin_access(db, current_user)
+    controller = LibraryController(db)
+    return StandardResponse(data=controller.list_assistant_items(current_user.user_id, is_admin=is_admin))
+
+
+@router.get("/items/{item_id}", response_model=StandardResponse[LibraryItemDetailResponse], summary="获取资源详情")
 def get_library_item_detail(
     item_id: int,
     current_user: TokenData = Depends(get_current_user),
@@ -109,7 +120,7 @@ def get_library_item_detail(
     return StandardResponse(data=controller.get_item_detail(item_id, current_user.user_id, is_admin=is_admin))
 
 
-@router.post("/items/files", response_model=StandardResponse[list[LibraryItemDetailResponse]], summary="批量创建文件资源项")
+@router.post("/items/files", response_model=StandardResponse[list[LibraryItemDetailResponse]], summary="批量创建文件资源")
 def create_library_items_from_files(
     data: LibraryBatchFileCreateRequest,
     current_user: TokenData = Depends(get_current_user),
@@ -130,7 +141,7 @@ def create_library_knowledge_item(
     return StandardResponse(data=controller.create_knowledge_item(current_user.user_id, data))
 
 
-@router.put("/items/{item_id}", response_model=StandardResponse[LibraryItemDetailResponse], summary="更新知识点")
+@router.put("/items/{item_id}", response_model=StandardResponse[LibraryItemDetailResponse], summary="更新知识库资源")
 def update_library_item(
     item_id: int,
     data: LibraryItemUpdateRequest,
@@ -142,7 +153,7 @@ def update_library_item(
     return StandardResponse(data=controller.update_item(item_id, current_user.user_id, data, is_admin=is_admin))
 
 
-@router.post("/items/{item_id}/move", response_model=StandardResponse[LibraryItemDetailResponse], summary="移动知识点文件夹")
+@router.post("/items/{item_id}/move", response_model=StandardResponse[LibraryItemDetailResponse], summary="移动知识库资源")
 def move_library_item(
     item_id: int,
     data: LibraryItemMoveRequest,
@@ -154,7 +165,7 @@ def move_library_item(
     return StandardResponse(data=controller.move_item(item_id, current_user.user_id, data, is_admin=is_admin))
 
 
-@router.post("/items/{item_id}/share", response_model=StandardResponse[LibraryItemDetailResponse], summary="公开知识点")
+@router.post("/items/{item_id}/share", response_model=StandardResponse[LibraryItemDetailResponse], summary="公开知识库资源")
 def share_library_item(
     item_id: int,
     current_user: TokenData = Depends(get_current_user),
@@ -165,7 +176,7 @@ def share_library_item(
     return StandardResponse(data=controller.share_item(item_id, current_user.user_id, True, is_admin=is_admin))
 
 
-@router.post("/items/{item_id}/unshare", response_model=StandardResponse[LibraryItemDetailResponse], summary="取消公开知识点")
+@router.post("/items/{item_id}/unshare", response_model=StandardResponse[LibraryItemDetailResponse], summary="取消公开知识库资源")
 def unshare_library_item(
     item_id: int,
     current_user: TokenData = Depends(get_current_user),
@@ -176,7 +187,7 @@ def unshare_library_item(
     return StandardResponse(data=controller.share_item(item_id, current_user.user_id, False, is_admin=is_admin))
 
 
-@router.delete("/items/{item_id}", response_model=StandardResponse, summary="删除知识点")
+@router.delete("/items/{item_id}", response_model=StandardResponse, summary="删除知识库资源")
 def delete_library_item(
     item_id: int,
     current_user: TokenData = Depends(get_current_user),
@@ -185,4 +196,4 @@ def delete_library_item(
     is_admin = _resolve_library_admin_access(db, current_user)
     controller = LibraryController(db)
     controller.delete_item(item_id, current_user.user_id, is_admin=is_admin)
-    return StandardResponse(message="知识点已删除")
+    return StandardResponse(message="资源已删除")

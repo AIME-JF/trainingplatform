@@ -70,7 +70,6 @@
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getChatSessions, getMyScenarioSessions } from '@/api/knowledge'
-import { getKnowledgeChatModeLabel } from '@/views/knowledge/assistant/modeConfig'
 
 const router = useRouter()
 const activeTab = ref('chat')
@@ -141,7 +140,13 @@ function handleScenarioTableChange(pag: { current?: number; pageSize?: number })
 }
 
 function getModeLabel(mode: string) {
-  return getKnowledgeChatModeLabel(mode)
+  if (mode === 'case') {
+    return '问答记录'
+  }
+  if (mode === 'qa') {
+    return '知识问答'
+  }
+  return mode || '-'
 }
 
 function getCategoryLabel(category: string) {
@@ -185,7 +190,7 @@ function getScoreColor(score: number) {
 }
 
 function viewChatDetail(id: number) {
-  void router.push(`/knowledge/assistant/chat?sessionId=${id}`)
+  void router.push(`/knowledge/assistant/chat?sessionId=${id}&source=records`)
 }
 
 function viewScenarioDetail(id: number) {

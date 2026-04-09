@@ -1,18 +1,19 @@
 """
-Word 文档解析器
+Word parser with optional python-docx dependency.
 """
-from docx import Document
+
 from io import BytesIO
-from typing import List
-from .base import BaseParser, ParseResult, DocumentType, DocumentMetadata
+from typing import Any, List
+
+from .base import BaseParser, DocumentMetadata, DocumentType, ParseResult
 from .image_parser import ImageParser, ParseImage, ParseImageResult
 from logger import logger
 
 
 class WordParser(BaseParser):
-    """Word 文档解析器"""
+    """Parse DOCX files and OCR embedded images."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self.image_parser = ImageParser()
 
     @property
@@ -21,29 +22,39 @@ class WordParser(BaseParser):
 
     @property
     def parser_name(self) -> str:
-        return "Word解析器"
+        return "WordParser"
 
     def can_parse(self, filename: str, mime_type: str = None) -> bool:
-        return filename.lower().endswith(tuple(self.supported_extensions)) or (
+        normalized_name = str(filename or "").lower()
+        return normalized_name.endswith(tuple(self.supported_extensions)) or (
             mime_type and ("word" in mime_type.lower() or "document" in mime_type.lower())
         )
 
     def parse(self, file_data: bytes, filename: str) -> ParseResult:
         try:
-            doc = Document(BytesIO(file_data))
-            images = self._extract_images(doc)
+            from docx import Document
+        except ImportError as exc:
+            logger.error("Word parser dependency missing for %s: %s", filename, exc)
+            return self._empty_result(len(file_data))
+
+        try:
+            document = Document(BytesIO(file_data))
+            images = self._extract_images(document)
             image_results = self.image_parser.process_images_parallel(images)
-            doc = self._insert_image_content(doc, image_results)
+            document = self._insert_image_content(document, image_results)
 
             file_stream = BytesIO()
-            doc.save(file_stream)
+            document.save(file_stream)
 
             try:
                 from markitdown import MarkItDown
-                md = MarkItDown()
-                content = md.convert(file_stream).text_content
+
+                markdown_converter = MarkItDown()
+                content = markdown_converter.convert(file_stream).text_content
             except ImportError:
-                content = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+                content = "\n".join(
+                    paragraph.text for paragraph in document.paragraphs if paragraph.text.strip()
+                )
 
             metadata = DocumentMetadata(
                 parser=self.parser_name,
@@ -52,48 +63,66 @@ class WordParser(BaseParser):
                 lines=len(content.splitlines()),
             )
             return ParseResult(content, metadata)
-        except Exception as e:
-            logger.error("Word 解析失败: %s, 错误: %s", filename, e)
-            return ParseResult("", DocumentMetadata(
-                parser=self.parser_name, document_type=DocumentType.WORD,
-                size=len(file_data), lines=0,
-            ))
+        except Exception as exc:
+            logger.error("Word parse failed for %s: %s", filename, exc)
+            return self._empty_result(len(file_data))
 
-    def _extract_images(self, doc: Document) -> List[ParseImage]:
-        images = []
-        for paragraph in doc.paragraphs:
+    def _extract_images(self, document: Any) -> List[ParseImage]:
+        images: List[ParseImage] = []
+        for paragraph in document.paragraphs:
             for run in paragraph.runs:
                 drawing_elements = run.element.xpath(".//w:drawing")
                 if not drawing_elements:
                     continue
                 blip_elements = run.element.xpath(".//a:blip")
                 for blip in blip_elements:
-                    embed_id = blip.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed")
-                    if embed_id and embed_id in doc.part.related_parts:
-                        image_data = doc.part.related_parts[embed_id].blob
-                        images.append(ParseImage(
-                            id=self.image_parser.get_image_hash(image_data),
-                            index=len(images),
-                            data=image_data,
-                        ))
+                    embed_id = blip.get(
+                        "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed"
+                    )
+                    if embed_id and embed_id in document.part.related_parts:
+                        image_data = document.part.related_parts[embed_id].blob
+                        images.append(
+                            ParseImage(
+                                id=self.image_parser.get_image_hash(image_data),
+                                index=len(images),
+                                data=image_data,
+                            )
+                        )
                         break
         return images
 
-    def _insert_image_content(self, doc: Document, image_results: List[ParseImageResult]) -> Document:
-        for paragraph in doc.paragraphs:
+    def _insert_image_content(
+        self,
+        document: Any,
+        image_results: List[ParseImageResult],
+    ) -> Any:
+        for paragraph in document.paragraphs:
             for run in paragraph.runs:
                 drawing_elements = run.element.xpath(".//w:drawing")
                 if not drawing_elements:
                     continue
                 blip_elements = run.element.xpath(".//a:blip")
                 for blip in blip_elements:
-                    embed_id = blip.get("{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed")
-                    if embed_id and embed_id in doc.part.related_parts:
-                        image_data = doc.part.related_parts[embed_id].blob
-                        img_hash = self.image_parser.get_image_hash(image_data)
-                        result = next((r for r in image_results if r.id == img_hash), None)
+                    embed_id = blip.get(
+                        "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed"
+                    )
+                    if embed_id and embed_id in document.part.related_parts:
+                        image_data = document.part.related_parts[embed_id].blob
+                        image_hash = self.image_parser.get_image_hash(image_data)
+                        result = next((item for item in image_results if item.id == image_hash), None)
                         if result:
                             run.clear()
                             run.add_text(result.content)
                         break
-        return doc
+        return document
+
+    def _empty_result(self, file_size: int) -> ParseResult:
+        return ParseResult(
+            "",
+            DocumentMetadata(
+                parser=self.parser_name,
+                document_type=DocumentType.WORD,
+                size=file_size,
+                lines=0,
+            ),
+        )

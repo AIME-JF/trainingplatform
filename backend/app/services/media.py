@@ -182,6 +182,26 @@ class MediaService:
             return abs_path
         return None
 
+    def download_file_bytes(self, media: MediaFile) -> bytes:
+        """Download file bytes from local storage or MinIO."""
+        if not media:
+            raise ValueError("file not found")
+
+        local_path = self.get_file_path(media.id)
+        if local_path and local_path.exists():
+            return local_path.read_bytes()
+
+        object_key = str(media.storage_path or "").strip().lstrip("/")
+        if not object_key:
+            raise ValueError("file storage path is empty")
+
+        response = self.minio.get_object(settings.MINIO_BUCKET, object_key)
+        try:
+            return response.read()
+        finally:
+            response.close()
+            response.release_conn()
+
     def build_url(self, media: MediaFile) -> str:
         """构建文件直链 URL（MinIO 公网地址）"""
         base = (settings.MINIO_PUBLIC_URL or "").rstrip("/")

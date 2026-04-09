@@ -8,7 +8,7 @@
   >
     <div class="upload-panel">
       <div class="upload-tip">
-        支持 `mp4 / mp3 / wav / m4a / pdf / ppt / pptx / doc / docx / html / htm / jpg / jpeg / png / webp / gif`
+        支持 `mp4 / mp3 / wav / m4a / pdf / docx / pptx / xlsx / txt / md / csv / html / htm / json / xml / log / jpg / jpeg / png / bmp / tiff / webp / gif`
       </div>
 
       <a-form layout="vertical">
@@ -24,7 +24,7 @@
         <a-form-item label="选择文件">
           <div class="picker-box">
             <a-button type="primary" @click="triggerFilePicker">选择文件</a-button>
-            <span class="picker-hint">系统会自动识别类型，并直接以文件名创建资源。</span>
+            <span class="picker-hint">系统会自动识别文件类型，并以文件名创建资源条目。</span>
             <input
               ref="fileInputRef"
               type="file"

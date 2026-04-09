@@ -451,9 +451,12 @@ class ScenarioService:
             "updatedAt": str(template.updated_at) if template.updated_at else None,
         }
 
-    @classmethod
-    def _to_session_dict(cls, session: ScenarioSession) -> dict:
+    def _to_session_dict(self, session: ScenarioSession) -> dict:
         template = session.scenario_template
+        knowledge_item_titles = []
+        if template and template.knowledge_item_ids:
+            knowledge_items = self.library_service.get_knowledge_items_by_ids(list(template.knowledge_item_ids or []))
+            knowledge_item_titles = [item.title for item in knowledge_items]
         return {
             "id": session.id,
             "scenarioTemplateId": session.scenario_template_id,
@@ -461,8 +464,10 @@ class ScenarioService:
             "category": template.category if template else None,
             "background": template.background if template else None,
             "estimatedMinutes": template.estimated_minutes if template else None,
+            "checkpoints": template.checkpoints or [] if template else [],
+            "knowledgeItemTitles": knowledge_item_titles,
             "userId": session.user_id,
-            "studentName": cls._display_user_name(session),
+            "studentName": self._display_user_name(session),
             "messages": session.messages or [],
             "status": session.status,
             "score": session.score,
@@ -474,9 +479,8 @@ class ScenarioService:
             "createdAt": str(session.created_at) if session.created_at else None,
         }
 
-    @classmethod
-    def _to_session_summary(cls, session: ScenarioSession) -> dict:
-        payload = cls._to_session_dict(session)
+    def _to_session_summary(self, session: ScenarioSession) -> dict:
+        payload = self._to_session_dict(session)
         return {
             "id": payload["id"],
             "scenarioTemplateId": payload["scenarioTemplateId"],

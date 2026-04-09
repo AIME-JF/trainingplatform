@@ -184,6 +184,15 @@ CRITICAL_SCHEMA_REQUIREMENTS: dict[str, tuple[str, ...]] = {
         "passed_exam_count",
         "summary",
     ),
+    "library_items": (
+        "plain_text_content",
+    ),
+    "knowledge_chat_sessions": (
+        "knowledge_item_ids",
+    ),
+    "scenario_templates": (
+        "knowledge_item_ids",
+    ),
 }
 
 
