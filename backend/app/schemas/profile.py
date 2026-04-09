@@ -14,6 +14,16 @@ class ProfileUpdate(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     avatar: Optional[str] = None
+    birth_date: Optional[date] = None
+    native_place: Optional[str] = Field(None, max_length=100)
+    ethnicity: Optional[str] = Field(None, max_length=50)
+    education: Optional[str] = Field(None, max_length=50)
+    degree: Optional[str] = Field(None, max_length=50)
+    instructor_title: Optional[str] = Field(None, max_length=50)
+    instructor_job_type: Optional[str] = Field(None, max_length=20)
+    instructor_category: Optional[str] = Field(None, max_length=20)
+    instructor_level: Optional[str] = Field(None, max_length=20)
+    instructor_intro: Optional[str] = None
 
 
 class ProfileResponse(BaseModel):
@@ -31,6 +41,18 @@ class ProfileResponse(BaseModel):
     study_hours: float = 0
     exam_count: int = 0
     avg_score: float = 0
+    birth_date: Optional[date] = None
+    native_place: Optional[str] = None
+    ethnicity: Optional[str] = None
+    education: Optional[str] = None
+    degree: Optional[str] = None
+    instructor_title: Optional[str] = None
+    instructor_job_type: Optional[str] = None
+    instructor_category: Optional[str] = None
+    instructor_level: Optional[str] = None
+    instructor_hire_start: Optional[date] = None
+    instructor_hire_end: Optional[date] = None
+    instructor_intro: Optional[str] = None
     roles: List[str] = []
     departments: List[str] = []
     police_types: List[str] = []

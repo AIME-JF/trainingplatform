@@ -8,6 +8,7 @@ from passlib.context import CryptContext
 from fastapi import HTTPException
 
 from app.models import User, Role, Department, PoliceType
+from app.models.instructor_profile import InstructorTag, InstructorTeachingDirection
 from app.schemas import (
     UserCreate, UserUpdate, UserResponse, UserSimpleResponse, PaginatedResponse,
     UserRoleUpdate, UserDepartmentUpdate, UserPoliceTypeUpdate
@@ -44,7 +45,7 @@ class UserService:
         return response
 
     def _load_instructor_tags(self, user_id: int) -> list:
-        from app.models.instructor_profile import InstructorTag
+
         from app.schemas.user import InstructorTagResponse
         tags = self.db.query(InstructorTag).filter(InstructorTag.user_id == user_id).all()
         result = []
@@ -61,7 +62,7 @@ class UserService:
         return result
 
     def _load_teaching_directions(self, user_id: int) -> list:
-        from app.models.instructor_teaching_direction import InstructorTeachingDirection
+
         from app.schemas.user import DictTeachingDirectionResponse
         relations = self.db.query(InstructorTeachingDirection).filter(
             InstructorTeachingDirection.user_id == user_id
@@ -202,7 +203,7 @@ class UserService:
 
         # 教官标签筛选
         if admin_level or professional_level or specialty_id:
-            from app.models.instructor_profile import InstructorTag
+    
             tag_filter = query.join(InstructorTag, InstructorTag.user_id == User.id)
             if admin_level:
                 tag_filter = tag_filter.filter(InstructorTag.admin_level == admin_level)

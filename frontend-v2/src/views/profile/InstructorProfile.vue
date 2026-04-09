@@ -79,27 +79,13 @@
           </div>
         </div>
 
-        <!-- 聘任信息区 -->
-        <div class="form-section">
+        <!-- 聘任信息区（只读，由管理员设置） -->
+        <div v-if="form.instructor_hire_start || form.instructor_hire_end" class="form-section">
           <h2 class="section-title">聘任信息</h2>
           <div class="form-grid">
             <div class="form-item">
-              <label>聘任开始日期</label>
-              <a-date-picker
-                v-model:value="form.appointment_start_date"
-                placeholder="请选择开始日期"
-                style="width: 100%"
-                value-format="YYYY-MM-DD"
-              />
-            </div>
-            <div class="form-item">
-              <label>聘任结束日期</label>
-              <a-date-picker
-                v-model:value="form.appointment_end_date"
-                placeholder="请选择结束日期"
-                style="width: 100%"
-                value-format="YYYY-MM-DD"
-              />
+              <label>聘任时间</label>
+              <span class="readonly-value">{{ form.instructor_hire_start || '-' }} ~ {{ form.instructor_hire_end || '-' }}</span>
             </div>
           </div>
         </div>
@@ -235,8 +221,8 @@ const form = reactive({
   position_type: undefined as string | undefined,
   teacher_type: undefined as string | undefined,
   instructor_level: undefined as string | undefined,
-  appointment_start_date: undefined as string | undefined,
-  appointment_end_date: undefined as string | undefined,
+  instructor_hire_start: undefined as string | undefined,
+  instructor_hire_end: undefined as string | undefined,
   instructor_intro: '',
 })
 
@@ -279,7 +265,7 @@ async function loadProfile() {
   if (!userId) return
   loading.value = true
   try {
-    const res = await axiosInstance.get(`/users/${userId}`)
+    const res = await axiosInstance.get('/profile')
     const data = res.data as Record<string, unknown>
     form.birth_date = (data.birth_date as string) || undefined
     form.native_place = (data.native_place as string) || ''
@@ -287,11 +273,11 @@ async function loadProfile() {
     form.education = (data.education as string) || undefined
     form.degree = (data.degree as string) || undefined
     form.instructor_title = (data.instructor_title as string) || ''
-    form.position_type = (data.position_type as string) || undefined
-    form.teacher_type = (data.teacher_type as string) || undefined
+    form.position_type = (data.instructor_job_type as string) || undefined
+    form.teacher_type = (data.instructor_category as string) || undefined
     form.instructor_level = (data.instructor_level as string) || undefined
-    form.appointment_start_date = (data.appointment_start_date as string) || undefined
-    form.appointment_end_date = (data.appointment_end_date as string) || undefined
+    form.instructor_hire_start = (data.instructor_hire_start as string) || undefined
+    form.instructor_hire_end = (data.instructor_hire_end as string) || undefined
     form.instructor_intro = (data.instructor_intro as string) || ''
   } catch (e: unknown) {
     message.error((e as Error).message || '加载个人信息失败')
@@ -335,18 +321,16 @@ async function handleSave() {
   saving.value = true
   try {
     // 保存基本信息和教官信息
-    await axiosInstance.put(`/users/${userId}`, {
+    await axiosInstance.put('/profile', {
       birth_date: form.birth_date || null,
       native_place: form.native_place || null,
       ethnicity: form.ethnicity || null,
       education: form.education || null,
       degree: form.degree || null,
       instructor_title: form.instructor_title || null,
-      position_type: form.position_type || null,
-      teacher_type: form.teacher_type || null,
+      instructor_job_type: form.position_type || null,
+      instructor_category: form.teacher_type || null,
       instructor_level: form.instructor_level || null,
-      appointment_start_date: form.appointment_start_date || null,
-      appointment_end_date: form.appointment_end_date || null,
       instructor_intro: form.instructor_intro || null,
     })
 
@@ -490,6 +474,11 @@ onMounted(() => {
 .form-item label {
   font-size: 13px;
   color: #666;
+}
+
+.readonly-value {
+  font-size: 14px;
+  color: var(--v2-text-primary);
 }
 
 .direction-tags {
