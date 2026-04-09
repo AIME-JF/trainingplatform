@@ -40,6 +40,10 @@
         </div>
         <template #overlay>
           <div class="sidebar-user-dropdown">
+            <button type="button" class="sidebar-user-dropdown-item" @click="router.push('/profile')">
+              <UserOutlined />
+              <span>个人中心</span>
+            </button>
             <button type="button" class="sidebar-user-dropdown-item danger" @click="handleLogout">
               <LogoutOutlined />
               <span>退出登录</span>

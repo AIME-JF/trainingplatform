@@ -8,6 +8,9 @@
     <template #filters>
       <button type="button" class="dark-chip" :class="{ active: filterStatus.length === 0 }" @click="setStatus([])">全部</button>
       <button v-for="s in statusOptions" :key="s.value" type="button" class="dark-chip" :class="{ active: filterStatus.length === 1 && filterStatus[0] === s.value }" @click="setStatus([s.value])">{{ s.label }}</button>
+      <span class="filter-spacer" />
+      <button type="button" class="dark-chip scope-chip" :class="{ active: filterScope === 'mine' }" @click="setScope('mine')">我的培训班</button>
+      <button type="button" class="dark-chip scope-chip" :class="{ active: filterScope === 'enrollable' }" @click="setScope('enrollable')">可报名培训班</button>
     </template>
     <template #actions>
       <a-select v-if="typeOptions.length" v-model:value="filterType" placeholder="全部类型" style="width: 140px" allow-clear popup-class-name="dark-select-popup" @change="onFilterChange">
@@ -116,6 +119,7 @@ const router = useRouter()
 
 const filterStatus = ref<string[]>(['upcoming', 'active'])
 const filterType = ref('')
+const filterScope = ref('mine')
 const searchText = ref('')
 const page = ref(1)
 const pageSize = ref(12)
@@ -186,6 +190,11 @@ function setStatus(values: string[]) {
   onFilterChange()
 }
 
+function setScope(value: string) {
+  filterScope.value = filterScope.value === value ? '' : value
+  onFilterChange()
+}
+
 function onFilterChange() {
   page.value = 1
   fetchList()
@@ -206,6 +215,9 @@ async function fetchList() {
     }
     if (searchText.value.trim()) {
       params.search = searchText.value.trim()
+    }
+    if (filterScope.value) {
+      params.scope = filterScope.value
     }
 
     const res = await axiosInstance.get('/trainings', { params })
@@ -262,6 +274,12 @@ onMounted(() => {
 :deep(.ant-select-selection-placeholder) { color: rgba(255,255,255,0.50) !important; }
 :deep(.ant-select-clear) { background: transparent !important; color: rgba(255,255,255,0.58) !important; }
 
+/* -- 筛选间隔 -- */
+.filter-spacer {
+  flex: 1;
+  min-width: 12px;
+}
+
 /* -- 加载 -- */
 .loading-wrapper {
   display: flex;
@@ -292,6 +310,24 @@ onMounted(() => {
   .class-grid {
     grid-template-columns: 1fr;
     gap: 14px;
+  }
+
+  /* 移动端：标题 → 搜索 → 类型筛选（覆盖 DarkPageHeader 默认的 leading+actions 同行） */
+  :deep(.dark-header-main) {
+    grid-template-columns: 1fr !important;
+    grid-template-areas:
+      'leading'
+      'search'
+      'actions' !important;
+  }
+
+  :deep(.dark-header-actions) {
+    justify-self: start;
+  }
+
+  .filter-spacer {
+    flex-basis: 100%;
+    min-width: 0;
   }
 }
 

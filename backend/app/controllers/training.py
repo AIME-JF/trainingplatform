@@ -43,9 +43,10 @@ class TrainingController:
         training_type: Optional[str] = None,
         search: Optional[str] = None,
         current_user_id: Optional[int] = None,
+        scope: Optional[str] = None,
     ):
         try:
-            return self.service.get_trainings(page, size, training_status, training_type, search, current_user_id)
+            return self.service.get_trainings(page, size, training_status, training_type, search, current_user_id, scope)
         except Exception as exc:
             logger.error("获取培训列表异常: %s", exc)
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="获取培训列表失败")

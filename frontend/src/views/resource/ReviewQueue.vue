@@ -8,6 +8,10 @@
     <a-card :bordered="false">
       <a-table :data-source="tasks" :columns="columns" row-key="id" :pagination="false">
         <template #bodyCell="{ column, record }">
+          <template v-if="column.key === 'source'">
+            <a-tag v-if="isAiFallback(record)" color="purple">AI 降级</a-tag>
+            <a-tag v-else color="default">人工</a-tag>
+          </template>
           <template v-if="column.key === 'status'">
             <a-tag :color="record.status === 'pending' ? 'gold' : (record.status === 'approved' ? 'green' : 'red')">
               {{ statusLabel(record.status) }}
@@ -39,6 +43,31 @@
     <a-modal v-model:open="rejectVisible" title="驳回原因" @ok="doReject">
       <a-textarea v-model:value="rejectComment" :rows="4" placeholder="请输入驳回意见" />
     </a-modal>
+
+    <a-modal v-model:open="aiInfoVisible" title="AI 审核信息" :footer="null" width="600px">
+      <template v-if="aiInfoTask">
+        <a-alert type="warning" show-icon style="margin-bottom: 16px">
+          <template #message>AI 审核已降级到人工审核</template>
+          <template #description>
+            该任务由 AI 自动审核后降级到人工确认，请参考以下 AI 审核信息做出最终判断。
+          </template>
+        </a-alert>
+        <a-descriptions :column="1" bordered size="small">
+          <a-descriptions-item label="资源">{{ aiInfoTask.resourceTitle || '-' }}</a-descriptions-item>
+          <a-descriptions-item label="审核阶段">第 {{ aiInfoTask.stageOrder }} 级</a-descriptions-item>
+          <a-descriptions-item label="AI 审核摘要">
+            <div style="white-space: pre-wrap; word-break: break-all;">{{ getAiSummary(aiInfoTask) || '无摘要信息' }}</div>
+          </a-descriptions-item>
+        </a-descriptions>
+        <div style="margin-top: 16px; text-align: right;">
+          <a-space>
+            <a-button @click="() => { aiInfoVisible = false; if (aiInfoTask?.resourceId) router.push('/resource/detail/' + aiInfoTask.resourceId) }">
+              查看资源
+            </a-button>
+          </a-space>
+        </div>
+      </template>
+    </a-modal>
   </div>
 </template>
 
@@ -57,6 +86,7 @@ const canReviewTask = computed(() => authStore.hasAnyPermission(['REVIEW_RESOURC
 const columns = [
   { title: '资源', dataIndex: 'resourceTitle', key: 'resourceTitle' },
   { title: '阶段', dataIndex: 'stageOrder', key: 'stageOrder', width: 100 },
+  { title: '来源', key: 'source', width: 120 },
   { title: '状态', dataIndex: 'status', key: 'status', width: 120 },
   { title: '创建时间', dataIndex: 'createdAt', key: 'createdAt', width: 180 },
   { title: '操作', key: 'action', width: 220 },
@@ -65,6 +95,8 @@ const columns = [
 const rejectVisible = ref(false)
 const rejectComment = ref('')
 const currentTask = ref(null)
+const aiInfoVisible = ref(false)
+const aiInfoTask = ref(null)
 
 onMounted(fetchTasks)
 
@@ -81,7 +113,22 @@ async function fetchTasks() {
   }
 }
 
+function isAiFallback(task) {
+  return task.comment && task.comment.startsWith('AI 审核降级到人工')
+}
+
+function getAiSummary(task) {
+  if (!isAiFallback(task)) return ''
+  const prefix = 'AI 审核降级到人工: '
+  return task.comment.startsWith(prefix) ? task.comment.slice(prefix.length) : task.comment
+}
+
 function viewDetail(task) {
+  if (isAiFallback(task)) {
+    aiInfoTask.value = task
+    aiInfoVisible.value = true
+    return
+  }
   if (!task?.resourceId) {
     message.warning('未找到对应资源')
     return

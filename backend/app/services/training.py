@@ -172,13 +172,21 @@ class TrainingService:
         training_type: Optional[str] = None,
         search: Optional[str] = None,
         current_user_id: Optional[int] = None,
+        scope: Optional[str] = None,
     ) -> PaginatedResponse[TrainingListResponse]:
-        """获取培训列表"""
+        """获取培训列表
+
+        scope 参数:
+            None: 全部可见培训班
+            mine: 我参与的培训班（已审批学员、班主任、创建人、课程教官）
+            enrollable: 可报名的培训班（已发布且未参与的）
+        """
         trainings = self._collect_visible_trainings(
             status=status,
             training_type=training_type,
             search=search,
             current_user_id=current_user_id,
+            scope=scope,
         )
         items = [self._to_list_response(training, current_user_id) for training in trainings]
 
@@ -210,6 +218,7 @@ class TrainingService:
         training_type: Optional[str] = None,
         search: Optional[str] = None,
         current_user_id: Optional[int] = None,
+        scope: Optional[str] = None,
     ) -> List[Training]:
         status_filters = self._normalize_training_status_filters(status)
         query = self.db.query(Training).options(
@@ -240,9 +249,19 @@ class TrainingService:
             if scope_context and not can_view_training_with_context(scope_context, training):
                 continue
             # 非管理员、非相关人员只能看到已发布的班级
+            related = is_training_related_user(training, current_user_id) if current_user_id else False
             if scope_context and not scope_context.is_admin:
-                related = is_training_related_user(training, current_user_id) if current_user_id else False
                 if not related and (training.publish_status or "draft") != "published":
+                    continue
+            # scope 筛选
+            if scope == 'mine' and current_user_id:
+                if not related:
+                    continue
+            elif scope == 'enrollable' and current_user_id:
+                if related:
+                    continue
+                # 可报名 = 已发布
+                if (training.publish_status or "draft") != "published":
                     continue
             visible_trainings.append(training)
 

@@ -170,11 +170,12 @@ def get_trainings(
     status: Optional[str] = None,
     type: Optional[str] = None,
     search: Optional[str] = None,
+    scope: Optional[str] = Query(None, description="筛选范围: mine(我的培训班)/enrollable(可报名)"),
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     controller = TrainingController(db)
-    data = controller.get_trainings(page, size, status, type, search, current_user.user_id)
+    data = controller.get_trainings(page, size, status, type, search, current_user.user_id, scope)
     return StandardResponse(data=data)
 
 
