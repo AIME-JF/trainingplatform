@@ -98,7 +98,7 @@ class ReviewTaskResponse(BaseModel):
     resource_id: Optional[int] = None
     resource_title: Optional[str] = None
     stage_order: int
-    assignee_user_id: int
+    assignee_user_id: Optional[int] = None
     assignee_name: Optional[str] = None
     status: str
     comment: Optional[str] = None
@@ -119,6 +119,40 @@ class ReviewWorkflowResponse(BaseModel):
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
     tasks: List[ReviewTaskResponse] = []
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ReviewWorkflowListResponse(BaseModel):
+    """审核工作流列表项（含业务信息）"""
+    id: int
+    business_type: str
+    business_id: int
+    business_title: Optional[str] = None
+    policy_id: Optional[int] = None
+    policy_name: Optional[str] = None
+    current_stage: int = 1
+    total_stages: int = 0
+    status: str = "pending"
+    submitter_id: Optional[int] = None
+    submitter_name: Optional[str] = None
+    started_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ReviewLogDetailResponse(BaseModel):
+    """审核日志详情"""
+    id: int
+    workflow_id: int
+    business_type: str
+    business_id: int
+    actor_id: Optional[int] = None
+    actor_name: Optional[str] = None
+    action: str
+    detail_json: Optional[dict] = None
+    created_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 

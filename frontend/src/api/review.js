@@ -45,3 +45,11 @@ export function createReviewPolicy(data) {
 export function updateReviewPolicy(id, data) {
   return request.put(`/review-policies/${id}`, data)
 }
+
+export function getReviewWorkflows(params) {
+  return request.get('/reviews/workflows', { params })
+}
+
+export function getReviewWorkflowLogs(workflowId) {
+  return request.get(`/reviews/workflows/${workflowId}/logs`)
+}

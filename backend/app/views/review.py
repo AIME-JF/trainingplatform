@@ -13,6 +13,7 @@ from app.schemas.review import (
     ReviewTaskActionRequest,
     ReviewTaskResponse,
     ReviewWorkflowResponse,
+    ReviewLogDetailResponse,
     ReviewPolicyCreate,
     ReviewPolicyUpdate,
     ReviewPolicyResponse,
@@ -92,6 +93,34 @@ def reject_task(
 ):
     controller = ReviewController(db)
     result = controller.reject_task(task_id, current_user.user_id, data)
+    return StandardResponse(data=result)
+
+
+# ===== 审核工作流列表与日志 =====
+
+@router.get("/reviews/workflows", response_model=StandardResponse, summary="审核工作流列表")
+def list_review_workflows(
+    business_type: Optional[str] = None,
+    status: Optional[str] = None,
+    search: Optional[str] = None,
+    page: int = 1,
+    size: int = 20,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = ReviewController(db)
+    result = controller.list_workflows(business_type, status, search, page, size)
+    return StandardResponse(data=result)
+
+
+@router.get("/reviews/workflows/{workflow_id}/logs", response_model=StandardResponse[List[ReviewLogDetailResponse]], summary="审核工作流日志")
+def get_review_workflow_logs(
+    workflow_id: int,
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    controller = ReviewController(db)
+    result = controller.get_workflow_logs(workflow_id)
     return StandardResponse(data=result)
 
 

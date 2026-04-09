@@ -107,6 +107,24 @@ class ReviewController:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='审核流程不存在')
         return data
 
+    def list_workflows(self, business_type=None, status_filter=None, search=None, page=1, size=20):
+        try:
+            return self.service.list_workflows(business_type, status_filter, search, page, size)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("查询审核记录异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="查询审核记录失败")
+
+    def get_workflow_logs(self, workflow_id: int):
+        try:
+            return self.service.get_workflow_logs(workflow_id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        except Exception as exc:
+            logger.error("查询审核日志异常: %s", exc)
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="查询审核日志失败")
+
     def get_policies(self, business_type: Optional[str] = None):
         try:
             return self.service.list_policies(business_type=business_type)

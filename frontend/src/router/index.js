@@ -261,6 +261,12 @@ const router = createRouter({
           meta: { title: '审核策略', anyPermissions: RESOURCE_POLICY_PAGE_PERMISSIONS },
         },
         {
+          path: 'resource/review-history',
+          name: 'ResourceReviewHistory',
+          component: () => import('../views/resource/ReviewHistory.vue'),
+          meta: { title: '审核记录' },
+        },
+        {
           path: 'instructor',
           name: 'InstructorList',
           component: () => import('../views/instructor/List.vue'),

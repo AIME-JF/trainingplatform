@@ -189,6 +189,7 @@ export const appMenuConfig = [
         label: '审核策略',
         anyPermissions: RESOURCE_POLICY_PAGE_PERMISSIONS,
       },
+      { key: '/resource/review-history', label: '审核记录' },
     ],
   },
   {

@@ -12,7 +12,7 @@ class VideoKeyframeTask(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     media_file_id = Column(Integer, ForeignKey('media_files.id'), nullable=False, index=True, comment='原始视频文件ID')
-    resource_id = Column(Integer, ForeignKey('resources.id'), nullable=True, index=True, comment='关联资源ID')
+    resource_id = Column(Integer, ForeignKey('resources.id', ondelete='SET NULL'), nullable=True, index=True, comment='关联资源ID')
     status = Column(String(30), nullable=False, default='pending', comment='pending/running/success/partial_success/failed')
     video_duration = Column(Float, default=0, comment='视频时长(秒)')
     thumbnail_storage_path = Column(String(1000), nullable=True, comment='缩略图视频存储路径')

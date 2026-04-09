@@ -96,7 +96,7 @@ class ReviewTask(Base):
     business_type = Column(String(30), nullable=False, comment='业务类型')
     business_id = Column(Integer, nullable=False, comment='业务对象ID')
     stage_order = Column(Integer, nullable=False, comment='阶段顺序')
-    assignee_user_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True, comment='审核人ID')
+    assignee_user_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True, comment='审核人ID，AI审核时为NULL')
     status = Column(String(30), nullable=False, default='pending', index=True,
                     comment='状态: pending/approved/rejected/skipped')
     comment = Column(Text, nullable=True, comment='审核意见')
@@ -120,8 +120,8 @@ class ReviewLog(Base):
     business_type = Column(String(30), nullable=False, comment='业务类型')
     business_id = Column(Integer, nullable=False, comment='业务对象ID')
     workflow_id = Column(Integer, ForeignKey('review_workflows.id', ondelete='CASCADE'), nullable=False, index=True)
-    actor_id = Column(Integer, ForeignKey('users.id'), nullable=False, index=True)
-    action = Column(String(30), nullable=False, comment='动作: submit/approve/reject/revoke/reassign')
+    actor_id = Column(Integer, ForeignKey('users.id'), nullable=True, index=True, comment='操作人ID，AI审核时为NULL')
+    action = Column(String(30), nullable=False, comment='动作: submit/approve/reject/revoke/reassign/ai_fallback')
     detail_json = Column(JSON, nullable=True, comment='日志详情')
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment='创建时间')
 

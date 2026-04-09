@@ -426,6 +426,112 @@ class ReviewService:
             tasks=tasks,
         )
 
+    # ===== 工作流列表与日志 =====
+    def list_workflows(
+        self,
+        business_type: Optional[str] = None,
+        status: Optional[str] = None,
+        search: Optional[str] = None,
+        page: int = 1,
+        size: int = 20,
+    ) -> dict:
+        """查询审核工作流列表（分页+筛选）"""
+        from app.models.review import ReviewPolicy
+
+        query = self.db.query(ReviewWorkflow).order_by(ReviewWorkflow.id.desc())
+
+        if business_type:
+            query = query.filter(ReviewWorkflow.business_type == business_type)
+        if status:
+            query = query.filter(ReviewWorkflow.status == status)
+
+        total = query.count()
+        workflows = query.offset((page - 1) * size).limit(size).all()
+
+        items = []
+        for wf in workflows:
+            # 获取业务标题
+            business_title = None
+            if wf.business_type == 'resource':
+                resource = self.db.query(Resource).filter(Resource.id == wf.business_id).first()
+                if resource:
+                    business_title = resource.title
+                    if search and search.lower() not in (business_title or '').lower():
+                        continue
+
+            # 获取策略名称
+            policy_name = None
+            policy = self.db.query(ReviewPolicy).filter(ReviewPolicy.id == wf.policy_id).first()
+            if policy:
+                policy_name = policy.name
+
+            # 获取阶段总数
+            total_stages = 0
+            if policy:
+                total_stages = len(policy.stages or [])
+
+            # 获取提交人
+            submitter_id = None
+            submitter_name = None
+            submit_log = self.db.query(ReviewLog).filter(
+                ReviewLog.workflow_id == wf.id,
+                ReviewLog.action == 'submit',
+            ).first()
+            if submit_log:
+                submitter_id = submit_log.actor_id
+                user = self.db.query(User).filter(User.id == submit_log.actor_id).first()
+                if user:
+                    submitter_name = user.nickname or user.username
+
+            items.append({
+                'id': wf.id,
+                'business_type': wf.business_type,
+                'business_id': wf.business_id,
+                'business_title': business_title,
+                'policy_id': wf.policy_id,
+                'policy_name': policy_name,
+                'current_stage': wf.current_stage,
+                'total_stages': total_stages,
+                'status': wf.status,
+                'submitter_id': submitter_id,
+                'submitter_name': submitter_name,
+                'started_at': wf.started_at,
+                'finished_at': wf.finished_at,
+            })
+
+        return {'items': items, 'total': total, 'page': page, 'size': size}
+
+    def get_workflow_logs(self, workflow_id: int) -> list:
+        """获取工作流的操作日志时间线"""
+
+        logs = self.db.query(ReviewLog).filter(
+            ReviewLog.workflow_id == workflow_id,
+        ).order_by(ReviewLog.created_at.asc()).all()
+
+        result = []
+        for log in logs:
+            actor_name = None
+            if log.actor_id is not None and log.actor_id > 0:
+                user = self.db.query(User).filter(User.id == log.actor_id).first()
+                if user:
+                    actor_name = user.nickname or user.username
+            elif log.actor_id is None:
+                actor_name = 'AI 审核系统'
+
+            result.append({
+                'id': log.id,
+                'workflow_id': log.workflow_id,
+                'business_type': log.business_type,
+                'business_id': log.business_id,
+                'actor_id': log.actor_id,
+                'actor_name': actor_name,
+                'action': log.action,
+                'detail_json': log.detail_json,
+                'created_at': log.created_at,
+            })
+
+        return result
+
     # ===== 内部方法 =====
     def _match_policy_by_context(
         self, business_type: str, scope_context: Dict[str, Any], include_default: bool = False
@@ -581,13 +687,13 @@ class ReviewService:
             return 0
 
         if stage.reviewer_type == 'ai':
-            # 创建占位任务
+            # 创建占位任务（AI 审核无审核人，assignee_user_id 为 NULL）
             placeholder_task = ReviewTask(
                 workflow_id=workflow_id,
                 business_type=business_type,
                 business_id=business_id,
                 stage_order=stage_order,
-                assignee_user_id=0,
+                assignee_user_id=None,
                 status='pending',
             )
             self.db.add(placeholder_task)
@@ -795,7 +901,7 @@ class ReviewService:
                     business_type=workflow.business_type,
                     business_id=workflow.business_id,
                     stage_order=current_stage,
-                    assignee_user_id=0,
+                    assignee_user_id=None,
                     status='rejected',
                     comment=f'AI 审核异常且未配置降级审核人: {summary}',
                 )
@@ -833,7 +939,7 @@ class ReviewService:
             self.db.commit()
             self._write_log(
                 workflow.business_type, workflow.business_id, workflow.id,
-                actor_id=0, action='ai_fallback', detail={'reason': summary},
+                actor_id=None, action='ai_fallback', detail={'reason': summary},
             )
             return
 
@@ -859,7 +965,7 @@ class ReviewService:
             self.db.commit()
             self._write_log(
                 workflow.business_type, workflow.business_id, workflow.id,
-                actor_id=0, action='reject', detail={'ai_review': summary},
+                actor_id=None, action='reject', detail={'ai_review': summary},
             )
 
     def _get_uploader_id(self, workflow: ReviewWorkflow) -> int:
