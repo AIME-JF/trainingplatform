@@ -82,9 +82,9 @@ export const appMenuConfig = [
     icon: TeamOutlined,
     children: [
       {
-        key: '/training',
-        label: '培训班管理',
-        anyPermissions: TRAINING_PAGE_PERMISSIONS,
+        key: '/training/plan',
+        label: '培训计划管理',
+        anyPermissions: TRAINING_SCHEDULE_PAGE_PERMISSIONS,
       },
       {
         key: '/training/base',
@@ -92,9 +92,9 @@ export const appMenuConfig = [
         anyPermissions: TRAINING_BASE_PAGE_PERMISSIONS,
       },
       {
-        key: '/training/plan',
-        label: '培训计划管理',
-        anyPermissions: TRAINING_SCHEDULE_PAGE_PERMISSIONS,
+        key: '/training',
+        label: '培训班管理',
+        anyPermissions: TRAINING_PAGE_PERMISSIONS,
       },
     ],
   },
@@ -131,11 +131,6 @@ export const appMenuConfig = [
         anyPermissions: REPORT_PAGE_PERMISSIONS,
       },
       {
-        key: '/report/exam',
-        label: '考试统计',
-        anyPermissions: REPORT_PAGE_PERMISSIONS,
-      },
-      {
         key: '/trainee',
         label: '学员统计',
         anyPermissions: USER_ARCHIVE_PAGE_PERMISSIONS,
@@ -160,11 +155,6 @@ export const appMenuConfig = [
       {
         key: '/resource/my',
         label: COMMUNITY_BOARD_TITLE,
-        anyPermissions: [],
-      },
-      {
-        key: '/resource/assistant',
-        label: COMMUNITY_ASSISTANT_TITLE,
         anyPermissions: [],
       },
       {

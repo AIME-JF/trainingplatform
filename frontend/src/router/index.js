@@ -204,12 +204,6 @@ const router = createRouter({
           meta: { title: COMMUNITY_BOARD_TITLE },
         },
         {
-          path: 'resource/assistant',
-          name: 'CommunityAssistant',
-          component: () => import('../views/resource/CommunityAssistant.vue'),
-          meta: { title: COMMUNITY_ASSISTANT_TITLE },
-        },
-        {
           path: 'resource/recommend',
           redirect: { name: 'CommunityAssistant' },
         },
@@ -301,12 +295,6 @@ const router = createRouter({
           name: 'Report',
           component: () => import('../views/report/DataBoard.vue'),
           meta: { title: '数据看板', anyPermissions: REPORT_PAGE_PERMISSIONS },
-        },
-        {
-          path: 'report/exam',
-          name: 'ExamStatisticsBoard',
-          component: () => import('../views/report/DataBoard.vue'),
-          meta: { title: '考试统计', anyPermissions: REPORT_PAGE_PERMISSIONS, reportCategory: 'exam' },
         },
         {
           path: 'system/dashboard-modules',
