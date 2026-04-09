@@ -786,6 +786,7 @@ export default {
       if (nextScope !== 'private') {
         selectedFolderId.value = null
       }
+      fetchItems()
     }
 
     function handleCategorySelect(category) {
