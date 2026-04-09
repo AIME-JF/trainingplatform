@@ -9,6 +9,7 @@ from typing import Sequence, Union
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import inspect
 
 
 # revision identifiers, used by Alembic.
@@ -18,19 +19,36 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+def _has_column(inspector, table_name: str, column_name: str) -> bool:
+    if not inspector.has_table(table_name):
+        return False
+    return column_name in {column["name"] for column in inspector.get_columns(table_name)}
+
+
 def upgrade() -> None:
-    op.add_column(
-        "knowledge_chat_sessions",
-        sa.Column("knowledge_item_ids", sa.JSON(), nullable=False, server_default=sa.text("'[]'")),
-    )
-    op.add_column(
-        "scenario_templates",
-        sa.Column("knowledge_item_ids", sa.JSON(), nullable=False, server_default=sa.text("'[]'")),
-    )
-    op.alter_column("knowledge_chat_sessions", "knowledge_item_ids", server_default=None)
-    op.alter_column("scenario_templates", "knowledge_item_ids", server_default=None)
+    bind = op.get_bind()
+    inspector = inspect(bind)
+
+    if not _has_column(inspector, "knowledge_chat_sessions", "knowledge_item_ids"):
+        op.add_column(
+            "knowledge_chat_sessions",
+            sa.Column("knowledge_item_ids", sa.JSON(), nullable=False, server_default=sa.text("'[]'")),
+        )
+        op.alter_column("knowledge_chat_sessions", "knowledge_item_ids", server_default=None)
+
+    inspector = inspect(bind)
+    if not _has_column(inspector, "scenario_templates", "knowledge_item_ids"):
+        op.add_column(
+            "scenario_templates",
+            sa.Column("knowledge_item_ids", sa.JSON(), nullable=False, server_default=sa.text("'[]'")),
+        )
+        op.alter_column("scenario_templates", "knowledge_item_ids", server_default=None)
 
 
 def downgrade() -> None:
-    op.drop_column("scenario_templates", "knowledge_item_ids")
-    op.drop_column("knowledge_chat_sessions", "knowledge_item_ids")
+    inspector = inspect(op.get_bind())
+
+    if _has_column(inspector, "scenario_templates", "knowledge_item_ids"):
+        op.drop_column("scenario_templates", "knowledge_item_ids")
+    if _has_column(inspector, "knowledge_chat_sessions", "knowledge_item_ids"):
+        op.drop_column("knowledge_chat_sessions", "knowledge_item_ids")
