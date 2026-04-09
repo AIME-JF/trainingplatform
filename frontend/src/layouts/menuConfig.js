@@ -26,7 +26,6 @@ import {
   RESOURCE_POLICY_PAGE_PERMISSIONS,
   RESOURCE_REVIEW_PAGE_PERMISSIONS,
   ROLE_MANAGE_PAGE_PERMISSIONS,
-  TEACHING_RESOURCE_GENERATION_PAGE_PERMISSIONS,
   TRAINING_BASE_PAGE_PERMISSIONS,
   TRAINING_PAGE_PERMISSIONS,
   TRAINING_SCHEDULE_PAGE_PERMISSIONS,
@@ -56,18 +55,13 @@ export const appMenuConfig = [
     children: [
       {
         key: '/library',
-        label: '知识库',
+        label: '知识库管理',
         roles: ['admin', 'instructor', 'student'],
       },
       {
         key: '/knowledge/scenarios',
         label: '场景模板管理',
         roles: ['admin', 'instructor'],
-      },
-      {
-        key: '/resource/teaching-generate',
-        label: '教学助手',
-        anyPermissions: TEACHING_RESOURCE_GENERATION_PAGE_PERMISSIONS,
       },
       {
         key: '/courses',

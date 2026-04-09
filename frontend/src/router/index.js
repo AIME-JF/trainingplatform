@@ -1,6 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import {
-  TEACHING_RESOURCE_GENERATION_PAGE_PERMISSIONS,
   AI_PAPER_ASSEMBLE_PAGE_PERMISSIONS,
   AI_PAPER_GENERATE_PAGE_PERMISSIONS,
   AI_QUESTION_PAGE_PERMISSIONS,
@@ -188,7 +187,7 @@ const router = createRouter({
           path: 'library',
           name: 'Library',
           component: () => import('../views/library/Index.vue'),
-          meta: { title: '知识库', roles: ['admin', 'instructor', 'student'] },
+          meta: { title: '知识库管理', roles: ['admin', 'instructor', 'student'] },
         },
         {
           path: 'knowledge/scenarios',
@@ -224,16 +223,6 @@ const router = createRouter({
           name: 'MyResources',
           component: () => import('../views/resource/MyResources.vue'),
           meta: { title: MY_UPLOAD_TITLE, anyPermissions: MY_RESOURCE_PAGE_PERMISSIONS },
-        },
-        {
-          path: 'resource/teaching-generate',
-          name: 'TeachingResourceGenerationTask',
-          component: () => import('../views/resource/TeachingResourceGenerationTask.vue'),
-          meta: { title: '教学资源生成', anyPermissions: TEACHING_RESOURCE_GENERATION_PAGE_PERMISSIONS },
-        },
-        {
-          path: 'resource/ai-generate',
-          redirect: { name: 'TeachingResourceGenerationTask' },
         },
         // -- 资源管理/审核 --
         {

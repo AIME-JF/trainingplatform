@@ -163,7 +163,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
           </svg>
         </button>
-        <span class="mobile-header-title">知识库</span>
+        <span class="mobile-header-title">知识库管理</span>
       </div>
       <div class="mobile-avatar">
         {{ avatarText }}
@@ -186,7 +186,7 @@
       >
         <div class="sidebar-inner">
           <div class="sidebar-title-block">
-            <h2 class="sidebar-title">知识库</h2>
+            <h2 class="sidebar-title">知识库管理</h2>
           </div>
 
           <!-- 搜索框 -->

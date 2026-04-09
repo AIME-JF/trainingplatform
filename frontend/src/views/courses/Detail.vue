@@ -3,7 +3,7 @@
     <div class="top-bar">
         <a-breadcrumb>
         <a-breadcrumb-item @click="$router.push('/courses')" style="cursor: pointer; color: var(--police-primary)">
-          课程资源
+          {{ COURSE_RESOURCES_TITLE }}
         </a-breadcrumb-item>
         <a-breadcrumb-item>{{ localCourse.title }}</a-breadcrumb-item>
       </a-breadcrumb>
@@ -232,6 +232,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
 import { DeleteOutlined, DownloadOutlined, EditOutlined } from '@ant-design/icons-vue'
 import { message } from 'ant-design-vue'
+import { COURSE_RESOURCES_TITLE } from '@/constants/navigationTitles'
 import {
   bindCourseResource,
   createCourseQA,

@@ -1,6 +1,6 @@
 <template>
-  <div class="page-content scenario-sim-page">
-    <div class="sim-header">
+  <div class="page-content scenario-sim-page" :class="{ 'embedded-scenario-page': embedded }">
+    <div v-if="!embedded" class="sim-header">
       <a-button @click="router.push(backTarget)">返回</a-button>
       <h1 class="sim-title">场景模拟训练</h1>
     </div>
@@ -317,10 +317,17 @@ const RADAR_RADIUS = 98
 const RADAR_LABEL_RADIUS = 126
 const RADAR_GRID_LEVELS = [0.25, 0.5, 0.75, 1]
 
+const props = withDefaults(defineProps<{
+  embedded?: boolean
+}>(), {
+  embedded: false,
+})
+
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 const avatarText = computed(() => (authStore.currentUser?.name || '').slice(0, 1))
+const embedded = computed(() => props.embedded)
 
 const filterCategory = ref<string>()
 
@@ -805,6 +812,14 @@ function buildRadarPolygon(points: string[]) {
   margin: 0 auto;
 }
 
+.embedded-scenario-page {
+  max-width: none;
+  margin: 0 !important;
+  margin-left: 0 !important;
+  padding: 0 !important;
+  min-height: auto !important;
+}
+
 .sim-header {
   display: flex;
   align-items: center;
@@ -847,6 +862,7 @@ function buildRadarPolygon(points: string[]) {
 
 .scenario-card {
   border-radius: var(--v2-radius-lg);
+  border: 1px solid rgba(226, 232, 244, 0.94);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -894,6 +910,11 @@ function buildRadarPolygon(points: string[]) {
   height: calc(100vh - 160px);
 }
 
+.embedded-scenario-page .sim-active {
+  height: auto;
+  min-height: 760px;
+}
+
 .history-banner {
   margin-bottom: 12px;
 }
@@ -902,10 +923,11 @@ function buildRadarPolygon(points: string[]) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 16px;
-  background: rgba(255, 255, 255, 0.92);
-  border: 1px solid rgba(229, 229, 234, 0.6);
-  border-radius: var(--v2-radius-lg);
+  padding: 14px 18px;
+  background: linear-gradient(180deg, rgba(247, 249, 255, 0.98) 0%, rgba(255, 255, 255, 0.98) 100%);
+  border: 1px solid rgba(226, 232, 244, 0.96);
+  border-radius: 22px;
+  box-shadow: 0 14px 28px rgba(48, 71, 122, 0.05);
   margin-bottom: 12px;
 }
 
@@ -923,16 +945,16 @@ function buildRadarPolygon(points: string[]) {
 }
 
 .sim-guide-card {
-  padding: 14px 16px;
-  background: rgba(82, 196, 26, 0.06);
-  border: 1px solid rgba(82, 196, 26, 0.18);
-  border-radius: var(--v2-radius-lg);
+  padding: 16px 18px;
+  background: linear-gradient(180deg, rgba(246, 251, 244, 0.98) 0%, rgba(255, 255, 255, 0.98) 100%);
+  border: 1px solid rgba(197, 233, 189, 0.86);
+  border-radius: 24px;
   margin-bottom: 12px;
 }
 
 .sim-guide-card-ready {
-  background: rgba(250, 173, 20, 0.1);
-  border-color: rgba(250, 173, 20, 0.28);
+  background: linear-gradient(180deg, rgba(255, 247, 230, 0.98) 0%, rgba(255, 255, 255, 0.98) 100%);
+  border-color: rgba(248, 196, 104, 0.5);
 }
 
 .sim-guide-stats {
@@ -986,10 +1008,10 @@ function buildRadarPolygon(points: string[]) {
 }
 
 .sim-background {
-  padding: 12px 16px;
-  background: rgba(24, 144, 255, 0.06);
-  border: 1px solid rgba(24, 144, 255, 0.15);
-  border-radius: var(--v2-radius-lg);
+  padding: 14px 18px;
+  background: linear-gradient(180deg, rgba(240, 246, 255, 0.98) 0%, rgba(255, 255, 255, 0.98) 100%);
+  border: 1px solid rgba(189, 214, 251, 0.88);
+  border-radius: 22px;
   font-size: 13px;
   line-height: 1.6;
   color: var(--v2-text-secondary);
@@ -1003,7 +1025,10 @@ function buildRadarPolygon(points: string[]) {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 12px 0;
+  padding: 18px 6px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(251, 252, 255, 0.98) 0%, rgba(247, 249, 255, 0.96) 100%);
+  border: 1px solid rgba(226, 232, 244, 0.92);
 }
 
 .sim-message {
@@ -1065,8 +1090,11 @@ function buildRadarPolygon(points: string[]) {
   display: flex;
   align-items: flex-end;
   gap: 10px;
-  padding: 12px 0;
-  border-top: 1px solid rgba(229, 229, 234, 0.6);
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid rgba(226, 232, 244, 0.96);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.92);
   flex-shrink: 0;
 }
 
@@ -1236,6 +1264,11 @@ function buildRadarPolygon(points: string[]) {
 @media (max-width: 768px) {
   .sim-active {
     height: calc(100vh - 140px);
+  }
+
+  .embedded-scenario-page .sim-active {
+    height: auto;
+    min-height: auto;
   }
 
   .sim-info-bar {

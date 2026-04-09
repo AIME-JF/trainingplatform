@@ -1,10 +1,16 @@
 <template>
-  <div class="page-content scenarios-page">
-    <div class="page-header">
+  <div class="page-content scenarios-page" :class="{ 'embedded-scenarios-page': embedded }">
+    <div v-if="!embedded" class="page-header">
       <div>
         <h1 class="page-title">场景模板管理</h1>
         <p class="page-subtitle">创建和管理场景模拟模板，发布给学员进行训练。</p>
       </div>
+      <a-button type="primary" @click="router.push('/knowledge/scenarios/create')">
+        创建场景模板
+      </a-button>
+    </div>
+
+    <div v-else class="embedded-toolbar">
       <a-button type="primary" @click="router.push('/knowledge/scenarios/create')">
         创建场景模板
       </a-button>
@@ -77,7 +83,14 @@ import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { getScenarioTemplates, publishScenarioTemplate, deleteScenarioTemplate } from '@/api/knowledge'
 
+const props = withDefaults(defineProps<{
+  embedded?: boolean
+}>(), {
+  embedded: false,
+})
+
 const router = useRouter()
+const embedded = props.embedded
 const loading = ref(false)
 
 const query = reactive({
@@ -115,13 +128,12 @@ onMounted(() => {
 async function fetchScenarios() {
   loading.value = true
   try {
-    const res = await getScenarioTemplates({
+    const data = await getScenarioTemplates({
       page: pagination.current,
       size: pagination.pageSize,
       category: query.category,
       status: query.status,
     })
-    const data = res.data || res
     scenarios.value = data.items || []
     pagination.total = data.total || 0
   } finally {
@@ -181,11 +193,25 @@ async function deleteScenario(id: number) {
   margin: 0 auto;
 }
 
+.embedded-scenarios-page {
+  max-width: none;
+  margin: 0 !important;
+  margin-left: 0 !important;
+  padding: 0 !important;
+  min-height: auto !important;
+}
+
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: 24px;
+}
+
+.embedded-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
 }
 
 .page-title {
@@ -216,5 +242,11 @@ async function deleteScenario(id: number) {
 
 .content-card {
   border-radius: var(--v2-radius-lg);
+}
+
+@media (max-width: 768px) {
+  .embedded-toolbar {
+    justify-content: flex-start;
+  }
 }
 </style>

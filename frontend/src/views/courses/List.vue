@@ -1,7 +1,7 @@
 <template>
   <div class="course-list-page">
     <div class="page-header">
-      <h2>课程资源</h2>
+      <h2>{{ COURSE_RESOURCES_TITLE }}</h2>
       <a-button v-if="canCreateCourse" type="primary" @click="openCreate">
         <template #icon><PlusOutlined /></template>创建课程
       </a-button>
@@ -126,6 +126,7 @@ import { DeleteOutlined, EditOutlined, PlusOutlined, StarFilled } from '@ant-des
 import { message } from 'ant-design-vue'
 import { deleteCourse as apiDeleteCourse, getCourses } from '@/api/course'
 import { getUsers } from '@/api/user'
+import { COURSE_RESOURCES_TITLE } from '@/constants/navigationTitles'
 import { useAuthStore } from '@/stores/auth'
 import CourseEditorModal from './components/CourseEditorModal.vue'
 

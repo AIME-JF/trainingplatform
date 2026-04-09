@@ -1,8 +1,8 @@
 <template>
-  <div class="page-content resource-page">
-    <LearningResourceTabs />
+  <div class="page-content resource-page teaching-generate-page" :class="{ 'embedded-generate-page': embedded }">
+    <LearningResourceTabs v-if="!embedded" />
 
-    <div class="page-header">
+    <div v-if="!embedded" class="page-header">
       <div>
         <h1 class="page-title">教学资源生成</h1>
         <p class="page-subtitle">描述教学需求，系统智能生成课件资源。</p>
@@ -17,12 +17,23 @@
       </a-space>
     </div>
 
+    <div v-else class="embedded-toolbar">
+      <a-space>
+        <a-button @click="loadTasks">刷新任务</a-button>
+        <PermissionsTooltip :allowed="canCreateTaskPermission" tips="需要 USE_TEACHING_RESOURCE_GENERATION 权限">
+          <template #default="{ disabled }">
+            <a-button type="primary" :disabled="disabled" @click="createModalVisible = true">新建任务</a-button>
+          </template>
+        </PermissionsTooltip>
+      </a-space>
+    </div>
+
     <template v-if="!detailVisible">
       <a-card :bordered="false" class="list-card">
         <template #title>
           <div class="list-title">
             <span>任务列表</span>
-            <a-button @click="loadTasks">刷新</a-button>
+            <a-button v-if="!embedded" @click="loadTasks">刷新</a-button>
           </div>
         </template>
         <a-spin :spinning="taskLoading">
@@ -250,10 +261,17 @@ import AdmissionScopeSelector from '@/components/common/AdmissionScopeSelector.v
 import AiTaskTimeline from '@/components/common/AiTaskTimeline.vue'
 import { formatDateTime, formatTagList, getResourceStatusColor, getResourceStatusLabel } from '@/utils/learning-resource'
 
+const props = withDefaults(defineProps<{
+  embedded?: boolean
+}>(), {
+  embedded: false,
+})
+
 type TaskSummary = AITaskSummaryResponse & { confirmed_resource_id?: number | null }
 
 const router = useRouter()
 const authStore = useAuthStore()
+const embedded = props.embedded
 
 const creating = ref(false)
 const confirming = ref(false)
@@ -434,8 +452,20 @@ async function handleConfirmTask() {
   gap: 16px;
 }
 
+.embedded-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 18px;
+}
+
 .page-header {
   margin-bottom: 20px;
+}
+
+.embedded-generate-page {
+  margin-left: 0 !important;
+  padding: 0 !important;
+  min-height: auto !important;
 }
 
 .page-title {
@@ -561,6 +591,10 @@ async function handleConfirmTask() {
 
   .task-side {
     align-items: flex-start;
+  }
+
+  .embedded-toolbar {
+    justify-content: flex-start;
   }
 }
 </style>

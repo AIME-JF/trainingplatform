@@ -426,8 +426,6 @@ function getSelectedMenuKeyByPath(path) {
   if (path.startsWith('/resource/assistant')) return '/resource/assistant'
   if (path.startsWith('/resource/recommend')) return '/resource/assistant'
   if (path.startsWith('/resource/library')) return '/resource/library'
-  if (path.startsWith('/resource/teaching-generate')) return '/resource/teaching-generate'
-  if (path.startsWith('/resource/ai-generate')) return '/resource/teaching-generate'
   if (path.startsWith('/resource/manage')) return '/resource/manage'
   if (path.startsWith('/resource/review')) return '/resource/review'
   if (path.startsWith('/resource/policy')) return '/resource/policy'
@@ -456,8 +454,6 @@ function getOpenKeysByPath(path) {
   if (path.startsWith('/resource/library')) return ['community']
   if (path.startsWith('/resource/uploads')) return ['community']
   if (path.startsWith('/resource/detail')) return ['community']
-  if (path.startsWith('/resource/teaching-generate')) return ['learn']
-  if (path.startsWith('/resource/ai-generate')) return ['learn']
   if (path.startsWith('/resource/manage')) return ['manage']
   if (path.startsWith('/resource/review')) return ['review']
   if (path.startsWith('/resource/policy')) return ['review']

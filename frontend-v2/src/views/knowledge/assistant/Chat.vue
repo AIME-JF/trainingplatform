@@ -7,19 +7,30 @@
     @success="handleSaveSuccess"
   />
 
-  <div class="page-content knowledge-chat-page">
-    <div class="chat-header">
+  <div class="page-content knowledge-chat-page" :class="{ 'embedded-chat-page': embedded }">
+    <div v-if="!embedded" class="chat-header">
       <a-button @click="router.push(backTarget)">返回</a-button>
       <h1 class="chat-title">{{ pageTitle }}</h1>
     </div>
 
-    <div class="chat-toolbar">
+    <div class="chat-scope-card">
+      <div class="scope-card-copy">
+        <span class="scope-card-kicker">{{ scopeKicker }}</span>
+        <h2 class="scope-card-title">{{ scopeTitle }}</h2>
+        <p class="scope-card-desc">{{ scopeDescription }}</p>
+      </div>
+
       <KnowledgeItemSelector
         v-model="selectedKnowledgeItemIds"
         placeholder="可多选知识点或资料，不选择则为通识问答"
       />
-      <div class="toolbar-hint">
-        {{ selectedKnowledgeItemIds.length ? `已选择 ${selectedKnowledgeItemIds.length} 个知识点/资料` : '当前为通识问答' }}
+
+      <div class="scope-card-footer">
+        <a-tag v-if="selectedKnowledgeItemIds.length" color="blue">定向知识问答</a-tag>
+        <a-tag v-else color="default">通识问答</a-tag>
+        <span class="toolbar-hint">
+          {{ selectedKnowledgeItemIds.length ? `已选择 ${selectedKnowledgeItemIds.length} 个知识点/资料` : '未限定知识范围，AI 将按通识问答模式回答' }}
+        </span>
       </div>
     </div>
 
@@ -31,74 +42,76 @@
       :message="knowledgeWarning"
     />
 
-    <div ref="chatBodyRef" class="chat-body">
-      <div v-if="!messages.length" class="chat-welcome">
-        <div class="welcome-icon">
-          <RobotOutlined />
-        </div>
-        <h2>{{ welcomeTitle }}</h2>
-        <p>{{ welcomeDesc }}</p>
-        <div class="quick-prompts">
-          <a-tag
-            v-for="(prompt, idx) in quickPrompts"
-            :key="idx"
-            class="quick-prompt-tag"
-            @click="sendMessage(prompt)"
-          >
-            {{ prompt }}
-          </a-tag>
-        </div>
-      </div>
-
-      <div v-for="(msg, idx) in messages" :key="idx" class="chat-message" :class="msg.role">
-        <div class="message-avatar">
-          <a-avatar v-if="msg.role === 'user'" :size="32">{{ avatarText }}</a-avatar>
-          <a-avatar v-else :size="32" style="background: var(--v2-primary)">AI</a-avatar>
-        </div>
-        <div class="message-bubble">
-          <div class="message-content" v-html="msg.content" />
-          <div class="message-footer">
-            <span class="message-time">{{ msg.time }}</span>
-            <a-button
-              v-if="isCaseMode && msg.role === 'assistant'"
-              type="link"
-              size="small"
-              class="save-result-btn"
-              @click="openSaveResult(msg, idx)"
+    <div class="chat-panel-surface">
+      <div ref="chatBodyRef" class="chat-body">
+        <div v-if="!messages.length" class="chat-welcome">
+          <div class="welcome-icon">
+            <RobotOutlined />
+          </div>
+          <h2>{{ welcomeTitle }}</h2>
+          <p>{{ welcomeDesc }}</p>
+          <div class="quick-prompts">
+            <a-tag
+              v-for="(prompt, idx) in quickPrompts"
+              :key="idx"
+              class="quick-prompt-tag"
+              @click="sendMessage(prompt)"
             >
-              保存结果
-            </a-button>
+              {{ prompt }}
+            </a-tag>
+          </div>
+        </div>
+
+        <div v-for="(msg, idx) in messages" :key="idx" class="chat-message" :class="msg.role">
+          <div class="message-avatar">
+            <a-avatar v-if="msg.role === 'user'" :size="32">{{ avatarText }}</a-avatar>
+            <a-avatar v-else :size="32" style="background: var(--v2-primary)">AI</a-avatar>
+          </div>
+          <div class="message-bubble">
+            <div class="message-content" v-html="msg.content" />
+            <div class="message-footer">
+              <span class="message-time">{{ msg.time }}</span>
+              <a-button
+                v-if="isCaseMode && msg.role === 'assistant'"
+                type="link"
+                size="small"
+                class="save-result-btn"
+                @click="openSaveResult(msg, idx)"
+              >
+                保存结果
+              </a-button>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="generating" class="chat-message assistant">
+          <div class="message-avatar">
+            <a-avatar :size="32" style="background: var(--v2-primary)">AI</a-avatar>
+          </div>
+          <div class="message-bubble">
+            <a-spin size="small" />
+            <span class="generating-text">正在思考中...</span>
           </div>
         </div>
       </div>
 
-      <div v-if="generating" class="chat-message assistant">
-        <div class="message-avatar">
-          <a-avatar :size="32" style="background: var(--v2-primary)">AI</a-avatar>
-        </div>
-        <div class="message-bubble">
-          <a-spin size="small" />
-          <span class="generating-text">正在思考中...</span>
-        </div>
+      <div class="chat-input-bar">
+        <a-textarea
+          v-model:value="inputText"
+          class="chat-input"
+          :auto-size="{ minRows: 1, maxRows: 4 }"
+          placeholder="输入你的问题..."
+          @pressEnter.prevent="handleEnter"
+        />
+        <a-button
+          type="primary"
+          class="send-btn"
+          :disabled="!inputText.trim() || generating || loadingSession"
+          @click="sendMessage(inputText)"
+        >
+          发送
+        </a-button>
       </div>
-    </div>
-
-    <div class="chat-input-bar">
-      <a-textarea
-        v-model:value="inputText"
-        class="chat-input"
-        :auto-size="{ minRows: 1, maxRows: 4 }"
-        placeholder="输入你的问题..."
-        @pressEnter.prevent="handleEnter"
-      />
-      <a-button
-        type="primary"
-        class="send-btn"
-        :disabled="!inputText.trim() || generating || loadingSession"
-        @click="sendMessage(inputText)"
-      >
-        发送
-      </a-button>
     </div>
   </div>
 </template>
@@ -126,6 +139,12 @@ interface ChatMessage {
   content: string
   time: string
 }
+
+const props = withDefaults(defineProps<{
+  embedded?: boolean
+}>(), {
+  embedded: false,
+})
 
 const route = useRoute()
 const router = useRouter()
@@ -157,6 +176,7 @@ const isCaseMode = computed(() => mode.value === 'case')
 const backTarget = computed(() => (route.query.source === 'records' ? '/knowledge/records' : '/knowledge/assistant'))
 
 const folderOptions = computed(() => flattenLibraryFolders(libraryFolders.value))
+const embedded = computed(() => props.embedded)
 const pageTitle = computed(() => (isCaseMode.value ? '知识问答' : modeMeta.value.pageTitle))
 const welcomeTitle = computed(() => (isCaseMode.value ? '知识问答助手' : modeMeta.value.welcomeTitle))
 const welcomeDesc = computed(() => (
@@ -172,6 +192,19 @@ const quickPrompts = computed(() => (
         '询问未成年人有哪些特殊规定？',
       ]
     : modeMeta.value.quickPrompts
+))
+const scopeKicker = computed(() => (
+  selectedKnowledgeItemIds.value.length ? '当前已开启定向问答' : '当前为通识问答'
+))
+const scopeTitle = computed(() => (
+  selectedKnowledgeItemIds.value.length
+    ? `已选择 ${selectedKnowledgeItemIds.value.length} 个知识点或资料`
+    : '还没有限定知识范围'
+))
+const scopeDescription = computed(() => (
+  selectedKnowledgeItemIds.value.length
+    ? '后续提问会优先围绕所选知识点或资料回答，你也可以随时调整范围。'
+    : '如果希望回答更聚焦，可以先选择知识点或资料；不选择时会直接进入通识问答。'
 ))
 
 watch(
@@ -447,6 +480,15 @@ function escapeHtml(content: string) {
   padding-bottom: 0 !important;
 }
 
+.embedded-chat-page {
+  height: 100%;
+  max-width: none;
+  margin: 0 !important;
+  margin-left: 0 !important;
+  padding: 0 !important;
+  min-height: auto !important;
+}
+
 .chat-header {
   display: flex;
   align-items: center;
@@ -463,26 +505,81 @@ function escapeHtml(content: string) {
   flex: 1;
 }
 
-.chat-toolbar {
+.chat-scope-card {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-top: 16px;
+  gap: 14px;
+  padding: 18px 20px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(247, 249, 255, 0.98) 0%, rgba(255, 255, 255, 0.98) 100%);
+  border: 1px solid rgba(226, 232, 244, 0.92);
+  box-shadow: 0 14px 28px rgba(48, 71, 122, 0.05);
+}
+
+.scope-card-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.scope-card-kicker {
+  display: inline-flex;
+  width: fit-content;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: rgba(75, 110, 245, 0.1);
+  color: var(--v2-primary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.scope-card-title {
+  margin: 0;
+  color: #12234d;
+  font-size: 22px;
+  line-height: 1.2;
+}
+
+.scope-card-desc {
+  margin: 0;
+  color: #6c7896;
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.scope-card-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
 }
 
 .toolbar-hint {
   font-size: 13px;
-  color: var(--v2-text-muted);
+  color: #7d88a5;
 }
 
 .knowledge-warning {
   margin-top: 16px;
 }
 
+.chat-panel-surface {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  margin-top: 16px;
+  border-radius: 28px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 250, 255, 0.98) 100%);
+  border: 1px solid rgba(226, 232, 244, 0.96);
+  box-shadow: 0 18px 32px rgba(48, 71, 122, 0.06);
+  overflow: hidden;
+}
+
 .chat-body {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 0;
+  padding: 24px 20px 18px;
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -611,14 +708,20 @@ function escapeHtml(content: string) {
   display: flex;
   align-items: flex-end;
   gap: 10px;
-  padding: 16px 0;
-  border-top: 1px solid rgba(229, 229, 234, 0.6);
+  padding: 16px 20px 18px;
+  border-top: 1px solid rgba(226, 232, 244, 0.96);
+  background: rgba(255, 255, 255, 0.84);
+  backdrop-filter: blur(16px);
   flex-shrink: 0;
 }
 
 .chat-input {
   flex: 1;
   border-radius: 12px !important;
+}
+
+.chat-input :deep(.ant-input) {
+  font-size: 14px;
 }
 
 .send-btn {
@@ -632,8 +735,23 @@ function escapeHtml(content: string) {
     height: calc(100vh - var(--v2-bottomnav-height));
   }
 
+  .embedded-chat-page {
+    height: auto;
+  }
+
   .message-bubble {
     max-width: 85%;
+  }
+
+  .chat-scope-card,
+  .chat-body,
+  .chat-input-bar {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .scope-card-title {
+    font-size: 20px;
   }
 }
 </style>

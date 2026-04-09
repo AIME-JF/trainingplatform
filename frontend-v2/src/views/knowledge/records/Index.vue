@@ -1,6 +1,6 @@
 <template>
-  <div class="page-content knowledge-records-page">
-    <div class="page-header">
+  <div class="page-content knowledge-records-page" :class="{ 'embedded-records-page': embedded }">
+    <div v-if="!embedded" class="page-header">
       <h1 class="page-title">学习记录</h1>
       <p class="page-subtitle">查看知识问答和场景模拟的历史记录。</p>
     </div>
@@ -71,7 +71,14 @@ import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { getChatSessions, getMyScenarioSessions } from '@/api/knowledge'
 
+const props = withDefaults(defineProps<{
+  embedded?: boolean
+}>(), {
+  embedded: false,
+})
+
 const router = useRouter()
+const embedded = props.embedded
 const activeTab = ref('chat')
 const loadingChat = ref(false)
 const loadingScenario = ref(false)
@@ -190,10 +197,18 @@ function getScoreColor(score: number) {
 }
 
 function viewChatDetail(id: number) {
+  if (embedded) {
+    void router.push(`/knowledge/assistant?panel=qa&sessionId=${id}&source=records`)
+    return
+  }
   void router.push(`/knowledge/assistant/chat?sessionId=${id}&source=records`)
 }
 
 function viewScenarioDetail(id: number) {
+  if (embedded) {
+    void router.push(`/knowledge/assistant?panel=scenario&sessionId=${id}&source=records`)
+    return
+  }
   void router.push(`/knowledge/assistant/scenario-sim?sessionId=${id}&source=records`)
 }
 </script>
@@ -202,6 +217,14 @@ function viewScenarioDetail(id: number) {
 .knowledge-records-page {
   max-width: 1100px;
   margin: 0 auto;
+}
+
+.embedded-records-page {
+  max-width: none;
+  margin: 0 !important;
+  margin-left: 0 !important;
+  padding: 0 !important;
+  min-height: auto !important;
 }
 
 .page-header {
