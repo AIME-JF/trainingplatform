@@ -263,6 +263,12 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/profile/Index.vue'),
         meta: { title: '个人中心' },
       },
+      {
+        path: 'instructor/profile',
+        name: 'InstructorProfile',
+        component: () => import('@/views/profile/InstructorProfile.vue'),
+        meta: { title: '教官信息采集' },
+      },
     ],
   },
 ]

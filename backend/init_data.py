@@ -8,6 +8,7 @@ from app.models import User, Role, Permission, Department, PoliceType
 from app.models.permission import PermissionGroup
 from app.models.training_type import TrainingType
 from app.models.dict_instructor_specialty import DictInstructorSpecialty
+from app.models.dict_teaching_direction import DictTeachingDirection
 from app.models.evaluation import EvaluationTemplate, EvaluationDimension
 from app.models.system import SystemMeta
 from app.services.auth import auth_service
@@ -668,6 +669,31 @@ def init_instructor_specialties():
         raise
 
 
+def init_teaching_directions():
+    """初始化教学方向字典"""
+    try:
+        with Session(engine) as db:
+            if db.query(DictTeachingDirection).count() > 0:
+                logger.info("教学方向数据已存在，跳过初始化")
+                return
+
+            directions = [
+                {"name": "刑事技术", "sort_order": 1},
+                {"name": "交通管理", "sort_order": 2},
+                {"name": "治安防控", "sort_order": 3},
+            ]
+
+            for item in directions:
+                db.add(DictTeachingDirection(name=item["name"], sort_order=item["sort_order"], enabled=True))
+
+            db.commit()
+            logger.info(f"教学方向初始化完成，共创建 {len(directions)} 个教学方向")
+
+    except Exception as e:
+        logger.error(f"初始化教学方向失败: {e}")
+        raise
+
+
 def init_evaluation_templates():
     """初始化评价问卷模板（固定 4 种）"""
     try:
@@ -754,6 +780,7 @@ def main():
         init_system_configs()
         init_training_types()
         init_instructor_specialties()
+        init_teaching_directions()
         init_evaluation_templates()
         init_permission_groups()
         init_permissions()

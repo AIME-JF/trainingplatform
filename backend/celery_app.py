@@ -21,6 +21,7 @@ celery_app = Celery(
         "app.tasks.ai_task_timeout",
         "app.tasks.video_keyframe",
         "app.tasks.evaluation",
+        "app.tasks.daily_check",
     ]
 )
 
@@ -67,6 +68,10 @@ celery_app.conf.update(
         "check-ai-task-timeout": {
             "task": "app.tasks.ai_task_timeout.check_ai_task_timeout",
             "schedule": 60.0,
+        },
+        "run-daily-checks": {
+            "task": "app.tasks.daily_check.run_daily_checks",
+            "schedule": crontab(hour=8, minute=0),
         },
     },
 )

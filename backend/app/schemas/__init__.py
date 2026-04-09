@@ -7,6 +7,9 @@ from .user import (
     PasswordChange, TokenData, UserRoleUpdate, UserDepartmentUpdate, UserPoliceTypeUpdate,
     InstructorTagCreate, InstructorTagResponse,
     DictInstructorSpecialtyCreate, DictInstructorSpecialtyUpdate, DictInstructorSpecialtyResponse,
+    InstructorTeachingExperienceCreate, InstructorTeachingExperienceResponse,
+    InstructorTeachingDirectionResponse, InstructorTeachingDirectionUpdate,
+    DictTeachingDirectionCreate, DictTeachingDirectionUpdate, DictTeachingDirectionResponse,
 )
 from .role import (
     RoleCreate, RoleUpdate, RoleResponse, RoleSimpleResponse,
@@ -189,6 +192,9 @@ __all__ = [
     # 用户相关
     "UserCreate", "UserUpdate", "UserResponse", "UserSimpleResponse", "UserLogin", "LoginResponse",
     "PasswordChange", "TokenData", "UserRoleUpdate", "UserDepartmentUpdate", "UserPoliceTypeUpdate",
+    "InstructorTeachingExperienceCreate", "InstructorTeachingExperienceResponse",
+    "InstructorTeachingDirectionResponse", "InstructorTeachingDirectionUpdate",
+    "DictTeachingDirectionCreate", "DictTeachingDirectionUpdate", "DictTeachingDirectionResponse",
     # 角色相关
     "RoleCreate", "RoleUpdate", "RoleResponse", "RoleSimpleResponse",
     "RolePermissionUpdate",
