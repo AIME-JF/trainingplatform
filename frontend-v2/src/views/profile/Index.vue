@@ -46,7 +46,52 @@
         </section>
 
         <section class="profile-section-grid">
-          <article class="profile-card notice-card">
+          <!-- 教官信息摘要卡片（教官可见） -->
+          <article v-if="authStore.isInstructor" class="profile-card instructor-card">
+            <div class="section-head">
+              <div>
+                <h2>教官信息</h2>
+                <p>查看和编辑教官详细信息</p>
+              </div>
+              <button type="button" class="section-link" @click="navigateTo('/instructor/profile')">
+                编辑教官信息
+              </button>
+            </div>
+
+            <div class="instructor-info-grid">
+              <div class="instructor-info-item">
+                <span>职称</span>
+                <strong>{{ instructorInfo.instructor_title || '未设置' }}</strong>
+              </div>
+              <div class="instructor-info-item">
+                <span>岗位类型</span>
+                <strong>{{ instructorInfo.position_type || '未设置' }}</strong>
+              </div>
+              <div class="instructor-info-item">
+                <span>师资类型</span>
+                <strong>{{ instructorInfo.teacher_type || '未设置' }}</strong>
+              </div>
+              <div class="instructor-info-item">
+                <span>教官等级</span>
+                <strong>{{ instructorInfo.instructor_level || '未设置' }}</strong>
+              </div>
+            </div>
+
+            <div v-if="instructorInfo.appointment_start_date" class="instructor-appointment">
+              <span class="contact-label">聘任时间</span>
+              <strong>{{ instructorInfo.appointment_start_date }} ~ {{ instructorInfo.appointment_end_date || '至今' }}</strong>
+            </div>
+
+            <div v-if="instructorDirections.length" class="instructor-directions">
+              <span class="contact-label">教学方向</span>
+              <div class="direction-tag-list">
+                <a-tag v-for="d in instructorDirections" :key="d.id" color="cyan">{{ d.name }}</a-tag>
+              </div>
+            </div>
+          </article>
+
+          <!-- 消息提醒（学员可见） -->
+          <article v-else class="profile-card notice-card">
             <div class="section-head">
               <div>
                 <h2>消息提醒</h2>
@@ -146,19 +191,31 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import type { NoticeResponse, ProfileOverviewResponse } from '@/api/generated/model'
 import { getProfileOverviewApiV1ProfileOverviewGet } from '@/api/generated/profile/profile'
 import { quickActionConfigs } from '@/constants/quickActions'
 import { getReminderTypeLabel, formatNoticeTime } from '@/utils/notice'
 import { useAuthStore } from '@/stores/auth'
+import axiosInstance from '@/api/custom-instance'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
 const loading = ref(false)
 const overview = ref<ProfileOverviewResponse | null>(null)
+
+// 教官信息
+const instructorInfo = reactive({
+  instructor_title: '',
+  position_type: '',
+  teacher_type: '',
+  instructor_level: '',
+  appointment_start_date: '',
+  appointment_end_date: '',
+})
+const instructorDirections = ref<Array<{ id: number; name: string }>>([])
 
 const profile = computed(() => overview.value?.profile ?? null)
 const recentNotices = computed<NoticeResponse[]>(() => overview.value?.recent_notices || [])
@@ -207,8 +264,32 @@ function handleLogout() {
   router.replace('/login')
 }
 
+async function loadInstructorInfo() {
+  const userId = authStore.currentUser?.id
+  if (!userId || !authStore.isInstructor) return
+  try {
+    const res = await axiosInstance.get(`/users/${userId}`)
+    const data = res.data as Record<string, string>
+    instructorInfo.instructor_title = data.instructor_title || ''
+    instructorInfo.position_type = data.position_type || ''
+    instructorInfo.teacher_type = data.teacher_type || ''
+    instructorInfo.instructor_level = data.instructor_level || ''
+    instructorInfo.appointment_start_date = data.appointment_start_date || ''
+    instructorInfo.appointment_end_date = data.appointment_end_date || ''
+  } catch {
+    // ignore
+  }
+  try {
+    const res = await axiosInstance.get(`/instructors/${userId}/teaching-directions`)
+    instructorDirections.value = (res.data as Array<{ id: number; name: string }>) || []
+  } catch {
+    instructorDirections.value = []
+  }
+}
+
 onMounted(() => {
   void fetchOverview()
+  void loadInstructorInfo()
 })
 </script>
 
@@ -582,6 +663,58 @@ onMounted(() => {
   font-size: 12px;
   line-height: 1.45;
   color: var(--v2-text-secondary);
+}
+
+.instructor-info-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.instructor-info-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 10px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(241, 245, 255, 0.98) 0%, rgba(248, 250, 255, 0.96) 100%);
+  border: 1px solid rgba(224, 230, 246, 0.96);
+}
+
+.instructor-info-item span {
+  font-size: 12px;
+  color: var(--v2-text-secondary);
+}
+
+.instructor-info-item strong {
+  font-size: 16px;
+  line-height: 1.2;
+  color: #1a2b63;
+}
+
+.instructor-appointment {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.instructor-appointment strong {
+  font-size: 14px;
+  color: #1a2b63;
+}
+
+.instructor-directions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.direction-tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .notice-card :deep(.ant-empty) {

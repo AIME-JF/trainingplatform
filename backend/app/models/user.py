@@ -35,6 +35,13 @@ class User(Base):
     exam_count = Column(Integer, default=0, comment='考试次数')
     avg_score = Column(Float, default=0, comment='平均分')
 
+    # 基本信息扩展字段
+    birth_date = Column(Date, nullable=True, comment='出生日期')
+    native_place = Column(String(100), nullable=True, comment='籍贯')
+    ethnicity = Column(String(50), nullable=True, comment='民族')
+    education = Column(String(50), nullable=True, comment='学历')
+    degree = Column(String(50), nullable=True, comment='学位')
+
     # 教官扩展字段
     instructor_title = Column(String(50), nullable=True, comment='教官职称')
     instructor_certificates = Column(JSON, nullable=True, comment='教官证书列表')
@@ -43,6 +50,11 @@ class User(Base):
     instructor_course_count = Column(Integer, default=0, comment='教官课程数')
     instructor_student_count = Column(Integer, default=0, comment='教官学员数')
     instructor_review_count = Column(Integer, default=0, comment='教官评价数')
+    instructor_job_type = Column(String(20), nullable=True, comment='岗位类型: 专职/兼职')
+    instructor_category = Column(String(20), nullable=True, comment='师资类型: 业务/技能')
+    instructor_level = Column(String(20), nullable=True, comment='教官等级: 高级/中级/初级')
+    instructor_hire_start = Column(Date, nullable=True, comment='聘任开始日期')
+    instructor_hire_end = Column(Date, nullable=True, comment='聘任结束日期')
 
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment='创建时间')
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), comment='更新时间')
