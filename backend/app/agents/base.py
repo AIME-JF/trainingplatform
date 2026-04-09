@@ -105,6 +105,7 @@ class BaseAIAgent:
 
     def _generate_vision(self, *, system_prompt: str, image_base64: str, user_prompt: str = "") -> str:
         """多模态图片分析"""
+        from logger import logger as _base_logger
         config = self._load_runtime_config()
         # 优先使用 vision 模型
         vision_model = get_config_value("ai", "default_vision_model", "")
@@ -119,11 +120,16 @@ class BaseAIAgent:
                 timeout=config.timeout,
             )
 
+        _base_logger.debug("[BaseAIAgent/Vision] provider={}, model={}, image_size={} bytes, user_prompt_len={}",
+                           config.provider, config.model, len(image_base64), len(user_prompt or ""))
+
         if config.provider == "ollama":
             return self._call_ollama_vision(config, system_prompt, image_base64, user_prompt)
         return self._call_openai_vision(config, system_prompt, image_base64, user_prompt)
 
     def _call_openai_vision(self, config, system_prompt: str, image_base64: str, user_prompt: str = "") -> str:
+        from logger import logger as _base_logger
+        _base_logger.debug("[BaseAIAgent/Vision] timeout={}, max_tokens={}, temperature={}", config.timeout, config.max_tokens, config.temperature)
         client = OpenAI(
             api_key=config.api_key,
             base_url=config.base_url,
@@ -146,18 +152,29 @@ class BaseAIAgent:
             request_kwargs["max_tokens"] = int(config.max_tokens)
         if config.temperature is not None:
             request_kwargs["temperature"] = float(config.temperature)
+        _base_logger.debug("[BaseAIAgent/Vision] calling {} model={}", config.base_url, config.model)
         response = client.chat.completions.create(**request_kwargs)
-        return (response.choices[0].message.content or "").strip()
+        content = (response.choices[0].message.content or "").strip() if response.choices else ""
+        finish_reason = response.choices[0].finish_reason if response.choices else "N/A"
+        _base_logger.debug("[BaseAIAgent/Vision] response finish_reason={} content_len={} content_preview={}",
+                           finish_reason, len(content), content[:200])
+        if not content:
+            raise ValueError("OpenAI Vision 未返回有效内容")
+        return content
 
     def _call_ollama_vision(self, config, system_prompt: str, image_base64: str, user_prompt: str = "") -> str:
+        from logger import logger as _base_logger
         import ollama
+        _base_logger.debug("[BaseAIAgent/Vision/Ollama] calling {} model={}", config.base_url, config.model)
         client = ollama.Client(host=config.base_url)
         prompt = f"{system_prompt}\n\n{user_prompt}" if user_prompt else system_prompt
         response = client.chat(
             model=config.model,
             messages=[{"role": "user", "content": prompt, "images": [image_base64]}],
         )
-        return (response.get("message", {}).get("content", "") or "").strip()
+        content = (response.get("message", {}).get("content", "") or "").strip()
+        _base_logger.debug("[BaseAIAgent/Vision/Ollama] response content_len={} content_preview={}", len(content), content[:200])
+        return content
 
     def _call_ollama(self, config: AIRuntimeConfig, messages: list[dict[str, str]]) -> str:
         try:

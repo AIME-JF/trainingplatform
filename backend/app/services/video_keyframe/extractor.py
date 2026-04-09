@@ -113,11 +113,11 @@ class VideoKeyframeExtractor:
         """执行完整的关键帧抽取流程"""
         task = self.db.query(VideoKeyframeTask).filter(VideoKeyframeTask.id == task_id).first()
         if not task:
-            logger.warning("关键帧任务不存在: %s", task_id)
+            logger.warning("关键帧任务不存在: {}", task_id)
             return
 
         if task.status in ("success", "partial_success", "failed"):
-            logger.info("关键帧任务已结束，跳过: %s", task_id)
+            logger.info("关键帧任务已结束，跳过: {}", task_id)
             return
 
         task.status = "running"
@@ -143,11 +143,11 @@ class VideoKeyframeExtractor:
 
         try:
             # 1. 从 MinIO 下载原始视频
-            logger.info("下载原始视频: %s", media.storage_path)
+            logger.info("下载原始视频: {}", media.storage_path)
             _download_from_minio(minio_client, bucket, media.storage_path, original_path)
 
             # 2. 压缩为缩略图视频
-            logger.info("压缩缩略图视频: %s", thumbnail_path)
+            logger.info("压缩缩略图视频: {}", thumbnail_path)
             duration = _compress_video(
                 original_path, thumbnail_path,
                 height=settings.KEYFRAME_THUMBNAIL_HEIGHT,
@@ -194,7 +194,7 @@ class VideoKeyframeExtractor:
                     _extract_frame_image(thumbnail_path, candidate.timestamp, frame_path, settings.KEYFRAME_JPEG_QUALITY)
                     frame_images[candidate.timestamp] = frame_path
                 except Exception as exc:
-                    logger.warning("抽帧失败 (%.3fs): %s", candidate.timestamp, exc)
+                    logger.warning("抽帧失败 ({:.3f}s): {}", candidate.timestamp, exc)
 
             # 去掉抽帧失败的候选
             all_candidates = [c for c in all_candidates if c.timestamp in frame_images]
@@ -246,7 +246,7 @@ class VideoKeyframeExtractor:
         except Exception as exc:
             self.db.rollback()
             self._fail_task(task, str(exc))
-            logger.error("关键帧抽取失败(task=%s): %s", task_id, exc)
+            logger.error("关键帧抽取失败(task={}): {}", task_id, exc)
         finally:
             self._cleanup_tmp(original_path, thumbnail_path, frames_dir)
 

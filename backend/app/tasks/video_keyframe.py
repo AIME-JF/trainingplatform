@@ -29,18 +29,18 @@ def run_keyframe_extraction(self, task_id: int) -> None:
     try:
         task = db.query(VideoKeyframeTask).filter(VideoKeyframeTask.id == task_id).first()
         if not task:
-            logger.warning("关键帧任务不存在: %s", task_id)
+            logger.warning("关键帧任务不存在: {}", task_id)
             return
 
         if task.status in {"success", "partial_success", "failed"}:
-            logger.info("关键帧任务已结束，跳过: %s", task_id)
+            logger.info("关键帧任务已结束，跳过: {}", task_id)
             return
 
         VideoKeyframeExtractor(db).execute(task_id)
         should_schedule_next = True
     except Exception as exc:
         db.rollback()
-        logger.error("关键帧任务执行失败(task_id=%s, retry=%s): %s", task_id, self.request.retries, exc)
+        logger.error("关键帧任务执行失败(task_id={}, retry={}): {}", task_id, self.request.retries, exc)
 
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc, countdown=5 * (self.request.retries + 1))
@@ -54,7 +54,7 @@ def run_keyframe_extraction(self, task_id: int) -> None:
         try:
             schedule_keyframe_task()
         except Exception as exc:
-            logger.error("关键帧任务后续调度失败: %s", exc)
+            logger.error("关键帧任务后续调度失败: {}", exc)
 
 
 def schedule_keyframe_task(preferred_task_id: Optional[int] = None, db: Optional[Session] = None) -> Optional[int]:
@@ -93,10 +93,10 @@ def schedule_keyframe_task(preferred_task_id: Optional[int] = None, db: Optional
                 revert.started_at = None
                 revert.error_message = f"调度失败: {exc}"
                 session.commit()
-            logger.error("调度关键帧任务失败: %s", exc)
+            logger.error("调度关键帧任务失败: {}", exc)
             return None
 
-        logger.info("关键帧任务已加入 Celery: %s", next_task.id)
+        logger.info("关键帧任务已加入 Celery: {}", next_task.id)
         return next_task.id
     finally:
         if lock is not None:
@@ -141,5 +141,5 @@ def _acquire_dispatch_lock():
             return None
         return lock
     except Exception as exc:
-        logger.warning("获取关键帧调度锁异常: %s", exc)
+        logger.warning("获取关键帧调度锁异常: {}", exc)
         return None

@@ -67,7 +67,7 @@ def run_ai_review(
         # 获取阶段配置
         workflow = db.query(ReviewWorkflow).filter(ReviewWorkflow.id == workflow_id).first()
         if not workflow:
-            logger.warning("AI 审核：工作流不存在 %s", workflow_id)
+            logger.warning("AI 审核：工作流不存在 {}", workflow_id)
             return
 
         policy = db.query(ReviewPolicy).filter(ReviewPolicy.id == workflow.policy_id).first()
@@ -83,10 +83,12 @@ def run_ai_review(
         review_rules = _get_review_rules(db)
         review_service = ReviewService(db)
 
+        logger.info("AI 审核开始: workflow={}, business={}/{}, stage={}", workflow_id, business_type, business_id, stage_order)
+
         if business_type == 'resource':
             result = _review_resource(db, business_id, review_rules)
         else:
-            # 其他业务类型暂不支持 AI 审核，降级
+            logger.info("AI 审核: 不支持的业务类型 {}，降级人工", business_type)
             review_service.complete_ai_review(
                 workflow_id, task_id,
                 passed=False, summary=f"不支持的业务类型: {business_type}",
@@ -94,8 +96,11 @@ def run_ai_review(
             )
             return
 
+        logger.info("AI 审核结果: workflow={}, passed={}, error={}, summary={}",
+                     workflow_id, result.get("passed"), result.get("error"), (result.get("summary") or "")[:200])
+
         if result.get("error"):
-            # AI 执行失败 → 降级到人工
+            logger.warning("AI 审核执行失败，降级人工: {}", result["error"])
             review_service.complete_ai_review(
                 workflow_id, task_id,
                 passed=False, summary=result["error"],
@@ -107,14 +112,15 @@ def run_ai_review(
         summary = result["summary"]
 
         if passed:
+            logger.info("AI 审核通过: workflow={}", workflow_id)
             review_service.complete_ai_review(
                 workflow_id, task_id,
                 passed=True, summary=summary,
                 should_fallback=False,
             )
         else:
-            # AI 判定不通过
             ai_reject_mode = stage_cfg.ai_reject_mode or 'fallback'
+            logger.info("AI 审核不通过: workflow={}, reject_mode={}", workflow_id, ai_reject_mode)
             if ai_reject_mode == 'direct':
                 review_service.complete_ai_review(
                     workflow_id, task_id,
@@ -122,7 +128,6 @@ def run_ai_review(
                     should_fallback=False,
                 )
             else:
-                # fallback 模式：降级到人工
                 review_service.complete_ai_review(
                     workflow_id, task_id,
                     passed=False, summary=f"AI 判定不通过，降级人工确认: {summary}",
@@ -131,7 +136,7 @@ def run_ai_review(
 
     except Exception as exc:
         db.rollback()
-        logger.error("AI 审核任务失败(workflow=%s): %s", workflow_id, exc)
+        logger.error("AI 审核任务失败(workflow={}): {}", workflow_id, exc)
 
         if self.request.retries < self.max_retries:
             raise self.retry(exc=exc, countdown=5)
@@ -145,7 +150,7 @@ def run_ai_review(
                 should_fallback=True,
             )
         except Exception as fallback_exc:
-            logger.error("AI 审核降级也失败: %s", fallback_exc)
+            logger.error("AI 审核降级也失败: {}", fallback_exc)
     finally:
         db.close()
 
@@ -160,7 +165,10 @@ def _review_resource(db: Session, resource_id: int, review_rules: str) -> dict:
         ResourceMediaLink.resource_id == resource_id,
     ).all()
     if not media_links:
+        logger.info("AI 审核资源 {}: 无关联文件，自动通过", resource_id)
         return {"passed": True, "summary": "无关联文件，自动通过", "error": None}
+
+    logger.info("AI 审核资源 {}: 发现 {} 个关联文件", resource_id, len(media_links))
 
     minio_client = _get_minio_client()
     agent = ContentReviewAgent()
@@ -174,6 +182,7 @@ def _review_resource(db: Session, resource_id: int, review_rules: str) -> dict:
             continue
 
         mime = (media.mime_type or "").lower()
+        logger.info("AI 审核文件: {} (mime={}, id={})", media.filename, mime, media.id)
 
         try:
             if mime.startswith("video/"):
@@ -198,14 +207,39 @@ def _review_resource(db: Session, resource_id: int, review_rules: str) -> dict:
 
 
 def _review_video_file(db: Session, media: MediaFile, agent: ContentReviewAgent, minio_client: Minio, review_rules: str) -> dict:
-    """审核视频文件：使用关键帧"""
+    """审核视频文件：使用关键帧，若关键帧抽取未完成则等待"""
+    import time
+
+    # 等待关键帧抽取完成（最多等 5 分钟）
+    max_wait = 300
+    poll_interval = 5
+    waited = 0
+    while waited < max_wait:
+        task = db.query(VideoKeyframeTask).filter(
+            VideoKeyframeTask.media_file_id == media.id,
+        ).order_by(VideoKeyframeTask.id.desc()).first()
+
+        if not task:
+            # 没有抽帧任务，可能不是视频或未触发
+            break
+
+        if task.status in ("success", "partial_success"):
+            break
+        elif task.status == "failed":
+            return {"passed": False, "summary": "", "error": f"视频 {media.filename} 关键帧抽取失败: {task.error_message}"}
+        else:
+            # pending / running，等待
+            time.sleep(poll_interval)
+            waited += poll_interval
+            db.expire_all()  # 刷新 session 缓存
+
     # 查询已提取的关键帧
     keyframes = db.query(VideoKeyframe).filter(
         VideoKeyframe.media_file_id == media.id,
     ).order_by(VideoKeyframe.sort_order).all()
 
     if not keyframes:
-        return {"passed": False, "summary": "", "error": f"视频 {media.filename} 无关键帧数据，无法审核"}
+        return {"passed": False, "summary": "", "error": f"视频 {media.filename} 无关键帧数据（等待 {waited}s 后仍无结果）"}
 
     # 下载关键帧图片
     images: List[bytes] = []
@@ -214,7 +248,7 @@ def _review_video_file(db: Session, media: MediaFile, agent: ContentReviewAgent,
             img_data = _download_from_minio(minio_client, kf.storage_path)
             images.append(img_data)
         except Exception as exc:
-            logger.warning("下载关键帧失败 %s: %s", kf.storage_path, exc)
+            logger.warning("下载关键帧失败 {}: {}", kf.storage_path, exc)
 
     if not images:
         return {"passed": False, "summary": "", "error": f"视频 {media.filename} 关键帧下载全部失败"}
@@ -269,4 +303,4 @@ def schedule_ai_review_task(
         args=[workflow_id, task_id, business_type, business_id, stage_order],
         task_id=f"ai-review-{workflow_id}-{task_id}",
     )
-    logger.info("AI 审核任务已调度: workflow=%s, task=%s", workflow_id, task_id)
+    logger.info("AI 审核任务已调度: workflow={}, task={}", workflow_id, task_id)

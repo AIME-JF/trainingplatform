@@ -36,7 +36,7 @@ def detect_scene_changes(video_path: str, duration: float) -> List[CandidateFram
         scene_manager.detect_scenes(video)
         scene_list = scene_manager.get_scene_list()
     except Exception as exc:
-        logger.warning("场景检测失败，降级为仅基础采样: %s", exc)
+        logger.warning("场景检测失败，降级为仅基础采样: {}", exc)
         return []
 
     candidates: List[CandidateFrame] = []
@@ -53,5 +53,5 @@ def detect_scene_changes(video_path: str, duration: float) -> List[CandidateFram
             scene_score=None,
         ))
 
-    logger.info("场景检测完成，发现 %d 个切换点", len(candidates))
+    logger.info("场景检测完成，发现 {} 个切换点", len(candidates))
     return candidates

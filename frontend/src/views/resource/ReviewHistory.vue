@@ -81,17 +81,29 @@
                 <span class="log-time">{{ formatTime(log.createdAt) }}</span>
               </div>
               <div v-if="log.detailJson" class="log-detail">
-                <template v-if="log.detailJson.comment">
-                  <div class="log-comment">{{ log.detailJson.comment }}</div>
+                <template v-if="log.action === 'ai_review'">
+                  <div class="log-comment" :class="{ 'ai-passed': log.detailJson.result === 'passed', 'ai-rejected': log.detailJson.result === 'rejected', 'ai-fallback': log.detailJson.result === 'fallback' || log.detailJson.result === 'error' }">
+                    <span v-if="log.detailJson.result === 'passed'">✓ AI 审核通过</span>
+                    <span v-else-if="log.detailJson.result === 'rejected'">✗ AI 审核不通过</span>
+                    <span v-else-if="log.detailJson.result === 'fallback'">⚠ AI 审核需人工确认</span>
+                    <span v-else-if="log.detailJson.result === 'error'">⚠ AI 审核异常</span>
+                    <div v-if="log.detailJson.summary" class="log-summary">{{ log.detailJson.summary }}</div>
+                  </div>
                 </template>
-                <template v-if="log.detailJson.reason">
-                  <div class="log-comment">{{ log.detailJson.reason }}</div>
-                </template>
-                <template v-if="log.detailJson.ai_review">
-                  <div class="log-comment">AI 审核摘要：{{ log.detailJson.ai_review }}</div>
-                </template>
-                <template v-if="log.action === 'ai_fallback'">
+                <template v-else-if="log.action === 'ai_fallback'">
                   <div class="log-comment ai-fallback">已降级到人工审核</div>
+                  <div v-if="log.detailJson.reason" class="log-summary">原因：{{ log.detailJson.reason }}</div>
+                </template>
+                <template v-else-if="log.action === 'workflow_approved'">
+                  <div class="log-comment ai-passed">{{ log.detailJson.message || '所有审核阶段已通过' }}</div>
+                </template>
+                <template v-else-if="log.action === 'workflow_rejected'">
+                  <div class="log-comment ai-rejected">{{ log.detailJson.message || '审核已驳回' }}</div>
+                </template>
+                <template v-else>
+                  <div v-if="log.detailJson.comment" class="log-comment">{{ log.detailJson.comment }}</div>
+                  <div v-if="log.detailJson.reason" class="log-comment">{{ log.detailJson.reason }}</div>
+                  <div v-if="log.detailJson.ai_review" class="log-comment">AI 审核摘要：{{ log.detailJson.ai_review }}</div>
                 </template>
               </div>
             </div>
@@ -159,7 +171,10 @@ const actionLabel = {
   reject: '驳回',
   revoke: '撤销',
   reassign: '重新分派',
-  ai_fallback: 'AI 降级',
+  ai_review: 'AI 审核',
+  ai_fallback: 'AI 降级人工',
+  workflow_approved: '审核通过',
+  workflow_rejected: '审核驳回',
 }
 const actionColor = {
   submit: 'blue',
@@ -167,7 +182,10 @@ const actionColor = {
   reject: 'red',
   revoke: 'orange',
   reassign: 'cyan',
-  ai_fallback: 'purple',
+  ai_review: 'purple',
+  ai_fallback: 'orange',
+  workflow_approved: 'green',
+  workflow_rejected: 'red',
 }
 
 const columns = [
@@ -261,8 +279,22 @@ onMounted(() => {
   border-radius: 4px;
   margin-top: 4px;
 }
+.log-comment.ai-passed {
+  background: #f6ffed;
+  color: #389e0d;
+}
+.log-comment.ai-rejected {
+  background: #fff2f0;
+  color: #cf1322;
+}
 .log-comment.ai-fallback {
   background: #f9f0ff;
   color: #722ed1;
+}
+.log-summary {
+  margin-top: 4px;
+  color: #595959;
+  font-size: 12px;
+  line-height: 1.5;
 }
 </style>

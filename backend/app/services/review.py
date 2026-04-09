@@ -395,6 +395,11 @@ class ReviewService:
             workflow.business_type, workflow.business_id, workflow.id,
             actor_id, 'reject', {'task_id': task.id, 'comment': comment}
         )
+        self._write_log(
+            workflow.business_type, workflow.business_id, workflow.id,
+            actor_id=None, action='workflow_rejected',
+            detail={'message': '审核已驳回'},
+        )
 
         self.db.commit()
         return self.get_workflow(workflow.business_type, workflow.business_id)
@@ -754,6 +759,11 @@ class ReviewService:
             workflow.finished_at = datetime.now()
             if callbacks and callbacks.on_approved:
                 callbacks.on_approved(self.db, workflow.business_id)
+            self._write_log(
+                workflow.business_type, workflow.business_id, workflow.id,
+                actor_id=None, action='workflow_approved',
+                detail={'message': '所有审核阶段已通过'},
+            )
             return
 
         # 推进到下一阶段
@@ -912,7 +922,24 @@ class ReviewService:
                 if callbacks and callbacks.on_rejected:
                     callbacks.on_rejected(self.db, workflow.business_id)
                 self.db.commit()
+                self._write_log(
+                    workflow.business_type, workflow.business_id, workflow.id,
+                    actor_id=None, action='ai_review',
+                    detail={'result': 'error', 'summary': summary},
+                )
+                self._write_log(
+                    workflow.business_type, workflow.business_id, workflow.id,
+                    actor_id=None, action='reject',
+                    detail={'reason': f'AI 审核异常且未配置降级审核人: {summary}'},
+                )
                 return
+
+            # 记录 AI 审核降级日志
+            self._write_log(
+                workflow.business_type, workflow.business_id, workflow.id,
+                actor_id=None, action='ai_review',
+                detail={'result': 'fallback', 'summary': summary},
+            )
 
             # 按降级配置创建人工审核任务
             uploader_id = self._get_uploader_id(workflow)
@@ -939,7 +966,8 @@ class ReviewService:
             self.db.commit()
             self._write_log(
                 workflow.business_type, workflow.business_id, workflow.id,
-                actor_id=None, action='ai_fallback', detail={'reason': summary},
+                actor_id=None, action='ai_fallback',
+                detail={'reason': summary, 'fallback_type': fallback_type, 'fallback_ref_id': fallback_ref_id},
             )
             return
 
@@ -949,6 +977,11 @@ class ReviewService:
             placeholder.comment = summary
             placeholder.reviewed_at = datetime.now()
             self.db.commit()
+            self._write_log(
+                workflow.business_type, workflow.business_id, workflow.id,
+                actor_id=None, action='ai_review',
+                detail={'result': 'passed', 'summary': summary},
+            )
             self._advance_if_stage_passed(workflow, policy)
             self.db.commit()
         else:
@@ -965,7 +998,13 @@ class ReviewService:
             self.db.commit()
             self._write_log(
                 workflow.business_type, workflow.business_id, workflow.id,
-                actor_id=None, action='reject', detail={'ai_review': summary},
+                actor_id=None, action='ai_review',
+                detail={'result': 'rejected', 'summary': summary},
+            )
+            self._write_log(
+                workflow.business_type, workflow.business_id, workflow.id,
+                actor_id=None, action='reject',
+                detail={'ai_review': summary},
             )
 
     def _get_uploader_id(self, workflow: ReviewWorkflow) -> int:
