@@ -57,6 +57,11 @@ export const appMenuConfig = [
       {
         key: '/library',
         label: '知识库',
+        roles: ['admin', 'instructor', 'student'],
+      },
+      {
+        key: '/knowledge/scenarios',
+        label: '场景模板管理',
         roles: ['admin', 'instructor'],
       },
       {

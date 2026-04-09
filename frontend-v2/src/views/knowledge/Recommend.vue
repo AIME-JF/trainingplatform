@@ -135,10 +135,10 @@ import {
   recordResourceEvent,
 } from '@/api/learning-resource'
 import { useMobile } from '@/composables/useMobile'
-import ResourceCommentsDrawer from '@/components/resource/ResourceCommentsDrawer.vue'
-import ResourceCommunityTopBar from '@/components/resource/ResourceCommunityTopBar.vue'
-import ResourceCommunityUploadEntry from '@/components/resource/ResourceCommunityUploadEntry.vue'
-import ResourceViewer from '@/components/resource/ResourceViewer.vue'
+import ResourceCommentsDrawer from '@/components/knowledge/ResourceCommentsDrawer.vue'
+import ResourceCommunityTopBar from '@/components/knowledge/ResourceCommunityTopBar.vue'
+import ResourceCommunityUploadEntry from '@/components/knowledge/ResourceCommunityUploadEntry.vue'
+import ResourceViewer from '@/components/knowledge/ResourceViewer.vue'
 import { useResourceInteractions } from '@/composables/useResourceInteractions'
 
 const PAGE_SIZE = 10

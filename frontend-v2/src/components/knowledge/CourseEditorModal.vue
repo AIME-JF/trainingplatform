@@ -136,7 +136,7 @@ import { useCreatableTagSelect } from '@/composables/useCreatableTagSelect'
 import { useAuthStore } from '@/stores/auth'
 import { COURSE_CATEGORIES, getUserDisplayName } from '@/utils/learning-resource'
 import AdmissionScopeSelector from '@/components/common/AdmissionScopeSelector.vue'
-import CourseChapterResourceSelector from '@/components/resource/CourseChapterResourceSelector.vue'
+import CourseChapterResourceSelector from '@/components/knowledge/CourseChapterResourceSelector.vue'
 
 interface SelectOption {
   value: number

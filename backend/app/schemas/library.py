@@ -9,7 +9,8 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 LIBRARY_SCOPE_PRIVATE = "private"
 LIBRARY_SCOPE_PUBLIC = "public"
-LIBRARY_SCOPE_CHOICES = {LIBRARY_SCOPE_PRIVATE, LIBRARY_SCOPE_PUBLIC}
+LIBRARY_SCOPE_ACCESSIBLE = "accessible"
+LIBRARY_SCOPE_CHOICES = {LIBRARY_SCOPE_PRIVATE, LIBRARY_SCOPE_PUBLIC, LIBRARY_SCOPE_ACCESSIBLE}
 
 LIBRARY_CONTENT_TYPE_VIDEO = "video"
 LIBRARY_CONTENT_TYPE_DOCUMENT = "document"
@@ -204,7 +205,7 @@ class LibraryItemDetailResponse(LibraryItemListResponse):
 class LibraryItemListParams(BaseModel):
     """资源库资源项查询参数"""
 
-    scope: str = Field(LIBRARY_SCOPE_PRIVATE, description="private/public")
+    scope: str = Field(LIBRARY_SCOPE_PRIVATE, description="private/public/accessible")
     category: Optional[str] = Field(None, description="固定资源分类")
     folder_id: Optional[int] = Field(None, description="文件夹ID")
     search: Optional[str] = Field(None, description="搜索关键词")
@@ -226,6 +227,7 @@ class LibraryItemListParams(BaseModel):
 __all__ = [
     "LIBRARY_SCOPE_PRIVATE",
     "LIBRARY_SCOPE_PUBLIC",
+    "LIBRARY_SCOPE_ACCESSIBLE",
     "LIBRARY_CONTENT_TYPE_VIDEO",
     "LIBRARY_CONTENT_TYPE_DOCUMENT",
     "LIBRARY_CONTENT_TYPE_IMAGE",

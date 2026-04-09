@@ -1,6 +1,5 @@
 <template>
   <div class="app-layout">
-    <!-- 图标侧栏：桌面端显示 -->
     <aside class="icon-sidebar">
       <div class="sidebar-brand">
         <div class="brand-icon">GA</div>
@@ -19,7 +18,6 @@
         </div>
       </div>
 
-      <!-- 通知入口 -->
       <div
         class="sidebar-notify"
         :class="{ active: currentRoute.path === '/notifications' }"
@@ -30,7 +28,6 @@
         </a-badge>
       </div>
 
-      <!-- 底部用户信息 -->
       <a-dropdown placement="topLeft" :trigger="['click']">
         <div class="sidebar-user">
           <a-avatar :size="34" class="sidebar-avatar">
@@ -52,12 +49,10 @@
       </a-dropdown>
     </aside>
 
-    <!-- 主体 -->
     <div class="layout-body">
       <router-view />
     </div>
 
-    <!-- 底部导航栏：移动端显示 -->
     <nav v-if="isMobile" class="bottom-nav">
       <div
         v-for="tab in bottomTabs"
@@ -126,7 +121,7 @@ interface NavItem {
   matchPaths?: string[]
 }
 
-const resourceNavPermissions = [
+const knowledgeNavPermissions = [
   ...new Set([
     ...COURSE_PERMISSIONS,
     ...TEACHING_RESOURCE_GENERATION_PERMISSIONS,
@@ -138,35 +133,29 @@ const sidebarNavConfig: NavItem[] = [
   { path: '/classes/schedule', label: '日历', icon: CalendarOutlined, permissions: TRAINING_SCHEDULE_PERMISSIONS },
   { path: '/classes', label: '班级', icon: ReadOutlined, permissions: TRAINING_PERMISSIONS },
   {
-    path: '/resource/courses',
+    path: '/knowledge/courses',
     label: COURSE_RESOURCES_TITLE,
     icon: DatabaseOutlined,
-    permissions: resourceNavPermissions,
-    matchPaths: [
-      '/resource/courses',
-      '/resource/teaching-generate',
-      '/resource/ai-generate',
-    ],
+    permissions: knowledgeNavPermissions,
+    matchPaths: ['/knowledge/courses', '/knowledge/teaching-generate', '/knowledge/ai-generate'],
   },
   {
     path: '/library',
     label: '知识库',
     icon: DatabaseOutlined,
-    roles: ['admin', 'instructor'],
-    matchPaths: ['/library'],
-  },
-  {
-    path: '/trainingplatform/library',
-    label: '知识库',
-    icon: DatabaseOutlined,
-    roles: ['student'],
-    matchPaths: ['/trainingplatform/library'],
+    roles: ['admin', 'instructor', 'student'],
   },
   {
     path: '/resource/community',
     label: '资源社区',
     icon: AppstoreOutlined,
     matchPaths: ['/resource/community', '/resource/recommend', '/resource/library', '/resource/my'],
+  },
+  {
+    path: '/knowledge/assistant',
+    label: '知识助手',
+    icon: AppstoreOutlined,
+    matchPaths: ['/knowledge/assistant', '/knowledge/scenarios'],
   },
   {
     path: '/exam/list',
@@ -212,6 +201,7 @@ function hasRoleAccess(item: NavItem) {
 const sidebarItems = computed(() =>
   sidebarNavConfig.filter((item) => authStore.hasAnyPermission(item.permissions || []) && hasRoleAccess(item)),
 )
+
 const bottomTabs = computed(() =>
   bottomNavConfig.filter((item) => authStore.hasAnyPermission(item.permissions || []) && hasRoleAccess(item)),
 )
@@ -220,10 +210,13 @@ const activeNavPath = computed(() => {
   if (currentRoute.path.startsWith('/resource/detail/')) {
     return ['community', 'featured', 'library', 'my'].includes(String(currentRoute.query.from || ''))
       ? '/resource/community'
-      : '/resource/courses'
+      : '/knowledge/courses'
   }
 
-  const mergedItems = [...sidebarItems.value, ...bottomTabs.value.filter((item) => !sidebarItems.value.some((side) => side.path === item.path))]
+  const mergedItems = [
+    ...sidebarItems.value,
+    ...bottomTabs.value.filter((item) => !sidebarItems.value.some((side) => side.path === item.path)),
+  ]
   const sortedItems = mergedItems.sort((left, right) => right.path.length - left.path.length)
   return sortedItems.find((item) => isNavItemMatch(item))?.path || ''
 })
@@ -260,7 +253,6 @@ function handleLogout() {
   min-height: 100vh;
 }
 
-/* -- 品牌图标 -- */
 .sidebar-brand {
   margin-bottom: 12px;
   padding: 8px 0 4px;
@@ -270,7 +262,7 @@ function handleLogout() {
   width: 40px;
   height: 40px;
   border-radius: 14px;
-  background: linear-gradient(135deg, #183B8C 0%, var(--v2-primary) 100%);
+  background: linear-gradient(135deg, #183b8c 0%, var(--v2-primary) 100%);
   box-shadow: 0 12px 24px rgba(75, 110, 245, 0.22);
   color: #fff;
   display: flex;
@@ -281,7 +273,6 @@ function handleLogout() {
   letter-spacing: 0.04em;
 }
 
-/* -- 导航区域（占满中间空间） -- */
 .sidebar-nav {
   flex: 1;
   display: flex;
@@ -290,7 +281,6 @@ function handleLogout() {
   gap: 8px;
 }
 
-/* -- 侧栏项 -- */
 .sidebar-item {
   display: flex;
   flex-direction: column;
@@ -331,7 +321,6 @@ function handleLogout() {
   letter-spacing: 0.01em;
 }
 
-/* -- 通知按钮 -- */
 .sidebar-notify {
   display: flex;
   align-items: center;
@@ -359,7 +348,6 @@ function handleLogout() {
   font-size: 20px;
 }
 
-/* -- 底部用户区域 -- */
 .sidebar-user {
   display: flex;
   flex-direction: column;
@@ -443,7 +431,6 @@ function handleLogout() {
   color: var(--v2-danger);
 }
 
-/* -- 主体 -- */
 .layout-body {
   min-height: 100vh;
 }

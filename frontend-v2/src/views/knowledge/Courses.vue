@@ -65,7 +65,7 @@
         v-for="(course, index) in courses"
         :key="course.id"
         class="course-card"
-        @click="router.push(`/resource/courses/${course.id}`)"
+        @click="router.push(`/knowledge/courses/${course.id}`)"
       >
         <div class="card-cover" :style="{ background: getCourseCoverBackground(course, index) }">
           <div class="cover-labels">
@@ -168,7 +168,7 @@ import { message } from 'ant-design-vue'
 import type { CourseListResponse } from '@/api/learning-resource'
 import { deleteCourse, listCourses, listUsers } from '@/api/learning-resource'
 import { useAuthStore } from '@/stores/auth'
-import CourseEditorModal from '@/components/resource/CourseEditorModal.vue'
+import CourseEditorModal from '@/components/knowledge/CourseEditorModal.vue'
 import DarkPageHeader from '@/components/common/DarkPageHeader.vue'
 import { COURSE_RESOURCES_TITLE } from '@/constants/navigationTitles'
 import {

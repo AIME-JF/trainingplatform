@@ -364,7 +364,7 @@ function goResourceDetail(resourceId: number) {
 }
 
 function goToCoursePage(courseId: number) {
-  void router.push(`/resource/courses/${courseId}`)
+  void router.push(`/knowledge/courses/${courseId}`)
 }
 
 function openBoundResource(resource: CourseBoundResourceResponse) {

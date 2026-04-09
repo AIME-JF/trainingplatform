@@ -48,7 +48,7 @@ export interface LibraryFolderCreatePayload {
 export interface LibraryItemQuery {
   page?: number
   size?: number
-  scope?: 'private' | 'public'
+  scope?: 'private' | 'public' | 'accessible'
   category?: string
   folder_id?: number | null
   search?: string
@@ -88,6 +88,15 @@ export async function deleteLibraryFolder(folderId: number) {
 export async function listLibraryItems(params?: LibraryItemQuery) {
   const response = await axiosInstance.get('/library/items', { params })
   return response.data as PaginatedResult<LibraryItemResponse>
+}
+
+export async function listAccessibleKnowledgeItems() {
+  return listLibraryItems({
+    page: 1,
+    size: -1,
+    scope: 'accessible',
+    category: 'knowledge',
+  })
 }
 
 export async function getLibraryItemDetail(itemId: number) {

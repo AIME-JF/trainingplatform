@@ -16,13 +16,13 @@ export interface LibraryCategoryOption {
 }
 
 export const LIBRARY_CATEGORIES: ReadonlyArray<LibraryCategoryOption> = [
-  { key: 'all', label: '全部类型', hint: '查看当前范围内全部资源' },
+  { key: 'all', label: '全部类型', hint: '查看当前范围内全部知识点和资源' },
   { key: 'video', label: '视频', hint: 'MP4 课件视频', category: 'video' },
   { key: 'document', label: '文档', hint: 'PDF / PPT / DOC', category: 'document' },
   { key: 'image', label: '图片', hint: 'JPG / PNG / WEBP / GIF', category: 'image' },
   { key: 'audio', label: '音频', hint: 'MP3 / WAV / M4A', category: 'audio' },
-  { key: 'knowledge', label: '知识点', hint: '富文本知识卡片', category: 'knowledge' },
-  { key: 'ai_generated', label: 'AI教学资源', hint: '教学资源生成后自动入库的课件', sourceKind: 'ai_generated' },
+  { key: 'knowledge', label: '知识点', hint: '富文本知识点卡片', category: 'knowledge' },
+  { key: 'ai_generated', label: 'AI 教学资源', hint: '教学资源生成后自动入库的课件', sourceKind: 'ai_generated' },
 ]
 
 export function resolveLibraryCategoryFilter(categoryKey: string) {
@@ -50,7 +50,7 @@ export function flattenLibraryFolders(
   ;(nodes || []).forEach((node) => {
     result.push({
       value: node.id,
-      label: `${'　'.repeat(depth)}${node.name}`,
+      label: `${'  '.repeat(depth)}${node.name}`,
     })
     result.push(...flattenLibraryFolders(node.children || [], depth + 1))
   })
@@ -79,7 +79,7 @@ export function formatLibraryDateTime(value?: string | null) {
 
 export function formatLibraryFileMeta(item: LibraryItemResponse) {
   if (item.content_type === 'knowledge') {
-    return '知识卡片'
+    return '知识点卡片'
   }
   const size = Number(item.size || 0)
   if (size >= 1024 * 1024) {

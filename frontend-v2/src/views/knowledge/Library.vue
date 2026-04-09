@@ -63,9 +63,9 @@ import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import type { ResourceListItemResponse } from '@/api/learning-resource'
 import { listResources } from '@/api/learning-resource'
-import ResourceCardCover from '@/components/resource/ResourceCardCover.vue'
-import ResourceCommunityTopBar from '@/components/resource/ResourceCommunityTopBar.vue'
-import ResourceCommunityUploadEntry from '@/components/resource/ResourceCommunityUploadEntry.vue'
+import ResourceCardCover from '@/components/knowledge/ResourceCardCover.vue'
+import ResourceCommunityTopBar from '@/components/knowledge/ResourceCommunityTopBar.vue'
+import ResourceCommunityUploadEntry from '@/components/knowledge/ResourceCommunityUploadEntry.vue'
 
 const PAGE_SIZE = 20
 

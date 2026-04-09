@@ -70,7 +70,7 @@ export const quickActionConfigs: QuickActionConfig[] = [
   {
     title: COURSE_RESOURCES_TITLE,
     description: '继续课程学习与资源浏览',
-    path: '/resource/courses',
+    path: '/knowledge/courses',
     icon: DatabaseOutlined,
     background: 'var(--v2-cover-purple)',
     mobileIcon: BookFilled,
@@ -78,6 +78,18 @@ export const quickActionConfigs: QuickActionConfig[] = [
     mobileIconColor: '#ffab47',
     mobileShadowColor: 'rgba(255, 171, 71, 0.12)',
     permissions: COURSE_PERMISSIONS,
+    surfaces: ['dashboard', 'profile'],
+  },
+  {
+    title: '知识库',
+    description: '查看公共知识点与个人知识点',
+    path: '/library',
+    icon: DatabaseOutlined,
+    background: 'var(--v2-cover-teal)',
+    mobileBackground: '#dff7f5',
+    mobileIconColor: '#1f948e',
+    mobileShadowColor: 'rgba(31, 148, 142, 0.16)',
+    permissions: PROFILE_PERMISSIONS,
     surfaces: ['dashboard', 'profile'],
   },
   {

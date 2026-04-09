@@ -188,8 +188,15 @@ const router = createRouter({
           path: 'library',
           name: 'Library',
           component: () => import('../views/library/Index.vue'),
-          meta: { title: '知识库', roles: ['admin', 'instructor'] },
+          meta: { title: '知识库', roles: ['admin', 'instructor', 'student'] },
         },
+        {
+          path: 'knowledge/scenarios',
+          name: 'ScenarioTemplates',
+          component: () => import('../views/knowledge/ScenarioTemplates.vue'),
+          meta: { title: '场景模板管理', roles: ['admin', 'instructor'] },
+        },
+        // -- 社区中心 --
         {
           path: 'resource/my',
           name: 'CommunityBoard',
@@ -234,6 +241,7 @@ const router = createRouter({
           path: 'resource/ai-generate',
           redirect: { name: 'TeachingResourceGenerationTask' },
         },
+        // -- 资源管理/审核 --
         {
           path: 'resource/manage',
           name: 'ResourceManage',

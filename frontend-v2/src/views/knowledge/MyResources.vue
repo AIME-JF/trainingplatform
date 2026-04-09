@@ -15,7 +15,7 @@
             tips="需要 USE_TEACHING_RESOURCE_GENERATION 权限"
           >
             <template #default="{ disabled }">
-              <a-button class="header-btn secondary-btn" :disabled="disabled" @click="router.push('/resource/teaching-generate')">
+              <a-button class="header-btn secondary-btn" :disabled="disabled" @click="router.push('/knowledge/teaching-generate')">
                 教学资源生成
               </a-button>
             </template>
@@ -175,11 +175,11 @@ import {
 } from '@/api/learning-resource'
 import { useMobile } from '@/composables/useMobile'
 import { useAuthStore } from '@/stores/auth'
-import MyResourceActionGroup from '@/components/resource/MyResourceActionGroup.vue'
+import MyResourceActionGroup from '@/components/knowledge/MyResourceActionGroup.vue'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
-import ResourceCardCover from '@/components/resource/ResourceCardCover.vue'
-import ResourceSearchInput from '@/components/resource/ResourceSearchInput.vue'
-import ResourceUploadModal from '@/components/resource/ResourceUploadModal.vue'
+import ResourceCardCover from '@/components/knowledge/ResourceCardCover.vue'
+import ResourceSearchInput from '@/components/knowledge/ResourceSearchInput.vue'
+import ResourceUploadModal from '@/components/knowledge/ResourceUploadModal.vue'
 import {
   formatDateTime,
   getResourceContentTypeLabel,

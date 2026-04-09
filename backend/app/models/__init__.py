@@ -48,6 +48,10 @@ from .training_activity import TrainingActivity
 from .training_plan import TrainingPlan
 from .practice import PracticeRecord
 from .video_keyframe import VideoKeyframeTask, VideoKeyframe
+from .knowledge_base import KnowledgeBase, KnowledgeDocument
+from .knowledge_chat_session import KnowledgeChatSession
+from .scenario_template import ScenarioTemplate
+from .scenario_session import ScenarioSession
 
 
 __all__ = [
@@ -110,4 +114,9 @@ __all__ = [
     "PracticeRecord",
     # 视频关键帧
     "VideoKeyframeTask", "VideoKeyframe",
+    # 知识库
+    "KnowledgeBase", "KnowledgeDocument",
+    "KnowledgeChatSession",
+    # 场景模拟
+    "ScenarioTemplate", "ScenarioSession",
 ]

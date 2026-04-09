@@ -32,7 +32,8 @@ if config.config_file_name is not None:
 from app.models import (
     user, role, permission, department, police_type, system,
     course, training, exam, certificate, media, notice,
-    resource, review, recommendation
+    resource, review, recommendation,
+    knowledge_base, knowledge_chat_session, scenario_template, scenario_session,
 )
 target_metadata = Base.metadata
 

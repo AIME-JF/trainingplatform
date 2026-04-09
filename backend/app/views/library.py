@@ -3,7 +3,7 @@
 """
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.controllers import LibraryController
@@ -24,65 +24,57 @@ from app.schemas import (
     StandardResponse,
     TokenData,
 )
-from app.utils.authz import is_admin_user, is_instructor_user
+from app.utils.authz import is_admin_user
 
 router = APIRouter(prefix="/library", tags=["library_management"])
 
 
-def _require_library_access(db: Session, current_user: TokenData) -> bool:
-    if is_admin_user(db, current_user.user_id):
-        return True
-    if is_instructor_user(db, current_user.user_id):
-        return True
-    raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅系统管理员和教官可访问资源库")
+def _resolve_library_admin_access(db: Session, current_user: TokenData) -> bool:
+    return is_admin_user(db, current_user.user_id)
 
 
-@router.get("/folders", response_model=StandardResponse[list[LibraryFolderResponse]], summary="获取资源库文件夹树")
+@router.get("/folders", response_model=StandardResponse[list[LibraryFolderResponse]], summary="获取知识库文件夹树")
 def get_library_folders(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _require_library_access(db, current_user)
     controller = LibraryController(db)
     return StandardResponse(data=controller.list_folders(current_user.user_id))
 
 
-@router.post("/folders", response_model=StandardResponse[LibraryFolderResponse], summary="创建资源库文件夹")
+@router.post("/folders", response_model=StandardResponse[LibraryFolderResponse], summary="创建知识库文件夹")
 def create_library_folder(
     data: LibraryFolderCreate,
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _require_library_access(db, current_user)
     controller = LibraryController(db)
     return StandardResponse(data=controller.create_folder(current_user.user_id, data))
 
 
-@router.put("/folders/{folder_id}", response_model=StandardResponse[LibraryFolderResponse], summary="更新资源库文件夹")
+@router.put("/folders/{folder_id}", response_model=StandardResponse[LibraryFolderResponse], summary="更新知识库文件夹")
 def update_library_folder(
     folder_id: int,
     data: LibraryFolderUpdate,
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _require_library_access(db, current_user)
     controller = LibraryController(db)
     return StandardResponse(data=controller.update_folder(folder_id, current_user.user_id, data))
 
 
-@router.delete("/folders/{folder_id}", response_model=StandardResponse, summary="删除资源库文件夹")
+@router.delete("/folders/{folder_id}", response_model=StandardResponse, summary="删除知识库文件夹")
 def delete_library_folder(
     folder_id: int,
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _require_library_access(db, current_user)
     controller = LibraryController(db)
     controller.delete_folder(folder_id, current_user.user_id)
     return StandardResponse(message="文件夹已删除")
 
 
-@router.get("/items", response_model=StandardResponse[PaginatedResponse[LibraryItemListResponse]], summary="获取资源库资源列表")
+@router.get("/items", response_model=StandardResponse[PaginatedResponse[LibraryItemListResponse]], summary="获取知识库条目列表")
 def get_library_items(
     page: int = Query(1, ge=1),
     size: int = Query(20, ge=-1),
@@ -94,7 +86,7 @@ def get_library_items(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _require_library_access(db, current_user)
+    is_admin = _resolve_library_admin_access(db, current_user)
     controller = LibraryController(db)
     params = LibraryItemListParams(
         scope=scope,
@@ -103,16 +95,16 @@ def get_library_items(
         search=search,
         source_kind=source_kind,
     )
-    return StandardResponse(data=controller.list_items(current_user.user_id, params, page, size))
+    return StandardResponse(data=controller.list_items(current_user.user_id, params, page, size, is_admin=is_admin))
 
 
-@router.get("/items/{item_id}", response_model=StandardResponse[LibraryItemDetailResponse], summary="获取资源库资源详情")
+@router.get("/items/{item_id}", response_model=StandardResponse[LibraryItemDetailResponse], summary="获取知识点详情")
 def get_library_item_detail(
     item_id: int,
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    is_admin = _require_library_access(db, current_user)
+    is_admin = _resolve_library_admin_access(db, current_user)
     controller = LibraryController(db)
     return StandardResponse(data=controller.get_item_detail(item_id, current_user.user_id, is_admin=is_admin))
 
@@ -123,7 +115,7 @@ def create_library_items_from_files(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    is_admin = _require_library_access(db, current_user)
+    is_admin = _resolve_library_admin_access(db, current_user)
     controller = LibraryController(db)
     return StandardResponse(data=controller.create_items_from_files(current_user.user_id, data, is_admin=is_admin))
 
@@ -134,64 +126,63 @@ def create_library_knowledge_item(
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    _require_library_access(db, current_user)
     controller = LibraryController(db)
     return StandardResponse(data=controller.create_knowledge_item(current_user.user_id, data))
 
 
-@router.put("/items/{item_id}", response_model=StandardResponse[LibraryItemDetailResponse], summary="更新资源库资源项")
+@router.put("/items/{item_id}", response_model=StandardResponse[LibraryItemDetailResponse], summary="更新知识点")
 def update_library_item(
     item_id: int,
     data: LibraryItemUpdateRequest,
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    is_admin = _require_library_access(db, current_user)
+    is_admin = _resolve_library_admin_access(db, current_user)
     controller = LibraryController(db)
     return StandardResponse(data=controller.update_item(item_id, current_user.user_id, data, is_admin=is_admin))
 
 
-@router.post("/items/{item_id}/move", response_model=StandardResponse[LibraryItemDetailResponse], summary="移动资源库资源项")
+@router.post("/items/{item_id}/move", response_model=StandardResponse[LibraryItemDetailResponse], summary="移动知识点文件夹")
 def move_library_item(
     item_id: int,
     data: LibraryItemMoveRequest,
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    is_admin = _require_library_access(db, current_user)
+    is_admin = _resolve_library_admin_access(db, current_user)
     controller = LibraryController(db)
     return StandardResponse(data=controller.move_item(item_id, current_user.user_id, data, is_admin=is_admin))
 
 
-@router.post("/items/{item_id}/share", response_model=StandardResponse[LibraryItemDetailResponse], summary="公开资源到公共资源")
+@router.post("/items/{item_id}/share", response_model=StandardResponse[LibraryItemDetailResponse], summary="公开知识点")
 def share_library_item(
     item_id: int,
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    is_admin = _require_library_access(db, current_user)
+    is_admin = _resolve_library_admin_access(db, current_user)
     controller = LibraryController(db)
     return StandardResponse(data=controller.share_item(item_id, current_user.user_id, True, is_admin=is_admin))
 
 
-@router.post("/items/{item_id}/unshare", response_model=StandardResponse[LibraryItemDetailResponse], summary="取消公开资源")
+@router.post("/items/{item_id}/unshare", response_model=StandardResponse[LibraryItemDetailResponse], summary="取消公开知识点")
 def unshare_library_item(
     item_id: int,
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    is_admin = _require_library_access(db, current_user)
+    is_admin = _resolve_library_admin_access(db, current_user)
     controller = LibraryController(db)
     return StandardResponse(data=controller.share_item(item_id, current_user.user_id, False, is_admin=is_admin))
 
 
-@router.delete("/items/{item_id}", response_model=StandardResponse, summary="删除资源库资源项")
+@router.delete("/items/{item_id}", response_model=StandardResponse, summary="删除知识点")
 def delete_library_item(
     item_id: int,
     current_user: TokenData = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    is_admin = _require_library_access(db, current_user)
+    is_admin = _resolve_library_admin_access(db, current_user)
     controller = LibraryController(db)
     controller.delete_item(item_id, current_user.user_id, is_admin=is_admin)
-    return StandardResponse(message="资源已删除")
+    return StandardResponse(message="知识点已删除")

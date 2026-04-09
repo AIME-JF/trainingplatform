@@ -1,14 +1,15 @@
 """
 资源库模块服务
 """
+import html
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
-from sqlalchemy import func as sa_func
+from sqlalchemy import func as sa_func, or_
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import LibraryFolder, LibraryItem, MediaFile, User
+from app.models import LibraryFolder, LibraryItem, MediaFile
 from app.schemas import PaginatedResponse
 from app.schemas.library import (
     LIBRARY_CONTENT_TYPE_AUDIO,
@@ -16,11 +17,12 @@ from app.schemas.library import (
     LIBRARY_CONTENT_TYPE_IMAGE,
     LIBRARY_CONTENT_TYPE_KNOWLEDGE,
     LIBRARY_CONTENT_TYPE_VIDEO,
+    LIBRARY_SCOPE_ACCESSIBLE,
+    LIBRARY_SCOPE_PRIVATE,
+    LIBRARY_SCOPE_PUBLIC,
     LIBRARY_SOURCE_KIND_AI_GENERATED,
     LIBRARY_SOURCE_KIND_FILE,
     LIBRARY_SOURCE_KIND_KNOWLEDGE,
-    LIBRARY_SCOPE_PRIVATE,
-    LIBRARY_SCOPE_PUBLIC,
     LibraryBatchFileCreateRequest,
     LibraryFolderCreate,
     LibraryFolderResponse,
@@ -36,16 +38,19 @@ from app.services.media import MediaService
 
 
 class LibraryService:
-    """教官资源库服务"""
+    """统一知识库服务"""
 
     def __init__(self, db: Session):
         self.db = db
         self.media_service = MediaService(db)
 
     def list_folders(self, owner_user_id: int) -> List[LibraryFolderResponse]:
-        folders = self.db.query(LibraryFolder).filter(
-            LibraryFolder.owner_user_id == owner_user_id,
-        ).order_by(LibraryFolder.sort_order.asc(), LibraryFolder.id.asc()).all()
+        folders = (
+            self.db.query(LibraryFolder)
+            .filter(LibraryFolder.owner_user_id == owner_user_id)
+            .order_by(LibraryFolder.sort_order.asc(), LibraryFolder.id.asc())
+            .all()
+        )
 
         direct_counts: Dict[Optional[int], int] = {}
         for folder_id, item_count in (
@@ -101,12 +106,7 @@ class LibraryService:
             children=[],
         )
 
-    def update_folder(
-        self,
-        folder_id: int,
-        owner_user_id: int,
-        data: LibraryFolderUpdate,
-    ) -> LibraryFolderResponse:
+    def update_folder(self, folder_id: int, owner_user_id: int, data: LibraryFolderUpdate) -> LibraryFolderResponse:
         folder = self._get_owned_folder(folder_id, owner_user_id)
         if not folder:
             raise ValueError("文件夹不存在")
@@ -150,14 +150,14 @@ class LibraryService:
             LibraryFolder.parent_id == folder.id,
         ).first()
         if has_children:
-            raise ValueError("文件夹下仍有子文件夹，请先手动移空")
+            raise ValueError("文件夹下仍有子文件夹，请先手动清空")
 
         has_items = self.db.query(LibraryItem.id).filter(
             LibraryItem.owner_user_id == owner_user_id,
             LibraryItem.folder_id == folder.id,
         ).first()
         if has_items:
-            raise ValueError("文件夹下仍有资源，请先手动移空")
+            raise ValueError("文件夹下仍有知识点，请先手动清空")
 
         self.db.delete(folder)
         self.db.commit()
@@ -168,6 +168,7 @@ class LibraryService:
         params: LibraryItemListParams,
         page: int = 1,
         size: int = 20,
+        is_admin: bool = False,
     ) -> PaginatedResponse[LibraryItemListResponse]:
         query = self.db.query(LibraryItem).options(
             joinedload(LibraryItem.owner),
@@ -175,17 +176,24 @@ class LibraryService:
             joinedload(LibraryItem.media_file),
         )
 
-        if params.scope == LIBRARY_SCOPE_PUBLIC:
-            query = query.filter(
-                LibraryItem.is_public == True,
-                LibraryItem.owner_user_id != current_user_id,
-            )
+        if params.scope == LIBRARY_SCOPE_ACCESSIBLE:
+            if not is_admin:
+                query = query.filter(
+                    or_(
+                        LibraryItem.owner_user_id == current_user_id,
+                        LibraryItem.is_public == True,
+                    )
+                )
+        elif params.scope == LIBRARY_SCOPE_PUBLIC:
+            query = query.filter(LibraryItem.is_public == True)
         else:
-            query = query.filter(LibraryItem.owner_user_id == current_user_id)
-            if params.folder_id is not None:
-                self._ensure_folder_access(params.folder_id, current_user_id)
-                query = query.filter(LibraryItem.folder_id == params.folder_id)
-
+            if is_admin:
+                query = query.filter(LibraryItem.is_public == False)
+            else:
+                query = query.filter(LibraryItem.owner_user_id == current_user_id)
+                if params.folder_id is not None:
+                    self._ensure_folder_access(params.folder_id, current_user_id)
+                    query = query.filter(LibraryItem.folder_id == params.folder_id)
         if params.category:
             query = query.filter(LibraryItem.content_type == params.category)
         if params.source_kind:
@@ -209,17 +217,114 @@ class LibraryService:
             items=[self._to_item_list_response(item, current_user_id) for item in items],
         )
 
-    def get_item_detail(
-        self,
-        item_id: int,
-        current_user_id: int,
-        is_admin: bool = False,
-    ) -> Optional[LibraryItemDetailResponse]:
+    def get_item_detail(self, item_id: int, current_user_id: int, is_admin: bool = False) -> Optional[LibraryItemDetailResponse]:
         item = self._get_item(item_id)
         if not item or not self._can_view_item(item, current_user_id, is_admin=is_admin):
             return None
         response = self._to_item_list_response(item, current_user_id)
         return LibraryItemDetailResponse(**response.model_dump(), knowledge_content_html=item.knowledge_content_html)
+
+    def list_accessible_knowledge_items(
+        self,
+        current_user_id: int,
+        *,
+        is_admin: bool = False,
+    ) -> List[LibraryItemListResponse]:
+        return self.list_items(
+            current_user_id,
+            LibraryItemListParams(scope=LIBRARY_SCOPE_ACCESSIBLE, category=LIBRARY_CONTENT_TYPE_KNOWLEDGE),
+            page=1,
+            size=-1,
+            is_admin=is_admin,
+        ).items
+
+    def resolve_accessible_knowledge_items(
+        self,
+        current_user_id: int,
+        item_ids: List[int],
+        *,
+        is_admin: bool = False,
+        strict: bool = True,
+    ) -> List[LibraryItem]:
+        normalized_ids = self._normalize_item_ids(item_ids)
+        if not normalized_ids:
+            return []
+
+        items = (
+            self.db.query(LibraryItem)
+            .options(joinedload(LibraryItem.owner))
+            .filter(
+                LibraryItem.id.in_(normalized_ids),
+                LibraryItem.content_type == LIBRARY_CONTENT_TYPE_KNOWLEDGE,
+            )
+            .all()
+        )
+        item_map = {item.id: item for item in items}
+        resolved: List[LibraryItem] = []
+        missing_ids: List[int] = []
+
+        for item_id in normalized_ids:
+            item = item_map.get(item_id)
+            if not item or not self._can_view_item(item, current_user_id, is_admin=is_admin):
+                missing_ids.append(item_id)
+                continue
+            resolved.append(item)
+
+        if strict and missing_ids:
+            raise ValueError("存在无权限访问或不存在的知识点")
+        return resolved
+
+    def get_knowledge_items_by_ids(self, item_ids: List[int]) -> List[LibraryItem]:
+        normalized_ids = self._normalize_item_ids(item_ids)
+        if not normalized_ids:
+            return []
+
+        items = (
+            self.db.query(LibraryItem)
+            .options(joinedload(LibraryItem.owner))
+            .filter(
+                LibraryItem.id.in_(normalized_ids),
+                LibraryItem.content_type == LIBRARY_CONTENT_TYPE_KNOWLEDGE,
+            )
+            .all()
+        )
+        item_map = {item.id: item for item in items}
+        return [item_map[item_id] for item_id in normalized_ids if item_id in item_map]
+
+    def build_knowledge_context(
+        self,
+        items: List[LibraryItem],
+        query_text: Optional[str] = None,
+        *,
+        per_item_limit: int = 1800,
+    ) -> dict:
+        if not items:
+            return {
+                "context": "",
+                "knowledgeMatched": None,
+                "knowledgeItemIds": [],
+                "knowledgeItemTitles": [],
+            }
+
+        normalized_query = str(query_text or "").strip()
+        keywords = self._extract_keywords(normalized_query)
+        matched = False if normalized_query else True
+        titles: List[str] = []
+        context_parts: List[str] = []
+
+        for item in items:
+            plain_text = self._html_to_text(item.knowledge_content_html)
+            titles.append(item.title)
+            context_parts.append(f"[{item.title}]\n{plain_text[:per_item_limit]}")
+            if normalized_query and self._is_knowledge_match(item.title, plain_text, normalized_query, keywords):
+                matched = True
+
+        return {
+            "context": "\n\n---\n\n".join(context_parts),
+            "knowledgeMatched": matched if normalized_query else True,
+            "knowledgeItemIds": [item.id for item in items],
+            "knowledgeItemTitles": titles,
+        }
 
     def create_items_from_files(
         self,
@@ -240,7 +345,7 @@ class LibraryService:
             if not media:
                 raise ValueError(f"文件 {media_file_id} 不存在")
             if not is_admin and media.uploader_id != current_user_id:
-                raise ValueError("只能将当前账号上传的文件加入资源库")
+                raise ValueError("只能将当前账号上传的文件加入知识库")
             created_items.append(
                 self._create_file_item_entity(
                     owner_user_id=current_user_id,
@@ -278,11 +383,7 @@ class LibraryService:
             source_kind=LIBRARY_SOURCE_KIND_AI_GENERATED,
         )
 
-    def create_knowledge_item(
-        self,
-        current_user_id: int,
-        data: LibraryKnowledgeCreateRequest,
-    ) -> LibraryItemDetailResponse:
+    def create_knowledge_item(self, current_user_id: int, data: LibraryKnowledgeCreateRequest) -> LibraryItemDetailResponse:
         folder = None
         if data.folder_id is not None:
             folder = self._ensure_folder_access(data.folder_id, current_user_id)
@@ -311,7 +412,7 @@ class LibraryService:
     ) -> LibraryItemDetailResponse:
         item = self._get_owned_or_admin_item(item_id, current_user_id, is_admin=is_admin)
         if not item:
-            raise ValueError("资源不存在")
+            raise ValueError("知识点不存在")
 
         if data.title is not None:
             item.title = data.title
@@ -334,11 +435,14 @@ class LibraryService:
     ) -> LibraryItemDetailResponse:
         item = self._get_owned_or_admin_item(item_id, current_user_id, is_admin=is_admin)
         if not item:
-            raise ValueError("资源不存在")
+            raise ValueError("知识点不存在")
+        if is_admin and item.owner_user_id != current_user_id:
+            raise ValueError("管理员暂不支持移动其他用户的文件夹")
 
         folder = None
         if data.folder_id is not None:
-            folder = self._ensure_folder_access(data.folder_id, item.owner_user_id if is_admin and item.owner_user_id != current_user_id else current_user_id)
+            folder_owner_id = item.owner_user_id if is_admin and item.owner_user_id != current_user_id else current_user_id
+            folder = self._ensure_folder_access(data.folder_id, folder_owner_id)
 
         item.folder_id = folder.id if folder else None
         self.db.commit()
@@ -355,7 +459,7 @@ class LibraryService:
     ) -> LibraryItemDetailResponse:
         item = self._get_owned_or_admin_item(item_id, current_user_id, is_admin=is_admin)
         if not item:
-            raise ValueError("资源不存在")
+            raise ValueError("知识点不存在")
         item.is_public = bool(is_public)
         self.db.commit()
         self.db.refresh(item)
@@ -365,7 +469,7 @@ class LibraryService:
     def delete_item(self, item_id: int, current_user_id: int, is_admin: bool = False) -> None:
         item = self._get_owned_or_admin_item(item_id, current_user_id, is_admin=is_admin)
         if not item:
-            raise ValueError("资源不存在")
+            raise ValueError("知识点不存在")
         self.db.delete(item)
         self.db.commit()
 
@@ -394,7 +498,7 @@ class LibraryService:
             LIBRARY_SOURCE_KIND_KNOWLEDGE,
             LIBRARY_SOURCE_KIND_AI_GENERATED,
         }:
-            raise ValueError("不支持的资源来源类型")
+            raise ValueError("不支持的知识库来源类型")
 
         item = LibraryItem(
             owner_user_id=owner_user_id,
@@ -442,10 +546,7 @@ class LibraryService:
 
     def _count_folder_items_recursive(self, folder_id: int) -> int:
         children = self.db.query(LibraryFolder.id).filter(LibraryFolder.parent_id == folder_id).all()
-        count = int(
-            self.db.query(LibraryItem.id).filter(LibraryItem.folder_id == folder_id).count()
-            or 0
-        )
+        count = int(self.db.query(LibraryItem.id).filter(LibraryItem.folder_id == folder_id).count() or 0)
         for (child_id,) in children:
             count += self._count_folder_items_recursive(child_id)
         return count
@@ -459,18 +560,18 @@ class LibraryService:
         return False
 
     def _get_item(self, item_id: int) -> Optional[LibraryItem]:
-        return self.db.query(LibraryItem).options(
-            joinedload(LibraryItem.owner),
-            joinedload(LibraryItem.folder),
-            joinedload(LibraryItem.media_file),
-        ).filter(LibraryItem.id == item_id).first()
+        return (
+            self.db.query(LibraryItem)
+            .options(
+                joinedload(LibraryItem.owner),
+                joinedload(LibraryItem.folder),
+                joinedload(LibraryItem.media_file),
+            )
+            .filter(LibraryItem.id == item_id)
+            .first()
+        )
 
-    def _get_owned_or_admin_item(
-        self,
-        item_id: int,
-        current_user_id: int,
-        is_admin: bool = False,
-    ) -> Optional[LibraryItem]:
+    def _get_owned_or_admin_item(self, item_id: int, current_user_id: int, is_admin: bool = False) -> Optional[LibraryItem]:
         item = self._get_item(item_id)
         if not item:
             return None
@@ -484,6 +585,30 @@ class LibraryService:
         if item.owner_user_id == current_user_id:
             return True
         return bool(item.is_public)
+
+    def _normalize_item_ids(self, item_ids: Optional[List[int]]) -> List[int]:
+        normalized: List[int] = []
+        seen = set()
+        for raw_item in item_ids or []:
+            try:
+                item_id = int(raw_item)
+            except (TypeError, ValueError):
+                continue
+            if item_id <= 0 or item_id in seen:
+                continue
+            seen.add(item_id)
+            normalized.append(item_id)
+        return normalized
+
+    def _extract_keywords(self, query_text: str) -> List[str]:
+        return [token for token in re.split(r"[\s,，。；;、]+", query_text) if len(token.strip()) >= 2][:5]
+
+    def _is_knowledge_match(self, title: str, plain_text: str, query_text: str, query_keywords: List[str]) -> bool:
+        haystack = f"{title}\n{plain_text}".lower()
+        lowered_query = query_text.lower()
+        if lowered_query and lowered_query in haystack:
+            return True
+        return any(keyword.lower() in haystack for keyword in query_keywords)
 
     def _derive_media_title(self, filename: Optional[str]) -> str:
         name = Path(str(filename or "未命名文件")).stem.strip()
@@ -508,16 +633,27 @@ class LibraryService:
         raise ValueError(f"文件类型不受支持: {media.filename}")
 
     def _sanitize_html(self, content: Optional[str]) -> str:
-        html = str(content or "").strip()
-        if not html:
+        sanitized = str(content or "").strip()
+        if not sanitized:
             return ""
-        html = re.sub(r"(?is)<script.*?>.*?</script>", "", html)
-        html = re.sub(r"(?is)<style.*?>.*?</style>", "", html)
-        html = re.sub(r"(?is)<iframe.*?>.*?</iframe>", "", html)
-        html = re.sub(r"\s+on[a-zA-Z]+\s*=\s*\"[^\"]*\"", "", html)
-        html = re.sub(r"\s+on[a-zA-Z]+\s*=\s*'[^']*'", "", html)
-        html = re.sub(r"javascript:", "", html, flags=re.IGNORECASE)
-        return html.strip()
+        sanitized = re.sub(r"(?is)<script.*?>.*?</script>", "", sanitized)
+        sanitized = re.sub(r"(?is)<style.*?>.*?</style>", "", sanitized)
+        sanitized = re.sub(r"(?is)<iframe.*?>.*?</iframe>", "", sanitized)
+        sanitized = re.sub(r"\s+on[a-zA-Z]+\s*=\s*\"[^\"]*\"", "", sanitized)
+        sanitized = re.sub(r"\s+on[a-zA-Z]+\s*=\s*'[^']*'", "", sanitized)
+        sanitized = re.sub(r"javascript:", "", sanitized, flags=re.IGNORECASE)
+        return sanitized.strip()
+
+    def _html_to_text(self, content: Optional[str]) -> str:
+        plain = str(content or "")
+        plain = re.sub(r"(?is)<br\s*/?>", "\n", plain)
+        plain = re.sub(r"(?is)</p\s*>", "\n", plain)
+        plain = re.sub(r"(?is)<[^>]+>", " ", plain)
+        plain = html.unescape(plain.replace("&nbsp;", " "))
+        plain = re.sub(r"\s+\n", "\n", plain)
+        plain = re.sub(r"\n{3,}", "\n\n", plain)
+        plain = re.sub(r"[ \t]{2,}", " ", plain)
+        return plain.strip()
 
     def _to_item_list_response(self, item: LibraryItem, current_user_id: int) -> LibraryItemListResponse:
         media = item.media_file

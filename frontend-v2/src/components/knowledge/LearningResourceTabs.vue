@@ -34,15 +34,15 @@ const route = useRoute()
 const authStore = useAuthStore()
 
 const tabs: TabItem[] = [
-  { path: '/resource/courses', label: COURSE_RESOURCES_TITLE, permissions: COURSE_PERMISSIONS },
-  { path: '/resource/teaching-generate', label: '教学资源生成', permissions: TEACHING_RESOURCE_GENERATION_PERMISSIONS },
+  { path: '/knowledge/courses', label: COURSE_RESOURCES_TITLE, permissions: COURSE_PERMISSIONS },
+  { path: '/knowledge/teaching-generate', label: '教学资源生成', permissions: TEACHING_RESOURCE_GENERATION_PERMISSIONS },
 ]
 
 const visibleTabs = computed(() => tabs.filter((tab) => authStore.hasAnyPermission(tab.permissions || [])))
 
 function isActive(path: string) {
-  if (path === '/resource/courses') {
-    return route.path.startsWith('/resource/courses')
+  if (path === '/knowledge/courses') {
+    return route.path.startsWith('/knowledge/courses')
   }
   return route.path === path
 }

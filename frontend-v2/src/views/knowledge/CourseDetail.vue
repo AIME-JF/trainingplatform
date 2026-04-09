@@ -3,7 +3,7 @@
     <header class="detail-header">
       <div class="header-main">
         <div class="header-actions">
-          <a-button ghost @click="router.push('/resource/courses')">返回{{ COURSE_RESOURCES_TITLE }}</a-button>
+          <a-button ghost @click="router.push('/knowledge/courses')">返回{{ COURSE_RESOURCES_TITLE }}</a-button>
           <a-button v-if="canManageCourse" ghost @click="openEdit">编辑课程</a-button>
           <a-popconfirm v-if="canManageCourse" title="确定删除此课程吗？" @confirm="handleDeleteCourse">
             <a-button ghost danger>删除课程</a-button>
@@ -324,7 +324,7 @@ import {
 } from '@/api/learning-resource'
 import { useAuthStore } from '@/stores/auth'
 import LibraryItemPickerModal from '@/components/library/LibraryItemPickerModal.vue'
-import CourseEditorModal from '@/components/resource/CourseEditorModal.vue'
+import CourseEditorModal from '@/components/knowledge/CourseEditorModal.vue'
 import { COURSE_RESOURCES_TITLE } from '@/constants/navigationTitles'
 import {
   formatCourseDuration,
@@ -707,7 +707,7 @@ async function handleDeleteCourse() {
   try {
     await deleteCourse(course.value.id)
     message.success('课程已删除')
-    router.push('/resource/courses')
+    router.push('/knowledge/courses')
   } catch (error) {
     message.error(error instanceof Error ? error.message : '删除失败')
   }

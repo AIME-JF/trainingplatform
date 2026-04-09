@@ -1,4 +1,4 @@
-export const LEARNING_CENTER_TITLE = '学习中心'
+export const LEARNING_CENTER_TITLE = '知识中心'
 export const COURSE_RESOURCES_TITLE = '线上课程'
 export const COMMUNITY_CENTER_TITLE = '社区中心'
 export const COMMUNITY_BOARD_TITLE = '社区看板'

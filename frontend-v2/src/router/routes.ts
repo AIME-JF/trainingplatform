@@ -36,7 +36,6 @@ export const routes: RouteRecordRaw[] = [
     component: MobileLayout,
     meta: { requiresAuth: true },
     children: [
-      // -- 首页 --
       {
         path: '',
         name: 'Dashboard',
@@ -47,7 +46,6 @@ export const routes: RouteRecordRaw[] = [
         path: 'calendar',
         redirect: { name: 'ClassSchedule' },
       },
-      // -- 班级 --
       {
         path: 'classes',
         name: 'ClassList',
@@ -84,14 +82,12 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/dashboard/Index.vue'),
         meta: { title: '签退' },
       },
-      // -- 通知 --
       {
         path: 'notifications',
         name: 'Notifications',
         component: () => import('@/views/notification/Index.vue'),
         meta: { title: '通知中心' },
       },
-      // -- 考试 --
       {
         path: 'exam/list',
         name: 'ExamList',
@@ -122,7 +118,6 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/report/ExamStatistics.vue'),
         meta: { title: '考试统计', anyPermissions: REPORT_PERMISSIONS },
       },
-      // -- 刷题练习 --
       {
         path: 'practice',
         name: 'Practice',
@@ -135,41 +130,93 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/practice/Do.vue'),
         meta: { title: '答题' },
       },
-      // -- 资源 --
       {
-        path: 'resource/courses',
-        name: 'LearningCourses',
-        component: () => import('@/views/resource/Courses.vue'),
+        path: 'knowledge/courses',
+        name: 'KnowledgeCourses',
+        component: () => import('@/views/knowledge/Courses.vue'),
         meta: { title: COURSE_RESOURCES_TITLE, anyPermissions: COURSE_PERMISSIONS },
       },
       {
-        path: 'resource/courses/:id',
+        path: 'knowledge/courses/:id',
         name: 'CourseDetail',
-        component: () => import('@/views/resource/CourseDetail.vue'),
+        component: () => import('@/views/knowledge/CourseDetail.vue'),
         meta: { title: '课程详情', anyPermissions: COURSE_PERMISSIONS },
       },
       {
-        path: 'library',
-        name: 'Library',
-        component: () => import('@/views/library/Index.vue'),
-        meta: { title: '知识库', roles: ['admin', 'instructor'] },
+        path: 'knowledge/teaching-generate',
+        name: 'TeachingResourceGenerationTask',
+        component: () => import('@/views/knowledge/TeachingResourceGenerationTask.vue'),
+        meta: { title: '教学资源生成', anyPermissions: TEACHING_RESOURCE_GENERATION_PERMISSIONS },
       },
       {
-        path: 'trainingplatform/library',
-        name: 'TrainingPlatformLibrary',
-        component: () => import('@/views/library/Index.vue'),
-        meta: { title: '知识库', roles: ['student'] },
+        path: 'knowledge/ai-generate',
+        redirect: { name: 'TeachingResourceGenerationTask' },
+      },
+      {
+        path: 'knowledge/assistant',
+        name: 'KnowledgeAssistant',
+        component: () => import('@/views/knowledge/assistant/Index.vue'),
+        meta: { title: '知识助手' },
+      },
+      {
+        path: 'knowledge/assistant/chat',
+        name: 'KnowledgeAssistantChat',
+        component: () => import('@/views/knowledge/assistant/Chat.vue'),
+        meta: { title: '知识问答' },
+      },
+      {
+        path: 'knowledge/assistant/chat/:legacyKnowledgeBaseId',
+        redirect: (to) => ({
+          path: '/knowledge/assistant/chat',
+          query: to.query,
+        }),
+      },
+      {
+        path: 'knowledge/assistant/scenario-sim/:scenarioId?',
+        name: 'KnowledgeScenarioSim',
+        component: () => import('@/views/knowledge/assistant/ScenarioSim.vue'),
+        meta: { title: '场景模拟训练' },
+      },
+      {
+        path: 'knowledge/scenarios',
+        name: 'KnowledgeScenarios',
+        component: () => import('@/views/knowledge/scenarios/Index.vue'),
+        meta: { title: '场景模板管理', roles: ['admin', 'instructor'] },
+      },
+      {
+        path: 'knowledge/scenarios/create',
+        name: 'KnowledgeScenarioCreate',
+        component: () => import('@/views/knowledge/scenarios/Editor.vue'),
+        meta: { title: '创建场景模板', roles: ['admin', 'instructor'] },
+      },
+      {
+        path: 'knowledge/scenarios/:id/edit',
+        name: 'KnowledgeScenarioEdit',
+        component: () => import('@/views/knowledge/scenarios/Editor.vue'),
+        meta: { title: '编辑场景模板', roles: ['admin', 'instructor'] },
+      },
+      {
+        path: 'knowledge/scenarios/:id/records',
+        name: 'KnowledgeScenarioRecords',
+        component: () => import('@/views/knowledge/scenarios/Records.vue'),
+        meta: { title: '模拟记录', roles: ['admin', 'instructor'] },
+      },
+      {
+        path: 'knowledge/records',
+        name: 'KnowledgeRecords',
+        component: () => import('@/views/knowledge/records/Index.vue'),
+        meta: { title: '学习记录' },
       },
       {
         path: 'resource/library',
         name: 'ResourceLibrary',
-        component: () => import('@/views/resource/Library.vue'),
+        component: () => import('@/views/knowledge/Library.vue'),
         meta: { title: '社区精选' },
       },
       {
         path: 'resource/community',
         name: 'ResourceCommunity',
-        component: () => import('@/views/resource/Recommend.vue'),
+        component: () => import('@/views/knowledge/Recommend.vue'),
         meta: { title: '资源社区' },
       },
       {
@@ -179,26 +226,25 @@ export const routes: RouteRecordRaw[] = [
       {
         path: 'resource/detail/:id',
         name: 'ResourceDetail',
-        component: () => import('@/views/resource/Detail.vue'),
+        component: () => import('@/views/knowledge/Detail.vue'),
         meta: { title: '资源详情' },
       },
       {
         path: 'resource/my',
         name: 'MyResources',
-        component: () => import('@/views/resource/MyResources.vue'),
+        component: () => import('@/views/knowledge/MyResources.vue'),
         meta: { title: '我的空间' },
       },
       {
-        path: 'resource/teaching-generate',
-        name: 'TeachingResourceGenerationTask',
-        component: () => import('@/views/resource/TeachingResourceGenerationTask.vue'),
-        meta: { title: '教学资源生成', anyPermissions: TEACHING_RESOURCE_GENERATION_PERMISSIONS },
+        path: 'library',
+        name: 'Library',
+        component: () => import('@/views/library/Index.vue'),
+        meta: { title: '知识库', roles: ['admin', 'instructor', 'student'] },
       },
-      {
-        path: 'resource/ai-generate',
-        redirect: { name: 'TeachingResourceGenerationTask' },
-      },
-      // -- 问卷评价 --
+      { path: 'resource/courses', redirect: { name: 'KnowledgeCourses' } },
+      { path: 'resource/courses/:id', redirect: '/knowledge/courses/:id' },
+      { path: 'resource/teaching-generate', redirect: { name: 'TeachingResourceGenerationTask' } },
+      { path: 'resource/ai-generate', redirect: { name: 'TeachingResourceGenerationTask' } },
       {
         path: 'evaluation',
         name: 'EvaluationCenter',
@@ -211,7 +257,6 @@ export const routes: RouteRecordRaw[] = [
         component: () => import('@/views/evaluation/Fill.vue'),
         meta: { title: '问卷填写' },
       },
-      // -- 个人中心 --
       {
         path: 'profile',
         name: 'Profile',

@@ -26,6 +26,9 @@ from .library import LibraryController
 from .resource_comment import ResourceCommentController
 from .review import ReviewController
 from .recommendation import RecommendationController
+from .knowledge_base import KnowledgeBaseController
+from .knowledge_chat import KnowledgeChatController
+from .scenario import ScenarioController
 
 __all__ = [
     "UserController",
@@ -53,4 +56,7 @@ __all__ = [
     "ResourceCommentController",
     "ReviewController",
     "RecommendationController",
+    "KnowledgeBaseController",
+    "KnowledgeChatController",
+    "ScenarioController",
 ]

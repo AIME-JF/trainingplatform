@@ -32,6 +32,9 @@ from .resource import ResourceService
 from .review import ReviewService
 from .recommendation import RecommendationService
 from .schedule_file_parse import ScheduleFileParseService
+from .knowledge_base import KnowledgeBaseService
+from .knowledge_chat import KnowledgeChatService
+from .scenario import ScenarioService
 
 __all__ = [
     "AuthService", "UserService", "DepartmentService", "RoleService", "PermissionService",
@@ -43,4 +46,5 @@ __all__ = [
     "TrainingPortraitAggregator", "TrainingAIService", "TalentService",
     "MediaService", "NoticeService",
     "ResourceService", "ReviewService", "RecommendationService", "ScheduleFileParseService",
+    "KnowledgeBaseService", "KnowledgeChatService", "ScenarioService",
 ]

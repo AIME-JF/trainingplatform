@@ -244,7 +244,7 @@ import {
 } from '@/api/learning-resource'
 import { useAuthStore } from '@/stores/auth'
 import { useCreatableTagSelect } from '@/composables/useCreatableTagSelect'
-import LearningResourceTabs from '@/components/resource/LearningResourceTabs.vue'
+import LearningResourceTabs from '@/components/knowledge/LearningResourceTabs.vue'
 import PermissionsTooltip from '@/components/common/PermissionsTooltip.vue'
 import AdmissionScopeSelector from '@/components/common/AdmissionScopeSelector.vue'
 import AiTaskTimeline from '@/components/common/AiTaskTimeline.vue'

@@ -33,6 +33,9 @@ from .training_base import router as training_base_router
 from .training_plan import router as training_plan_router
 from .training_type import router as training_type_router
 from .user import router as user_router
+from .knowledge_base import router as knowledge_base_router
+from .knowledge_chat import router as knowledge_chat_router
+from .scenario import router as scenario_router
 
 
 all_routers = [
@@ -67,6 +70,9 @@ all_routers = [
     evaluation_router,
     instructor_router,
     recommendation_router,
+    knowledge_base_router,
+    knowledge_chat_router,
+    scenario_router,
 ]
 
 
@@ -103,4 +109,7 @@ __all__ = [
     "evaluation_router",
     "instructor_router",
     "recommendation_router",
+    "knowledge_base_router",
+    "knowledge_chat_router",
+    "scenario_router",
 ]
