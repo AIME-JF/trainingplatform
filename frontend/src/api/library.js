@@ -20,6 +20,10 @@ export function getLibraryItems(params) {
   return request.get('/library/items', { params })
 }
 
+export function getLibraryDashboard() {
+  return request.get('/library/dashboard')
+}
+
 export function getLibraryItem(id) {
   return request.get(`/library/items/${id}`)
 }

@@ -24,33 +24,6 @@
       @success="handleDataRefresh"
     />
 
-    <!-- Create Folder Modal -->
-    <a-modal
-      v-model:open="createFolderVisible"
-      title="新建文件夹"
-      :footer="null"
-      :destroy-on-close="true"
-      @cancel="resetFolderForm"
-    >
-      <a-form layout="vertical">
-        <a-form-item label="文件夹名称" required>
-          <a-input v-model:value="folderForm.name" :maxlength="100" placeholder="请输入文件夹名称" />
-        </a-form-item>
-        <a-form-item label="父文件夹">
-          <a-select v-model:value="folderForm.parentId" allow-clear placeholder="创建到根目录">
-            <a-select-option :value="null">根目录</a-select-option>
-            <a-select-option v-for="folder in folderOptions" :key="folder.value" :value="folder.value">
-              {{ folder.label }}
-            </a-select-option>
-          </a-select>
-        </a-form-item>
-      </a-form>
-      <div class="modal-footer">
-        <a-button @click="resetFolderForm">取消</a-button>
-        <a-button type="primary" :loading="folderSubmitting" @click="handleCreateFolder">创建文件夹</a-button>
-      </div>
-    </a-modal>
-
     <!-- Preview Modal -->
     <a-modal
       v-model:open="previewVisible"
@@ -95,7 +68,7 @@
     <!-- Storage Stats Modal -->
     <a-modal
       v-model:open="storageModalVisible"
-      title="系统存储统计"
+      title="知识库数据看板"
       :footer="null"
       :width="720"
       :destroy-on-close="true"
@@ -103,46 +76,30 @@
       <div class="storage-modal">
         <div class="storage-panel-head">
           <div>
-            <p class="storage-panel-label">当前范围总览</p>
-            <h3 class="storage-panel-title">资源容量与结构分布</h3>
+            <p class="storage-panel-label">系统级资源总览</p>
+            <h3 class="storage-panel-title">知识库管理核心指标</h3>
           </div>
-          <span class="storage-panel-time">{{ storageSummary.latestUpdate }}</span>
+          <span class="storage-panel-time">{{ dashboardGeneratedAtLabel }}</span>
         </div>
         <div class="storage-grid">
-          <div class="storage-metric">
-            <span class="storage-metric-label">资源总数</span>
-            <strong>{{ storageSummary.totalItems }}</strong>
-          </div>
-          <div class="storage-metric">
-            <span class="storage-metric-label">目录数量</span>
-            <strong>{{ storageSummary.totalFolders }}</strong>
-          </div>
-          <div class="storage-metric">
-            <span class="storage-metric-label">AI 资源</span>
-            <strong>{{ storageSummary.aiItems }}</strong>
-          </div>
-          <div class="storage-metric">
-            <span class="storage-metric-label">公共资源</span>
-            <strong>{{ storageSummary.publicItems }}</strong>
-          </div>
-          <div class="storage-metric">
-            <span class="storage-metric-label">文件型资源</span>
-            <strong>{{ storageSummary.fileItems }}</strong>
-          </div>
-          <div class="storage-metric">
-            <span class="storage-metric-label">累计容量</span>
-            <strong>{{ storageSummary.totalSize }}</strong>
+          <div v-for="metric in dashboardMetrics" :key="metric.key" class="storage-metric">
+            <span class="storage-metric-label">{{ metric.label }}</span>
+            <strong>{{ metric.value }}</strong>
           </div>
         </div>
-        <div v-if="storageSummary.distribution && storageSummary.distribution.length > 0" class="storage-distribution">
+        <div class="storage-panel-subhead">
+          <span class="storage-panel-subtitle">部门知识点上传分布</span>
+          <span class="storage-panel-subhint">按上传者所属部门索引统计</span>
+        </div>
+        <div v-if="departmentKnowledgeDistribution.length > 0" class="storage-distribution">
           <div
-            v-for="entry in storageSummary.distribution"
-            :key="entry.key"
+            v-for="entry in departmentKnowledgeDistribution"
+            :key="entry.departmentName"
             class="distribution-row"
           >
             <div class="distribution-copy">
-              <span class="distribution-name">{{ entry.label }}</span>
-              <span class="distribution-count">{{ entry.count }} 项</span>
+              <span class="distribution-name">{{ entry.departmentName }}</span>
+              <span class="distribution-count">{{ entry.knowledgeCount }} 条知识点</span>
             </div>
             <div class="distribution-bar">
               <span
@@ -152,6 +109,7 @@
             </div>
           </div>
         </div>
+        <a-empty v-else description="暂无部门知识点统计数据" />
       </div>
     </a-modal>
 
@@ -230,56 +188,11 @@
               </button>
             </div>
 
-            <!-- 我的文件夹 -->
-            <div>
-              <div class="sidebar-section-head group">
-                <span class="sidebar-section-label">我的文件夹</span>
-                <svg
-                  v-if="scopeTab === 'private'"
-                  class="w-3.5 h-3.5 shrink-0 icon-xs folder-plus-icon"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  @click="openCreateFolder"
-                >
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
-                </svg>
-              </div>
-
-              <div class="folder-list">
-                <button
-                  type="button"
-                  class="sidebar-folder"
-                  :class="{ active: selectedFolderId === null }"
-                  @click="selectedFolderId = null"
-                >
-                  <svg class="w-4 h-4 mr-2 text-blue-600 shrink-0 icon-sm" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/>
-                  </svg>
-                  <span class="truncate font-semibold text-gray-800">根目录</span>
-                </button>
-                <button
-                  v-for="folder in folders"
-                  :key="folder.id"
-                  type="button"
-                  class="sidebar-folder pl-8 group"
-                  :class="{ active: selectedFolderId === folder.id }"
-                  @click="selectedFolderId = folder.id"
-                >
-                  <svg class="w-4 h-4 mr-2 text-gray-400 group-hover:text-gray-600 shrink-0 icon-sm" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z"/>
-                  </svg>
-                  <span class="truncate flex-1">{{ folder.name }}</span>
-                  <span class="folder-count text-[10px] text-gray-400 bg-gray-100 px-1.5 rounded opacity-0 group-hover:opacity-100 transition">{{ folder.itemCount || 0 }}</span>
-                  <a-button
-                    type="text"
-                    size="small"
-                    danger
-                    class="folder-delete-btn opacity-0 group-hover:opacity-100 ml-1"
-                    @click.stop="handleDeleteFolder(folder.id)"
-                  >删除</a-button>
-                </button>
-              </div>
+            <div class="sidebar-admin-card">
+              <p class="sidebar-admin-card-title">管理员视角说明</p>
+              <p class="sidebar-admin-card-copy">公共资源展示系统内已公开的知识点与资料。</p>
+              <p class="sidebar-admin-card-copy">待公开资源展示全系统尚未公开的资源，便于统一审核与发布。</p>
+              <p class="sidebar-admin-card-copy">部门统计按上传者所属部门索引，不会新增任何部门存储库。</p>
             </div>
           </div>
         </div>
@@ -292,8 +205,8 @@
           <div class="main-hero">
             <div class="main-hero-head">
               <div class="main-title-block">
-                <h1 class="main-title">我的资源</h1>
-                <p class="main-subtitle">当前查看 {{ currentFolderName }} 下的 {{ currentCategoryLabel }}</p>
+                <h1 class="main-title">知识库管理</h1>
+                <p class="main-subtitle">当前查看 {{ currentScopeLabel }} 中的 {{ currentCategoryLabel }}</p>
               </div>
               <div class="main-hero-actions">
                 <button
@@ -301,7 +214,7 @@
                   class="stat-button"
                   @click.stop="storageModalVisible = true"
                 >
-                  系统存储统计
+                  查看数据看板
                 </button>
               </div>
             </div>
@@ -347,20 +260,55 @@
                 </div>
               </button>
 
-              <!-- 新建文件夹 -->
-              <button type="button" class="action-card group" @click="openCreateFolder">
-                <div class="action-icon action-icon-orange">
-                  <svg class="w-5 h-5 shrink-0 icon-md" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 13h6m-3-3v6m-9 1V7a2 2 0 012-2h6l2 2h6a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2z"/>
-                  </svg>
-                </div>
-                <div class="action-copy">
-                  <span class="action-title action-title-orange">新建文件夹</span>
-                  <span class="action-desc">创建新的资源目录</span>
-                </div>
-              </button>
             </div>
           </div>
+
+          <section class="dashboard-board">
+            <div class="dashboard-board-head">
+              <div>
+                <p class="dashboard-board-label">系统资源看板</p>
+                <h2 class="dashboard-board-title">管理员知识库管理总览</h2>
+              </div>
+              <span class="dashboard-board-time">{{ dashboardGeneratedAtLabel }}</span>
+            </div>
+
+            <div class="dashboard-grid">
+              <article v-for="metric in dashboardMetrics" :key="metric.key" class="dashboard-card">
+                <span class="dashboard-card-label">{{ metric.label }}</span>
+                <strong class="dashboard-card-value">{{ metric.value }}</strong>
+                <span class="dashboard-card-hint">{{ metric.hint }}</span>
+              </article>
+            </div>
+
+            <div class="dashboard-panels">
+              <section class="dashboard-panel">
+                <div class="dashboard-panel-head">
+                  <div>
+                    <p class="dashboard-panel-label">部门维度</p>
+                    <h3 class="dashboard-panel-title">知识点上传分布</h3>
+                  </div>
+                  <span class="dashboard-panel-hint">按上传者所属部门索引</span>
+                </div>
+
+                <div v-if="departmentKnowledgeDistribution.length > 0" class="storage-distribution">
+                  <div
+                    v-for="entry in departmentKnowledgeDistribution"
+                    :key="entry.departmentName"
+                    class="distribution-row"
+                  >
+                    <div class="distribution-copy">
+                      <span class="distribution-name">{{ entry.departmentName }}</span>
+                      <span class="distribution-count">{{ entry.knowledgeCount }} 条知识点</span>
+                    </div>
+                    <div class="distribution-bar">
+                      <span class="distribution-fill" :style="{ width: entry.percent + '%' }" />
+                    </div>
+                  </div>
+                </div>
+                <a-empty v-else description="暂无部门知识点统计数据" />
+              </section>
+            </div>
+          </section>
 
           <!-- 权限 Tabs -->
           <div class="tabs-bar hide-scrollbar">
@@ -371,7 +319,7 @@
                 :class="{ active: scopeTab === 'private' }"
                 @click="setScopeTab('private')"
               >
-                私人资源
+                待公开资源
               </button>
               <button
                 type="button"
@@ -570,7 +518,7 @@
     >
       <button type="button" @click="handleMoveItem(contextMenu.item)">移动到文件夹</button>
       <button type="button" @click="toggleShare(contextMenu.item)">
-        {{ contextMenu.item.isPublic ? '取消公开' : '共享到公共资源' }}
+        {{ contextMenu.item.isPublic ? '撤回到待公开资源' : '发布到公共资源' }}
       </button>
       <button
         v-if="contextMenu.item.contentType === 'knowledge'"
@@ -588,9 +536,8 @@
 import { computed, onBeforeMount, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { Modal, message } from 'ant-design-vue'
 import {
-  createLibraryFolder,
-  deleteLibraryFolder,
   deleteLibraryItem,
+  getLibraryDashboard,
   getLibraryFolders,
   getLibraryItem,
   getLibraryItems,
@@ -599,8 +546,6 @@ import {
 } from '@/api/library'
 import {
   LIBRARY_CATEGORIES,
-  buildLibraryTreeData,
-  findLibraryFolderName,
   formatLibraryFileMeta,
   getLibraryTypeIcon,
   getLibraryTypeLabel,
@@ -609,6 +554,26 @@ import {
 import QuickUploadModal from './components/QuickUploadModal.vue'
 import KnowledgeCardModal from './components/KnowledgeCardModal.vue'
 import MoveItemModal from './components/MoveItemModal.vue'
+
+function createEmptyDashboard() {
+  return {
+    overview: {
+      totalItems: 0,
+      officialItems: 0,
+      pendingItems: 0,
+      totalFolders: 0,
+      knowledgeItems: 0,
+    },
+    usage: {
+      totalScenarioTemplates: 0,
+      publishedScenarioTemplates: 0,
+      knowledgeChatSessions: 0,
+      completedScenarioSessions: 0,
+    },
+    departmentKnowledgeDistribution: [],
+    generatedAt: null,
+  }
+}
 
 export default {
   name: 'LibraryIndex',
@@ -632,6 +597,8 @@ export default {
     const viewMode = ref('list')
     const storageModalVisible = ref(false)
     const typeFilterOpen = ref(false)
+    const dashboardLoading = ref(false)
+    const dashboardData = ref(createEmptyDashboard())
 
     const uploadVisible = ref(false)
     const knowledgeVisible = ref(false)
@@ -642,13 +609,6 @@ export default {
     const editingKnowledgeId = ref(null)
     const editingKnowledgeTitle = ref('')
     const editingKnowledgeContent = ref('')
-    const createFolderVisible = ref(false)
-    const folderSubmitting = ref(false)
-
-    const folderForm = reactive({
-      name: '',
-      parentId: null,
-    })
 
     const contextMenu = reactive({
       visible: false,
@@ -662,15 +622,8 @@ export default {
       return '用户'.slice(0, 1)
     })
 
-    const treeData = computed(() => buildLibraryTreeData(folders.value))
-    const selectedFolderKeys = computed(() => selectedFolderId.value ? [selectedFolderId.value] : [])
     const folderOptions = computed(() => flattenFolders(folders.value))
-    const currentFolderName = computed(() => {
-      if (selectedFolderId.value) {
-        return findLibraryFolderName(folders.value, selectedFolderId.value) || '未知文件夹'
-      }
-      return '根目录'
-    })
+    const currentScopeLabel = computed(() => (scopeTab.value === 'private' ? '待公开资源' : '公共资源'))
     const currentCategoryLabel = computed(() => {
       return categories.find((item) => item.key === selectedCategory.value)?.label || '全部类型'
     })
@@ -688,41 +641,31 @@ export default {
 
       return result.sort((left, right) => getItemTimestamp(right) - getItemTimestamp(left))
     })
-    const totalFolderCount = computed(() => countFolders(folders.value))
-    const storageSummary = computed(() => {
-      const sourceItems = items.value
-      const totalItems = sourceItems.length
-      const totalSizeBytes = sourceItems.reduce((sum, item) => sum + Number(item.size || 0), 0)
-      const latestTimestamp = sourceItems.reduce((latest, item) => Math.max(latest, getItemTimestamp(item)), 0)
-      const distribution = categories
-        .filter((item) => item.key !== 'all')
-        .map((category) => {
-          const count = sourceItems.filter((item) => {
-            if (category.key === 'ai_generated') {
-              return item.sourceKind === 'ai_generated'
-            }
-            return item.contentType === category.key
-          }).length
-          return {
-            key: category.key,
-            label: category.label,
-            count,
-            percent: totalItems > 0 ? Math.max(8, Math.round((count / totalItems) * 100)) : 0,
-          }
-        })
-        .filter((entry) => entry.count > 0)
-
-      return {
-        totalItems,
-        totalFolders: totalFolderCount.value,
-        totalSize: formatBytes(totalSizeBytes),
-        totalSizeBytes,
-        aiItems: sourceItems.filter((item) => item.sourceKind === 'ai_generated').length,
-        publicItems: sourceItems.filter((item) => item.isPublic).length,
-        fileItems: sourceItems.filter((item) => item.sourceKind === 'file').length,
-        latestUpdate: latestTimestamp ? formatLocalDateTime(latestTimestamp) : '暂无更新记录',
-        distribution,
-      }
+    const dashboardGeneratedAtLabel = computed(() => {
+      return dashboardData.value.generatedAt ? formatDateTime(dashboardData.value.generatedAt) : '暂无更新记录'
+    })
+    const dashboardMetrics = computed(() => {
+      const overview = dashboardData.value.overview || {}
+      const usage = dashboardData.value.usage || {}
+      return [
+        { key: 'totalItems', label: '总资源', value: overview.totalItems ?? 0, hint: '全系统知识点与资料总量' },
+        { key: 'officialItems', label: '公共资源数', value: overview.officialItems ?? 0, hint: '当前已公开资源数量' },
+        { key: 'pendingItems', label: '待公开资源数', value: overview.pendingItems ?? 0, hint: '全系统尚未公开资源数量' },
+        { key: 'totalFolders', label: '目录数量', value: overview.totalFolders ?? 0, hint: '现有资源目录总数' },
+        { key: 'knowledgeItems', label: '知识点数', value: overview.knowledgeItems ?? 0, hint: '仅统计知识点卡片' },
+        { key: 'totalScenarioTemplates', label: '场景模板总数', value: usage.totalScenarioTemplates ?? 0, hint: '教官端可配置场景模板总量' },
+        { key: 'publishedScenarioTemplates', label: '已发布模板数', value: usage.publishedScenarioTemplates ?? 0, hint: '已发布可用于训练的场景模板' },
+        { key: 'knowledgeChatSessions', label: '知识问答数', value: usage.knowledgeChatSessions ?? 0, hint: '按知识问答会话总数统计' },
+        { key: 'completedScenarioSessions', label: '场景模拟数', value: usage.completedScenarioSessions ?? 0, hint: '按已完成场景模拟会话统计' },
+      ]
+    })
+    const departmentKnowledgeDistribution = computed(() => {
+      const source = dashboardData.value.departmentKnowledgeDistribution || []
+      const maxCount = source.reduce((max, entry) => Math.max(max, Number(entry.knowledgeCount || 0)), 0)
+      return source.map((entry) => ({
+        ...entry,
+        percent: maxCount > 0 ? Math.max(10, Math.round((Number(entry.knowledgeCount || 0) / maxCount) * 100)) : 0,
+      }))
     })
 
     const CONTEXT_MENU_WIDTH = 208
@@ -740,6 +683,7 @@ export default {
     onBeforeMount(() => {
       fetchFolders()
       fetchItems()
+      fetchDashboard()
       document.addEventListener('click', handlePageClick)
       window.addEventListener('resize', handlePageClick)
     })
@@ -755,6 +699,18 @@ export default {
       } catch (error) {
         folders.value = []
         console.error('加载文件夹失败', error)
+      }
+    }
+
+    async function fetchDashboard() {
+      dashboardLoading.value = true
+      try {
+        dashboardData.value = await getLibraryDashboard()
+      } catch (error) {
+        dashboardData.value = createEmptyDashboard()
+        console.error('加载知识库数据看板失败', error)
+      } finally {
+        dashboardLoading.value = false
       }
     }
 
@@ -783,9 +739,7 @@ export default {
     function setScopeTab(nextScope) {
       if (scopeTab.value === nextScope) return
       scopeTab.value = nextScope
-      if (nextScope !== 'private') {
-        selectedFolderId.value = null
-      }
+      selectedFolderId.value = null
       fetchItems()
     }
 
@@ -799,61 +753,6 @@ export default {
 
     function handleSearch() {
       fetchItems()
-    }
-
-    function openCreateFolder() {
-      folderForm.name = ''
-      folderForm.parentId = selectedFolderId.value
-      createFolderVisible.value = true
-    }
-
-    function resetFolderForm() {
-      createFolderVisible.value = false
-      folderForm.name = ''
-      folderForm.parentId = null
-    }
-
-    async function handleCreateFolder() {
-      if (!folderForm.name.trim()) {
-        message.warning('请输入文件夹名称')
-        return
-      }
-      folderSubmitting.value = true
-      try {
-        await createLibraryFolder({
-          name: folderForm.name.trim(),
-          parentId: folderForm.parentId,
-        })
-        message.success('文件夹已创建')
-        resetFolderForm()
-        await fetchFolders()
-      } catch (error) {
-        message.error('创建文件夹失败')
-      } finally {
-        folderSubmitting.value = false
-      }
-    }
-
-    async function handleDeleteFolder(folderId) {
-      Modal.confirm({
-        title: '删除文件夹',
-        content: '仅空文件夹允许删除。确认继续吗？',
-        okText: '删除',
-        okType: 'danger',
-        cancelText: '取消',
-        async onOk() {
-          try {
-            await deleteLibraryFolder(folderId)
-            if (selectedFolderId.value === folderId) {
-              selectedFolderId.value = null
-            }
-            message.success('文件夹已删除')
-            await fetchFolders()
-          } catch (error) {
-            message.error('删除文件夹失败')
-          }
-        },
-      })
     }
 
     async function openPreview(item) {
@@ -908,13 +807,14 @@ export default {
       try {
         if (item.isPublic) {
           await unshareLibraryItem(item.id)
-          message.success('已取消公开')
+          message.success('已撤回到待公开资源')
         } else {
           await shareLibraryItem(item.id)
-          message.success('已共享到公共资源')
+          message.success('已发布到公共资源')
         }
         closeContextMenu()
         await fetchItems()
+        await fetchDashboard()
       } catch (error) {
         message.error('操作失败')
       }
@@ -959,6 +859,7 @@ export default {
             message.success('资源已删除')
             await fetchItems()
             await fetchFolders()
+            await fetchDashboard()
           } catch (error) {
             message.error('删除资源失败')
           }
@@ -969,6 +870,7 @@ export default {
     function handleDataRefresh() {
       fetchItems()
       fetchFolders()
+      fetchDashboard()
     }
 
     function flattenFolders(nodes, depth = 0) {
@@ -1029,33 +931,6 @@ export default {
     function getItemTimestamp(item) {
       const raw = item.updatedAt || item.createdAt
       return raw ? new Date(raw).getTime() : 0
-    }
-
-    function countFolders(nodes) {
-      return (nodes || []).reduce((sum, node) => sum + 1 + countFolders(node.children || []), 0)
-    }
-
-    function formatBytes(size) {
-      if (size >= 1024 * 1024 * 1024) {
-        return `${(size / 1024 / 1024 / 1024).toFixed(1)} GB`
-      }
-      if (size >= 1024 * 1024) {
-        return `${(size / 1024 / 1024).toFixed(1)} MB`
-      }
-      if (size >= 1024) {
-        return `${Math.round(size / 1024)} KB`
-      }
-      return `${size} B`
-    }
-
-    function formatLocalDateTime(timestamp) {
-      const date = new Date(timestamp)
-      const year = date.getFullYear()
-      const month = String(date.getMonth() + 1).padStart(2, '0')
-      const day = String(date.getDate()).padStart(2, '0')
-      const hours = String(date.getHours()).padStart(2, '0')
-      const minutes = String(date.getMinutes()).padStart(2, '0')
-      return `${year}-${month}-${day} ${hours}:${minutes}`
     }
 
     function stripHtmlTags(content) {
@@ -1136,33 +1011,28 @@ export default {
       editingKnowledgeId,
       editingKnowledgeTitle,
       editingKnowledgeContent,
-      createFolderVisible,
-      folderSubmitting,
-      folderForm,
       contextMenu,
       avatarText,
+      dashboardLoading,
       quickTypeOptions,
       displayedItems,
-      storageSummary,
+      dashboardMetrics,
+      departmentKnowledgeDistribution,
+      dashboardGeneratedAtLabel,
 
       // computed
-      treeData,
-      selectedFolderKeys,
       folderOptions,
-      currentFolderName,
+      currentScopeLabel,
       currentCategoryLabel,
 
       // methods
       fetchFolders,
+      fetchDashboard,
       fetchItems,
       setScopeTab,
       setViewMode,
       handleCategorySelect,
       handleSearch,
-      openCreateFolder,
-      resetFolderForm,
-      handleCreateFolder,
-      handleDeleteFolder,
       openPreview,
       showContextMenu,
       showActionMenuFromButton,
@@ -1330,6 +1200,7 @@ export default {
     display: flex !important;
   }
   .main-hero,
+  .dashboard-board,
   .tabs-bar,
   .grid-view,
   .list-header,
@@ -1345,6 +1216,9 @@ export default {
     align-items: flex-start;
   }
   .storage-grid {
+    grid-template-columns: 1fr;
+  }
+  .dashboard-grid {
     grid-template-columns: 1fr;
   }
   .storage-panel-head {
@@ -1393,6 +1267,7 @@ export default {
 
 @media (min-width: 769px) and (max-width: 1200px) {
   .main-hero,
+  .dashboard-board,
   .tabs-bar,
   .grid-view,
   .list-header,
@@ -1401,6 +1276,9 @@ export default {
     padding-right: 24px;
   }
   .storage-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .dashboard-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .grid-view {
@@ -1506,6 +1384,33 @@ export default {
 
 .folder-delete-btn {
   margin-left: 4px;
+}
+
+.sidebar-admin-card {
+  margin: 12px 20px 0;
+  padding: 14px 14px 12px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+  border: 1px solid #dbeafe;
+  box-shadow: 0 10px 24px -20px rgba(37, 99, 235, 0.45);
+}
+
+.sidebar-admin-card-title {
+  margin: 0 0 8px;
+  color: #1e3a8a;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sidebar-admin-card-copy {
+  margin: 0;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.sidebar-admin-card-copy + .sidebar-admin-card-copy {
+  margin-top: 6px;
 }
 
 /* Search Input */
@@ -1806,6 +1711,109 @@ export default {
 .action-card:hover .action-title-purple { color: #7c3aed; }
 .action-card:hover .action-title-emerald { color: #059669; }
 .action-card:hover .action-title-orange { color: #f97316; }
+
+.dashboard-board {
+  margin: 0 32px 20px;
+  padding: 22px 24px 24px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  border: 1px solid #dbeafe;
+  box-shadow: 0 18px 40px -32px rgba(15, 23, 42, 0.35);
+}
+
+.dashboard-board-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.dashboard-board-label,
+.dashboard-panel-label,
+.storage-panel-subtitle {
+  margin: 0;
+  color: #2563eb;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dashboard-board-title,
+.dashboard-panel-title {
+  margin: 6px 0 0;
+  color: #0f172a;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.dashboard-board-time,
+.dashboard-panel-hint,
+.storage-panel-subhint {
+  color: #64748b;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.dashboard-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 128px;
+  padding: 16px 18px;
+  border-radius: 18px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 14px 32px -28px rgba(15, 23, 42, 0.4);
+}
+
+.dashboard-card-label {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dashboard-card-value {
+  color: #0f172a;
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.dashboard-card-hint {
+  color: #94a3b8;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.dashboard-panels {
+  margin-top: 18px;
+}
+
+.dashboard-panel {
+  padding: 18px;
+  border-radius: 18px;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.dashboard-panel-head,
+.storage-panel-subhead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
 
 /* Tabs Bar */
 .tabs-bar {

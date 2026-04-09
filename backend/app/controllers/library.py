@@ -54,6 +54,9 @@ class LibraryController:
     def list_assistant_items(self, current_user_id: int, is_admin: bool = False):
         return self.service.list_accessible_assistant_items(current_user_id, is_admin=is_admin)
 
+    def get_admin_dashboard(self):
+        return self.service.get_admin_dashboard()
+
     def get_item_detail(self, item_id: int, current_user_id: int, is_admin: bool = False):
         data = self.service.get_item_detail(item_id, current_user_id, is_admin=is_admin)
         if not data:

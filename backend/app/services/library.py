@@ -4,13 +4,22 @@ Library service.
 
 import html
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
 from sqlalchemy import func as sa_func, or_
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import LibraryFolder, LibraryItem, MediaFile
+from app.models import (
+    KnowledgeChatSession,
+    LibraryFolder,
+    LibraryItem,
+    MediaFile,
+    ScenarioSession,
+    ScenarioTemplate,
+    User,
+)
 from app.parsers import ParserFactory
 from app.schemas import PaginatedResponse
 from app.schemas.library import (
@@ -26,6 +35,10 @@ from app.schemas.library import (
     LIBRARY_SOURCE_KIND_FILE,
     LIBRARY_SOURCE_KIND_KNOWLEDGE,
     LibraryBatchFileCreateRequest,
+    LibraryDashboardOverviewResponse,
+    LibraryDashboardResponse,
+    LibraryDashboardUsageResponse,
+    LibraryDepartmentKnowledgeStatResponse,
     LibraryFolderCreate,
     LibraryFolderResponse,
     LibraryFolderUpdate,
@@ -221,6 +234,52 @@ class LibraryService:
             size=total if size == -1 else size,
             total=total,
             items=[self._to_item_list_response(item, current_user_id) for item in items],
+        )
+
+    def get_admin_dashboard(self) -> LibraryDashboardResponse:
+        overview = LibraryDashboardOverviewResponse(
+            total_items=int(self.db.query(sa_func.count(LibraryItem.id)).scalar() or 0),
+            official_items=int(
+                self.db.query(sa_func.count(LibraryItem.id))
+                .filter(LibraryItem.is_public == True)
+                .scalar()
+                or 0
+            ),
+            pending_items=int(
+                self.db.query(sa_func.count(LibraryItem.id))
+                .filter(LibraryItem.is_public == False)
+                .scalar()
+                or 0
+            ),
+            total_folders=int(self.db.query(sa_func.count(LibraryFolder.id)).scalar() or 0),
+            knowledge_items=int(
+                self.db.query(sa_func.count(LibraryItem.id))
+                .filter(LibraryItem.content_type == LIBRARY_CONTENT_TYPE_KNOWLEDGE)
+                .scalar()
+                or 0
+            ),
+        )
+        usage = LibraryDashboardUsageResponse(
+            total_scenario_templates=int(self.db.query(sa_func.count(ScenarioTemplate.id)).scalar() or 0),
+            published_scenario_templates=int(
+                self.db.query(sa_func.count(ScenarioTemplate.id))
+                .filter(ScenarioTemplate.status == "published")
+                .scalar()
+                or 0
+            ),
+            knowledge_chat_sessions=int(self.db.query(sa_func.count(KnowledgeChatSession.id)).scalar() or 0),
+            completed_scenario_sessions=int(
+                self.db.query(sa_func.count(ScenarioSession.id))
+                .filter(ScenarioSession.status == "completed")
+                .scalar()
+                or 0
+            ),
+        )
+        return LibraryDashboardResponse(
+            overview=overview,
+            usage=usage,
+            department_knowledge_distribution=self._build_department_knowledge_distribution(),
+            generated_at=datetime.now(),
         )
 
     def get_item_detail(self, item_id: int, current_user_id: int, is_admin: bool = False) -> Optional[LibraryItemDetailResponse]:
@@ -546,6 +605,36 @@ class LibraryService:
             raise ValueError("资源不存在")
         self.db.delete(item)
         self.db.commit()
+
+    def _build_department_knowledge_distribution(self) -> List[LibraryDepartmentKnowledgeStatResponse]:
+        knowledge_items = (
+            self.db.query(LibraryItem)
+            .options(joinedload(LibraryItem.owner).joinedload(User.departments))
+            .filter(LibraryItem.content_type == LIBRARY_CONTENT_TYPE_KNOWLEDGE)
+            .all()
+        )
+        department_counts: Dict[str, int] = {}
+
+        for item in knowledge_items:
+            department_name = self._resolve_primary_department_name(item.owner)
+            department_counts[department_name] = department_counts.get(department_name, 0) + 1
+
+        return [
+            LibraryDepartmentKnowledgeStatResponse(
+                department_name=department_name,
+                knowledge_count=count,
+            )
+            for department_name, count in sorted(
+                department_counts.items(),
+                key=lambda entry: (-entry[1], entry[0]),
+            )
+        ]
+
+    def _resolve_primary_department_name(self, user: Optional[User]) -> str:
+        departments = [department for department in (user.departments or []) if getattr(department, "is_active", True)] if user else []
+        if departments and departments[0].name:
+            return departments[0].name
+        return "未分配"
 
     def _get_owned_folder(self, folder_id: int, owner_user_id: int) -> Optional[LibraryFolder]:
         return self.db.query(LibraryFolder).filter(

@@ -4,7 +4,7 @@ Library routes.
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.controllers import LibraryController
@@ -12,6 +12,7 @@ from app.database import get_db
 from app.middleware.auth import get_current_user
 from app.schemas import (
     LibraryBatchFileCreateRequest,
+    LibraryDashboardResponse,
     LibraryFolderCreate,
     LibraryFolderResponse,
     LibraryFolderUpdate,
@@ -32,6 +33,18 @@ router = APIRouter(prefix="/library", tags=["library_management"])
 
 def _resolve_library_admin_access(db: Session, current_user: TokenData) -> bool:
     return is_admin_user(db, current_user.user_id)
+
+
+@router.get("/dashboard", response_model=StandardResponse[LibraryDashboardResponse], summary="获取管理员知识库数据看板")
+def get_library_dashboard(
+    current_user: TokenData = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    is_admin = _resolve_library_admin_access(db, current_user)
+    if not is_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="仅管理员可查看知识库数据看板")
+    controller = LibraryController(db)
+    return StandardResponse(data=controller.get_admin_dashboard())
 
 
 @router.get("/folders", response_model=StandardResponse[list[LibraryFolderResponse]], summary="获取知识库文件夹树")

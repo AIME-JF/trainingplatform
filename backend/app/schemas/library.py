@@ -204,6 +204,41 @@ class LibraryItemDetailResponse(LibraryItemListResponse):
     plain_text_content: Optional[str] = None
 
 
+class LibraryDashboardOverviewResponse(BaseModel):
+    """管理员知识库总览指标"""
+
+    total_items: int = 0
+    official_items: int = 0
+    pending_items: int = 0
+    total_folders: int = 0
+    knowledge_items: int = 0
+
+
+class LibraryDashboardUsageResponse(BaseModel):
+    """知识库相关使用统计"""
+
+    total_scenario_templates: int = 0
+    published_scenario_templates: int = 0
+    knowledge_chat_sessions: int = 0
+    completed_scenario_sessions: int = 0
+
+
+class LibraryDepartmentKnowledgeStatResponse(BaseModel):
+    """部门知识点上传统计"""
+
+    department_name: str
+    knowledge_count: int = 0
+
+
+class LibraryDashboardResponse(BaseModel):
+    """管理员知识库数据看板"""
+
+    overview: LibraryDashboardOverviewResponse
+    usage: LibraryDashboardUsageResponse
+    department_knowledge_distribution: List[LibraryDepartmentKnowledgeStatResponse] = Field(default_factory=list)
+    generated_at: Optional[datetime] = None
+
+
 class LibraryItemListParams(BaseModel):
     """资源库资源项查询参数"""
 
@@ -247,6 +282,10 @@ __all__ = [
     "LibraryItemMoveRequest",
     "LibraryItemListResponse",
     "LibraryItemDetailResponse",
+    "LibraryDashboardOverviewResponse",
+    "LibraryDashboardUsageResponse",
+    "LibraryDepartmentKnowledgeStatResponse",
+    "LibraryDashboardResponse",
     "LibraryItemListParams",
 ]
 

@@ -161,6 +161,8 @@ from .library import (
     LibraryBatchFileCreateRequest, LibraryKnowledgeCreateRequest,
     LibraryItemUpdateRequest, LibraryItemMoveRequest,
     LibraryItemListResponse, LibraryItemDetailResponse, LibraryItemListParams,
+    LibraryDashboardOverviewResponse, LibraryDashboardUsageResponse,
+    LibraryDepartmentKnowledgeStatResponse, LibraryDashboardResponse,
 )
 from .knowledge_chat import KnowledgeChatSessionCreateRequest
 from .review import (
@@ -312,6 +314,8 @@ __all__ = [
     "LibraryBatchFileCreateRequest", "LibraryKnowledgeCreateRequest",
     "LibraryItemUpdateRequest", "LibraryItemMoveRequest",
     "LibraryItemListResponse", "LibraryItemDetailResponse", "LibraryItemListParams",
+    "LibraryDashboardOverviewResponse", "LibraryDashboardUsageResponse",
+    "LibraryDepartmentKnowledgeStatResponse", "LibraryDashboardResponse",
     "KnowledgeChatSessionCreateRequest",
     # 审核
     "ReviewPolicyCreate", "ReviewPolicyUpdate",
