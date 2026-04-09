@@ -695,6 +695,13 @@ class TrainingService:
 
         self._refresh_instructor_teaching_records(training_id)
 
+        # 触发自动评价任务
+        try:
+            from app.tasks.evaluation import trigger_training_evaluation
+            trigger_training_evaluation.delay(training_id)
+        except Exception as exc:
+            logger.warning("触发自动评价任务失败: %s", exc)
+
         logger.info("手动结班: %s", training_id)
         return self.get_training_by_id(training_id, actor_id)
 

@@ -71,6 +71,23 @@ class EvaluationTask(Base):
 
     template = relationship("EvaluationTemplate", foreign_keys=[template_id])
     records = relationship("EvaluationRecord", back_populates="task", cascade="all, delete-orphan")
+    items = relationship("EvaluationTaskItem", back_populates="task", cascade="all, delete-orphan",
+                         order_by="EvaluationTaskItem.sort_order")
+
+
+class EvaluationTaskItem(Base):
+    """评价任务包含的评价项清单（自动生成）"""
+
+    __tablename__ = "evaluation_task_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("evaluation_tasks.id", ondelete="CASCADE"), nullable=False, index=True)
+    target_type = Column(String(30), nullable=False, comment="评价对象类型")
+    target_id = Column(Integer, nullable=False, comment="被评对象ID")
+    target_name = Column(String(200), nullable=True, comment="对象名称快照")
+    sort_order = Column(Integer, default=0, comment="排序")
+
+    task = relationship("EvaluationTask", back_populates="items")
 
 
 class EvaluationRecord(Base):

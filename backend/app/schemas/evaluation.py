@@ -57,9 +57,7 @@ class EvaluationTemplateUpdate(BaseModel):
 # ========== 任务 ==========
 
 class EvaluationTaskCreate(BaseModel):
-    target_type: str = Field(..., description="评价对象类型: course/instructor/training/training_base")
-    target_id: int = Field(..., description="被评对象ID")
-    training_id: Optional[int] = Field(None, description="关联培训班")
+    training_id: int = Field(..., description="培训班ID")
     title: str = Field(..., max_length=200, description="任务标题")
     status: str = Field("active", description="状态: draft/active/closed")
     start_time: Optional[datetime] = None
@@ -73,12 +71,26 @@ class EvaluationTaskUpdate(BaseModel):
     end_time: Optional[datetime] = None
 
 
+class EvaluationTaskItemResponse(BaseModel):
+    id: int
+    task_id: int
+    target_type: str
+    target_id: int
+    target_name: Optional[str] = None
+    sort_order: int = 0
+    dimensions: List[EvaluationDimensionResponse] = Field(default_factory=list)
+    completed: bool = False
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class EvaluationTaskResponse(BaseModel):
     id: int
     template_id: int
     target_type: str
     target_id: int
     training_id: Optional[int] = None
+    training_name: Optional[str] = None
     title: str
     status: str = "active"
     source: str = "manual"
@@ -87,6 +99,19 @@ class EvaluationTaskResponse(BaseModel):
     created_by: Optional[int] = None
     created_at: Optional[datetime] = None
     record_count: int = 0
+    item_count: int = 0
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class EvaluationTaskDetailResponse(BaseModel):
+    id: int
+    title: str
+    training_id: Optional[int] = None
+    training_name: Optional[str] = None
+    status: str = "active"
+    items: List[EvaluationTaskItemResponse] = Field(default_factory=list)
+    completed: bool = False
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -98,13 +123,16 @@ class EvaluationScoreItem(BaseModel):
     score: int = Field(..., ge=0, le=5)
 
 
-class EvaluationSubmit(BaseModel):
+class EvaluationSubmitItem(BaseModel):
     target_type: str = Field(..., description="评价对象类型")
     target_id: int = Field(..., description="被评对象ID")
-    task_id: Optional[int] = Field(None, description="关联任务（自主填写为空）")
-    training_id: Optional[int] = Field(None, description="关联培训班上下文")
     scores: List[EvaluationScoreItem] = Field(..., min_length=1)
-    comment: Optional[str] = Field(None, max_length=1000, description="总体评语")
+    comment: Optional[str] = Field(None, max_length=1000, description="评语")
+
+
+class EvaluationSubmit(BaseModel):
+    task_id: int = Field(..., description="评价任务ID")
+    items: List[EvaluationSubmitItem] = Field(..., min_length=1, description="各对象的评分数据")
 
 
 # ========== 评价记录 ==========

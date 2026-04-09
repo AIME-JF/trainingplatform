@@ -170,7 +170,8 @@ from .evaluation import (
     EvaluationDimensionCreate, EvaluationDimensionUpdate, EvaluationDimensionResponse,
     EvaluationTemplateResponse, EvaluationTemplateUpdate,
     EvaluationTaskCreate, EvaluationTaskUpdate, EvaluationTaskResponse,
-    EvaluationSubmit, EvaluationScoreItem, EvaluationScoreResponse,
+    EvaluationTaskItemResponse, EvaluationTaskDetailResponse,
+    EvaluationSubmit, EvaluationSubmitItem, EvaluationScoreItem, EvaluationScoreResponse,
     EvaluationRecordResponse, EvaluationSummaryResponse, EvaluationDimensionStat,
 )
 from .recommendation import (

@@ -19,6 +19,7 @@ celery_app = Celery(
         "app.tasks.schedule_file_parse",
         "app.tasks.ai_task_timeout",
         "app.tasks.video_keyframe",
+        "app.tasks.evaluation",
     ]
 )
 
