@@ -654,9 +654,9 @@ const pickMode = ref(false)
 const pickSelectedKeys = ref([])
 
 // ============ 分页 ============
-const pagination = reactive({ current: 1, pageSize: 20, total: 0 })
+const pagination = reactive({ current: 1, pageSize: 10, total: 0 })
 const pageSizeOptions = [10, 20, 50]
-const questionPagination = reactive({ current: 1, pageSize: 20, total: 0 })
+const questionPagination = reactive({ current: 1, pageSize: 10, total: 0 })
 
 // ============ 文件夹管理弹窗 ============
 const folderFormModalVisible = ref(false)
